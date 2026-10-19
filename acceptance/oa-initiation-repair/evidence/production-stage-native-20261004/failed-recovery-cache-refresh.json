@@ -1,0 +1,295 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-04T15:05:25.498Z",
+  "passed": false,
+  "private_native": true,
+  "public_main_changed": false,
+  "full_oa_accepted": false,
+  "local_docker_started": false,
+  "scenarios": [
+    {
+      "name": "private-Nginx-Gateway-formal-IAM-independent-PG18-owners-four-project-types",
+      "passed": true
+    },
+    {
+      "name": "normal-Workbench-original-shared-scheme-panel-lazy-read-zero-owner-writes",
+      "passed": true
+    },
+    {
+      "name": "original-main-required-and-cancel-zero-native-commands",
+      "passed": true
+    },
+    {
+      "name": "one-shared-Production-collection-two-main-one-review-zero-score-three-real-Evidence-files",
+      "passed": true
+    },
+    {
+      "name": "browser-reload-same-IDs-zero-writes-real-short-grant-bytes-and-original-preview",
+      "passed": true
+    },
+    {
+      "name": "optional-review-append-exact-decimal-score-one-revision-blank-preserves-zero-write",
+      "passed": true
+    },
+    {
+      "name": "committed-reply-lost-reload-continues-original-command-zero-duplicate-files-revisions-receipts",
+      "passed": true
+    },
+    {
+      "name": "cancel-zero-write-then-one-reference-ending-immutable-history-Evidence-bytes-retained",
+      "passed": true
+    }
+  ],
+  "infrastructure": {
+    "pg": "oa-stage-pg-33f8734f99",
+    "edge": "oa-stage-edge-33f8734f99",
+    "remote": "/tmp/oa-stage-suite-33f8734f99",
+    "local_docker": false,
+    "main_changed": false,
+    "nginx_sha256": "84bd149a231d0377653be8edf133944d5b8716728128870e292281ee60b6a805"
+  },
+  "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+  "project_id": "4ac38fa9-24f3-48b3-a411-1d22af328cf8",
+  "subject_id": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+  "initial_collection": {
+    "schema_version": "1.0",
+    "profile": "reference-oa-stage-materials-v1",
+    "work_item": {
+      "id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+      "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+      "project_id": "4ac38fa9-24f3-48b3-a411-1d22af328cf8",
+      "project_source_revision": 3,
+      "type_key": "reference-oa-stage-set-v1",
+      "type_definition_version": 2,
+      "status": "completed",
+      "revision": 2,
+      "created_by": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+      "created_at": "2026-10-04T23:06:44.770141+08:00",
+      "updated_at": "2026-10-04T23:06:55.942662+08:00"
+    },
+    "stage": {
+      "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+      "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+      "stage_key": "scheme",
+      "sequence": 10,
+      "status": "completed",
+      "completed_at": "2026-10-04T23:06:55.942662+08:00",
+      "completed_work_item_revision": 2,
+      "updated_at": "2026-10-04T23:06:55.942662+08:00"
+    },
+    "main_files": [
+      {
+        "id": "c5db9799-03a1-4deb-966d-a5b3221cd1ba",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "stage_key": "scheme",
+        "kind": "main-file",
+        "file_id": "5c6d2879-e172-4d81-966c-ce280f40b812",
+        "version": 1,
+        "source_revision": 1,
+        "display_name": "方案一.png",
+        "created_revision": 2,
+        "created_at": "2026-10-04T23:06:55.942662+08:00"
+      },
+      {
+        "id": "c8be987c-4390-424d-9a45-9805733e6b5b",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "stage_key": "scheme",
+        "kind": "main-file",
+        "file_id": "88683a71-c0ad-4a44-abc1-1e1754214108",
+        "version": 1,
+        "source_revision": 1,
+        "display_name": "方案二.png",
+        "created_revision": 2,
+        "created_at": "2026-10-04T23:06:55.942662+08:00"
+      }
+    ],
+    "review_sheets": [
+      {
+        "id": "de871c0e-a9f8-4985-8e0b-ba80af002fbd",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "stage_key": "scheme",
+        "kind": "review-sheet",
+        "file_id": "238dd19a-3f12-406d-8990-90cf4daf7146",
+        "version": 1,
+        "source_revision": 1,
+        "display_name": "校审单.png",
+        "created_revision": 2,
+        "created_at": "2026-10-04T23:06:55.942662+08:00"
+      }
+    ],
+    "score": "0",
+    "allowed_actions": [
+      "production-work-item.stage-material.read",
+      "production-work-item.stage-material.register",
+      "production-work-item.stage-material.withdraw",
+      "production-work-item.stage-material.history.read"
+    ]
+  },
+  "file": {
+    "id": "5c6d2879-e172-4d81-966c-ce280f40b812",
+    "version": 1,
+    "sha256": "6fad1bf2ee4e65af71356c8031a62e604d4325b734b015288b84b6c468cae6e7"
+  },
+  "history": {
+    "items": [
+      {
+        "id": "5209ebc6-9cef-457f-b6ee-dfccb1e08062",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "work_item_revision": 1,
+        "event_sequence": 1,
+        "event_type": "work_item_created",
+        "command_id": "afeb156a-95f6-4110-b113-d9ed3315243c",
+        "actor_subject": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+        "occurred_at": "2026-10-04T23:06:44.770141+08:00",
+        "payload": {
+          "project_id": "4ac38fa9-24f3-48b3-a411-1d22af328cf8",
+          "project_source_revision": 3,
+          "type_definition_version": 2,
+          "type_key": "reference-oa-stage-set-v1"
+        }
+      },
+      {
+        "id": "cd8e32a5-0091-4e39-a1da-51927b62de69",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "work_item_revision": 2,
+        "event_sequence": 2,
+        "event_type": "stage_materials_registered",
+        "command_id": "e21543b3-f163-4d13-b40d-47d3737f5f3c",
+        "actor_subject": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+        "occurred_at": "2026-10-04T23:06:55.942662+08:00",
+        "payload": {
+          "materials": [
+            {
+              "created_at": "2026-10-04T15:06:55.942662Z",
+              "created_revision": 2,
+              "display_name": "方案一.png",
+              "file_id": "5c6d2879-e172-4d81-966c-ce280f40b812",
+              "id": "c5db9799-03a1-4deb-966d-a5b3221cd1ba",
+              "kind": "main-file",
+              "source_revision": 1,
+              "stage_key": "scheme",
+              "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+              "version": 1,
+              "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5"
+            },
+            {
+              "created_at": "2026-10-04T15:06:55.942662Z",
+              "created_revision": 2,
+              "display_name": "方案二.png",
+              "file_id": "88683a71-c0ad-4a44-abc1-1e1754214108",
+              "id": "c8be987c-4390-424d-9a45-9805733e6b5b",
+              "kind": "main-file",
+              "source_revision": 1,
+              "stage_key": "scheme",
+              "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+              "version": 1,
+              "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5"
+            },
+            {
+              "created_at": "2026-10-04T15:06:55.942662Z",
+              "created_revision": 2,
+              "display_name": "校审单.png",
+              "file_id": "238dd19a-3f12-406d-8990-90cf4daf7146",
+              "id": "de871c0e-a9f8-4985-8e0b-ba80af002fbd",
+              "kind": "review-sheet",
+              "source_revision": 1,
+              "stage_key": "scheme",
+              "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+              "version": 1,
+              "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5"
+            }
+          ],
+          "score": "0",
+          "stage_key": "scheme"
+        }
+      },
+      {
+        "id": "8eb109a3-0f47-48e7-9af1-2442084028ec",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "work_item_revision": 3,
+        "event_sequence": 3,
+        "event_type": "stage_materials_registered",
+        "command_id": "909c621a-2a51-4876-8652-231c2ad06098",
+        "actor_subject": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+        "occurred_at": "2026-10-04T23:07:37.577718+08:00",
+        "payload": {
+          "materials": [
+            {
+              "created_at": "2026-10-04T15:07:37.577718Z",
+              "created_revision": 3,
+              "display_name": "校审补充.png",
+              "file_id": "2d813d0c-e7fa-4c85-abe8-4ea8a8ff6c8c",
+              "id": "8b04602b-feec-4d2e-80e0-86f26361959c",
+              "kind": "review-sheet",
+              "source_revision": 1,
+              "stage_key": "scheme",
+              "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+              "version": 1,
+              "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5"
+            }
+          ],
+          "score": "88.5",
+          "stage_key": "scheme"
+        }
+      },
+      {
+        "id": "f5a9e3ef-04dd-48e1-9835-7e1f07611c0a",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "work_item_revision": 4,
+        "event_sequence": 4,
+        "event_type": "stage_materials_registered",
+        "command_id": "7be353b6-81a4-462e-820c-d20072c87a51",
+        "actor_subject": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+        "occurred_at": "2026-10-04T23:08:12.18332+08:00",
+        "payload": {
+          "materials": [
+            {
+              "created_at": "2026-10-04T15:08:12.18332Z",
+              "created_revision": 4,
+              "display_name": "方案续办.png",
+              "file_id": "bb4d9c87-8258-4ad7-81b0-61541762fbea",
+              "id": "838b7377-f1da-46bf-ac7a-4474f9826b4f",
+              "kind": "main-file",
+              "source_revision": 1,
+              "stage_key": "scheme",
+              "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+              "version": 1,
+              "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5"
+            }
+          ],
+          "score": "88.5",
+          "stage_key": "scheme"
+        }
+      },
+      {
+        "id": "08408e5f-d433-4097-82ee-98d4e348c6de",
+        "tenant_id": "779911c6-40ac-49af-b3fc-b4cb2c5cb369",
+        "work_item_id": "3593c78e-efcd-4976-a526-26b2194d2bb5",
+        "work_item_revision": 5,
+        "event_sequence": 5,
+        "event_type": "stage_material_withdrawn",
+        "command_id": "ce809917-1fb8-45b9-9fcf-411989593471",
+        "actor_subject": "42d9bc1e-eea3-448c-981d-ddcb1dab7834",
+        "occurred_at": "2026-10-04T23:08:41.277922+08:00",
+        "payload": {
+          "reason": "原 OA 阶段资料移出",
+          "reference_id": "c5db9799-03a1-4deb-966d-a5b3221cd1ba",
+          "stage_key": "scheme"
+        }
+      }
+    ],
+    "next_after_sequence": null
+  },
+  "stage": "partial-Evidence-complete",
+  "error": "locator.waitFor: Timeout 45000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-real-production-stage-react]').getByRole('button', { name: '部分完成二.png', exact: true }) to be visible\u001b[22m\n",
+  "page_errors": [],
+  "fixture_stopped": true,
+  "finished_at": "2026-10-04T15:10:17.501Z"
+}

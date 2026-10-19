@@ -1,0 +1,159 @@
+{
+  "started_at": "2026-10-04T16:09:21.659Z",
+  "finished_at": "2026-10-04T16:09:32.889Z",
+  "main": [
+    {
+      "name": "omsbizfoundry-unified-workbench-1",
+      "id": "f3f704c62b34f1a756c01394dabbe7c5482e45ffbf4b067fe1f8c844e67701c4",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:d396ab8837c0a2d8efa6c1a8b89dd1744e7ffa8f478e2b202dd1fedfceeca89a",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-gateway-1",
+      "id": "b28d44f49d6b4a314eb6e9cb15dbe34597d0b803bb857a4c820d5625a3216083",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/gateway@sha256:e2f3d4237650985e8e28ae890d407bd819a16bbd79884a94029ee0b7622af267",
+      "status": "Up 10 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-identity-access-1",
+      "id": "ee56f69570e87c583f0365fbc243f42aef75e96cecff388a42ef9b86317386fe",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/identity-access@sha256:69806b6fbf055dcdbb50dcc93a135149e0a523684213ef4607bcc1c21a006266",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-cost-outsourcing-1",
+      "id": "ce36c2b77c640368e4ab8ba213ae6e969f31baf642537e1de994ddafbc21c97b",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/cost-outsourcing@sha256:5eba528b58d38ba52d732b6d471a270427459ae8fb7822f2414719c607914762",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-billing-invoice-1",
+      "id": "30b79a37c646d870ef8591951e77f4588e830f810224961048699fe3b2160ba6",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/billing-invoice@sha256:966b33f325d6a627edc2601fbb43de20f6678b4780f0c6a859fc5f5779bb0e88",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-contract-ledger-1",
+      "id": "3a6d01a0a308e17d28d61552401fd599abd5d41f517f1535dd0b7ccfd1dc55a6",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/contract-ledger@sha256:c93ec28d5066bc5d1f1a936666e4b9d90cdd879d5ceaccce79bcb1106de397b2",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-money-flow-ledger-1",
+      "id": "ece1e5279fa1107801f31e3c73c0e1fbf99726b50086b539b6ea4b433204040e",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/money-flow-ledger@sha256:841a20578eb40f5e8229fbcb74c01f106e5c1df0997a35267a1cb4464cb8b8cf",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-project-workspace-1",
+      "id": "77f27af41049e34e7b71d7deb9f67fa68d74967ec5f9d42d0fcc4ac1f58275e6",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/project-workspace@sha256:28252c9555dc8d66ecada0678db5b210c0c6bfeebf8319c427c56b47bfbeee7c",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-business-engagement-1",
+      "id": "bb1313ddb55e92324b812f76506b87b97c26d02ccefd5a8fb418e0c98cc2594d",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/business-engagement@sha256:3edd046daf159bef2373b3a71a5214e2b265b76e62e4a89f4bed705ec0233a35",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-nginx-1",
+      "id": "b684f5bb18b0de4463d64f3b1c771ef3e8594753b77f0aa0d6403bbfb142f140",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/base-nginx:1.28-alpine@sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3",
+      "status": "Up 3 days (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-approval-audit-results-1",
+      "id": "bf4d9a418ceb868e1c26b6928c978e24e7f8e25e0c06da13c826191436a09757",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/approval-audit-results:v0.1.0-test.19@sha256:116013e9addce14d5b3fdaffd3072540c29ac40daab0a182cf32c0e29a042719",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-bonus-distribution-1",
+      "id": "fb08187d6883d63bb834993a6abd94b11e624e502efe85fccdd396db0984af9d",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/bonus-distribution:v0.1.0-test.20@sha256:a623859773a864584791e5c6d38323c6796dd1d6e1ac0da0f9c11cdf324dc9cb",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-production-operations-1",
+      "id": "ac4644228330bd930b60308cbe440672f5744261d07dd449b9801277a6dd9df5",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/production-operations:v0.1.0-test.16@sha256:1eba80b9fa0d78328ee04466971657291555806722db2a8e1f032dada5536f70",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-evidence-service-1",
+      "id": "5534975ecde49125fb0078b8fd6a28d85f55f9fbb52e79843c6c77a71c5c60d0",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/evidence-service:v0.1.0-test.7@sha256:4145253fb806fab382fe03a42dcbda335ed7597095fb4e10421f0a58e858ebdf",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-people-groups-1",
+      "id": "a3ec06a96d450f8ebb693bf65706ee325a39b9180de24c3fd9993d08b62404ce",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/people-groups:v0.1.0-test.14@sha256:23829268f0fc4ec6e71fe725f98c2919b6d872e5d0e4f388098e0dad9d6ed17a",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-party-directory-1",
+      "id": "5e106d4c61fb2767563cbbd142b5bc06eeab3d2f6db264d270677e4565a197d5",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/party-directory:v0.1.0-test.5@sha256:5b6c218eae2b6bc632944789902f9bc5be00b118774c42284dfca0d2bcb13d3d",
+      "status": "Up 9 hours (healthy)"
+    },
+    {
+      "name": "omsbizfoundry-postgres-1",
+      "id": "9384ddcf5d0f78c39bb3c52b90235df401035cd3b749df48fa5749f39811e826",
+      "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/base-postgres:18.6-alpine@sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66",
+      "status": "Up 5 days (healthy)"
+    }
+  ],
+  "main_healthy_count": 17,
+  "main_images_and_ids_unchanged_during_closeout": true,
+  "main_production_readonly_inventory": {
+    "schema_versions": [
+      "000001_design_operations.sql",
+      "000002_production_type_definitions.sql"
+    ],
+    "work_item_groups": [
+      {
+        "type_key": "design-v1",
+        "type_definition_version": 1,
+        "status": "in-progress",
+        "count": 3
+      }
+    ],
+    "stage_material_table_present": false
+  },
+  "main_writes": false,
+  "main_grants_changed": false,
+  "local_docker_started": false,
+  "local_docker_or_task_processes": [],
+  "remote_task_containers_running": [],
+  "private_archives_or_keys_removed": false,
+  "candidate_hashes_rechecked": 22,
+  "original_hashes_rechecked": 67,
+  "later_stage_original_hashes_rechecked": 6,
+  "material_consumer_boundary_regression": [
+    {
+      "module": "project-workspace",
+      "filter": "^TestProductionMaterialConsumer",
+      "passed": true,
+      "pass_top_level": 3,
+      "pass_including_subtests": 20,
+      "skipped": 0
+    },
+    {
+      "module": "design-operations",
+      "filter": "^TestMaterialReference|^TestStageMaterial",
+      "passed": true,
+      "pass_top_level": 6,
+      "pass_including_subtests": 43,
+      "skipped": 0
+    }
+  ],
+  "documents_checked": 14,
+  "local_document_links_checked": 1104,
+  "diff_check_passed": true,
+  "native_scheme_browser_scenarios": 16,
+  "stage_actual_d1_restore_accepted": false,
+  "main_stage_deployed": false,
+  "full_oa_accepted": false
+}

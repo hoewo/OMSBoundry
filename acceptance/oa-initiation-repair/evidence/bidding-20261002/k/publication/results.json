@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "official_release": false,
+  "images": {
+    "unified-workbench": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:c6b133063cd9800dd0270423fc3d133c56081208fe7de26a9cdd21ed2cd13645",
+      "image_id": "sha256:c6b133063cd9800dd0270423fc3d133c56081208fe7de26a9cdd21ed2cd13645",
+      "binary_sha256": {
+        "server": "eb334c21635f5cf3c87b152bb6f84141d0f16e68321cf747dabb03d939b2422f"
+      }
+    }
+  },
+  "main_unchanged": true
+}

@@ -1,0 +1,181 @@
+# Approval & Audit Results 受保护 HTTP API 契约
+metadata:
+  path: tech/_shared/contracts/approval-audit-results-api.yaml
+  domain: approval-audit-results
+  owner: Approval & Audit Results
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+security:
+  auth_required: true
+  audience: approval-audit-results
+  tenant_match: exact
+  scope_types: [project, approval_audit_result]
+  untrusted_identity_headers: stripped
+operations:
+  - method: POST
+    path: /api/v1/approval-audit-results
+    capability: approval-audit-result.create
+    resource_scope: {type: project, id_from: body.project_ref.id}
+    conditional_capabilities:
+      - {when: body.amount_components is present, capability: approval-audit-result.amount.read}
+      - {when: body.evidence_refs is non-empty, capability: approval-audit-result.evidence.manage}
+    request: {$ref: "#/components/record_request"}
+    success: {status: 201, schema: {$ref: "#/components/result_view"}}
+  - method: GET
+    path: /api/v1/approval-audit-results/{result_id}
+    capability: approval-audit-result.read
+    resource_scope: {any_of: [{type: approval_audit_result, id_from: result_id}, {type: project, id_from: stored_result.project.id}]}
+    success: {status: 200, schema: {$ref: "#/components/result_view"}}
+  - method: GET
+    path: /api/v1/approval-audit-results/{result_id}/history
+    capability: approval-audit-result.history.read
+    resource_scope: {any_of: [{type: approval_audit_result, id_from: result_id}, {type: project, id_from: stored_result.project.id}]}
+    success: {status: 200, schema: {$ref: "#/components/history_view"}}
+  - method: POST
+    path: /api/v1/approval-audit-results/{result_id}/corrections
+    capability: approval-audit-result.correct
+    resource_scope: {any_of: [{type: approval_audit_result, id_from: result_id}, {type: project, id_from: stored_result.project.id}]}
+    conditional_capabilities:
+      - {when: body.amount_components is present, capability: approval-audit-result.amount.read}
+      - {when: body.evidence_refs differs from stored result, capability: approval-audit-result.evidence.manage}
+    request: {$ref: "#/components/correct_request"}
+    success: {status: 200, schema: {$ref: "#/components/result_view"}}
+  - method: POST
+    path: /api/v1/approval-audit-results/{result_id}/withdrawal
+    capability: approval-audit-result.withdraw
+    resource_scope: {any_of: [{type: approval_audit_result, id_from: result_id}, {type: project, id_from: stored_result.project.id}]}
+    request: {$ref: "#/components/withdraw_request"}
+    success: {status: 200, schema: {$ref: "#/components/result_view"}}
+components:
+  project_ref:
+    type: object
+    additionalProperties: false
+    required: [id, revision]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+  source_ref:
+    type: object
+    additionalProperties: false
+    required: [application, resource_type, resource_id, revision]
+    properties:
+      application: {type: string, enum: [contract-ledger, approval-audit-results]}
+      resource_type: {type: string, enum: [contract, settlement, approval-result]}
+      resource_id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+  amount_component:
+    type: object
+    additionalProperties: false
+    required: [kind, amount_minor]
+    properties:
+      kind: {type: string, enum: [design_fee, survey_fee, consultation_fee]}
+      amount_minor: {type: integer, minimum: 0}
+  evidence_ref:
+    type: object
+    additionalProperties: false
+    required: [file_id, version, slot]
+    properties:
+      file_id: {type: string, format: uuid}
+      version: {type: integer, minimum: 1}
+      slot: {type: string, minLength: 1, maxLength: 100}
+  record_request:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, project_ref, kind, currency, source_ref, external_confirmed_by, external_confirmed_at]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 0}
+      project_ref: {$ref: "#/components/project_ref"}
+      kind: {type: string, enum: [approval, audit]}
+      currency: {type: string, pattern: "^[A-Z]{3}$"}
+      amount_components: {type: array, minItems: 3, maxItems: 3, items: {$ref: "#/components/amount_component"}}
+      source_ref: {$ref: "#/components/source_ref"}
+      evidence_refs: {type: array, items: {$ref: "#/components/evidence_ref"}}
+      override_reason: {type: string, maxLength: 1000}
+      external_confirmed_by: {type: string, minLength: 1, maxLength: 200}
+      external_confirmed_at: {type: string, format: date-time}
+  correct_request:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason, currency, source_ref, external_confirmed_by, external_confirmed_at]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+      currency: {type: string, pattern: "^[A-Z]{3}$"}
+      amount_components: {type: array, minItems: 3, maxItems: 3, items: {$ref: "#/components/amount_component"}}
+      source_ref: {$ref: "#/components/source_ref"}
+      evidence_refs: {type: array, items: {$ref: "#/components/evidence_ref"}}
+      override_reason: {type: string, maxLength: 1000}
+      external_confirmed_by: {type: string, minLength: 1, maxLength: 200}
+      external_confirmed_at: {type: string, format: date-time}
+  withdraw_request:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+  result_view:
+    type: object
+    description: "当前结果完整视图；无 approval-audit-result.amount.read 时省略 Result 与冻结 Source 中的金额 profile、币种、组成及合计。"
+    required: [id, tenant_id, project, kind, state, source, evidence, external_confirmed_by, external_confirmed_at, revision, created_at, updated_at, allowed_actions]
+    properties:
+      id: {type: string, format: uuid}
+      tenant_id: {type: string, format: uuid}
+      project: {type: object, description: "冻结的 Project ID、revision、编号和显示名。"}
+      kind: {type: string, enum: [approval, audit]}
+      state: {type: string, enum: [recorded, withdrawn]}
+      amount_profile: {type: string, const: reference-oa-v1}
+      currency: {type: string, pattern: "^[A-Z]{3}$"}
+      amount_components: {type: array, items: {$ref: "#/components/amount_component"}}
+      total_amount_minor: {type: integer, minimum: 0}
+      source: {type: object, description: "冻结的来源 ID、revision、状态、Project、摘要及有权限时的金额。"}
+      evidence: {type: array, description: "已验证 File ID／Version／slot／SHA256／显示名快照。"}
+      override_reason: {type: string}
+      external_confirmed_by: {type: string}
+      external_confirmed_at: {type: string, format: date-time}
+      revision: {type: integer, minimum: 1}
+      created_at: {type: string, format: date-time}
+      updated_at: {type: string, format: date-time}
+      allowed_actions: {type: array, items: {type: string}}
+  history_view:
+    type: object
+    required: [items]
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          required: [result_id, revision, event_kind, command_id, snapshot, actor_ref, occurred_at]
+          properties:
+            result_id: {type: string, format: uuid}
+            revision: {type: integer, minimum: 1}
+            event_kind: {type: string, enum: [recorded, corrected, withdrawn, reregistered]}
+            command_id: {type: string, format: uuid}
+            snapshot: {$ref: "#/components/result_view"}
+            reason: {type: string}
+            actor_ref: {type: string}
+            occurred_at: {type: string, format: date-time}
+errors:
+  - {status: 400, code: INVALID_JSON, retryable: false}
+  - {status: 400, code: INVALID_REQUEST, retryable: false}
+  - {status: 401, code: UNAUTHENTICATED, retryable: false}
+  - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+  - {status: 403, code: SCOPE_DENIED, retryable: false}
+  - {status: 404, code: RESULT_NOT_FOUND, retryable: false}
+  - {status: 409, code: REVISION_CONFLICT, retryable: false}
+  - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+  - {status: 409, code: RESULT_ALREADY_RECORDED, retryable: false}
+  - {status: 409, code: RESULT_WITHDRAWN, retryable: false}
+  - {status: 422, code: REFERENCE_INVALID, retryable: false}
+  - {status: 422, code: NO_EFFECTIVE_CHANGE, retryable: false}
+  - {status: 415, code: UNSUPPORTED_MEDIA_TYPE, retryable: false}
+  - {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow:
+    - "目标应用复验 Tenant、Audience、Capability、Project／Result Scope 和当前业务状态。"
+    - "Project、Contract／Settlement 与 Evidence 全部验证成功后，当前投影、revision、command 与 audit 在同一事务提交。"
+    - "成功 Command 的相同载荷重放返回同一结果且不再次访问来源；相同 Command 的不同载荷返回冲突。"

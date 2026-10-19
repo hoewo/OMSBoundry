@@ -1,0 +1,24 @@
+# 创建 Party API 契约
+metadata: {path: "tech/_shared/contracts/party-create.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/parties", summary: "登记主体 revision 1", auth_required: true, audience: "party-directory", capability: "party-directory.create"}
+request:
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, kind, legal_name]
+    properties:
+      command_id: {type: string, format: uuid}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+      registration_identifier: {type: [string, "null"], minLength: 1, maxLength: 100}
+responses:
+  success: {status: 201, schema: {$ref: "../models/Party.yaml"}}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+business_logic:
+  flow: ["标准化输入。", "按 tenant + command_id 幂等。", "原子写 Party、revision 1、命令和审计。"]
+  state_transitions: ["none -> active revision 1"]
+  side_effects: ["仅写 Party Directory 数据库"]

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "application_id": "business-engagement",
+  "application_version": "0.1.0",
+  "audience": "business-engagement",
+  "capabilities": [
+    { "id": "business-engagement.create", "description": "为凭证范围内的 Project 建立经营承接记录", "risk": "write", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.read", "description": "读取凭证范围内的经营承接当前投影与材料状态", "risk": "read", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.applicability.manage", "description": "确认经营承接是否适用并记录不适用原因", "risk": "write", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.method.select", "description": "选择比选、竞争性谈判或招投标经营方式", "risk": "write", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.evidence.manage", "description": "登记、替换或移除经营材料的 Evidence 引用", "risk": "write", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.material-reference.read", "description": "供受信工作负载读取精确经营承接的当前 Evidence 引用投影", "risk": "privileged", "resource_types": ["business-engagement"] },
+    { "id": "business-engagement.cancel", "description": "取消经营承接记录并保留全部历史", "risk": "privileged", "resource_types": ["project", "business-engagement"] },
+    { "id": "business-engagement.history.read", "description": "读取经营承接的不可变变更历史", "risk": "read", "resource_types": ["project", "business-engagement"] }
+  ]
+}

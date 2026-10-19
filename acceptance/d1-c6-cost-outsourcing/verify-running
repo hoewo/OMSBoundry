@@ -1,0 +1,402 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C6_D1_EVIDENCE_DIR:-"$d1_dir/.runtime/c6-d1-evidence"}
+
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --file "${D1_COMPOSE_OVERRIDE_FILE:?set D1_COMPOSE_OVERRIDE_FILE}" \
+    --profile contract --profile people --profile party --profile project --profile evidence --profile cost-outsourcing "$@"
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() { [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }; }
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+request() {
+  method=$1; url=$2; cookie=$3; payload=$4; output=$5; expected=$6; label=$7; idempotency_key=${8:-}
+  if [ -n "$payload" ] && [ -n "$idempotency_key" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' \
+      -H "Idempotency-Key: $idempotency_key" --data "$payload" "$url")
+  elif [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' \
+      --data "$payload" "$url")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" "$url")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  request GET "$base_url/auth/api/v1/csrf" "$cookie" '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+auth_json() {
+  path=$1; cookie=$2; csrf=$3; payload=$4; output=$5; expected=$6
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+    --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  [ "$actual" = "$expected" ] || { [ "$output" = /dev/null ] || cat "$output" >&2; }
+  expect_status "$expected" "$actual" "POST /auth$path"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; resource_id=${4:-}; output=$5
+  if [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      --data-urlencode resource_type=project --data-urlencode "resource_id=$resource_id" \
+      "$base_url/gateway/authorize/$app")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      "$base_url/gateway/authorize/$app")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "authorize $app"
+}
+
+hidden_value() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$2" | head -1; }
+form_hidden_value() {
+  action=$1; name=$2; file=$3
+  awk -v action="$action" -v name="$name" '
+    index($0,"<form") && index($0,"action=\"" action "\"") {inside=1}
+    inside && index($0,"name=\"" name "\"") {line=$0; sub(".*name=\"" name "\" value=\"","",line); sub("\".*","",line); print line; exit}
+    inside && index($0,"</form>") {inside=0}
+  ' "$file"
+}
+location_value() { sed -n "s/.*[?&]$1=\([^&[:space:]]*\).*/\1/p" "$2" | tr -d '\r' | head -1; }
+
+post_contract() {
+  output=$1; shift
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url/contract/contracts")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /contract/contracts' 303 "$actual" "$duration"
+  expect_status 303 "$actual" 'create Contract'
+}
+
+post_contract_path() {
+  path=$1; output=$2; shift 2
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url/contract$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /contract$path" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "POST /contract$path"
+}
+
+wait_healthy() {
+  service=$1
+  for _attempt in $(seq 1 60); do
+    container=$(compose ps -q "$service")
+    [ -z "$container" ] || [ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")" != healthy ] || return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+service_container() { container=$(compose ps --all --quiet "$1"); [ -n "$container" ] || { echo "$1 container is missing" >&2; exit 1; }; printf '%s' "$container"; }
+stop_service() { docker stop "$(service_container "$1")" >/dev/null; }
+start_service() { docker start "$(service_container "$1")" >/dev/null; }
+run_contract_party_operation() {
+  input=$1; operation=$2
+  compose exec -T contract-ledger sh -eu -c "temporary=\$(mktemp); trap 'rm -f \"\$temporary\"' EXIT; cat >\"\$temporary\"; /app/ops $operation --input \"\$temporary\"" <"$input"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c6.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+stopped_services=''
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  for service in $stopped_services; do start_service "$service" >/dev/null 2>&1 || true; done
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv workload-audits.tsv ids.json state.json cost.json engagement.json contract-engagement.json assessment.json observer-costs.json observer-engagements.json contract-party-boundary.json contract-party-map.json contract-party-cutover.json contract-party-rollback.json contract-party-recutover.json result.md; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT HUP INT TERM
+
+"$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+auth_json /api/v1/login "$admin_cookies" "$admin_csrf" "$payload" "$workspace/admin-login.json" 200
+for app in people-groups party-directory project-workspace contract-ledger evidence-service cost-outsourcing; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$app" '' "$workspace/admin-$app.out"
+done
+
+echo '[1/8] 验证正式选择集、Workbench、C6 页面和 Gateway 相对 API'
+manifest="$d1_dir/.runtime/suite-manifest.json"
+[ -f "$manifest" ] || { echo "Suite Manifest is missing: $manifest" >&2; exit 1; }
+for selected in people-groups party-directory project-workspace contract-ledger evidence-service cost-outsourcing; do
+  jq -e --arg id "$selected" 'any(.applications[]; .id == $id and .enabled == true)' "$manifest" >/dev/null || {
+    echo "$selected is not enabled in Suite Manifest" >&2; exit 1;
+  }
+done
+for absent in money-flow-ledger business-engagement billing-invoice production-operations approval-audit-results; do
+  jq -e --arg id "$absent" 'any(.applications[]; .id == $id and .enabled == false)' "$manifest" >/dev/null || {
+    echo "$absent is not disabled in Suite Manifest" >&2; exit 1;
+  }
+done
+request GET "$base_url/workbench/" "$admin_cookies" '' "$workspace/workbench.html" 200 'GET /workbench/'
+for selected in people-groups party-directory project-workspace contract-ledger cost-outsourcing; do
+  grep -Fq "/gateway/authorize/$selected" "$workspace/workbench.html" || { echo "$selected is missing from Workbench" >&2; exit 1; }
+done
+# Evidence Service 是无界面的支撑服务：它必须被选中和路由，但不应出现在 Workbench。
+for absent in evidence-service money-flow-ledger business-engagement billing-invoice production-operations approval-audit-results; do
+  ! grep -Fq "/gateway/authorize/$absent" "$workspace/workbench.html" || { echo "$absent unexpectedly appears in Workbench" >&2; exit 1; }
+done
+request GET "$base_url/cost-outsourcing/" "$admin_cookies" '' "$workspace/c6.html" 200 'GET /cost-outsourcing/'
+grep -Fq '成本与外协业务记录' "$workspace/c6.html" || { echo 'C6 workspace marker is missing' >&2; exit 1; }
+request GET "$base_url/cost-outsourcing/assets/cost-outsourcing.js" "$admin_cookies" '' "$workspace/c6.js" 200 'GET C6 browser asset'
+for marker in 'gatewayMode' 'allowed_actions' 'assessments' 'error.retryable'; do
+  grep -Fq "$marker" "$workspace/c6.js" || { echo "C6 browser marker is missing: $marker" >&2; exit 1; }
+done
+
+echo '[2/8] 通过正式 API 建立 People、active Project、Party 和 Evidence'
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+create_person() {
+  slug=$1; display=$2
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$display" '{command_id:$command_id,display_name:$display_name}')
+  request POST "$base_url/people/api/v1/persons" "$admin_cookies" "$payload" "$workspace/$slug-person.json" 201 "POST People person ($slug)"
+}
+create_person business 'C6 项目经营负责人'
+create_person production 'C6 项目生产负责人'
+business_person=$(jq -er .id "$workspace/business-person.json"); business_revision=$(jq -er .revision "$workspace/business-person.json")
+production_person=$(jq -er .id "$workspace/production-person.json"); production_revision=$(jq -er .revision "$workspace/production-person.json")
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg number "C6-$stamp" --arg name "C6 成本与外协 $stamp" \
+  '{command_id:$command_id,project_number:$number,name:$name,summary:"C6 D1 formal composition",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+request POST "$base_url/project/api/v1/projects" "$admin_cookies" "$payload" "$workspace/project.json" 201 'POST Project'
+project_id=$(jq -er .id "$workspace/project.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$business_person" --argjson source_revision "$business_revision" '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"business_owner"}')
+request POST "$base_url/project/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/business-assignment.json" 200 'POST Project business assignment'
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$production_person" --argjson source_revision "$production_revision" '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"production_owner"}')
+request POST "$base_url/project/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/production-assignment.json" 200 'POST Project production assignment'
+payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3}')
+request POST "$base_url/project/api/v1/projects/$project_id/complete-initiation" "$admin_cookies" "$payload" "$workspace/project-active.json" 200 'POST Project complete initiation'
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg legal_name "C6 外协服务方 $stamp" --arg registration_identifier "C6-PARTY-$stamp" '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+request POST "$base_url/party/api/v1/parties" "$admin_cookies" "$payload" "$workspace/party.json" 201 'POST Party Directory party'
+party_id=$(jq -er .id "$workspace/party.json"); party_revision=$(jq -er .revision "$workspace/party.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg legal_name "C6 委托方 $stamp" --arg registration_identifier "C6-OWNER-PARTY-$stamp" '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+request POST "$base_url/party/api/v1/parties" "$admin_cookies" "$payload" "$workspace/owner-party.json" 201 'POST Party Directory owner'
+owner_party_id=$(jq -er .id "$workspace/owner-party.json"); owner_party_revision=$(jq -er .revision "$workspace/owner-party.json")
+
+evidence_content="$workspace/c6-receipt.txt"
+printf 'C6 D1 evidence %s\n' "$stamp" >"$evidence_content"
+evidence_size=$(wc -c <"$evidence_content" | tr -d ' ')
+evidence_sha=$(openssl dgst -sha256 "$evidence_content" | awk '{print $2}')
+payload=$(jq -cn --arg file_name "c6-receipt-$stamp.txt" --argjson size "$evidence_size" --arg sha "$evidence_sha" '{file_name:$file_name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:"c6-cost-proof"}}')
+request POST "$base_url/evidence/v1/upload-sessions" "$admin_cookies" "$payload" "$workspace/upload-session.json" 201 'POST Evidence upload session' "$(new_uuid)"
+upload_url=$(jq -er .authorization.upload_url "$workspace/upload-session.json"); upload_session=$(jq -er .session_id "$workspace/upload-session.json"); evidence_file=$(jq -er .file_id "$workspace/upload-session.json")
+expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --request PUT -H 'Content-Type: text/plain' --data-binary "@$evidence_content" "$upload_url")" 'upload Evidence bytes'
+payload=$(jq -cn --argjson size "$evidence_size" --arg sha "$evidence_sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+request POST "$base_url/evidence/v1/upload-sessions/$upload_session/complete" "$admin_cookies" "$payload" "$workspace/evidence-complete.json" 200 'POST Evidence complete' "$(new_uuid)"
+
+echo '[3/8] 建立旧 Contract 精确 Project link，保留本地 Party 边界'
+request GET "$base_url/contract/contracts" "$admin_cookies" '' "$workspace/contract-form.html" 200 'GET Contract form'
+contract_csrf=$(hidden_value csrf_token "$workspace/contract-form.html"); contract_command=$(hidden_value command_id "$workspace/contract-form.html")
+post_contract "$workspace/contract-create" --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" \
+  --data-urlencode number_namespace=C6 --data-urlencode "contract_number=C6-CONTRACT-$stamp" --data-urlencode "title=C6 外协合同 $stamp" \
+  --data-urlencode category=design --data-urlencode currency=CNY --data-urlencode total_amount=5000.00 \
+  --data-urlencode "signed_on=$(date -u '+%Y-%m-%d')" --data-urlencode "effective_on=$(date -u '+%Y-%m-%d')"
+contract_id=$(location_value contract_id "$workspace/contract-create.headers")
+[ -n "$contract_id" ] || { echo 'Contract ID is missing' >&2; exit 1; }
+create_contract_party() {
+  slug=$1; legal_name=$2; registration="C6-$slug-$stamp"
+  request GET "$base_url/contract/parties" "$admin_cookies" '' "$workspace/$slug-contract-party-form.html" 200 "GET Contract Party form ($slug)"
+  csrf=$(hidden_value csrf_token "$workspace/$slug-contract-party-form.html")
+  post_contract_path /parties "$workspace/$slug-contract-party-create" --data-urlencode "csrf_token=$csrf" --data-urlencode kind=organization --data-urlencode "legal_name=$legal_name" --data-urlencode "registration_identifier=$registration"
+  printf '%s' "$registration"
+}
+owner_registration=$(create_contract_party owner "C6 本地委托方 $stamp")
+supplier_registration=$(create_contract_party supplier "C6 本地受托方 $stamp")
+add_contract_party() {
+  slug=$1; registration=$2; role=$3
+  request GET "$base_url/contract/contracts/$contract_id" "$admin_cookies" '' "$workspace/$slug-contract-detail.html" 200 "GET Contract detail ($slug)"
+  local_party=$(awk -v registration="$registration" 'index($0,"<option value=\"") && index($0,registration) {line=$0; sub(".*<option value=\"","",line); sub("\".*","",line); print line; exit}' "$workspace/$slug-contract-detail.html")
+  [ -n "$local_party" ] || { echo "local Contract Party $registration is unavailable" >&2; exit 1; }
+  path="/contracts/$contract_id/parties"
+  csrf=$(form_hidden_value "/contract$path" csrf_token "$workspace/$slug-contract-detail.html")
+  command_id=$(form_hidden_value "/contract$path" command_id "$workspace/$slug-contract-detail.html")
+  expected=$(form_hidden_value "/contract$path" expected_draft_version "$workspace/$slug-contract-detail.html")
+  post_contract_path "$path" "$workspace/$slug-contract-party-link" --data-urlencode "csrf_token=$csrf" --data-urlencode "command_id=$command_id" --data-urlencode "expected_draft_version=$expected" --data-urlencode "party_id=$local_party" --data-urlencode "role=$role"
+}
+add_contract_party owner "$owner_registration" 委托方
+add_contract_party supplier "$supplier_registration" 受托方
+request GET "$base_url/contract/contracts/$contract_id" "$admin_cookies" '' "$workspace/contract-activation-form.html" 200 'GET Contract activation form'
+path="/contracts/$contract_id/activate"
+contract_csrf=$(form_hidden_value "/contract$path" csrf_token "$workspace/contract-activation-form.html"); contract_command=$(form_hidden_value "/contract$path" command_id "$workspace/contract-activation-form.html"); contract_draft=$(form_hidden_value "/contract$path" expected_draft_version "$workspace/contract-activation-form.html")
+post_contract_path "$path" "$workspace/contract-activation" --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" --data-urlencode "expected_draft_version=$contract_draft"
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg contract "$contract_id" '{command_id:$command_id,expected_revision:4,operation:"link",target_service:"contract-ledger",resource_type:"contract",resource_id:$contract,source_revision:1,relation_key:"outsourcing-contract",note:"C6 exact Contract source"}')
+request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$payload" "$workspace/project-link.json" 200 'POST Project Contract link'
+project_revision=$(jq -er .project.revision "$workspace/project-link.json")
+
+echo '[4/8] Evidence 停机零写入，恢复后登记 Cost Entry'
+cost_command=$(new_uuid)
+cost_payload=$(jq -cn --arg command_id "$cost_command" --arg project "$project_id" --argjson project_revision "$project_revision" --arg evidence "$evidence_file" --arg occurred_on "$(date -u '+%Y-%m-%d')" '{command_id:$command_id,project_ref:{id:$project,revision:$project_revision},category:"vehicle",occurred_on:$occurred_on,currency:"CNY",amount_minor:12345,distance_meters:6789,description:"C6 D1 现场车辆成本",evidence_refs:[{file_id:$evidence,version:1,slot:"receipt"}]}')
+stop_service evidence-service; stopped_services='evidence-service'
+request POST "$base_url/cost-outsourcing/api/v1/cost-entries" "$admin_cookies" "$cost_payload" "$workspace/cost-evidence-down.json" 503 'POST Cost with Evidence down'
+request GET "$base_url/cost-outsourcing/api/v1/cost-entries?project_id=$project_id" "$admin_cookies" '' "$workspace/cost-empty.json" 200 'GET Cost after failed create'
+jq -e '.items == []' "$workspace/cost-empty.json" >/dev/null
+start_service evidence-service; wait_healthy evidence-service; stopped_services=''
+request POST "$base_url/cost-outsourcing/api/v1/cost-entries" "$admin_cookies" "$cost_payload" "$workspace/cost.json" 201 'POST Cost after recovery'
+cost_id=$(jq -er .id "$workspace/cost.json")
+jq -e '.revision == 1 and .amount_minor == 12345 and (.evidence | length) == 1 and (.allowed_actions | index("cost-entry.correct"))' "$workspace/cost.json" >/dev/null
+request POST "$base_url/cost-outsourcing/api/v1/cost-entries" "$admin_cookies" "$cost_payload" "$workspace/cost-replay.json" 201 'POST Cost replay'
+jq -e --arg id "$cost_id" '.id == $id and .revision == 1' "$workspace/cost-replay.json" >/dev/null
+
+echo '[5/8] Party 停机零写入，恢复后登记无 Contract 外协和 Assessment'
+engagement_command=$(new_uuid)
+engagement_payload=$(jq -cn --arg command_id "$engagement_command" --arg project "$project_id" --argjson project_revision "$project_revision" --arg party "$party_id" --argjson party_revision "$party_revision" --arg evidence "$evidence_file" '{command_id:$command_id,project_ref:{id:$project,revision:$project_revision},provider_ref:{id:$party,revision:$party_revision},scope:"C6 D1 桥梁测量外协",currency:"CNY",amount_minor:500000,evidence_refs:[{file_id:$evidence,version:1,slot:"agreement"}],note:"Contract 可选的最小组合"}')
+stop_service party-directory; stopped_services='party-directory'
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements" "$admin_cookies" "$engagement_payload" "$workspace/engagement-party-down.json" 503 'POST Engagement with Party down'
+request GET "$base_url/cost-outsourcing/api/v1/outsourcing-engagements?project_id=$project_id" "$admin_cookies" '' "$workspace/engagement-empty.json" 200 'GET Engagement after failed create'
+jq -e '.items == []' "$workspace/engagement-empty.json" >/dev/null
+start_service party-directory; wait_healthy party-directory; stopped_services=''
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements" "$admin_cookies" "$engagement_payload" "$workspace/engagement.json" 201 'POST Engagement after recovery'
+engagement_id=$(jq -er .id "$workspace/engagement.json")
+jq -e --arg party "$party_id" '.revision == 1 and .provider.id == $party and .amount_minor == 500000 and (.allowed_actions | index("outsourcing-engagement.assess"))' "$workspace/engagement.json" >/dev/null
+assessment_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_engagement_revision:1,expected_assessment_revision:0,score:5,reason:"C6 D1 交付资料齐全"}')
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements/$engagement_id/assessments" "$admin_cookies" "$assessment_payload" "$workspace/assessment.json" 201 'POST Engagement assessment'
+jq -e '.revision == 1 and .score == 5' "$workspace/assessment.json" >/dev/null
+
+echo '[6/8] Contract Party 显式映射、运行时切换、回滚与重切'
+mismatch_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project "$project_id" --argjson project_revision "$project_revision" --arg party "$party_id" --argjson party_revision "$party_revision" --arg contract "$contract_id" --arg evidence "$evidence_file" '{command_id:$command_id,project_ref:{id:$project,revision:$project_revision},provider_ref:{id:$party,revision:$party_revision},scope:"必须拒绝的旧合同外协",currency:"CNY",amount_minor:500000,contract_ref:{application:"contract-ledger",resource_type:"contract",resource_id:$contract,revision:1},evidence_refs:[{file_id:$evidence,version:1,slot:"agreement"}],note:"不可隐式替换 Party"}')
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements" "$admin_cookies" "$mismatch_payload" "$workspace/contract-party-boundary.json" 422 'POST Engagement with mismatched Contract Party'
+jq -e '.error.code == "REFERENCE_INVALID" and .error.retryable == false' "$workspace/contract-party-boundary.json" >/dev/null
+request GET "$base_url/cost-outsourcing/api/v1/outsourcing-engagements?project_id=$project_id" "$admin_cookies" '' "$workspace/engagement-after-boundary.json" 200 'GET Engagement after Contract boundary rejection'
+jq -e --arg id "$engagement_id" '(.items | length) == 1 and .items[0].id == $id' "$workspace/engagement-after-boundary.json" >/dev/null
+
+tenant_id=$(env_value TENANT_ID)
+reviewer_subject=$(jq -er .principal.subject_id "$workspace/admin-login.json")
+reviewer_name=$(jq -er .principal.display_name "$workspace/admin-login.json")
+migration_batch=$(new_uuid)
+compose exec -T contract-ledger /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/contract-party-preflight.json"
+owner_local_id=$(jq -er --arg registration "$owner_registration" '.items[] | select(.registration_identifier == $registration) | .local_party_id' "$workspace/contract-party-preflight.json")
+owner_local_sha=$(jq -er --arg registration "$owner_registration" '.items[] | select(.registration_identifier == $registration) | .local_snapshot_sha256' "$workspace/contract-party-preflight.json")
+supplier_local_id=$(jq -er --arg registration "$supplier_registration" '.items[] | select(.registration_identifier == $registration) | .local_party_id' "$workspace/contract-party-preflight.json")
+supplier_local_sha=$(jq -er --arg registration "$supplier_registration" '.items[] | select(.registration_identifier == $registration) | .local_snapshot_sha256' "$workspace/contract-party-preflight.json")
+jq -cn --arg tenant "$tenant_id" --arg batch "$migration_batch" --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  --arg owner_command "$(new_uuid)" --arg owner_local "$owner_local_id" --arg owner_sha "$owner_local_sha" --arg owner_target "$owner_party_id" --argjson owner_revision "$owner_party_revision" \
+  --arg supplier_command "$(new_uuid)" --arg supplier_local "$supplier_local_id" --arg supplier_sha "$supplier_local_sha" --arg supplier_target "$party_id" --argjson supplier_revision "$party_revision" \
+  '{format:"omsbizfoundry.contract-party-mapping-review/v1",tenant_id:$tenant,migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,mappings:[{command_id:$owner_command,local_party_id:$owner_local,local_snapshot_sha256:$owner_sha,decision:"map_existing_directory_party",target_party_id:$owner_target,target_party_revision:$owner_revision,reason:"C6 委托方人工核对"},{command_id:$supplier_command,local_party_id:$supplier_local,local_snapshot_sha256:$supplier_sha,decision:"map_existing_directory_party",target_party_id:$supplier_target,target_party_revision:$supplier_revision,reason:"C6 受托方人工核对"}]}' >"$workspace/contract-party-map-request.json"
+run_contract_party_operation "$workspace/contract-party-map-request.json" party-migration-map >"$workspace/contract-party-map.json"
+jq -e '.recorded == 2 and .replayed == 0 and .ready_for_cutover == false' "$workspace/contract-party-map.json" >/dev/null
+
+jq -cn --arg tenant "$tenant_id" --arg command "$(new_uuid)" --arg batch "$migration_batch" --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  '{format:"omsbizfoundry.contract-party-runtime-transition/v1",tenant_id:$tenant,command_id:$command,action:"cutover",migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,reason:"C6 两个引用主体已显式复核"}' >"$workspace/contract-party-cutover-request.json"
+run_contract_party_operation "$workspace/contract-party-cutover-request.json" party-runtime-transition >"$workspace/contract-party-cutover.json"
+jq -e '.state.mode == "directory" and .mapped_party_count == 2 and .referenced_party_count == 2' "$workspace/contract-party-cutover.json" >/dev/null
+
+linked_payload=$(printf '%s' "$mismatch_payload" | jq --arg command_id "$(new_uuid)" --arg scope "显式 Party 切换后的合同外协" '.command_id=$command_id | .scope=$scope | .note="Contract 对外引用已投影 Directory Party 精确 revision"')
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements" "$admin_cookies" "$linked_payload" "$workspace/contract-engagement.json" 201 'POST Contract-linked Engagement after Party cutover'
+contract_engagement_id=$(jq -er .id "$workspace/contract-engagement.json")
+jq -e --arg party "$party_id" --arg contract "$contract_id" '.provider.id == $party and .contract.resource_id == $contract and .revision == 1' "$workspace/contract-engagement.json" >/dev/null
+
+jq -cn --arg tenant "$tenant_id" --arg command "$(new_uuid)" --arg batch "$migration_batch" --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  '{format:"omsbizfoundry.contract-party-runtime-transition/v1",tenant_id:$tenant,command_id:$command,action:"rollback",migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,reason:"C6 验证兼容读回滚，不恢复本地写权"}' >"$workspace/contract-party-rollback-request.json"
+run_contract_party_operation "$workspace/contract-party-rollback-request.json" party-runtime-transition >"$workspace/contract-party-rollback.json"
+jq -e '.state.mode == "local_compatibility" and .state.directory_authority_established == true' "$workspace/contract-party-rollback.json" >/dev/null
+rolled_back_payload=$(printf '%s' "$linked_payload" | jq --arg command_id "$(new_uuid)" --arg scope "回滚后必须再次拒绝的合同外协" '.command_id=$command_id | .scope=$scope')
+request POST "$base_url/cost-outsourcing/api/v1/outsourcing-engagements" "$admin_cookies" "$rolled_back_payload" "$workspace/contract-party-rollback-boundary.json" 422 'POST Contract-linked Engagement after Party rollback'
+
+request GET "$base_url/contract/parties" "$admin_cookies" '' "$workspace/contract-party-frozen-form.html" 200 'GET Contract Party form after rollback'
+frozen_csrf=$(hidden_value csrf_token "$workspace/contract-party-frozen-form.html")
+result=$(curl --silent --show-error --output "$workspace/contract-party-frozen-write.out" --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+  --data-urlencode "csrf_token=$frozen_csrf" --data-urlencode kind=organization --data-urlencode "legal_name=不得写入的本地主体" --data-urlencode "registration_identifier=C6-FROZEN-$stamp" "$base_url/contract/parties")
+actual=${result%% *}; duration=${result#* }; record_http 'POST frozen Contract Party after rollback' 409 "$actual" "$duration"; expect_status 409 "$actual" 'frozen Contract Party write after rollback'
+
+jq -cn --arg tenant "$tenant_id" --arg command "$(new_uuid)" --arg batch "$migration_batch" --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  '{format:"omsbizfoundry.contract-party-runtime-transition/v1",tenant_id:$tenant,command_id:$command,action:"cutover",migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,reason:"C6 回滚证据完成后恢复 Directory 运行态"}' >"$workspace/contract-party-recutover-request.json"
+run_contract_party_operation "$workspace/contract-party-recutover-request.json" party-runtime-transition >"$workspace/contract-party-recutover.json"
+jq -e '.state.mode == "directory" and .state.sequence == 3' "$workspace/contract-party-recutover.json" >/dev/null
+
+echo '[7/8] Project Scope + 最小 read capability 驱动脱敏和拒绝'
+observer_username="c6-observer-$stamp"; observer_password="C6-Observer-${stamp}!Aa7"
+payload=$(jq -cn --arg username "$observer_username" '{username:$username,display_name:"C6 无金额观察者"}')
+auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/observer-invitation.json" 201
+observer_subject=$(jq -er .subject.id "$workspace/observer-invitation.json"); observer_token=$(jq -er .token "$workspace/observer-invitation.json")
+observer_cookies="$workspace/observer.cookies"; observer_csrf=$(fetch_csrf "$observer_cookies" "$workspace/observer-csrf.json")
+payload=$(jq -cn --arg token "$observer_token" --arg password "$observer_password" '{token:$token,password:$password}')
+auth_json /api/v1/activate "$observer_cookies" "$observer_csrf" "$payload" "$workspace/observer-activation.json" 200
+payload=$(jq -cn --arg username "$observer_username" --arg password "$observer_password" '{username:$username,password:$password}')
+auth_json /api/v1/login "$observer_cookies" "$observer_csrf" "$payload" "$workspace/observer-login.json" 200
+for action in cost-entry.read outsourcing-engagement.read; do
+  payload=$(jq -cn --arg subject_id "$observer_subject" --arg action "$action" '{subject_id:$subject_id,audience:"cost-outsourcing",action:$action}')
+  auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+done
+authorize_app "$observer_cookies" "$observer_csrf" cost-outsourcing "$project_id" "$workspace/observer-authorize.out"
+request GET "$base_url/cost-outsourcing/api/v1/cost-entries?project_id=$project_id" "$observer_cookies" '' "$workspace/observer-costs.json" 200 'GET redacted Cost'
+jq -e '(.items | length) == 1 and (.items[0] | has("amount_minor") | not) and (.items[0].allowed_actions == ["cost-entry.read"])' "$workspace/observer-costs.json" >/dev/null
+request GET "$base_url/cost-outsourcing/api/v1/outsourcing-engagements?project_id=$project_id" "$observer_cookies" '' "$workspace/observer-engagements.json" 200 'GET redacted Engagement'
+jq -e '(.items | length) == 2 and all(.items[]; (has("amount_minor") | not) and .allowed_actions == ["outsourcing-engagement.read"])' "$workspace/observer-engagements.json" >/dev/null
+denied_payload=$(printf '%s' "$cost_payload" | sed "s/$cost_command/$(new_uuid)/")
+request POST "$base_url/cost-outsourcing/api/v1/cost-entries" "$observer_cookies" "$denied_payload" "$workspace/observer-write.json" 403 'POST Cost without create capability'
+request GET "$base_url/cost-outsourcing/api/v1/cost-entries?project_id=$(new_uuid)" "$observer_cookies" '' "$workspace/observer-wrong-project.json" 403 'GET Cost outside Project Scope'
+
+echo '[8/8] 固化恢复前 canonical 状态与运行结论'
+request GET "$base_url/cost-outsourcing/api/v1/cost-entries/$cost_id/history" "$admin_cookies" '' "$workspace/cost-history.json" 200 'GET Cost history'
+request GET "$base_url/cost-outsourcing/api/v1/outsourcing-engagements/$engagement_id/history" "$admin_cookies" '' "$workspace/engagement-history.json" 200 'GET Engagement history'
+request GET "$base_url/cost-outsourcing/api/v1/outsourcing-engagements/$engagement_id/assessments" "$admin_cookies" '' "$workspace/assessment-history.json" 200 'GET Assessment history'
+printf 'audience\taction\tresource_type\tresource_id\taudit_count\n' >"$workspace/workload-audits.tsv"
+assert_workload_audit() {
+  audience=$1; action=$2; resource_type=$3; resource_id=$4
+  count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='cost-outsourcing' AND details->>'audience'='$audience' AND details->'actions' @> '[\\\"$action\\\"]'::jsonb AND details->'scope'->'resources' @> '[{\\\"type\\\":\\\"$resource_type\\\",\\\"id\\\":\\\"$resource_id\\\"}]'::jsonb\"")
+  printf '%s\t%s\t%s\t%s\t%s\n' "$audience" "$action" "$resource_type" "$resource_id" "$count" >>"$workspace/workload-audits.tsv"
+  [ "$count" -ge 1 ] || { echo "missing exact C6 workload audit: $audience/$action/$resource_type/$resource_id" >&2; exit 1; }
+}
+assert_workload_audit project-workspace project-workspace.read project "$project_id"
+assert_workload_audit party-directory party-directory.reference.read party "$party_id"
+assert_workload_audit contract-ledger contract-ledger.reference.read contract "$contract_id"
+assert_workload_audit evidence-service evidence-service.view file "$evidence_file"
+cost_sha=$(jq -Sc '{id,tenant_id,project,category,occurred_on,currency,amount_minor,distance_meters,description,evidence,state,revision,created_by,updated_by,created_at,updated_at}' "$workspace/cost.json" | openssl dgst -sha256 -r | awk '{print $1}')
+engagement_sha=$(jq -Sc '{id,tenant_id,project,provider,scope,currency,amount_minor,contract,evidence,note,state,revision,created_by,updated_by,created_at,updated_at}' "$workspace/engagement.json" | openssl dgst -sha256 -r | awk '{print $1}')
+assessment_sha=$(jq -Sc . "$workspace/assessment-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+jq -cn --arg project_id "$project_id" --argjson project_revision "$project_revision" --arg party_id "$party_id" --arg owner_party_id "$owner_party_id" --arg contract_id "$contract_id" --arg evidence_file_id "$evidence_file" --arg cost_id "$cost_id" --arg engagement_id "$engagement_id" --arg contract_engagement_id "$contract_engagement_id" --arg migration_batch_id "$migration_batch" '{project_id:$project_id,project_revision:$project_revision,party_id:$party_id,owner_party_id:$owner_party_id,contract_id:$contract_id,evidence_file_id:$evidence_file_id,cost_id:$cost_id,engagement_id:$engagement_id,contract_engagement_id:$contract_engagement_id,migration_batch_id:$migration_batch_id}' >"$workspace/ids.json"
+jq -cn --arg cost_sha256 "$cost_sha" --arg engagement_sha256 "$engagement_sha" --arg assessment_sha256 "$assessment_sha" --argjson party_runtime_sequence "$(jq -er .state.sequence "$workspace/contract-party-recutover.json")" '{cost_sha256:$cost_sha256,engagement_sha256:$engagement_sha256,assessment_sha256:$assessment_sha256,cost_history_count:1,engagement_history_count:1,assessment_history_count:1,party_runtime_mode:"directory",party_runtime_sequence:$party_runtime_sequence,engagement_count:2}' >"$workspace/state.json"
+assertions=$(awk -F '\t' 'NR>1 {count++} END {print count+0}' "$http_evidence"); mismatches=$(awk -F '\t' 'NR>1 && $2!=$3 {count++} END {print count+0}' "$http_evidence")
+printf '%s\n' '# C6 D1 正式组合首次验证' '' "- HTTP 断言：${assertions}" "- 状态不匹配：${mismatches}" "- Cost：${cost_id}，Engagement：${engagement_id}，Contract Engagement：${contract_engagement_id}，Assessment revision 1" '- Evidence／Party 停机均 503 且零写入；恢复后同一业务意图成功。' '- Contract 在切换前 422；显式映射并切换后 201；回滚后再次 422；本地主体写入保持 409；重切后恢复 Directory 运行态。' '- Project Scope、最小 read、金额脱敏、无 create 403 与越 Scope 403 通过。' '- 下一步：联合备份、空目标恢复、取消选装缺席与恢复后继续写入。' >"$workspace/result.md"
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat "$workspace/result.md"

@@ -1,0 +1,104 @@
+{
+  "passed": true,
+  "ui_only": true,
+  "native_accepted": false,
+  "main_changed": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-scheme-panel-empty-main-required-optional-review-score-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-800px-drawer-labels-controls-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "missing-main-does-not-call-save-port",
+      "passed": true
+    },
+    {
+      "name": "two-main-files-optional-review-zero-score-one-complete-intent",
+      "passed": true
+    },
+    {
+      "name": "original-saved-file-preview-drawer-private-memory-delivery",
+      "passed": true
+    },
+    {
+      "name": "existing-main-append-independent-optional-review-and-decimal-score",
+      "passed": true
+    },
+    {
+      "name": "blank-score-preserves-prior-value-not-unrequested-clear",
+      "passed": true
+    },
+    {
+      "name": "original-file-confirm-cancel-zero-withdraw",
+      "passed": true
+    },
+    {
+      "name": "one-reference-withdraw-shape-keeps-other-main-and-review",
+      "passed": true
+    },
+    {
+      "name": "failed-save-keeps-input-for-explicit-port-continue-not-native-replay-evidence",
+      "passed": true
+    },
+    {
+      "name": "read-failure-visible-retry-not-empty-or-new-form",
+      "passed": true
+    },
+    {
+      "name": "explicit-readonly-port-hides-write-controls-keeps-file-display",
+      "passed": true
+    },
+    {
+      "name": "900px-original-drawer-save-and-cancel-real-click-targets-reachable",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "bd5df11b99501374a8fdf8469e4f64509218f96894f408ed321c65b416b96391",
+  "page_errors": [],
+  "calls": {
+    "save": 5,
+    "withdraw": 1,
+    "read": 28,
+    "downloads": 0
+  },
+  "intents": [
+    {
+      "mainFiles": [
+        "方案一.png",
+        "方案二.png"
+      ],
+      "reviewSheets": [],
+      "score": "0"
+    },
+    {
+      "mainFiles": [],
+      "reviewSheets": [
+        "校审单.png"
+      ],
+      "score": "88.5"
+    },
+    {
+      "mainFiles": [],
+      "reviewSheets": []
+    },
+    {
+      "mainFiles": [
+        "方案续存.png"
+      ],
+      "reviewSheets": [],
+      "score": "88.5"
+    },
+    {
+      "mainFiles": [
+        "方案续存.png"
+      ],
+      "reviewSheets": [],
+      "score": "88.5"
+    }
+  ]
+}

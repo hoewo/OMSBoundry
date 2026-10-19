@@ -1,0 +1,42 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    },
+    {
+      "name": "reopen-original-form-and-save-amendment-intention",
+      "passed": true
+    },
+    {
+      "name": "original-amendment-edit-keeps-identity",
+      "passed": true
+    },
+    {
+      "name": "original-confirmation-cancels-intention-without-removing-history",
+      "passed": true
+    },
+    {
+      "name": "reload-zero-command-and-truthful-disabled-material-controls",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "0a9de70c22e20d606d1e90259dc034268e8044683e34a6de4cdead4ca06e092f",
+  "failure": {
+    "stage": "lost-core-reply",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText(/上次操作尚未全部确认（core）/) to be visible\u001b[22m\n"
+  },
+  "business_command_count": 13,
+  "page_errors": []
+}

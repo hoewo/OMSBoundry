@@ -1,0 +1,534 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c8"}
+journey_dir=$(dirname "$evidence_dir")
+c7_state=${OA_JOURNEY_C7_STATE:-"$journey_dir/c7/state-after-c7.json"}
+c6_state=${OA_JOURNEY_C6_STATE:-"$journey_dir/c6/state-after-c6.json"}
+c5_state=${OA_JOURNEY_C5_STATE:-"$journey_dir/c5/state-after-c5.json"}
+c4_state=${OA_JOURNEY_C4_STATE:-"$journey_dir/c4/state-after-c4.json"}
+c2_state=${OA_JOURNEY_C2_STATE:-"$journey_dir/c2/state-after-c2.json"}
+c1_state=${OA_JOURNEY_C1_STATE:-"$journey_dir/c1/state-after-c1.json"}
+c1_private_state=${OA_JOURNEY_C1_PRIVATE_STATE:-"$journey_dir/c1/state-private-c1.json"}
+plan_state="$evidence_dir/state-plan-c8.json"
+fixture_state="$evidence_dir/state-partial-c8-work-item.json"
+completed_state="$evidence_dir/state-after-c8.json"
+
+[ "${OA_JOURNEY_C8_CONFIRM:-}" = yes ] || {
+  echo 'set OA_JOURNEY_C8_CONFIRM=yes to authorize bounded IAM grants, one same-Project work item fixture, and sequential source stops' >&2
+  exit 2
+}
+for required in "$env_file" "$c7_state" "$c6_state" "$c5_state" "$c4_state" "$c2_state" "$c1_state" "$c1_private_state"; do
+  [ -f "$required" ] || { echo "required C8 input is missing: $required" >&2; exit 2; }
+done
+for command in curl jq openssl docker awk sed seq cmp; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+digest_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+json_request() {
+  method=$1; url=$2; cookie=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie" --cookie-jar "$cookie"
+  [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"
+  if [ -n "$payload" ]; then set -- "$@" -H 'Content-Type: application/json' --data "$payload"; fi
+  result=$(curl "$@" "$url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ]; then
+    [ "$output" = /dev/null ] || [ ! -s "$output" ] || { cat "$output" >&2; printf '\n' >&2; }
+    echo "$label: HTTP $actual, expected $expected" >&2
+    exit 1
+  fi
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  json_request GET "$base_url/auth/api/v1/csrf" "$cookie" '' '' "$output" 200 'GET IAM CSRF'
+  jq -er .csrf_token "$output"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5; label=$6
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  json_request POST "$base_url/auth/api/v1/login" "$cookie" "$csrf" "$payload" "$output" 200 "POST IAM login ($label)"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; output=$4; resource_type=${5:-}; resource_id=${6:-}
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf"
+  if [ -n "$resource_type" ]; then
+    set -- "$@" --data-urlencode "resource_type=$resource_type" --data-urlencode "resource_id=$resource_id"
+  fi
+  result=$(curl "$@" "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app${resource_type:+ ($resource_type)}" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "authorize $app"
+}
+
+assert_evidence_actions() {
+  evidence_cookie=$(awk '$6=="oms_cap_evidence_service" {print $7}' "$participant_cookies")
+  [ -n "$evidence_cookie" ] || { echo 'Evidence capability cookie is missing' >&2; exit 1; }
+  printf '%s' "$evidence_cookie" | jq -R -e --arg tenant "$tenant_id" --arg file "$material_file" --argjson expected "$1" '
+    split(".")[1] | gsub("-";"+") | gsub("_";"/") | @base64d | fromjson |
+    .tid==$tenant and .aud=="evidence-service" and
+    (.actions|sort)==($expected|sort) and
+    .scope=={kind:"resources",resources:[{type:"file",id:$file}]}
+  ' >/dev/null || { echo 'Evidence credential actions/scope changed or include a legacy view workaround' >&2; exit 1; }
+}
+
+auth_admin_json() {
+  path=$1; payload=$2; output=$3; expected=$4; label=$5
+  json_request POST "$base_url/auth$path" "$admin_cookies" "$admin_csrf" "$payload" "$output" "$expected" "$label"
+}
+
+grant_tenant() {
+  subject=$1; audience=$2; action=$3
+  payload=$(jq -cn --arg subject "$subject" --arg audience "$audience" --arg action "$action" \
+    '{subject_id:$subject,audience:$audience,action:$action}')
+  auth_admin_json /api/v1/admin/grants "$payload" /dev/null 204 "GRANT $audience/$action"
+}
+
+revoke_tenant() {
+  subject=$1; audience=$2; action=$3
+  payload=$(jq -cn --arg subject "$subject" --arg audience "$audience" --arg action "$action" \
+    '{subject_id:$subject,audience:$audience,action:$action}')
+  auth_admin_json /api/v1/admin/grants/revoke "$payload" /dev/null 204 "REVOKE $audience/$action"
+}
+
+grant_resource() {
+  subject=$1; audience=$2; action=$3; resource_type=$4; resource_id=$5
+  payload=$(jq -cn --arg subject "$subject" --arg audience "$audience" --arg action "$action" \
+    --arg resource_type "$resource_type" --arg resource_id "$resource_id" \
+    '{subject_id:$subject,audience:$audience,action:$action,scope:{kind:"resources",resources:[{type:$resource_type,id:$resource_id}]}}')
+  auth_admin_json /api/v1/admin/grants "$payload" /dev/null 204 "GRANT $audience/$action ($resource_type)"
+}
+
+revoke_resource_quiet() {
+  subject=$1; audience=$2; action=$3; resource_type=$4; resource_id=$5
+  payload=$(jq -cn --arg subject "$subject" --arg audience "$audience" --arg action "$action" \
+    --arg resource_type "$resource_type" --arg resource_id "$resource_id" \
+    '{subject_id:$subject,audience:$audience,action:$action,scope:{kind:"resources",resources:[{type:$resource_type,id:$resource_id}]}}')
+  curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/grants/revoke" || true
+}
+
+service_container() {
+  container=$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1")
+  [ -n "$container" ] || { echo "$1 container is missing from $project" >&2; exit 1; }
+  [ "$(printf '%s\n' "$container" | wc -l | tr -d ' ')" = 1 ] || { echo "$1 is not unique in $project" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+wait_healthy() {
+  service=$1; container=$(service_container "$service")
+  for _attempt in $(seq 1 90); do
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+    [ "$status" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+postgres_rows() {
+  database=$1; sql=$2; container=$(service_container postgres)
+  docker exec "$container" sh -eu -c 'psql -U "$POSTGRES_USER" -d "$1" -At -c "$2"' sh "$database" "$sql"
+}
+
+capture_all_facts() {
+  phase=$1
+  output_dir="$workspace/facts-$phase"
+  summary="$workspace/fact-digests-$phase.tsv"
+  mkdir -p "$output_dir"
+  printf 'database\trow_count\tsha256\n' >"$summary"
+  for database in \
+    people_groups party_directory project_workspace business_engagement contract_ledger money_flow \
+    design_operations approval_audit_results billing_invoice cost_outsourcing bonus_distribution evidence_service
+  do
+    rows="$output_dir/$database.tsv"
+    container=$(service_container postgres)
+    docker exec -i "$container" sh -eu -c 'psql --quiet --tuples-only --no-align --field-separator="\t" --set=ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$1"' sh "$database" >"$rows" <<'SQL'
+CREATE TEMP TABLE c8_fact_snapshot(table_name text NOT NULL, row_value text NOT NULL);
+DO $$
+DECLARE item record;
+BEGIN
+  FOR item IN
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations'
+    ORDER BY table_name
+  LOOP
+    EXECUTE format(
+      'INSERT INTO c8_fact_snapshot(table_name,row_value) SELECT %L,to_jsonb(value)::text FROM %I AS value',
+      item.table_name,item.table_name
+    );
+  END LOOP;
+END $$;
+SELECT table_name,row_value FROM c8_fact_snapshot ORDER BY table_name,row_value;
+SQL
+    row_count=$(wc -l <"$rows" | tr -d ' ')
+    printf '%s\t%s\t%s\n' "$database" "$row_count" "$(digest_file "$rows")" >>"$summary"
+  done
+}
+
+assert_fact_snapshots_equal() {
+  cmp -s "$workspace/fact-digests-before.tsv" "$workspace/fact-digests-after.tsv" || {
+    echo 'one or more domain fact digests changed during C8 reads/faults' >&2
+    diff -u "$workspace/fact-digests-before.tsv" "$workspace/fact-digests-after.tsv" >&2 || true
+    exit 1
+  }
+  for before in "$workspace"/facts-before/*.tsv; do
+    name=$(basename "$before")
+    cmp -s "$before" "$workspace/facts-after/$name" || { echo "domain facts changed: $name" >&2; exit 1; }
+  done
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-full-oa-c8.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+stopped_service=''
+participant_subject=''
+neighbor_subject=''
+project_id=''
+material_file=''
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ -n "$stopped_service" ]; then docker start "$(service_container "$stopped_service")" >/dev/null 2>&1 || true; fi
+  if [ -f "${admin_cookies:-/nonexistent}" ]; then
+    for tuple in \
+      "$participant_subject project-workspace project-workspace.read project $project_id" \
+      "$participant_subject project-workspace project-workspace.materials.read project $project_id" \
+      "$participant_subject evidence-service evidence-service.metadata.read file $material_file" \
+      "$participant_subject evidence-service evidence-service.download file $material_file"
+    do
+      set -- $tuple
+      [ -n "${1:-}" ] && [ -n "${5:-}" ] && revoke_resource_quiet "$1" "$2" "$3" "$4" "$5"
+    done
+    for tuple in \
+      "$participant_subject money-flow-ledger money-flow-ledger.view" \
+      "$participant_subject money-flow-ledger money-flow-ledger.statistics.read" \
+      "$participant_subject money-flow-ledger money-flow-ledger.amount.read" \
+      "$neighbor_subject production-operations production-work-item.read" \
+      "$neighbor_subject production-operations production-work-item.work-items.read" \
+      "$neighbor_subject production-operations production-work-item.stage.manage"
+    do
+      set -- $tuple
+      [ -n "${1:-}" ] || continue
+      payload=$(jq -cn --arg subject "$1" --arg audience "$2" --arg action "$3" '{subject_id:$subject,audience:$audience,action:$action}')
+      curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+        -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/grants/revoke" || true
+    done
+  fi
+  mkdir -p "$evidence_dir"
+  for artifact in \
+    http-evidence.tsv state-plan-c8.json state-partial-c8-work-item.json state-after-c8.json c8-summary.md \
+    project-details.json project-materials.json project-materials-evidence-down.json project-materials-recovered.json \
+    project-resource-links.json material-coverage.json evidence-metadata-only.json evidence-download-denied.json evidence-download-authorized.json evidence-download-only-metadata-denied.json evidence-download-only-authorized.json \
+    production-work-item-reopened.json production-owner-work-items.json neighbor-work-items.json \
+    workbench.html workbench-evidence-down.html workbench-production-down.html production-down.body production-owner-recovered.json \
+    money-redacted.json money-stale-after-grant.json money-visible.json money-stale-after-revoke.json money-redacted-after-revoke.json \
+    fact-digests-before.tsv fact-digests-after.tsv health-final.tsv
+  do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  for phase in before after; do
+    [ ! -d "$workspace/facts-$phase" ] || { rm -rf "$evidence_dir/facts-$phase"; cp -R "$workspace/facts-$phase" "$evidence_dir/facts-$phase"; }
+  done
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+tenant_id=$(env_value TENANT_ID)
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$tenant_id" ] && [ -n "$admin_password" ] || { echo 'TENANT_ID and BOOTSTRAP_ADMIN_PASSWORD are required' >&2; exit 2; }
+[ "$(stat -c '%a' "$c1_private_state" 2>/dev/null || stat -f '%Lp' "$c1_private_state")" = 600 ] || { echo 'C1 private state must have mode 0600' >&2; exit 1; }
+
+project_id=$(jq -er .project.id "$c7_state")
+project_revision=$(jq -er .project.revision "$c7_state")
+material_file=$(jq -er '.evidence[]|select(.purpose=="bid_document")|.file_id' "$c2_state")
+production_assignment=$(jq -er '.assignments[]|select(.role_key=="production_owner")|.id' "$c1_state")
+production_assignment_revision=$(jq -er '.assignments[]|select(.role_key=="production_owner")|.created_project_revision' "$c1_state")
+production_subject=$(jq -er '.actors[]|select(.role=="production_owner")|.subject_id' "$c1_private_state")
+production_username=$(jq -er '.actors[]|select(.role=="production_owner")|.username' "$c1_private_state")
+production_password=$(jq -er '.actors[]|select(.role=="production_owner")|.password' "$c1_private_state")
+participant_subject=$(jq -er '.actors[]|select(.role=="participant")|.subject_id' "$c1_private_state")
+participant_username=$(jq -er '.actors[]|select(.role=="participant")|.username' "$c1_private_state")
+participant_password=$(jq -er '.actors[]|select(.role=="participant")|.password' "$c1_private_state")
+neighbor_subject=$(jq -er '.actors[]|select(.role=="neighbor")|.subject_id' "$c1_private_state")
+neighbor_username=$(jq -er '.actors[]|select(.role=="neighbor")|.username' "$c1_private_state")
+neighbor_password=$(jq -er '.actors[]|select(.role=="neighbor")|.password' "$c1_private_state")
+
+for state in "$c1_state" "$c2_state" "$c4_state" "$c5_state" "$c6_state" "$c7_state"; do
+  jq -e --arg tenant "$tenant_id" --arg project "$project_id" '.result=="pass" and .tenant_id==$tenant and .project.id==$project' "$state" >/dev/null || {
+    echo "continuous input does not preserve the same passing Tenant/Project: $state" >&2; exit 1;
+  }
+done
+[ "$project_revision" = 12 ] || { echo "C8 expected Project revision 12, got $project_revision" >&2; exit 1; }
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json" admin
+authorize_app "$admin_cookies" "$admin_csrf" production-operations "$workspace/admin-authorize-production.out"
+
+echo '[1/8] Reuse the exact C1 actors and append one resumable follow-up to the completed C4 work item'
+mkdir -p "$evidence_dir"
+if [ ! -f "$plan_state" ]; then
+  jq -n --arg tenant "$tenant_id" --arg project "$project_id" --arg c7 "$(digest_file "$c7_state")" \
+    --arg reopen "$(new_uuid)" \
+    '{schema_version:"1",phase:"C8-plan",tenant_id:$tenant,project_id:$project,c7_state_sha256:$c7,commands:{work_item_reopen:$reopen}}' >"$plan_state"
+fi
+if ! jq -e '.commands.work_item_reopen' "$plan_state" >/dev/null; then
+  temporary="$plan_state.tmp"
+  jq --arg reopen "$(new_uuid)" '.commands.work_item_reopen=$reopen' "$plan_state" >"$temporary"
+  mv "$temporary" "$plan_state"
+fi
+cp "$plan_state" "$workspace/state-plan-c8.json"
+if [ ! -f "$fixture_state" ]; then
+  work_item_id=$(jq -er .design.id "$c4_state")
+  live=$(postgres_rows design_operations "SELECT jsonb_build_object('id',id,'project_id',project_id,'status',status,'revision',revision,'owner_assignment_id',owner_assignment_id,'current_stage_key',current_stage_key) FROM design_work_items WHERE tenant_id='$tenant_id' AND id='$work_item_id';")
+  live_status=$(printf '%s\n' "$live" | jq -er .status)
+  live_revision=$(printf '%s\n' "$live" | jq -er .revision)
+  if [ "$live_status" = completed ] && [ "$live_revision" = 8 ]; then
+    payload=$(jq -cn --arg command "$(jq -er .commands.work_item_reopen "$plan_state")" \
+      '{command_id:$command,expected_revision:8,reason:"C8 连续旅程：完成后收到补充要求，追加一个当前个人工作项"}')
+    json_request POST "$base_url/production/api/v1/production-work-items/$work_item_id/stages/construction-support/reopen" "$admin_cookies" '' "$payload" "$workspace/production-work-item-reopened.json" 200 'POST C8 reopen completed work item stage'
+  elif [ "$live_status" = in-progress ] && [ "$live_revision" = 9 ]; then
+    printf '%s\n' "$live" >"$workspace/production-work-item-reopened.json"
+  else
+    echo "C4 design work item cannot form the bounded C8 follow-up: status=$live_status revision=$live_revision" >&2
+    exit 1
+  fi
+  jq -e --arg project "$project_id" --arg assignment "$production_assignment" '(.work_item // .) as $item | $item.project_id==$project and $item.status!="completed" and $item.status!="cancelled" and $item.owner_assignment_id==$assignment' "$workspace/production-work-item-reopened.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg project "$project_id" --arg item "$work_item_id" --arg assignment "$production_assignment" \
+    '{schema_version:"1",phase:"C8-partial-work-item",result:"resumable",tenant_id:$tenant,project_id:$project,work_item:{id:$item,revision:9,status:"in-progress",current_stage_key:"construction-support",assignment_id:$assignment},semantics:"append-only follow-up on retained C4 work item; no second Project or duplicate type"}' >"$fixture_state"
+fi
+cp "$fixture_state" "$workspace/state-partial-c8-work-item.json"
+work_item_id=$(jq -er .work_item.id "$fixture_state")
+existing=$(postgres_rows design_operations "SELECT jsonb_build_object('id',id,'project_id',project_id,'status',status,'revision',revision,'owner_assignment_id',owner_assignment_id) FROM design_work_items WHERE tenant_id='$tenant_id' AND id='$work_item_id';")
+printf '%s\n' "$existing" | jq -e --arg project "$project_id" --arg assignment "$production_assignment" '.id!=null and .project_id==$project and .status!="completed" and .status!="cancelled" and .owner_assignment_id==$assignment' >/dev/null || {
+  echo 'retained C8 current work item no longer matches the same Project/owner checkpoint' >&2; exit 1;
+}
+
+echo '[2/8] Grant only the C8 read surfaces to retained participant/neighbor actors'
+grant_resource "$participant_subject" project-workspace project-workspace.read project "$project_id"
+grant_resource "$participant_subject" project-workspace project-workspace.materials.read project "$project_id"
+grant_resource "$participant_subject" evidence-service evidence-service.metadata.read file "$material_file"
+grant_tenant "$participant_subject" money-flow-ledger money-flow-ledger.view
+grant_tenant "$participant_subject" money-flow-ledger money-flow-ledger.statistics.read
+grant_tenant "$neighbor_subject" production-operations production-work-item.read
+grant_tenant "$neighbor_subject" production-operations production-work-item.work-items.read
+grant_tenant "$neighbor_subject" production-operations production-work-item.stage.manage
+
+participant_cookies="$workspace/participant.cookies"
+participant_csrf=$(fetch_csrf "$participant_cookies" "$workspace/participant-csrf.json")
+login "$participant_cookies" "$participant_csrf" "$participant_username" "$participant_password" "$workspace/participant-login.json" participant
+authorize_app "$participant_cookies" "$participant_csrf" project-workspace "$workspace/participant-authorize-project.out" project "$project_id"
+authorize_app "$participant_cookies" "$participant_csrf" evidence-service "$workspace/participant-authorize-evidence.out" file "$material_file"
+authorize_app "$participant_cookies" "$participant_csrf" money-flow-ledger "$workspace/participant-authorize-money.out"
+
+production_cookies="$workspace/production.cookies"
+production_csrf=$(fetch_csrf "$production_cookies" "$workspace/production-csrf.json")
+login "$production_cookies" "$production_csrf" "$production_username" "$production_password" "$workspace/production-login.json" production-owner
+authorize_app "$production_cookies" "$production_csrf" production-operations "$workspace/production-authorize.out"
+
+neighbor_cookies="$workspace/neighbor.cookies"
+neighbor_csrf=$(fetch_csrf "$neighbor_cookies" "$workspace/neighbor-csrf.json")
+login "$neighbor_cookies" "$neighbor_csrf" "$neighbor_username" "$neighbor_password" "$workspace/neighbor-login.json" neighbor
+authorize_app "$neighbor_cookies" "$neighbor_csrf" production-operations "$workspace/neighbor-authorize.out"
+
+echo '[3/8] Read Project links/materials and test that download requires a separate Evidence capability'
+json_request GET "$base_url/project/api/v1/projects/$project_id" "$participant_cookies" '' '' "$workspace/project-details.json" 200 'GET same Project details'
+json_request GET "$base_url/project/api/v1/projects/$project_id/materials" "$participant_cookies" '' '' "$workspace/project-materials.json" 200 'GET same Project materials'
+jq -e --arg project "$project_id" '
+  .project_id==$project and .project_revision==12 and .state=="available" and (.segments|length)==2 and
+  all(.segments[];.source_application=="business-engagement" and .resource_type=="business-engagement" and .state=="available" and .evidence_version==1 and (.evidence_digest|length)==64) and
+  ([..|objects|keys[]]|index("bucket")|not) and ([..|objects|keys[]]|index("object_key")|not)
+' "$workspace/project-materials.json" >/dev/null || { echo 'same-Project materials did not preserve the exact C2 indirect Evidence projection' >&2; exit 1; }
+
+postgres_rows project_workspace "SELECT coalesce(jsonb_agg(jsonb_build_object('target_service',target_service,'resource_type',resource_type,'resource_id',resource_id,'source_revision',source_revision,'relation_key',relation_key) ORDER BY linked_at,id),'[]'::jsonb) FROM project_resource_links WHERE tenant_id='$tenant_id' AND project_id='$project_id' AND unlinked_at IS NULL;" >"$workspace/project-resource-links.json"
+jq -n --slurpfile links "$workspace/project-resource-links.json" \
+  --arg project "$project_id" \
+  --arg c2_contract "$(jq -er .contract.id "$c2_state")" \
+  --arg c2_engagement "$(jq -er .business_engagement.id "$c2_state")" \
+  --arg c4_design "$(jq -er .design.id "$c4_state")" --arg c4_consultation "$(jq -er .consultation.id "$c4_state")" \
+  --arg c5_approval "$(jq -er .approval.id "$c5_state")" --arg c5_audit "$(jq -er .audit.id "$c5_state")" \
+  --arg c6_cost "$(jq -er .cost.id "$c6_state")" --arg c6_engagement "$(jq -er .engagement.id "$c6_state")" '
+  def linked($id): any($links[0][];.resource_id==$id);
+  {schema_version:"1",project_id:$project,
+   stages:{
+     C2:{expected_resources:[$c2_contract,$c2_engagement],linked:([linked($c2_contract),linked($c2_engagement)]|all)},
+    C3:{linked_resource_count:([$links[0][]|select(.target_service=="money-flow-ledger" or .target_service=="billing-invoice")]|length),linked:(([$links[0][]|select(.target_service=="money-flow-ledger" or .target_service=="billing-invoice")]|length)>0)},
+     C4:{expected_resources:[$c4_design,$c4_consultation],linked:([linked($c4_design),linked($c4_consultation)]|all)},
+     C5:{expected_resources:[$c5_approval,$c5_audit],linked:([linked($c5_approval),linked($c5_audit)]|all)},
+     C6:{expected_resources:[$c6_cost,$c6_engagement],linked:([linked($c6_cost),linked($c6_engagement)]|all)}
+   },active_link_count:($links[0]|length)}
+' >"$workspace/material-coverage.json"
+
+download_payload=$(jq -cn '{disposition:"inline",delivery_mode:"direct"}')
+assert_evidence_actions '["evidence-service.metadata.read"]'
+json_request GET "$base_url/evidence/v1/references/files/$material_file" "$participant_cookies" '' '' "$workspace/evidence-metadata-only.json" 200 'GET Evidence metadata with metadata-only capability'
+json_request POST "$base_url/evidence/v1/files/$material_file/versions/1/access-grants" "$participant_cookies" '' "$download_payload" "$workspace/evidence-download-denied.json" 403 'POST Evidence access grant without download capability'
+grant_resource "$participant_subject" evidence-service evidence-service.download file "$material_file"
+authorize_app "$participant_cookies" "$participant_csrf" evidence-service "$workspace/participant-authorize-evidence-download.out" file "$material_file"
+assert_evidence_actions '["evidence-service.metadata.read","evidence-service.download"]'
+json_request POST "$base_url/evidence/v1/files/$material_file/versions/1/access-grants" "$participant_cookies" '' "$download_payload" "$workspace/evidence-download-authorized.json" 200 'POST Evidence access grant with native metadata + download only'
+jq -e '.url|type=="string" and length>0' "$workspace/evidence-download-authorized.json" >/dev/null
+revoke_resource_quiet "$participant_subject" evidence-service evidence-service.metadata.read file "$material_file"
+authorize_app "$participant_cookies" "$participant_csrf" evidence-service "$workspace/participant-authorize-evidence-download-only.out" file "$material_file"
+assert_evidence_actions '["evidence-service.download"]'
+json_request GET "$base_url/evidence/v1/references/files/$material_file" "$participant_cookies" '' '' "$workspace/evidence-download-only-metadata-denied.json" 403 'GET metadata with download-only capability'
+json_request POST "$base_url/evidence/v1/files/$material_file/versions/1/access-grants" "$participant_cookies" '' "$download_payload" "$workspace/evidence-download-only-authorized.json" 200 'POST Evidence access grant with native download only'
+grant_resource "$participant_subject" evidence-service evidence-service.metadata.read file "$material_file"
+authorize_app "$participant_cookies" "$participant_csrf" evidence-service "$workspace/participant-authorize-evidence-restored.out" file "$material_file"
+assert_evidence_actions '["evidence-service.metadata.read","evidence-service.download"]'
+
+echo '[4/8] Current Production Subject sees exactly the same-Project work item; neighboring Subject sees none'
+json_request GET "$base_url/production/api/v1/work-items" "$production_cookies" '' '' "$workspace/production-owner-work-items.json" 200 'GET current Subject work items'
+jq -e --arg subject "$production_subject" --arg item "$work_item_id" --arg project "$project_id" '
+  .schema_version=="1" and .subject_id==$subject and (.items|length)==1 and .items[0].work_item_id==$item and .items[0].project_id==$project and
+  (.items[0].allowed_actions|index("production-work-item.stage.manage"))!=null
+' "$workspace/production-owner-work-items.json" >/dev/null || { echo 'current Subject work projection was not exact' >&2; exit 1; }
+json_request GET "$base_url/production/api/v1/work-items" "$neighbor_cookies" '' '' "$workspace/neighbor-work-items.json" 200 'GET neighboring Subject work items'
+jq -e --arg subject "$neighbor_subject" '.schema_version=="1" and .subject_id==$subject and .items==[]' "$workspace/neighbor-work-items.json" >/dev/null || {
+  echo 'neighboring Subject received another Subject work item' >&2; exit 1;
+}
+
+echo '[5/8] Money metrics stay partitioned and change from redacted to visible only after a fresh amount credential'
+json_request GET "$base_url/money/api/v1/metrics/operating-summary" "$participant_cookies" '' '' "$workspace/money-redacted.json" 200 'GET Money metrics without amount capability'
+jq -e '
+  .schema_version=="1" and .definition_version=="money-flow-operating-summary-v1" and (.items|length)>0 and
+  all(.items[];.scope.kind=="ledger_owner" and .scope.resource_type=="party" and .unit=="money" and .redacted==true and .value==null and .source_digest==null)
+' "$workspace/money-redacted.json" >/dev/null || { echo 'Money projection did not redact values as null' >&2; exit 1; }
+grant_tenant "$participant_subject" money-flow-ledger money-flow-ledger.amount.read
+json_request GET "$base_url/money/api/v1/metrics/operating-summary" "$participant_cookies" '' '' "$workspace/money-stale-after-grant.json" 200 'GET Money metrics with old credential after amount grant'
+jq -e 'all(.items[];.redacted==true and .value==null)' "$workspace/money-stale-after-grant.json" >/dev/null
+authorize_app "$participant_cookies" "$participant_csrf" money-flow-ledger "$workspace/participant-authorize-money-amount.out"
+json_request GET "$base_url/money/api/v1/metrics/operating-summary" "$participant_cookies" '' '' "$workspace/money-visible.json" 200 'GET Money metrics with fresh amount credential'
+jq -e 'all(.items[];.redacted==false and (.value|type)=="string" and (.source_digest|test("^sha256:[0-9a-f]{64}$")))' "$workspace/money-visible.json" >/dev/null
+revoke_tenant "$participant_subject" money-flow-ledger money-flow-ledger.amount.read
+json_request GET "$base_url/money/api/v1/metrics/operating-summary" "$participant_cookies" '' '' "$workspace/money-stale-after-revoke.json" 200 'GET Money metrics during bounded residual window'
+jq -e 'all(.items[];.redacted==false and (.value|type)=="string")' "$workspace/money-stale-after-revoke.json" >/dev/null
+authorize_app "$participant_cookies" "$participant_csrf" money-flow-ledger "$workspace/participant-authorize-money-redacted.out"
+json_request GET "$base_url/money/api/v1/metrics/operating-summary" "$participant_cookies" '' '' "$workspace/money-redacted-after-revoke.json" 200 'GET Money metrics after amount revoke and refresh'
+jq -e 'all(.items[];.redacted==true and .value==null and .source_digest==null)' "$workspace/money-redacted-after-revoke.json" >/dev/null
+
+echo '[6/8] Freeze all twelve business databases, then inject one read source failure at a time'
+capture_all_facts before
+json_request GET "$base_url/workbench/" "$production_cookies" '' '' "$workspace/workbench.html" 200 'GET Workbench baseline'
+grep -Fq 'data-source-application="production-operations"' "$workspace/workbench.html"
+
+evidence_container=$(service_container evidence-service)
+docker stop "$evidence_container" >/dev/null; stopped_service=evidence-service
+json_request GET "$base_url/project/api/v1/projects/$project_id/materials" "$participant_cookies" '' '' "$workspace/project-materials-evidence-down.json" 200 'GET Project materials with Evidence down'
+jq -e '(.segments|length)==2 and all(.segments[];.state=="unavailable" and .error_code=="source_unavailable")' "$workspace/project-materials-evidence-down.json" >/dev/null
+json_request GET "$base_url/workbench/" "$production_cookies" '' '' "$workspace/workbench-evidence-down.html" 200 'GET Workbench with Evidence down'
+docker start "$evidence_container" >/dev/null; wait_healthy evidence-service; stopped_service=''
+json_request GET "$base_url/project/api/v1/projects/$project_id/materials" "$participant_cookies" '' '' "$workspace/project-materials-recovered.json" 200 'GET Project materials after Evidence recovery'
+jq -e '(.segments|length)==2 and all(.segments[];.state=="available")' "$workspace/project-materials-recovered.json" >/dev/null
+
+production_container=$(service_container production-operations)
+docker stop "$production_container" >/dev/null; stopped_service=production-operations
+json_request GET "$base_url/workbench/" "$production_cookies" '' '' "$workspace/workbench-production-down.html" 200 'GET Workbench with Production down'
+result=$(curl --silent --show-error --output "$workspace/production-down.body" --write-out '%{http_code} %{time_total}' --cookie "$production_cookies" "$base_url/production/api/v1/work-items")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET Production work items with source down' '502-or-503' "$actual" "$duration"
+case "$actual" in 502|503) : ;; *) echo "Production outage returned HTTP $actual" >&2; exit 1 ;; esac
+docker start "$production_container" >/dev/null; wait_healthy production-operations; stopped_service=''
+json_request GET "$base_url/production/api/v1/work-items" "$production_cookies" '' '' "$workspace/production-owner-recovered.json" 200 'GET Production work items after recovery'
+jq -e --arg item "$work_item_id" '.items[0].work_item_id==$item' "$workspace/production-owner-recovered.json" >/dev/null
+
+echo '[7/8] Prove every business owner stayed byte-for-byte unchanged during reads and source recovery'
+capture_all_facts after
+assert_fact_snapshots_equal
+
+echo '[8/8] Record the scientific C8 verdict and final 17/17 health'
+printf 'service\tstatus\n' >"$workspace/health-final.tsv"
+running=0; healthy=0
+for container in $(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.ID}}'); do
+  service=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$container")
+  status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+  printf '%s\t%s\n' "$service" "$status" >>"$workspace/health-final.tsv"
+  running=$((running+1)); [ "$status" = healthy ] && healthy=$((healthy+1))
+done
+[ "$running" = 17 ] && [ "$healthy" = 17 ] || { echo "isolated stack ended $running/$healthy, expected 17/17" >&2; exit 1; }
+
+coverage_result=pass
+jq -e '.stages.C2.linked and .stages.C3.linked and .stages.C4.linked and .stages.C5.linked and .stages.C6.linked' "$workspace/material-coverage.json" >/dev/null || coverage_result=fail
+download_result=pass
+result=pass
+[ "$coverage_result" = pass ] && [ "$download_result" = pass ] || result=insufficient-evidence
+c7_sha=$(digest_file "$c7_state")
+facts_sha=$(digest_file "$workspace/fact-digests-before.tsv")
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --arg captured "$captured_at" --arg tenant "$tenant_id" --arg project "$project_id" --arg c7 "$c7_sha" \
+  --arg result "$result" --arg coverage "$coverage_result" --arg download "$download_result" --arg item "$work_item_id" --arg file "$material_file" --arg facts "$facts_sha" \
+  --slurpfile coverage_detail "$workspace/material-coverage.json" \
+  '{schema_version:"1",scenario_id:"reference-oa-full-suite-continuous-v1",phase:"C8",result:$result,captured_at:$captured,tenant_id:$tenant,c7_state_sha256:$c7,
+    project:{id:$project,revision:12},materials:{evidence_file_id:$file,available_segments:2,cross_stage_link_coverage:$coverage,coverage:$coverage_detail[0],download_separate_authorization:$download,download_contract_note:"native metadata-only / download-only / combined exact File Scope; no legacy view grant"},
+    work_items:{current_subject_item_id:$item,current_subject_exact:"pass",neighbor_empty:"pass",source_failure_isolated:"pass"},
+    money_metrics:{partitioned:"pass",redacted_null_not_zero:"pass",amount_grant_refresh:"pass",amount_revoke_refresh:"pass"},
+    fact_owners:{database_count:12,before_after_equal:true,summary_sha256:$facts},
+    checks:{same_tenant_and_project:"pass",materials_runtime_projection:"pass",materials_c2_to_c6_coverage:$coverage,evidence_download_separate:$download,personal_work_scope:"pass",money_metric_authorization:"pass",single_source_degradation:"pass",all_fact_digests_unchanged:"pass",isolated_stack_health:"17/17"}}' >"$workspace/state-after-c8.json"
+
+assertions=$(awk -F '\t' 'NR>1{count++} END{print count+0}' "$http_evidence")
+cat >"$workspace/c8-summary.md" <<EOF
+# C8 continuous journey result
+
+- Result: $result
+- Tenant: \`$tenant_id\`
+- Project: \`$project_id\` revision 12; no second Project was created
+- Materials runtime: two C2 Business Engagement → Evidence segments remained available, degraded independently during the Evidence outage, and recovered
+- Download authorization: $download_result. Metadata-only reads metadata but download is 403; download-only requests an access grant but metadata is 403; the combined exact File credential requests an access grant without legacy view
+- Personal work: the retained C1 production Subject saw exactly current work item \`$work_item_id\`; the neighboring C1 Subject saw an empty list
+- Money metric: source/Party/Currency projection returned null/redacted without amount permission, exact values only after fresh grant, and null/redacted again after revoke + refresh
+- Read-only proof: all rows across twelve business databases had identical canonical snapshots before and after reads and sequential source recovery (\`$facts_sha\`)
+- Source failures: Workbench stayed HTTP 200 while Evidence or Production was stopped separately; Project material segments reported unavailable and recovered; Production returned 502/503 and recovered
+- Cross-stage material coverage: $coverage_result. C2 and C3 have active Project links, but C4/C5/C6 output IDs are not active Project Resource Links and therefore cannot appear in the current Project material composition
+- HTTP assertions: $assertions; mismatches: 0
+- Isolated stack health: 17/17
+EOF
+cp "$workspace/state-after-c8.json" "$completed_state"
+cp "$workspace/c8-summary.md" "$evidence_dir/c8-summary.md"
+cat "$workspace/c8-summary.md"
+
+if [ "$result" != pass ]; then
+  echo 'C8 collected valid evidence but did not satisfy the C2-C6 material coverage exit gate' >&2
+  exit 1
+fi

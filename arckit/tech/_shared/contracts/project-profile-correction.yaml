@@ -1,0 +1,39 @@
+metadata:
+  path: tech/_shared/contracts/project-profile-correction.yaml
+  domain: project-workspace
+  owner: Project Workspace
+  version: "1.0"
+  created: "2026-10-02"
+  updated: "2026-10-02"
+endpoint:
+  method: POST
+  path: /api/v1/projects/{project_id}/profile-corrections
+  summary: 更正已立项 Project 的基本资料并保留历史
+  auth_required: true
+  audience: project-workspace
+  capability: project-workspace.profile.correct
+request:
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, correction_reason, project_number, name, project_type_keys]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      correction_reason: {type: string, minLength: 1, maxLength: 1000}
+      project_number: {type: string, maxLength: 64, description: 普通项目必填，项目包可空}
+      name: {type: string, minLength: 1, maxLength: 200}
+      summary: {type: string, maxLength: 2000}
+      planned_start_date: {type: [string, "null"], format: date-time}
+      planned_end_date: {type: [string, "null"], format: date-time}
+      project_type_keys: {type: array, minItems: 1, maxItems: 16, uniqueItems: true, items: {type: string, pattern: "^[a-z][a-z0-9-]{0,63}$"}}
+responses:
+  success: {status: 200, schema: {$ref: "../models/Project.yaml"}}
+  errors: [400, 401, 403, 404, 409]
+business_logic:
+  state_transitions: ["active -> active"]
+  invariants:
+    - 同内容同命令回放先于当前状态检查；命令内容不同拒绝。
+    - 旧 update 不扩大到 active；更正必须使用新的原生能力。
+    - 无变化不增加 revision／历史，有变化追加原因及 previous_revision。
+    - 不改身份、分工、引用、Client Party 快照及外部事实；不级联删除已有生产事实。

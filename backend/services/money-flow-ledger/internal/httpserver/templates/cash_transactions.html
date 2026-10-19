@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实际收付款 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions" aria-current="page">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>实际收款／付款</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>这里登记已经发生的资金事实。人工来源不代表银行已核验，且资金不会在此处直接冲减任何义务。</p>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="create-cash-transaction-heading">
+      <h2 id="create-cash-transaction-heading">登记实际资金</h2>
+      {{if .CanCreate}}
+      {{if can .Principal "cash.record"}}<form method="post" action="{{basePath}}/cash-transactions">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+
+        <label for="type">方向（相对于本方账簿主体）</label>
+        <select id="type" name="type" required>
+          <option value="receipt" {{if eq .Form.Type "receipt"}}selected{{end}}>收款：本方是收款方</option>
+          <option value="payment" {{if eq .Form.Type "payment"}}selected{{end}}>付款：本方是付款方</option>
+        </select>
+
+        <label for="ledger_owner_party_id">本方账簿主体</label>
+        <select id="ledger_owner_party_id" name="ledger_owner_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.Form.LedgerOwnerPartyID .ID}}selected{{end}}>{{.LegalName}}（revision {{.Revision}}）</option>
+          {{end}}
+        </select>
+
+        <label for="counterparty_party_id">往来主体</label>
+        <select id="counterparty_party_id" name="counterparty_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.Form.CounterpartyPartyID .ID}}selected{{end}}>{{.LegalName}}（revision {{.Revision}}）</option>
+          {{end}}
+        </select>
+
+        <label for="description">收付款描述</label>
+        <input id="description" name="description" value="{{.Form.Description}}" maxlength="200" required>
+
+        <label for="amount">实际金额</label>
+        <input id="amount" name="amount" value="{{.Form.Amount}}" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?" required>
+
+        <label for="currency">币种</label>
+        <input id="currency" name="currency" value="{{.Form.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+
+        <label for="occurred_on">资金发生日</label>
+        <input id="occurred_on" name="occurred_on" type="date" value="{{.Form.OccurredOn}}" required>
+
+        <label for="account_reference">本方资金账户标签</label>
+        <input id="account_reference" name="account_reference" value="{{.Form.AccountReference}}" maxlength="100" placeholder="例如：基本户尾号 1234" required>
+
+        <label for="manual_source_reference">人工来源依据</label>
+        <input id="manual_source_reference" name="manual_source_reference" value="{{.Form.ManualSourceReference}}" maxlength="200" required>
+
+        <label for="external_transaction_reference">外部流水号（可选）</label>
+        <input id="external_transaction_reference" name="external_transaction_reference" value="{{.Form.ExternalTransactionReference}}" maxlength="100">
+
+        <button type="submit">登记实际收付款</button>
+      </form>{{end}}
+      {{else}}
+      <p role="status">登记实际收付款前，至少需要在主体目录登记两个不同主体。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="cash-transaction-list-heading">
+      <h2 id="cash-transaction-list-heading">已登记资金</h2>
+      {{if .Transactions}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">描述</th>
+            <th scope="col">方向</th>
+            <th scope="col">本方</th>
+            <th scope="col">往来方</th>
+            <th scope="col">金额</th>
+            <th scope="col">当前有效</th>
+            <th scope="col">已分配</th>
+            <th scope="col">未分配</th>
+            <th scope="col">发生日</th>
+            <th scope="col">账户标签</th>
+            <th scope="col">状态</th>
+            <th scope="col">冲销</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Transactions}}
+          <tr>
+            <td><a href="{{basePath}}/cash-transactions/{{.ID}}">{{.Description}}</a></td>
+            <td>{{.Type.Label}}</td>
+            <td>{{.LedgerOwner.LegalName}}</td>
+            <td>{{.Counterparty.LegalName}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.EffectiveAmount}} {{.Currency}}</td>
+            <td>{{.AllocatedAmount}} {{.Currency}}</td>
+            <td>{{.UnallocatedAmount}} {{.Currency}}</td>
+            <td>{{.OccurredOn}}</td>
+            <td>{{.AccountReference}}</td>
+            <td>{{.Status}}</td>
+            <td>{{if .Reversal}}{{.Reversal.Reason}} · {{.Reversal.ReversedBy.DisplayName}} · {{.Reversal.ReversedAt}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未登记实际收付款。</p>
+      {{end}}
+    </section>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

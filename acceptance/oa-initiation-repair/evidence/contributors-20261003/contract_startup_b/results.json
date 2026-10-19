@@ -1,0 +1,11 @@
+{
+  "passed": false,
+  "main_unchanged": true,
+  "candidate_only": true,
+  "public_or_full_oa": false,
+  "failure": {
+    "stage": "explicit-install-migration",
+    "type": "RuntimeError"
+  },
+  "probe_and_pg_stopped": true
+}

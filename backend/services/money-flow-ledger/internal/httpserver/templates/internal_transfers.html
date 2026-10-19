@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>内部账户转账 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers" aria-current="page">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>内部账户转账</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>这里登记同一本方账簿主体名下账户之间的资金移动。它不是经营收款或付款，不进入义务核销，也不会生成两笔虚假的收付款。</p>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="create-internal-transfer-heading">
+      <h2 id="create-internal-transfer-heading">登记内部转账</h2>
+      {{if .CanCreate}}
+      {{if can .Principal "transfer.record"}}<form method="post" action="{{basePath}}/internal-transfers">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+
+        <label for="ledger_owner_party_id">本方账簿主体</label>
+        <select id="ledger_owner_party_id" name="ledger_owner_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.Form.LedgerOwnerPartyID .ID}}selected{{end}}>{{.LegalName}}（revision {{.Revision}}）</option>
+          {{end}}
+        </select>
+
+        <label for="description">转账描述</label>
+        <input id="description" name="description" value="{{.Form.Description}}" maxlength="200" required>
+
+        <label for="amount">转账金额</label>
+        <input id="amount" name="amount" value="{{.Form.Amount}}" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?" required>
+
+        <label for="currency">币种</label>
+        <input id="currency" name="currency" value="{{.Form.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+
+        <label for="occurred_on">转账发生日</label>
+        <input id="occurred_on" name="occurred_on" type="date" value="{{.Form.OccurredOn}}" required>
+
+        <label for="source_account_reference">来源账户标签</label>
+        <input id="source_account_reference" name="source_account_reference" value="{{.Form.SourceAccountReference}}" maxlength="100" placeholder="例如：基本户尾号 1234" required>
+
+        <label for="destination_account_reference">目标账户标签</label>
+        <input id="destination_account_reference" name="destination_account_reference" value="{{.Form.DestinationAccountReference}}" maxlength="100" placeholder="例如：备用金账户" required>
+
+        <label for="manual_source_reference">人工来源依据</label>
+        <input id="manual_source_reference" name="manual_source_reference" value="{{.Form.ManualSourceReference}}" maxlength="200" required>
+
+        <label for="external_transfer_reference">外部转账流水号（可选）</label>
+        <input id="external_transfer_reference" name="external_transfer_reference" value="{{.Form.ExternalTransferReference}}" maxlength="100">
+
+        <button type="submit">登记内部转账</button>
+      </form>{{end}}
+      {{else}}
+      <p role="status">登记内部转账前，至少需要在主体目录登记一个本方主体。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="internal-transfer-list-heading">
+      <h2 id="internal-transfer-list-heading">已登记内部转账</h2>
+      {{if .Transfers}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">描述</th>
+            <th scope="col">本方主体</th>
+            <th scope="col">金额</th>
+            <th scope="col">发生日</th>
+            <th scope="col">来源账户</th>
+            <th scope="col">目标账户</th>
+            <th scope="col">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Transfers}}
+          <tr>
+            <td><a href="{{basePath}}/internal-transfers/{{.ID}}">{{.Description}}</a></td>
+            <td>{{.LedgerOwner.LegalName}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.OccurredOn}}</td>
+            <td>{{.SourceAccountReference}}</td>
+            <td>{{.DestinationAccountReference}}</td>
+            <td>{{.Status}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未登记内部转账。</p>
+      {{end}}
+    </section>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

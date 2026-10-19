@@ -1,0 +1,185 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-c6-composition.XXXXXX")
+container="oms-c6-pg18-$$"
+evidence_dir=${C6_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c6-composition-evidence"}
+service_pids=''
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv cost.json engagement.json assessment.json redacted.json result.md processes.txt; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command in go docker curl jq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+(cd "$repo_dir" && go build -o "$runtime/fixture" ./acceptance/c6-cost-outsourcing-composition/cmd/fixture)
+(cd "$repo_dir" && go build -o "$runtime/cost-outsourcing" ./backend/services/cost-outsourcing/cmd/server)
+"$runtime/fixture" -mode init -private "$runtime/iam-private.json" -public "$runtime/iam-public.json"
+
+(
+  cd "$repo_dir"
+  export WORKLOAD_ID=cost-outsourcing
+  export WORKLOAD_SUBJECT_ID=22222222-2222-4222-8222-222222222222
+  export WORKLOAD_KEY_FILE="$runtime/workload-private.json"
+  export WORKLOAD_PUBLIC_KEY_FILE="$runtime/workload-public.json"
+  go run ./packages/workload-identity/cmd/workload-keyctl init
+)
+
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55466:5432 postgres:18.6 >/dev/null
+for attempt in $(seq 1 60); do
+  docker exec "$container" pg_isready -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { echo "PostgreSQL did not become ready" >&2; exit 1; }
+  sleep 1
+done
+
+start_fixture() {
+  name=$1
+  mode=$2
+  port=$3
+  "$runtime/fixture" -mode "$mode" -address "127.0.0.1:$port" -private "$runtime/iam-private.json" >"$runtime/$name.log" 2>&1 &
+  fixture_pid=$!
+  service_pids="$service_pids $fixture_pid"
+  eval "${name}_pid=$fixture_pid"
+}
+
+wait_http() {
+  url=$1
+  for attempt in $(seq 1 60); do
+    curl --silent --fail "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 60 ] || { echo "$url did not become ready" >&2; exit 1; }
+    sleep 1
+  done
+}
+
+start_fixture iam iam 19170
+start_fixture project project 19171
+start_fixture party party 19172
+start_fixture contract contract 19173
+start_fixture evidence evidence 19174
+for port in 19170 19171 19172 19173 19174; do wait_http "http://127.0.0.1:$port/health"; done
+
+HTTP_ADDR=127.0.0.1:19175 \
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55466/postgres?sslmode=disable' \
+IDENTITY_PROVIDER=iam \
+IAM_ISSUER=https://iam.c6.test \
+IAM_TENANT_ID=11111111-1111-4111-8111-111111111111 \
+IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+IAM_SERVICE_CREDENTIAL_URL=http://127.0.0.1:19170/api/v1/service-credentials \
+WORKLOAD_ID=cost-outsourcing \
+WORKLOAD_SUBJECT_ID=22222222-2222-4222-8222-222222222222 \
+WORKLOAD_KEY_FILE="$runtime/workload-private.json" \
+PROJECT_BASE_URL=http://127.0.0.1:19171 \
+PARTY_BASE_URL=http://127.0.0.1:19172 \
+CONTRACT_BASE_URL=http://127.0.0.1:19173 \
+EVIDENCE_BASE_URL=http://127.0.0.1:19174 \
+"$runtime/cost-outsourcing" >"$runtime/cost-outsourcing.log" 2>&1 &
+c6_pid=$!
+service_pids="$service_pids $c6_pid"
+wait_http http://127.0.0.1:19175/health/ready
+
+printf 'service\tpid\tport\n' >"$runtime/processes.txt"
+printf 'iam\t%s\t19170\nproject\t%s\t19171\nparty\t%s\t19172\ncontract\t%s\t19173\nevidence\t%s\t19174\ncost-outsourcing\t%s\t19175\npostgresql\tdocker:%s\t55466\n' "$iam_pid" "$project_pid" "$party_pid" "$contract_pid" "$evidence_pid" "$c6_pid" "$container" >>"$runtime/processes.txt"
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+
+token() { curl --silent --fail "http://127.0.0.1:19170/issue?profile=$1" | jq -er .token; }
+full_token=$(token full)
+read_token=$(token read-only)
+redacted_token=$(token redacted)
+wrong_scope_token=$(token wrong-project)
+
+request() {
+  method=$1
+  path=$2
+  credential=$3
+  payload=$4
+  output=$5
+  expected=$6
+  if [ -n "$payload" ]; then
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $credential" -H 'Content-Type: application/json' --data "$payload" "http://127.0.0.1:19175$path")
+  else
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $credential" "http://127.0.0.1:19175$path")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$path" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { cat "$output" >&2; echo "expected HTTP $expected, got $actual" >&2; exit 1; }
+}
+
+project_id=33333333-3333-4333-8333-333333333333
+party_id=44444444-4444-4444-8444-444444444444
+contract_id=55555555-5555-4555-8555-555555555555
+evidence_id=66666666-6666-4666-8666-666666666666
+cost_payload=$(jq -cn --arg project "$project_id" --arg evidence "$evidence_id" '{command_id:"77777777-7777-4777-8777-777777777777",project_ref:{id:$project,revision:7},category:"vehicle",occurred_on:"2026-09-28",currency:"CNY",amount_minor:12345,distance_meters:6789,description:"C6 独立组合车辆成本",evidence_refs:[{file_id:$evidence,version:2,slot:"receipt"}]}')
+
+echo '[1/6] 工作区和独立进程启动证据'
+request GET / "$full_token" '' "$runtime/workspace.html" 200
+grep -Fq '成本与外协业务记录' "$runtime/workspace.html"
+request GET /assets/cost-outsourcing.js "$full_token" '' "$runtime/workspace.js" 200
+
+echo '[2/6] Evidence 停机时零写入，恢复后同一业务意图成功'
+kill "$evidence_pid"
+wait "$evidence_pid" 2>/dev/null || true
+request POST /api/v1/cost-entries "$full_token" "$cost_payload" "$runtime/cost-down.json" 503
+request GET "/api/v1/cost-entries?project_id=$project_id" "$full_token" '' "$runtime/cost-empty.json" 200
+jq -e '.items | length == 0' "$runtime/cost-empty.json" >/dev/null
+start_fixture evidence evidence 19174
+wait_http http://127.0.0.1:19174/health
+request POST /api/v1/cost-entries "$full_token" "$cost_payload" "$runtime/cost.json" 201
+jq -e '.amount_minor == 12345 and .revision == 1 and (.evidence | length == 1)' "$runtime/cost.json" >/dev/null
+
+echo '[3/6] 已成功 Command 在依赖停机时仍只重放一次'
+kill "$evidence_pid"
+wait "$evidence_pid" 2>/dev/null || true
+request POST /api/v1/cost-entries "$full_token" "$cost_payload" "$runtime/cost-replay.json" 201
+jq -e --slurpfile original "$runtime/cost.json" '.id == $original[0].id and .revision == 1' "$runtime/cost-replay.json" >/dev/null
+start_fixture evidence evidence 19174
+wait_http http://127.0.0.1:19174/health
+
+echo '[4/6] Party 停机时外协零写入，恢复后冻结四类精确来源'
+engagement_payload=$(jq -cn --arg project "$project_id" --arg party "$party_id" --arg contract "$contract_id" --arg evidence "$evidence_id" '{command_id:"77777777-7777-4777-8777-777777777778",project_ref:{id:$project,revision:7},provider_ref:{id:$party,revision:5},scope:"C6 桥梁测量外协",currency:"CNY",amount_minor:500000,contract_ref:{application:"contract-ledger",resource_type:"contract",resource_id:$contract,revision:9},evidence_refs:[{file_id:$evidence,version:2,slot:"contract"}],note:"最小组合验证"}')
+kill "$party_pid"
+wait "$party_pid" 2>/dev/null || true
+request POST /api/v1/outsourcing-engagements "$full_token" "$engagement_payload" "$runtime/engagement-down.json" 503
+start_fixture party party 19172
+wait_http http://127.0.0.1:19172/health
+request POST /api/v1/outsourcing-engagements "$full_token" "$engagement_payload" "$runtime/engagement.json" 201
+jq -e '.provider.id == "44444444-4444-4444-8444-444444444444" and .contract.resource_id == "55555555-5555-4555-8555-555555555555" and .amount_minor == 500000' "$runtime/engagement.json" >/dev/null
+engagement_id=$(jq -er .id "$runtime/engagement.json")
+assessment_payload=$(jq -cn '{command_id:"77777777-7777-4777-8777-777777777779",expected_engagement_revision:1,expected_assessment_revision:0,score:5,reason:"交付资料齐全"}')
+request POST "/api/v1/outsourcing-engagements/$engagement_id/assessments" "$full_token" "$assessment_payload" "$runtime/assessment.json" 201
+jq -e '.score == 5 and .revision == 1' "$runtime/assessment.json" >/dev/null
+
+echo '[5/6] IAM 凭证刷新后金额与写动作立即收敛'
+request GET "/api/v1/cost-entries?project_id=$project_id" "$redacted_token" '' "$runtime/redacted.json" 200
+jq -e '(.items[0] | has("amount_minor") | not) and (.items[0].allowed_actions | index("cost-entry.correct") | not)' "$runtime/redacted.json" >/dev/null
+denied_payload=$(printf '%s' "$cost_payload" | sed 's/77777777-7777-4777-8777-777777777777/77777777-7777-4777-8777-777777777780/')
+request POST /api/v1/cost-entries "$read_token" "$denied_payload" "$runtime/denied.json" 403
+request GET "/api/v1/cost-entries?project_id=$project_id" "$wrong_scope_token" '' "$runtime/wrong-scope.json" 403
+
+echo '[6/6] 未选业务与边界检查'
+! grep -Eq 'money-flow-ledger|billing-invoice|bonus|payable' "$runtime/processes.txt"
+printf '%s\n' \
+  '# C6 独立进程最小组合结果' \
+  '' \
+  '- IAM、Project、Party、Contract、Evidence、Cost & Outsourcing 与 PostgreSQL 均为独立进程。' \
+  '- 工作区、正常登记、拒绝、依赖停机零写入、恢复、幂等重放、金额脱敏与动作收敛通过。' \
+  '- Money、Billing、应付款建议和 C7 未启动，也不是本组合前提。' \
+  '- 该结果不是 D1 正式交付、恢复演练或真实 Ubuntu 环境结论。' >"$runtime/result.md"
+cat "$runtime/result.md"
+if [ "${C6_KEEP_RUNNING:-0}" = 1 ]; then
+  echo "C6 composition remains available at http://127.0.0.1:19175/ until interrupted."
+  while :; do sleep 30; done
+fi

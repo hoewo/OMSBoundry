@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "empty_databases": 13,
+  "facts_and_sequences_equal": true,
+  "files_and_iam_key_bytes_equal": true,
+  "file_trees": 3,
+  "migration_run": false,
+  "schema_change": false,
+  "full_suite_restore_runtime": false
+}

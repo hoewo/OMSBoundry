@@ -1,0 +1,20 @@
+{
+  "version": "v0.1.0-oa.20261004.6",
+  "official_release": false,
+  "source_kind": "saved scoped dirty-worktree; original Cost drawer and confirmation layering fix, binary from extracted source",
+  "source_archive_sha256": "0b725687b7d762d2d27272e14e862ca06f73b97edec1eba480a45242cf30ef59",
+  "schema_change": false,
+  "closure": [
+    "unified-workbench"
+  ],
+  "applications": {
+    "unified-workbench": {
+      "server": "1aab3a966829747fe71599dd0c9124a3c1db6f5e0f9674efd75ec72c89791549"
+    }
+  },
+  "assets": {
+    "reference_oa_react_bidding.js": "d2b6e8f5b52859548d370c1f76e80642ac3ddb332ba213f6412c0e6ebff25883",
+    "reference_oa_react_bidding.css": "2d1eaee594088852c3114ec804be976f04c6e34c7179bb23417b529aa56329a3"
+  },
+  "full_oa_accepted": false
+}

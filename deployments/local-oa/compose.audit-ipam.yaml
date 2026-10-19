@@ -1,0 +1,22 @@
+networks:
+  app:
+    ipam:
+      config: [{subnet: 10.252.20.0/24}]
+  contract-data:
+    ipam:
+      config: [{subnet: 10.252.21.0/24}]
+  money-data:
+    ipam:
+      config: [{subnet: 10.252.22.0/24}]
+  people-data:
+    ipam:
+      config: [{subnet: 10.252.23.0/24}]
+  evidence-data:
+    ipam:
+      config: [{subnet: 10.252.24.0/24}]
+  project-data:
+    ipam:
+      config: [{subnet: 10.252.25.0/24}]
+  design-data:
+    ipam:
+      config: [{subnet: 10.252.26.0/24}]

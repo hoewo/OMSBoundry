@@ -1,0 +1,40 @@
+# ProjectCompletionAssessment 数据模型
+metadata:
+  path: "tech/_shared/models/ProjectCompletionAssessment.yaml"
+  domain: "project-workspace"
+  entity_name: "ProjectCompletionAssessment"
+  storage: "ephemeral"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+type: object
+additionalProperties: false
+description: "Project 对版本化完成规则的即时只读解释；不是来源事实，也不是 Project 完成状态。"
+required: [project_id, project_revision, profile_key, overall_status, requirements, drifted, observed_at]
+properties:
+  project_id: {type: string, format: uuid}
+  project_revision: {type: integer, minimum: 1}
+  profile_key: {type: string, const: reference-oa-c5-v1}
+  overall_status: {type: string, enum: [satisfied, pending, unavailable]}
+  requirements:
+    type: array
+    minItems: 2
+    maxItems: 2
+    items:
+      type: object
+      required: [key, status, reason]
+      properties:
+        key: {type: string, enum: [approval_result_recorded, audit_result_recorded]}
+        status: {type: string, enum: [satisfied, pending, not_applicable, unavailable]}
+        reason: {type: string, minLength: 1}
+        source:
+          type: [object, "null"]
+          description: "Results 提供的最小精确引用；不含金额或 Evidence 详情。"
+  latest_confirmation: {$ref: "./ProjectCompletionConfirmation.yaml"}
+  drifted: {type: boolean, description: "当前精确来源集合是否与最近确认快照不同。"}
+  observed_at: {type: string, format: date-time}
+ownership:
+  source_results: approval-audit-results
+  evaluation_rule: project-workspace
+  persistence: "GET 不持久化；可按来源重建。"

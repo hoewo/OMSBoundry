@@ -1,0 +1,616 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+overlay=${C1_ROLE_OVERLAY:-"$repo_dir/contracts/access/v1/examples/reference-oa-c1-role-overlay.json"}
+
+for command in curl jq openssl docker awk sort node; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$overlay" ] || { echo "C1 role overlay not found: $overlay" >&2; exit 2; }
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --profile contract --profile money --profile people --profile project --profile evidence "$@"
+}
+
+expect_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" \
+    "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" \
+    "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+cookie_value() {
+  cookie_file="$1"
+  cookie_name="$2"
+  awk -F '\t' -v name="$cookie_name" '$6 == name {value=$7} END {print value}' "$cookie_file"
+}
+
+decode_jwt_payload() {
+  token="$1"
+  part=$(printf '%s' "$token" | cut -d. -f2)
+  case $((${#part} % 4)) in
+    0) padding='' ;;
+    2) padding='==' ;;
+    3) padding='=' ;;
+    *) echo "invalid JWT payload encoding" >&2; return 1 ;;
+  esac
+  printf '%s%s' "$part" "$padding" | tr '_-' '/+' | openssl base64 -d -A
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+fetch_csrf() {
+  cookie_file="$1"
+  result=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code} %{time_total}' \
+    --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "GET /auth/api/v1/csrf" 200 "$actual" "$duration"
+  expect_status 200 "$actual" "fetch csrf"
+  jq -er .csrf_token "$workspace/csrf.json"
+}
+
+login() {
+  cookie_file="$1"
+  csrf_token="$2"
+  username="$3"
+  password="$4"
+  output_file="$5"
+  login_payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$login_payload" "$base_url/auth/api/v1/login")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /auth/api/v1/login" 200 "$actual" "$duration"
+  expect_status 200 "$actual" "login $username"
+}
+
+auth_json() {
+  path="$1"
+  cookie_file="$2"
+  csrf_token="$3"
+  request_payload="$4"
+  output_file="$5"
+  expected="$6"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$request_payload" "$base_url/auth$path")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then
+    cat "$output_file" >&2
+    printf '\n' >&2
+  fi
+  expect_status "$expected" "$actual" "$path"
+}
+
+authorize_app() {
+  cookie_file="$1"
+  csrf_token="$2"
+  app_id="$3"
+  resource_type="$4"
+  resource_id="$5"
+  fact_id="${6:-}"
+  fact_revision="${7:-}"
+  expected="$8"
+  output_file="$9"
+  if [ -n "$fact_id" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" --data-urlencode business_fact_kind=project_assignment \
+      --data-urlencode business_fact_source=project-workspace --data-urlencode "business_fact_id=$fact_id" \
+      --data-urlencode "business_fact_revision=$fact_revision" "$base_url/gateway/authorize/$app_id")
+  elif [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" "$base_url/gateway/authorize/$app_id")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" "$base_url/gateway/authorize/$app_id")
+  fi
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /gateway/authorize/$app_id" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "authorize $app_id"
+}
+
+app_json() {
+  method="$1"
+  path="$2"
+  cookie_file="$3"
+  request_payload="$4"
+  output_file="$5"
+  expected="$6"
+  if [ -n "$request_payload" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      -H 'Content-Type: application/json' --data "$request_payload" "$base_url/project$path")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/project$path")
+  fi
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "$method /project$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then
+    cat "$output_file" >&2
+    printf '\n' >&2
+  fi
+  expect_status "$expected" "$actual" "$method /project$path"
+}
+
+app_json_with_forged_headers() {
+  method="$1"
+  path="$2"
+  cookie_file="$3"
+  request_payload="$4"
+  output_file="$5"
+  expected="$6"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+    -H 'Content-Type: application/json' -H 'X-Actor-ID: forged-admin' \
+    -H 'X-Allowed-Actions: project-workspace.update,project-workspace.assignment.manage' \
+    -H 'X-Tenant-ID: forged-tenant' --data "$request_payload" "$base_url/project$path")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "$method /project$path forged-headers" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "forged identity headers"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c1-authorization.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+admin_restored=false
+cleanup() {
+  if [ "$admin_restored" != true ]; then
+    D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null 2>&1 || true
+  fi
+  if [ -n "${C1_EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$C1_EVIDENCE_DIR"
+    cp "$http_evidence" "$C1_EVIDENCE_DIR/http-evidence.tsv" 2>/dev/null || true
+  fi
+  rm -rf "$workspace"
+}
+trap cleanup EXIT HUP INT TERM
+
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$admin_password" ] || { echo "BOOTSTRAP_ADMIN_PASSWORD is required" >&2; exit 2; }
+project_people_base_url=$(env_value PROJECT_PEOPLE_BASE_URL)
+[ -n "$project_people_base_url" ] || {
+  echo "PROJECT_PEOPLE_BASE_URL is required for the C1 responsibility matrix" >&2
+  exit 2
+}
+
+jq -e '
+  .schema_version == "1" and .overlay_id == "reference-oa-c1" and
+  .application_id == "project-workspace" and .audience == "project-workspace" and
+  .assignment_policy.policy_id == "project-assignment-access" and
+  .site_roles.identity_super_admin.actions == []
+' "$overlay" >/dev/null
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+admin_subject_id=$(curl --fail --silent --show-error --cookie "$admin_cookies" "$base_url/auth/api/v1/session" | jq -er .principal.subject_id)
+
+authorize_app "$admin_cookies" "$admin_csrf" people-groups "" "" "" "" 303 "$workspace/admin-authorize-people.out"
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+
+actor_password() {
+  role_slug=$(printf '%s' "$1" | tr '_' '-')
+  printf 'C1-%s-%s!Aa7' "$role_slug" "$stamp"
+}
+
+create_actor() {
+  actor_role="$1"
+  actor_display="$2"
+  actor_slug=$(printf '%s' "$actor_role" | tr '_' '-')
+  actor_username="c1-$actor_slug-$stamp"
+  actor_password_value=$(actor_password "$actor_role")
+  actor_payload=$(jq -cn --arg username "$actor_username" --arg display_name "$actor_display" '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$actor_payload" "$workspace/$actor_role-invitation.json" 201
+  actor_subject=$(jq -er .subject.id "$workspace/$actor_role-invitation.json")
+  actor_token=$(jq -er .token "$workspace/$actor_role-invitation.json")
+  actor_cookies="$workspace/$actor_role.cookies"
+  actor_csrf=$(fetch_csrf "$actor_cookies")
+  actor_payload=$(jq -cn --arg token "$actor_token" --arg password "$actor_password_value" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$actor_cookies" "$actor_csrf" "$actor_payload" "$workspace/$actor_role-activation.json" 200
+  login "$actor_cookies" "$actor_csrf" "$actor_username" "$actor_password_value" "$workspace/$actor_role-login.json"
+  actor_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$actor_display" --arg iam_subject_id "$actor_subject" '{command_id:$command_id,display_name:$display_name,iam_subject_id:$iam_subject_id}')
+  result=$(curl --silent --show-error --output "$workspace/$actor_role-person.json" --write-out '%{http_code} %{time_total}' \
+    --request POST --cookie "$admin_cookies" --cookie-jar "$admin_cookies" -H 'Content-Type: application/json' \
+    --data "$actor_payload" "$base_url/people/api/v1/persons")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /people/api/v1/persons" 201 "$actual" "$duration"
+  expect_status 201 "$actual" "create Person for $actor_role"
+  jq -cn --arg role "$actor_role" --arg username "$actor_username" --arg subject_id "$actor_subject" \
+    --arg person_id "$(jq -er .id "$workspace/$actor_role-person.json")" \
+    --argjson person_revision "$(jq -er .revision "$workspace/$actor_role-person.json")" \
+    '{role:$role,username:$username,subject_id:$subject_id,person_id:$person_id,person_revision:$person_revision}' >"$workspace/$actor_role-meta.json"
+  printf '%s\n' "$actor_csrf" >"$workspace/$actor_role.csrf"
+}
+
+for actor in \
+  'oa_business_admin:OA 业务管理员' \
+  'general_manager:总经理' \
+  'business_manager:经营经理' \
+  'production_manager:生产经理' \
+  'business_owner:项目经营负责人' \
+  'production_owner:项目生产负责人' \
+  'participant:普通项目成员' \
+  'finance:财务人员'
+do
+  create_actor "${actor%%:*}" "${actor#*:}"
+done
+
+grant_site_role() {
+  grant_role="$1"
+  grant_subject=$(jq -er .subject_id "$workspace/$grant_role-meta.json")
+  jq -r --arg role "$grant_role" '.site_roles[$role].actions[]' "$overlay" |
+  while IFS= read -r grant_action; do
+    grant_payload=$(jq -cn --arg subject_id "$grant_subject" --arg audience project-workspace --arg action "$grant_action" '{subject_id:$subject_id,audience:$audience,action:$action}')
+    auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$grant_payload" /dev/null 204
+  done
+}
+
+for site_role in oa_business_admin general_manager business_manager production_manager finance; do
+  grant_site_role "$site_role"
+done
+
+oa_cookies="$workspace/oa_business_admin.cookies"
+oa_csrf=$(cat "$workspace/oa_business_admin.csrf")
+authorize_app "$oa_cookies" "$oa_csrf" project-workspace "" "" "" "" 303 "$workspace/oa-authorize-project.out"
+
+result=$(curl --silent --show-error --output "$workspace/project-page.html" --write-out '%{http_code} %{time_total}' --cookie "$oa_cookies" "$base_url/project/")
+actual=${result%% *}
+duration=${result#* }
+record_http "GET /project/" 200 "$actual" "$duration"
+expect_status 200 "$actual" "Project customer page"
+grep -q '新建项目包' "$workspace/project-page.html"
+grep -q '刷新权限' "$workspace/project-page.html"
+result=$(curl --silent --show-error --output "$workspace/project-demo.js" --write-out '%{http_code} %{time_total}' --cookie "$oa_cookies" "$base_url/project/assets/demo.js")
+actual=${result%% *}
+duration=${result#* }
+record_http "GET /project/assets/demo.js" 200 "$actual" "$duration"
+expect_status 200 "$actual" "Project customer page JavaScript"
+node --check "$workspace/project-demo.js" >/dev/null
+grep -q '/gateway/authorize/project-workspace' "$workspace/project-demo.js"
+
+create_project() {
+  project_number="$1"
+  project_name="$2"
+  project_output="$3"
+  project_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "$project_number" --arg name "$project_name" \
+    '{command_id:$command_id,project_number:$project_number,name:$name,summary:"C1 project responsibility matrix",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+  app_json POST /api/v1/projects "$oa_cookies" "$project_payload" "$project_output" 201
+}
+
+create_project "C1-A-$stamp" "C1 Project A $stamp" "$workspace/project-a.json"
+create_project "C1-B-$stamp" "C1 Project B $stamp" "$workspace/project-b.json"
+project_a=$(jq -er .id "$workspace/project-a.json")
+project_b=$(jq -er .id "$workspace/project-b.json")
+app_json GET /api/v1/projects "$oa_cookies" "" "$workspace/oa-project-list.json" 200
+jq -e '(.allowed_actions | index("project-workspace.create")) != null and (.allowed_actions | index("project-workspace.hierarchy.manage")) != null' "$workspace/oa-project-list.json" >/dev/null
+
+business_manager_cookies="$workspace/business_manager.cookies"
+business_manager_csrf=$(cat "$workspace/business_manager.csrf")
+production_manager_cookies="$workspace/production_manager.cookies"
+production_manager_csrf=$(cat "$workspace/production_manager.csrf")
+authorize_app "$business_manager_cookies" "$business_manager_csrf" project-workspace project "$project_a" "" "" 303 "$workspace/business-manager-authorize.out"
+authorize_app "$production_manager_cookies" "$production_manager_csrf" project-workspace project "$project_a" "" "" 303 "$workspace/production-manager-authorize.out"
+
+business_owner_person=$(jq -er .person_id "$workspace/business_owner-meta.json")
+business_owner_person_revision=$(jq -er .person_revision "$workspace/business_owner-meta.json")
+production_owner_person=$(jq -er .person_id "$workspace/production_owner-meta.json")
+production_owner_person_revision=$(jq -er .person_revision "$workspace/production_owner-meta.json")
+participant_person=$(jq -er .person_id "$workspace/participant-meta.json")
+participant_person_revision=$(jq -er .person_revision "$workspace/participant-meta.json")
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$business_owner_person" --argjson source_revision "$business_owner_person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"business_owner"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$business_manager_cookies" "$assignment_payload" "$workspace/business-owner-assignment.json" 200
+business_assignment_id=$(jq -er .assignment.id "$workspace/business-owner-assignment.json")
+business_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/business-owner-assignment.json")
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$production_owner_person" --argjson source_revision "$production_owner_person_revision" \
+  '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"production_owner"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$business_manager_cookies" "$assignment_payload" "$workspace/business-manager-cross-role-denied.json" 403
+app_json GET "/api/v1/projects/$project_a" "$business_manager_cookies" "" "$workspace/after-business-manager-denial.json" 200
+jq -e '.project.revision == 2 and (.assignments | length) == 1' "$workspace/after-business-manager-denial.json" >/dev/null
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$production_owner_person" --argjson source_revision "$production_owner_person_revision" \
+  '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"production_owner"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$production_manager_cookies" "$assignment_payload" "$workspace/production-owner-assignment.json" 200
+production_assignment_id=$(jq -er .assignment.id "$workspace/production-owner-assignment.json")
+production_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/production-owner-assignment.json")
+
+end_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$production_assignment_id" '{command_id:$command_id,expected_revision:3,operation:"end",assignment_id:$assignment_id,end_reason:"cross-role denial probe"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$business_manager_cookies" "$end_payload" "$workspace/business-manager-end-production-denied.json" 403
+end_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$business_assignment_id" '{command_id:$command_id,expected_revision:3,operation:"end",assignment_id:$assignment_id,end_reason:"cross-role denial probe"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$production_manager_cookies" "$end_payload" "$workspace/production-manager-end-business-denied.json" 403
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$participant_person" --argjson source_revision "$participant_person_revision" \
+  '{command_id:$command_id,expected_revision:3,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"participant"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$oa_cookies" "$assignment_payload" "$workspace/participant-assignment.json" 200
+participant_assignment_id=$(jq -er .assignment.id "$workspace/participant-assignment.json")
+participant_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/participant-assignment.json")
+
+authorize_assignment_role() {
+  assignment_role="$1"
+  assignment_id="$2"
+  assignment_revision="$3"
+  expected_actions="$4"
+  assignment_cookies="$workspace/$assignment_role.cookies"
+  assignment_csrf=$(cat "$workspace/$assignment_role.csrf")
+  authorize_app "$assignment_cookies" "$assignment_csrf" project-workspace project "$project_a" "$assignment_id" "$assignment_revision" 303 "$workspace/$assignment_role-authorize-a.out"
+  assignment_credential=$(cookie_value "$assignment_cookies" oms_cap_project_workspace)
+  [ -n "$assignment_credential" ] || { echo "$assignment_role credential is missing" >&2; exit 1; }
+  decode_jwt_payload "$assignment_credential" >"$workspace/$assignment_role-claims.json"
+  jq -e --arg project_id "$project_a" --argjson actions "$expected_actions" '
+    (.actions | sort) == ($actions | sort) and .scope.kind == "resources" and
+    .scope.resources == [{"type":"project","id":$project_id}] and (.exp - .iat) <= 300
+  ' "$workspace/$assignment_role-claims.json" >/dev/null
+}
+
+authorize_assignment_role business_owner "$business_assignment_id" "$business_assignment_revision" '["project-workspace.read","project-workspace.update"]'
+authorize_assignment_role production_owner "$production_assignment_id" "$production_assignment_revision" '["project-workspace.read","project-workspace.update"]'
+authorize_assignment_role participant "$participant_assignment_id" "$participant_assignment_revision" '["project-workspace.read"]'
+
+business_owner_cookies="$workspace/business_owner.cookies"
+business_owner_csrf=$(cat "$workspace/business_owner.csrf")
+production_owner_cookies="$workspace/production_owner.cookies"
+production_owner_csrf=$(cat "$workspace/production_owner.csrf")
+participant_cookies="$workspace/participant.cookies"
+
+app_json GET "/api/v1/projects/$project_a" "$business_owner_cookies" "" "$workspace/business-owner-read-a.json" 200
+app_json GET "/api/v1/projects/$project_b" "$business_owner_cookies" "" "$workspace/business-owner-read-b-denied.json" 403
+authorize_app "$business_owner_cookies" "$business_owner_csrf" project-workspace project "$project_b" "$business_assignment_id" "$business_assignment_revision" 403 "$workspace/business-owner-credential-b-denied.json"
+[ -z "$(cookie_value "$business_owner_cookies" oms_cap_project_workspace)" ] || { echo "failed scoped reauthorization retained stale Project A cookie" >&2; exit 1; }
+authorize_app "$business_owner_cookies" "$business_owner_csrf" project-workspace project "$project_a" "$business_assignment_id" "$business_assignment_revision" 303 "$workspace/business-owner-reauthorize-a.out"
+
+updated_name="C1 Project A completed by responsible team $stamp"
+update_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg name "$updated_name" --slurpfile details "$workspace/business-owner-read-a.json" '
+  ($details[0].project) as $p |
+  {command_id:$command_id,expected_revision:$p.revision,project_number:$p.project_number,name:$name,
+   summary:$p.summary,planned_start_date:($p.planned_start_date // null),planned_end_date:($p.planned_end_date // null),project_type_keys:$p.project_type_keys}')
+app_json PUT "/api/v1/projects/$project_a" "$business_owner_cookies" "$update_payload" "$workspace/business-owner-update-a.json" 200
+project_revision=$(jq -er .revision "$workspace/business-owner-update-a.json")
+
+app_json GET "/api/v1/projects/$project_a" "$production_owner_cookies" "" "$workspace/production-owner-read-a.json" 200
+app_json GET "/api/v1/projects/$project_b" "$production_owner_cookies" "" "$workspace/production-owner-read-b-denied.json" 403
+app_json GET "/api/v1/projects/$project_a" "$participant_cookies" "" "$workspace/participant-read-a.json" 200
+app_json GET "/api/v1/projects/$project_b" "$participant_cookies" "" "$workspace/participant-read-b-denied.json" 403
+participant_update_payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson expected_revision "$project_revision" --arg name "forged update" --slurpfile details "$workspace/participant-read-a.json" '
+  ($details[0].project) as $p |
+  {command_id:$command_id,expected_revision:$expected_revision,project_number:$p.project_number,name:$name,
+   summary:$p.summary,planned_start_date:($p.planned_start_date // null),planned_end_date:($p.planned_end_date // null),project_type_keys:$p.project_type_keys}')
+app_json_with_forged_headers PUT "/api/v1/projects/$project_a" "$participant_cookies" "$participant_update_payload" "$workspace/participant-forged-update-denied.json" 403
+
+for read_role in general_manager finance; do
+  read_cookies="$workspace/$read_role.cookies"
+  read_csrf=$(cat "$workspace/$read_role.csrf")
+  authorize_app "$read_cookies" "$read_csrf" project-workspace "" "" "" "" 303 "$workspace/$read_role-authorize.out"
+  app_json GET /api/v1/projects "$read_cookies" "" "$workspace/$read_role-list.json" 200
+  app_json GET "/api/v1/projects/$project_a" "$read_cookies" "" "$workspace/$read_role-read-a.json" 200
+  if [ "$read_role" = general_manager ]; then
+    jq -e '(.allowed_actions | sort) == (["project-workspace.commercial-summary.read","project-workspace.history.read","project-workspace.read"] | sort)' "$workspace/$read_role-read-a.json" >/dev/null
+  else
+    jq -e '(.allowed_actions | sort) == (["project-workspace.commercial-summary.read","project-workspace.read"] | sort)' "$workspace/$read_role-read-a.json" >/dev/null
+  fi
+  app_json PUT "/api/v1/projects/$project_a" "$read_cookies" "$participant_update_payload" "$workspace/$read_role-update-denied.json" 403
+done
+
+complete_payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson expected_revision "$project_revision" '{command_id:$command_id,expected_revision:$expected_revision}')
+app_json POST "/api/v1/projects/$project_a/complete-initiation" "$oa_cookies" "$complete_payload" "$workspace/project-a-active.json" 200
+active_revision=$(jq -er .revision "$workspace/project-a-active.json")
+jq -e '.status == "active"' "$workspace/project-a-active.json" >/dev/null
+
+active_update_payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson expected_revision "$active_revision" --arg name "state bypass attempt" --slurpfile project "$workspace/project-a-active.json" '
+  ($project[0]) as $p |
+  {command_id:$command_id,expected_revision:$expected_revision,project_number:$p.project_number,name:$name,
+   summary:$p.summary,planned_start_date:($p.planned_start_date // null),planned_end_date:($p.planned_end_date // null),project_type_keys:$p.project_type_keys}')
+app_json PUT "/api/v1/projects/$project_a" "$business_owner_cookies" "$active_update_payload" "$workspace/active-state-update-denied.json" 409
+app_json GET "/api/v1/projects/$project_a" "$business_owner_cookies" "" "$workspace/active-state-unchanged.json" 200
+jq -e --arg name "$updated_name" --argjson revision "$active_revision" '.project.status == "active" and .project.name == $name and .project.revision == $revision and (.allowed_actions | index("project-workspace.update")) == null' "$workspace/active-state-unchanged.json" >/dev/null
+
+# Project Package is a privileged tenant-scoped Project concern. The same
+# reference OA overlay gives it only to the OA business administrator.
+package_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "C1-PACKAGE-$stamp" \
+  '{command_id:$command_id,project_number:$project_number,name:"C1 项目包",summary:"C1 two-level hierarchy acceptance",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+app_json POST /api/v1/project-packages "$workspace/general_manager.cookies" "$package_payload" "$workspace/general-manager-package-denied.json" 403
+app_json POST /api/v1/project-packages "$oa_cookies" "$package_payload" "$workspace/project-package.json" 201
+package_id=$(jq -er .id "$workspace/project-package.json")
+package_revision=$(jq -er .revision "$workspace/project-package.json")
+jq -e '.node_type == "package" and .parent_project_id == null and .revision == 1' "$workspace/project-package.json" >/dev/null
+
+attach_command=$(new_uuid)
+attach_payload=$(jq -cn --arg command_id "$attach_command" --arg target_package_id "$package_id" --argjson expected_package_revision "$package_revision" \
+  '{command_id:$command_id,operation:"attach_existing",expected_project_revision:1,target_package_id:$target_package_id,expected_package_revision:$expected_package_revision,sort_order:20}')
+app_json POST "/api/v1/projects/$project_b/package-conversions" "$oa_cookies" "$attach_payload" "$workspace/project-b-attached.json" 200
+attach_conversion=$(jq -er .conversion.id "$workspace/project-b-attached.json")
+attached_project_revision=$(jq -er .project.revision "$workspace/project-b-attached.json")
+attached_package_revision=$(jq -er .package.revision "$workspace/project-b-attached.json")
+jq -e --arg project_id "$project_b" --arg package_id "$package_id" \
+  '.project.id == $project_id and .project.parent_project_id == $package_id and .conversion.status == "active" and .conversion.created_package == false' "$workspace/project-b-attached.json" >/dev/null
+app_json POST "/api/v1/projects/$project_b/package-conversions" "$oa_cookies" "$attach_payload" "$workspace/project-b-attach-replay.json" 200
+jq -e --arg conversion_id "$attach_conversion" '.conversion.id == $conversion_id' "$workspace/project-b-attach-replay.json" >/dev/null
+app_json GET "/api/v1/projects/$package_id" "$oa_cookies" "" "$workspace/package-with-child.json" 200
+jq -e --arg project_id "$project_b" '.project.node_type == "package" and (.children | length) == 1 and .children[0].id == $project_id' "$workspace/package-with-child.json" >/dev/null
+app_json GET "/api/v1/projects/$project_b" "$oa_cookies" "" "$workspace/attached-project-details.json" 200
+jq -e --arg conversion_id "$attach_conversion" '.active_package_conversion.id == $conversion_id and (.allowed_actions | index("project-workspace.hierarchy.manage")) != null' "$workspace/attached-project-details.json" >/dev/null
+
+stale_project_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg target_package_id "$package_id" \
+  '{command_id:$command_id,operation:"attach_existing",expected_project_revision:1,target_package_id:$target_package_id,expected_package_revision:1,sort_order:30}')
+create_project "C1-C-$stamp" "C1 Project C $stamp" "$workspace/project-c.json"
+project_c=$(jq -er .id "$workspace/project-c.json")
+app_json POST "/api/v1/projects/$project_c/package-conversions" "$oa_cookies" "$stale_project_payload" "$workspace/stale-package-revision-denied.json" 409
+app_json GET "/api/v1/projects/$project_c" "$oa_cookies" "" "$workspace/project-c-after-stale.json" 200
+jq -e '.project.parent_project_id == null and .project.revision == 1' "$workspace/project-c-after-stale.json" >/dev/null
+
+rollback_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg reason "恢复独立项目" --argjson expected_project_revision "$attached_project_revision" --argjson expected_package_revision "$attached_package_revision" \
+  '{command_id:$command_id,expected_project_revision:$expected_project_revision,expected_package_revision:$expected_package_revision,reason:$reason}')
+app_json POST "/api/v1/projects/$project_b/package-conversions/$attach_conversion/rollback" "$oa_cookies" "$rollback_payload" "$workspace/project-b-detached.json" 200
+jq -e '.project.parent_project_id == null and .conversion.status == "rolled_back" and .package.status == "draft"' "$workspace/project-b-detached.json" >/dev/null
+
+wrap_payload=$(jq -cn --arg command_id "$(new_uuid)" \
+  '{command_id:$command_id,operation:"wrap_as_package",expected_project_revision:3,sort_order:5,new_package:{project_number:"",name:"自动外层包",summary:"",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}}')
+app_json POST "/api/v1/projects/$project_b/package-conversions" "$oa_cookies" "$wrap_payload" "$workspace/project-b-wrapped.json" 200
+wrap_conversion=$(jq -er .conversion.id "$workspace/project-b-wrapped.json")
+wrapper_id=$(jq -er .package.id "$workspace/project-b-wrapped.json")
+wrapped_project_revision=$(jq -er .project.revision "$workspace/project-b-wrapped.json")
+wrapper_revision=$(jq -er .package.revision "$workspace/project-b-wrapped.json")
+
+deeper_payload=$(jq -cn --arg command_id "$(new_uuid)" \
+  '{command_id:$command_id,operation:"wrap_as_package",expected_project_revision:1,sort_order:0,new_package:{project_number:"",name:"禁止第三层",summary:"",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}}')
+app_json POST "/api/v1/projects/$wrapper_id/package-conversions" "$oa_cookies" "$deeper_payload" "$workspace/deeper-hierarchy-denied.json" 409
+
+wrapper_update=$(jq -cn --arg command_id "$(new_uuid)" --arg name "已补充资料的外层包" --arg project_number "C1-WRAPPER-$stamp" --argjson expected_revision "$wrapper_revision" \
+  '{command_id:$command_id,expected_revision:$expected_revision,project_number:$project_number,name:$name,summary:"后续业务已经使用",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+app_json PUT "/api/v1/projects/$wrapper_id" "$oa_cookies" "$wrapper_update" "$workspace/wrapper-updated.json" 200
+changed_wrapper_revision=$(jq -er .revision "$workspace/wrapper-updated.json")
+unsafe_rollback=$(jq -cn --arg command_id "$(new_uuid)" --arg reason "不应级联删除" --argjson expected_project_revision "$wrapped_project_revision" --argjson expected_package_revision "$changed_wrapper_revision" \
+  '{command_id:$command_id,expected_project_revision:$expected_project_revision,expected_package_revision:$expected_package_revision,reason:$reason}')
+app_json POST "/api/v1/projects/$project_b/package-conversions/$wrap_conversion/rollback" "$oa_cookies" "$unsafe_rollback" "$workspace/unsafe-wrapper-rollback-denied.json" 409
+jq -e '.error.code == "package_rollback_unsafe"' "$workspace/unsafe-wrapper-rollback-denied.json" >/dev/null
+app_json GET "/api/v1/projects/$project_b" "$oa_cookies" "" "$workspace/project-b-after-unsafe-rollback.json" 200
+jq -e --arg wrapper_id "$wrapper_id" --argjson revision "$wrapped_project_revision" '.project.parent_project_id == $wrapper_id and .project.revision == $revision' "$workspace/project-b-after-unsafe-rollback.json" >/dev/null
+
+safe_wrap=$(jq -cn --arg command_id "$(new_uuid)" \
+  '{command_id:$command_id,operation:"wrap_as_package",expected_project_revision:1,sort_order:0,new_package:{project_number:"",name:"可撤销外层包",summary:"",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}}')
+app_json POST "/api/v1/projects/$project_c/package-conversions" "$oa_cookies" "$safe_wrap" "$workspace/project-c-wrapped.json" 200
+safe_conversion=$(jq -er .conversion.id "$workspace/project-c-wrapped.json")
+safe_project_revision=$(jq -er .project.revision "$workspace/project-c-wrapped.json")
+safe_package_revision=$(jq -er .package.revision "$workspace/project-c-wrapped.json")
+safe_rollback=$(jq -cn --arg command_id "$(new_uuid)" --arg reason "方案撤回" --argjson expected_project_revision "$safe_project_revision" --argjson expected_package_revision "$safe_package_revision" \
+  '{command_id:$command_id,expected_project_revision:$expected_project_revision,expected_package_revision:$expected_package_revision,reason:$reason}')
+app_json POST "/api/v1/projects/$project_c/package-conversions/$safe_conversion/rollback" "$oa_cookies" "$safe_rollback" "$workspace/project-c-wrap-rolled-back.json" 200
+jq -e '.project.parent_project_id == null and .package.status == "cancelled" and .conversion.status == "rolled_back"' "$workspace/project-c-wrap-rolled-back.json" >/dev/null
+
+# An explicit permission refresh must replace the browser's old capability
+# view. Revoking hierarchy leaves read access, so the new credential succeeds
+# but the service projection and writes both lose the action.
+oa_subject=$(jq -er .subject_id "$workspace/oa_business_admin-meta.json")
+revoke_payload=$(jq -cn --arg subject_id "$oa_subject" --arg audience project-workspace --arg action project-workspace.hierarchy.manage '{subject_id:$subject_id,audience:$audience,action:$action}')
+auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$revoke_payload" /dev/null 204
+authorize_app "$oa_cookies" "$oa_csrf" project-workspace "" "" "" "" 303 "$workspace/oa-authorize-after-hierarchy-revoke.out"
+app_json GET "/api/v1/projects/$project_c" "$oa_cookies" "" "$workspace/project-c-after-hierarchy-revoke.json" 200
+jq -e '(.allowed_actions | index("project-workspace.hierarchy.manage")) == null' "$workspace/project-c-after-hierarchy-revoke.json" >/dev/null
+denied_package_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,project_number:"",name:"撤权后不应创建",summary:"",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+app_json POST /api/v1/project-packages "$oa_cookies" "$denied_package_payload" "$workspace/oa-package-after-revoke-denied.json" 403
+
+# If IAM can no longer issue even the entry capability, Gateway removes the
+# route-scoped cookie instead of leaving a stale editable application session.
+jq -r '.site_roles.oa_business_admin.actions[] | select(. != "project-workspace.hierarchy.manage")' "$overlay" |
+while IFS= read -r revoked_action; do
+  revoke_payload=$(jq -cn --arg subject_id "$oa_subject" --arg audience project-workspace --arg action "$revoked_action" '{subject_id:$subject_id,audience:$audience,action:$action}')
+  auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$revoke_payload" /dev/null 204
+done
+authorize_app "$oa_cookies" "$oa_csrf" project-workspace "" "" "" "" 403 "$workspace/oa-authorize-after-all-revoke.json"
+[ -z "$(cookie_value "$oa_cookies" oms_cap_project_workspace)" ] || { echo "Gateway retained stale Project capability cookie after failed reauthorization" >&2; exit 1; }
+
+fresh_business_cookies="$workspace/business_owner-fresh.cookies"
+fresh_business_csrf=$(fetch_csrf "$fresh_business_cookies")
+login "$fresh_business_cookies" "$fresh_business_csrf" "$(jq -er .username "$workspace/business_owner-meta.json")" "$(actor_password business_owner)" "$workspace/business-owner-fresh-login.json"
+
+end_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$business_assignment_id" --argjson expected_revision "$active_revision" '{command_id:$command_id,expected_revision:$expected_revision,operation:"end",assignment_id:$assignment_id,end_reason:"C1 responsibility handoff"}')
+app_json POST "/api/v1/projects/$project_a/assignments" "$business_manager_cookies" "$end_payload" "$workspace/business-owner-ended.json" 200
+ended_revision=$(jq -er .assignment.ended_project_revision "$workspace/business-owner-ended.json")
+[ "$ended_revision" -gt "$business_assignment_revision" ] || { echo "Assignment revision did not advance" >&2; exit 1; }
+authorize_app "$fresh_business_cookies" "$fresh_business_csrf" project-workspace project "$project_a" "$business_assignment_id" "$business_assignment_revision" 403 "$workspace/ended-assignment-new-credential-denied.json"
+app_json GET "/api/v1/projects/$project_a" "$business_owner_cookies" "" "$workspace/old-credential-residual-window.json" 200
+
+manifest="$repo_dir/contracts/access/v1/examples/project-workspace-capabilities.json"
+jq -r '.capabilities[].id' "$manifest" |
+while IFS= read -r admin_action; do
+  revoke_payload=$(jq -cn --arg subject_id "$admin_subject_id" --arg audience project-workspace --arg action "$admin_action" '{subject_id:$subject_id,audience:$audience,action:$action}')
+  auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$revoke_payload" /dev/null 204
+done
+
+identity_admin_cookies="$workspace/identity-admin-fresh.cookies"
+identity_admin_csrf=$(fetch_csrf "$identity_admin_cookies")
+login "$identity_admin_cookies" "$identity_admin_csrf" "$admin_username" "$admin_password" "$workspace/identity-admin-fresh-login.json"
+authorize_app "$identity_admin_cookies" "$identity_admin_csrf" project-workspace "" "" "" "" 403 "$workspace/identity-admin-business-denied.json"
+
+result=$(curl --silent --show-error --dump-header "$workspace/identity-admin-direct-denied.headers" \
+  --output "$workspace/identity-admin-direct-denied.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$identity_admin_cookies" -H 'X-Actor-ID: forged-admin' -H 'X-Allowed-Actions: project-workspace.read' \
+  "$base_url/project/api/v1/projects/$project_a")
+actual=${result%% *}
+duration=${result#* }
+record_http "GET /project/api/v1/projects/{id} identity-admin-forged" 303 "$actual" "$duration"
+expect_status 303 "$actual" "identity administrator direct business access"
+grep -Eiq '^location: /workbench/\?return_to=' "$workspace/identity-admin-direct-denied.headers" || {
+  echo "identity administrator denial did not return to the workbench authorization boundary" >&2
+  exit 1
+}
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_restored=true
+
+audit_counts=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -F"," -c "SELECT count(*) FILTER (WHERE action='"'"'iam_capability_granted'"'"'),count(*) FILTER (WHERE action='"'"'iam_policy_credential_issued'"'"'),count(*) FILTER (WHERE action='"'"'iam_capability_revoked'"'"') FROM iam_audit_entries"')
+grant_audits=$(printf '%s' "$audit_counts" | cut -d, -f1)
+policy_audits=$(printf '%s' "$audit_counts" | cut -d, -f2)
+revoke_audits=$(printf '%s' "$audit_counts" | cut -d, -f3)
+[ "$grant_audits" -ge 16 ] && [ "$policy_audits" -ge 3 ] && [ "$revoke_audits" -ge 12 ] || { echo "expected grant/policy/revoke audit evidence, got $audit_counts" >&2; exit 1; }
+
+http_samples=$(awk -F '\t' 'NR > 1 {count++} END {print count+0}' "$http_evidence")
+http_failures=$(awk -F '\t' 'NR > 1 && $2 != $3 {count++} END {print count+0}' "$http_evidence")
+max_latency=$(awk -F '\t' 'NR > 1 && $4 > max {max=$4} END {printf "%.6f", max+0}' "$http_evidence")
+[ "$http_failures" -eq 0 ] || { echo "$http_failures HTTP matrix assertions failed" >&2; exit 1; }
+
+printf '%s\n' \
+  "D1 C1 project responsibility authorization acceptance passed:" \
+  "- role overlay: reference-oa-c1@1.0.0; Project Assignment policy: project-assignment-access@1.0.0" \
+  "- identity super administrator had IAM governance rights but no implicit Project business capability" \
+  "- OA business administrator created Projects and completed initiation through explicit tenant capabilities" \
+  "- business and production managers could manage only their matching owner Assignment type" \
+  "- Project business owner and production owner received read/update only for Project A through versioned Assignment facts" \
+  "- participant received read-only Project A access; direct API and forged identity headers could not add update" \
+  "- general manager and finance role read Project context but could not update it" \
+  "- only the OA business administrator could create a Package, attach/wrap an existing Project, and safely roll back" \
+  "- Project list/detail allowed_actions matched role, resource scope, lifecycle state, and hierarchy conversion state" \
+  "- the customer page exposed Package operations and an explicit Gateway/IAM permission refresh without exposing the HttpOnly credential" \
+  "- revoking hierarchy removed the UI/API action on refresh; revoking entry access cleared the stale route-scoped cookie" \
+  "- original Project IDs and parent/child projections survived replay; stale dual revisions and third-level nesting were denied" \
+  "- a changed wrapper Package made automatic rollback fail closed without detaching its child" \
+  "- Project B, mismatched fact/scope, active-state update, and ended-Assignment new credential were denied without partial writes" \
+  "- already-issued owner credential stayed bounded to its documented <=300s residual window" \
+  "- IAM grant, policy issuance, and revocation audits were present" \
+  "- observed HTTP assertions: $http_samples; status mismatches: $http_failures; max local request time: ${max_latency}s"

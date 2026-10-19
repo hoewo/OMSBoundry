@@ -1,0 +1,986 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+compose_file="$d1_dir/compose.yaml"
+pull_compose_file="$d1_dir/compose.pull.yaml"
+https_compose_file="$d1_dir/compose.https.yaml"
+evidence_oss_compose_file="$d1_dir/compose.evidence-oss.yaml"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+project=${D1_PROJECT_NAME:-omsbizfoundry}
+compose_override_file=${D1_COMPOSE_OVERRIDE_FILE:-}
+
+usage() {
+  echo "usage: D1_ENV_FILE=path $0 up|apply|status|check|config|images|prepare-images|preflight-upgrade|party-map contract|money INPUT_JSON|backup|upgrade|restore BACKUP_ID|down" >&2
+  exit 2
+}
+
+[ -f "$env_file" ] || {
+  echo "D1 environment file not found: $env_file (copy .env.example to .env and replace every placeholder)" >&2
+  exit 2
+}
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+enable_contract=$(env_value ENABLE_CONTRACT true)
+enable_money=$(env_value ENABLE_MONEY true)
+enable_people=$(env_value ENABLE_PEOPLE true)
+enable_party=$(env_value ENABLE_PARTY true)
+enable_project=$(env_value ENABLE_PROJECT true)
+enable_evidence=$(env_value ENABLE_EVIDENCE true)
+enable_business_engagement=$(env_value ENABLE_BUSINESS_ENGAGEMENT false)
+enable_billing=$(env_value ENABLE_BILLING false)
+enable_production=$(env_value ENABLE_PRODUCTION false)
+enable_approval_audit_results=$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)
+enable_cost_outsourcing=$(env_value ENABLE_COST_OUTSOURCING false)
+enable_bonus_distribution=$(env_value ENABLE_BONUS_DISTRIBUTION false)
+reference_oa_bonus_profile=$(env_value REFERENCE_OA_BONUS_PROFILE)
+reference_oa_personnel_profile=$(env_value REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE)
+reference_oa_stage_profile=$(env_value REFERENCE_OA_PRODUCTION_STAGE_PROFILE)
+oms_qualification_party_id=$(env_value OMS_QUALIFICATION_PARTY_ID)
+image_mode=$(env_value D1_IMAGE_MODE build)
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+evidence_storage_mode=$(env_value D1_EVIDENCE_STORAGE_PROVIDER local)
+tenant_id=$(env_value TENANT_ID)
+backup_setting=$(env_value D1_BACKUP_DIR ./.runtime/backups)
+if [ -f "$d1_dir/.release-bundle" ] && [ "$image_mode" != pull ]; then
+  echo "D1 release bundles only support D1_IMAGE_MODE=pull; target hosts must not rebuild application images" >&2
+  exit 2
+fi
+case "$backup_setting" in
+  /*) backup_dir="$backup_setting" ;;
+  *) backup_dir="$d1_dir/${backup_setting#./}" ;;
+esac
+
+validate_port() {
+  name=$1
+  port=$2
+  case "$port" in ''|*[!0-9]*) echo "$name must be an integer from 1 to 65535" >&2; exit 2 ;; esac
+  [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || {
+    echo "$name must be an integer from 1 to 65535" >&2
+    exit 2
+  }
+}
+
+validate_env() {
+  case "$reference_oa_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;; esac
+  case "$reference_oa_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE" >&2; exit 2 ;; esac
+  case "$reference_oa_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE" >&2; exit 2 ;; esac
+  if [ -n "$oms_qualification_party_id" ] && ! printf '%s\n' "$oms_qualification_party_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    echo "OMS_QUALIFICATION_PARTY_ID must be a canonical lowercase UUID" >&2
+    exit 2
+  fi
+  if [ -n "$oms_qualification_party_id" ] && { [ "$enable_party" != true ] || [ "$enable_project" != true ] || [ "$enable_billing" != true ]; }; then
+    echo "OMS qualification Party requires Party, Project and Billing" >&2
+    exit 2
+  fi
+  if [ -n "$reference_oa_stage_profile" ] && { [ "$enable_production" != true ] || [ "$enable_project" != true ] || [ "$enable_people" != true ] || [ "$enable_evidence" != true ]; }; then echo "production stage requires Production, Project, People and Evidence" >&2; exit 2; fi
+  if [ -n "$reference_oa_personnel_profile" ] && { [ "$enable_project" != true ] || [ "$enable_people" != true ]; }; then echo "production personnel requires Project and People" >&2; exit 2; fi
+  if [ "$reference_oa_bonus_profile" = reference-oa-bonus-v3 ] && { [ "$reference_oa_personnel_profile" != reference-oa-production-personnel-v1 ] || [ "$enable_bonus_distribution" != true ]; }; then echo "professional Bonus requires explicit personnel profile and Bonus selection" >&2; exit 2; fi
+  for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution"; do
+    case "$value" in true|false) ;; *) echo "application enable flags must be true or false" >&2; exit 2 ;; esac
+  done
+  case "$image_mode" in build|pull) ;; *) echo "D1_IMAGE_MODE must be build or pull" >&2; exit 2 ;; esac
+  case "$ingress_mode" in http|https) ;; *) echo "D1_INGRESS_MODE must be http or https" >&2; exit 2 ;; esac
+  if [ "$image_mode" = pull ]; then
+    validate_digest_image D1_POSTGRES_IMAGE
+    validate_digest_image D1_IDENTITY_IMAGE
+    validate_digest_image D1_WORKBENCH_IMAGE
+    validate_digest_image D1_GATEWAY_IMAGE
+    validate_digest_image D1_NGINX_IMAGE
+    [ "$enable_contract" != true ] || validate_digest_image D1_CONTRACT_IMAGE
+    [ "$enable_money" != true ] || validate_digest_image D1_MONEY_IMAGE
+    [ "$enable_people" != true ] || validate_digest_image D1_PEOPLE_IMAGE
+    [ "$enable_party" != true ] || validate_digest_image D1_PARTY_IMAGE
+    [ "$enable_project" != true ] || validate_digest_image D1_PROJECT_IMAGE
+    [ "$enable_evidence" != true ] || validate_digest_image D1_EVIDENCE_IMAGE
+    [ "$enable_business_engagement" != true ] || validate_digest_image D1_BUSINESS_ENGAGEMENT_IMAGE
+    [ "$enable_billing" != true ] || validate_digest_image D1_BILLING_IMAGE
+    [ "$enable_production" != true ] || validate_digest_image D1_PRODUCTION_IMAGE
+    [ "$enable_approval_audit_results" != true ] || validate_digest_image D1_APPROVAL_AUDIT_RESULTS_IMAGE
+    [ "$enable_cost_outsourcing" != true ] || validate_digest_image D1_COST_OUTSOURCING_IMAGE
+    [ "$enable_bonus_distribution" != true ] || validate_digest_image D1_BONUS_DISTRIBUTION_IMAGE
+  fi
+  if [ "$enable_business_engagement" = true ] && { [ "$enable_project" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_BUSINESS_ENGAGEMENT=true requires ENABLE_PROJECT=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_billing" = true ] && { [ "$enable_party" != true ] || [ "$enable_project" != true ] || [ "$enable_contract" != true ] || [ "$enable_money" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_BILLING=true requires ENABLE_PARTY=true, ENABLE_PROJECT=true, ENABLE_CONTRACT=true, ENABLE_MONEY=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_production" = true ] && { [ "$enable_people" != true ] || [ "$enable_project" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_PRODUCTION=true requires ENABLE_PEOPLE=true, ENABLE_PROJECT=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_approval_audit_results" = true ] && { [ "$enable_project" != true ] || [ "$enable_contract" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_APPROVAL_AUDIT_RESULTS=true requires ENABLE_PROJECT=true, ENABLE_CONTRACT=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_cost_outsourcing" = true ] && { [ "$enable_project" != true ] || [ "$enable_party" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_COST_OUTSOURCING=true requires ENABLE_PROJECT=true, ENABLE_PARTY=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_bonus_distribution" = true ] && { [ "$enable_project" != true ] || [ "$enable_people" != true ] || { [ "$enable_contract" != true ] && [ "$enable_money" != true ]; }; }; then
+    echo "ENABLE_BONUS_DISTRIBUTION=true requires ENABLE_PROJECT=true, ENABLE_PEOPLE=true and at least one of ENABLE_CONTRACT=true or ENABLE_MONEY=true" >&2
+    exit 2
+  fi
+  project_party_base_url=$(env_value PROJECT_PARTY_BASE_URL)
+  if [ "$enable_project" = true ] && [ "$enable_party" = true ]; then
+    case "$project_party_base_url" in http://*|https://*) ;; *) echo "PROJECT_PARTY_BASE_URL is required when Project and Party are enabled" >&2; exit 2;; esac
+  elif [ "$enable_party" != true ] && [ -n "$project_party_base_url" ]; then
+    echo "PROJECT_PARTY_BASE_URL must be empty when Party Directory is disabled" >&2
+    exit 2
+  fi
+  [ -n "$tenant_id" ] || { echo "TENANT_ID is required" >&2; exit 2; }
+  issuer=$(env_value PUBLIC_ISSUER)
+  case "$issuer" in https://*) ;; *) echo "PUBLIC_ISSUER must use HTTPS" >&2; exit 2;; esac
+  cookie_secure=$(env_value COOKIE_SECURE false)
+  public_bind=$(env_value PUBLIC_BIND 127.0.0.1)
+  case "$cookie_secure" in true|false) ;; *) echo "COOKIE_SECURE must be true or false" >&2; exit 2;; esac
+  if [ "$cookie_secure" != true ] && [ "$public_bind" != 127.0.0.1 ] && [ "$public_bind" != localhost ] && [ "$public_bind" != ::1 ]; then
+    echo "COOKIE_SECURE=false is only allowed on a loopback bind" >&2
+    exit 2
+  fi
+  if [ "$ingress_mode" = https ]; then
+    [ "$cookie_secure" = true ] || { echo "COOKIE_SECURE must be true when D1_INGRESS_MODE=https" >&2; exit 2; }
+    public_host=$(env_value D1_PUBLIC_HOST)
+    printf '%s\n' "$public_host" | grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$' || {
+      echo "D1_PUBLIC_HOST must be a DNS hostname when D1_INGRESS_MODE=https" >&2
+      exit 2
+    }
+    http_port=$(env_value PUBLIC_HTTP_PORT 80)
+    https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+    validate_port PUBLIC_HTTP_PORT "$http_port"
+    validate_port PUBLIC_HTTPS_PORT "$https_port"
+    [ "$http_port" != "$https_port" ] || { echo "PUBLIC_HTTP_PORT and PUBLIC_HTTPS_PORT must differ" >&2; exit 2; }
+    certificate_file=$(env_value D1_TLS_CERT_FILE)
+    private_key_file=$(env_value D1_TLS_KEY_FILE)
+    case "$certificate_file" in /*) ;; *) echo "D1_TLS_CERT_FILE must be an absolute host path" >&2; exit 2 ;; esac
+    case "$private_key_file" in /*) ;; *) echo "D1_TLS_KEY_FILE must be an absolute host path" >&2; exit 2 ;; esac
+    [ "$certificate_file" != "$private_key_file" ] || { echo "D1_TLS_CERT_FILE and D1_TLS_KEY_FILE must differ" >&2; exit 2; }
+    [ -f "$certificate_file" ] || { echo "D1 TLS certificate file does not exist" >&2; exit 2; }
+    [ -f "$private_key_file" ] || { echo "D1 TLS private-key file does not exist" >&2; exit 2; }
+    if private_key_mode=$(stat -c '%a' "$private_key_file" 2>/dev/null); then :; else private_key_mode=$(stat -f '%Lp' "$private_key_file"); fi
+    case "$private_key_mode" in 400|600) ;; *) echo "D1 TLS private key permissions must be 0400 or 0600" >&2; exit 2 ;; esac
+    openssl x509 -in "$certificate_file" -noout >/dev/null 2>&1 || { echo "D1 TLS certificate is not valid PEM" >&2; exit 2; }
+    openssl x509 -in "$certificate_file" -noout -checkend 0 >/dev/null 2>&1 || { echo "D1 TLS certificate is expired or not currently valid" >&2; exit 2; }
+    openssl x509 -in "$certificate_file" -noout -checkhost "$public_host" >/dev/null 2>&1 || { echo "D1 TLS certificate does not cover D1_PUBLIC_HOST" >&2; exit 2; }
+    openssl pkey -in "$private_key_file" -noout -passin pass: >/dev/null 2>&1 || { echo "D1 TLS private key must be valid unencrypted PEM" >&2; exit 2; }
+    certificate_public_key=$(openssl x509 -in "$certificate_file" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform DER 2>/dev/null | openssl dgst -sha256 -r | awk '{print $1}')
+    private_public_key=$(openssl pkey -in "$private_key_file" -pubout -outform DER -passin pass: 2>/dev/null | openssl dgst -sha256 -r | awk '{print $1}')
+    [ -n "$certificate_public_key" ] && [ "$certificate_public_key" = "$private_public_key" ] || {
+      echo "D1 TLS certificate and private key do not match" >&2
+      exit 2
+    }
+    case "$issuer" in "https://$public_host"/*) ;; *) echo "PUBLIC_ISSUER must use D1_PUBLIC_HOST in HTTPS mode" >&2; exit 2 ;; esac
+  fi
+
+  superuser_password=$(env_value POSTGRES_SUPERUSER_PASSWORD)
+  identity_password=$(env_value IDENTITY_DB_PASSWORD)
+  contract_password=$(env_value CONTRACT_DB_PASSWORD)
+  money_password=$(env_value MONEY_DB_PASSWORD)
+  people_password=$(env_value PEOPLE_DB_PASSWORD)
+  party_password=$(env_value PARTY_DB_PASSWORD)
+  project_password=$(env_value PROJECT_DB_PASSWORD)
+  evidence_password=$(env_value EVIDENCE_DB_PASSWORD)
+  business_engagement_password=$(env_value BUSINESS_ENGAGEMENT_DB_PASSWORD)
+  billing_password=$(env_value BILLING_DB_PASSWORD)
+  production_password=$(env_value PRODUCTION_DB_PASSWORD)
+  approval_audit_results_password=$(env_value APPROVAL_AUDIT_RESULTS_DB_PASSWORD)
+  cost_outsourcing_password=$(env_value COST_OUTSOURCING_DB_PASSWORD)
+  bonus_distribution_password=$(env_value BONUS_DISTRIBUTION_DB_PASSWORD)
+  for secret in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password" "$bonus_distribution_password"; do
+    case "$secret" in
+      replace-with-*|'') echo "replace every database password placeholder" >&2; exit 2 ;;
+      *[!A-Za-z0-9_.~-]*) echo "database passwords must be URL-safe characters: A-Z a-z 0-9 _ . ~ -" >&2; exit 2 ;;
+    esac
+    [ "${#secret}" -ge 16 ] || { echo "database passwords must contain at least 16 characters" >&2; exit 2; }
+  done
+  [ "$superuser_password" != "$identity_password" ] && [ "$superuser_password" != "$contract_password" ] && \
+    [ "$superuser_password" != "$money_password" ] && [ "$identity_password" != "$contract_password" ] && \
+    [ "$identity_password" != "$money_password" ] && [ "$contract_password" != "$money_password" ] || {
+      echo "database accounts must not share passwords" >&2; exit 2;
+    }
+  [ "$people_password" != "$superuser_password" ] && [ "$people_password" != "$identity_password" ] && \
+    [ "$people_password" != "$contract_password" ] && [ "$people_password" != "$money_password" ] || {
+      echo "database accounts must not share passwords" >&2; exit 2;
+    }
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password"; do
+    [ "$party_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password"; do
+    [ "$project_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password"; do
+    [ "$evidence_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password"; do
+    [ "$business_engagement_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password"; do
+    [ "$billing_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password"; do
+    [ "$production_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password"; do
+    [ "$approval_audit_results_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password"; do
+    [ "$cost_outsourcing_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password"; do
+    [ "$bonus_distribution_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  party_cursor_key=$(env_value PARTY_CURSOR_HMAC_KEY)
+  case "$party_cursor_key" in replace-with-*|'') echo "replace PARTY_CURSOR_HMAC_KEY" >&2; exit 2;; esac
+  [ "${#party_cursor_key}" -ge 32 ] || { echo "PARTY_CURSOR_HMAC_KEY must contain at least 32 bytes" >&2; exit 2; }
+  evidence_base_url=$(env_value EVIDENCE_PUBLIC_BASE_URL)
+  case "$evidence_base_url" in
+    https://*) ;;
+    http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
+    *) echo "EVIDENCE_PUBLIC_BASE_URL must use HTTPS, except for loopback development" >&2; exit 2 ;;
+  esac
+  if [ "$ingress_mode" = https ]; then
+    case "$evidence_base_url" in "https://$public_host"/*) ;; *) echo "EVIDENCE_PUBLIC_BASE_URL must use D1_PUBLIC_HOST in HTTPS mode" >&2; exit 2 ;; esac
+  fi
+  evidence_signing_key=$(env_value EVIDENCE_LOCAL_SIGNING_KEY)
+  case "$evidence_signing_key" in replace-with-*|'') echo "replace EVIDENCE_LOCAL_SIGNING_KEY" >&2; exit 2;; esac
+  case "$evidence_signing_key" in *[!A-Za-z0-9_-]*) echo "EVIDENCE_LOCAL_SIGNING_KEY must be unpadded base64url" >&2; exit 2;; esac
+  normalized_key=$(printf '%s' "$evidence_signing_key" | tr '_-' '/+')
+  case $((${#normalized_key} % 4)) in
+    0) key_padding='' ;;
+    2) key_padding='==' ;;
+    3) key_padding='=' ;;
+    *) echo "EVIDENCE_LOCAL_SIGNING_KEY is not valid base64url" >&2; exit 2 ;;
+  esac
+  decoded_evidence_key_bytes=$(printf '%s%s' "$normalized_key" "$key_padding" | openssl base64 -d -A 2>/dev/null | wc -c | tr -d ' ')
+  [ "$decoded_evidence_key_bytes" -ge 32 ] || { echo "EVIDENCE_LOCAL_SIGNING_KEY must decode to at least 32 bytes" >&2; exit 2; }
+  bootstrap_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+  case "$bootstrap_password" in replace-with-*|'') echo "replace BOOTSTRAP_ADMIN_PASSWORD" >&2; exit 2;; esac
+  [ "${#bootstrap_password}" -ge 12 ] || { echo "BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters" >&2; exit 2; }
+  case "$evidence_storage_mode" in local|hybrid|aliyun-oss) ;; *) echo 'invalid D1_EVIDENCE_STORAGE_PROVIDER' >&2; exit 2;; esac
+  if [ "$evidence_storage_mode" != local ]; then
+    [ "$enable_evidence" = true ] || { echo 'OSS profile requires Evidence selected' >&2; exit 2; }
+    if [ "$evidence_storage_mode" = hybrid ]; then
+      case "$(env_value EVIDENCE_PRIMARY_STORAGE_PROVIDER)" in local|aliyun-oss) ;; *) echo 'hybrid requires explicit Primary' >&2; exit 2;; esac
+    else
+      [ -z "$(env_value EVIDENCE_PRIMARY_STORAGE_PROVIDER)" ] || { echo 'single OSS mode must not set Primary' >&2; exit 2; }
+    fi
+    for key in EVIDENCE_OSS_REGION EVIDENCE_OSS_BUCKET EVIDENCE_OSS_UPLOAD_ROLE_ARN EVIDENCE_OSS_BROWSER_ENDPOINT EVIDENCE_OSS_SERVICE_ENDPOINT EVIDENCE_OSS_STS_ENDPOINT EVIDENCE_ECS_ROLE_NAME EVIDENCE_EGRESS_NETWORK; do
+      [ -n "$(env_value "$key")" ] || { echo "missing $key" >&2; exit 2; }
+    done
+    for key in EVIDENCE_OSS_BROWSER_ENDPOINT EVIDENCE_OSS_SERVICE_ENDPOINT; do
+      case "$(env_value "$key")" in https://*) ;; *) echo "$key must use HTTPS" >&2; exit 2;; esac
+    done
+    case "$(env_value EVIDENCE_OSS_BROWSER_CNAME false)" in true|false) ;; *) echo 'invalid OSS CNAME flag' >&2; exit 2;; esac
+  fi
+}
+
+validate_digest_image() {
+  key=$1
+  reference=$(env_value "$key")
+  case "$reference" in
+    *@sha256:*) digest=${reference##*@sha256:} ;;
+    *) echo "$key must use an immutable name@sha256:<64 lowercase hex> reference in pull mode" >&2; exit 2 ;;
+  esac
+  printf '%s\n' "$digest" | grep -Eq '^[a-f0-9]{64}$' || {
+    echo "$key must end with a 64-character lowercase SHA-256 digest" >&2
+    exit 2
+  }
+  case "$reference" in *[!A-Za-z0-9_./:@-]*) echo "$key contains unsupported characters" >&2; exit 2 ;; esac
+}
+
+validate_env
+
+if [ -n "$compose_override_file" ]; then
+  case "$compose_override_file" in
+    /*) ;;
+    *) echo "D1_COMPOSE_OVERRIDE_FILE must be an absolute path" >&2; exit 2 ;;
+  esac
+  [ -f "$compose_override_file" ] || {
+    echo "D1 Compose override file does not exist: $compose_override_file" >&2
+    exit 2
+  }
+fi
+
+compose() {
+  [ -z "$compose_override_file" ] || set -- --file "$compose_override_file" "$@"
+  [ "$evidence_storage_mode" = local ] || set -- --file "$evidence_oss_compose_file" "$@"
+  [ "$ingress_mode" != https ] || set -- --file "$https_compose_file" "$@"
+  [ "$image_mode" != pull ] || set -- --file "$pull_compose_file" "$@"
+  set -- --file "$compose_file" "$@"
+  docker compose --project-name "$project" --env-file "$env_file" "$@"
+}
+
+compose_enabled() {
+  profiles=""
+  [ "$enable_contract" != true ] || profiles="$profiles --profile contract"
+  [ "$enable_money" != true ] || profiles="$profiles --profile money"
+  [ "$enable_people" != true ] || profiles="$profiles --profile people"
+  [ "$enable_party" != true ] || profiles="$profiles --profile party"
+  [ "$enable_project" != true ] || profiles="$profiles --profile project"
+  [ "$enable_evidence" != true ] || profiles="$profiles --profile evidence"
+  [ "$enable_business_engagement" != true ] || profiles="$profiles --profile business-engagement"
+  [ "$enable_billing" != true ] || profiles="$profiles --profile billing"
+  [ "$enable_production" != true ] || profiles="$profiles --profile production"
+  [ "$enable_approval_audit_results" != true ] || profiles="$profiles --profile approval-audit-results"
+  [ "$enable_cost_outsourcing" != true ] || profiles="$profiles --profile cost-outsourcing"
+  [ "$enable_bonus_distribution" != true ] || profiles="$profiles --profile bonus-distribution"
+  # The profile words are fixed literals selected above, not user input.
+  # shellcheck disable=SC2086
+  compose $profiles "$@"
+}
+
+compose_all() {
+  compose --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution "$@"
+}
+
+render_manifest() {
+  ENABLE_CONTRACT="$enable_contract" ENABLE_MONEY="$enable_money" TENANT_ID="$tenant_id" \
+    ENABLE_PEOPLE="$enable_people" ENABLE_PARTY="$enable_party" ENABLE_PROJECT="$enable_project" ENABLE_EVIDENCE="$enable_evidence" \
+    ENABLE_BUSINESS_ENGAGEMENT="$enable_business_engagement" \
+    ENABLE_BILLING="$enable_billing" \
+    ENABLE_PRODUCTION="$enable_production" \
+    ENABLE_APPROVAL_AUDIT_RESULTS="$enable_approval_audit_results" \
+    ENABLE_COST_OUTSOURCING="$enable_cost_outsourcing" \
+    ENABLE_BONUS_DISTRIBUTION="$enable_bonus_distribution" \
+    REFERENCE_OA_BONUS_PROFILE="$reference_oa_bonus_profile" \
+    "$script_dir/render-suite-manifest" "$d1_dir/.runtime/suite-manifest.json"
+  ENABLE_EVIDENCE="$enable_evidence" D1_INGRESS_MODE="$ingress_mode" \
+    D1_PUBLIC_HOST="$(env_value D1_PUBLIC_HOST)" \
+    "$script_dir/render-nginx-config" "$d1_dir/.runtime/nginx.conf"
+}
+
+prepare_images() {
+  if [ "$image_mode" = pull ]; then
+    images=$(compose_enabled config --images)
+    if [ -n "$images" ] && printf '%s\n' "$images" | while IFS= read -r image; do
+      [ -n "$image" ] || continue
+      docker image inspect "$image" >/dev/null 2>&1 || exit 1
+    done; then
+      echo 'all digest-pinned images are present locally; skipping Registry pull'
+    else
+      compose_enabled pull --policy always
+    fi
+  else
+    compose_enabled build
+  fi
+}
+
+remove_disabled() {
+  disabled_services=""
+  if [ "$enable_contract" != true ]; then
+    disabled_services="$disabled_services contract-ledger contract-migrate contract-workload-keys contract-workload-key-permissions"
+  fi
+  if [ "$enable_money" != true ]; then
+    disabled_services="$disabled_services money-flow-ledger money-migrate money-workload-keys money-workload-key-permissions"
+  fi
+  if [ "$enable_people" != true ]; then
+    disabled_services="$disabled_services people-groups people-migrate"
+  fi
+  if [ "$enable_party" != true ]; then
+    disabled_services="$disabled_services party-directory party-migrate"
+  fi
+  if [ "$enable_project" != true ]; then
+    disabled_services="$disabled_services project-workspace project-migrate"
+  fi
+  if [ "$enable_evidence" != true ]; then
+    disabled_services="$disabled_services evidence-service evidence-migrate"
+  fi
+  if [ "$enable_business_engagement" != true ]; then
+    disabled_services="$disabled_services business-engagement business-engagement-migrate business-engagement-workload-keys business-engagement-workload-key-permissions"
+  fi
+  if [ "$enable_billing" != true ]; then
+    disabled_services="$disabled_services billing-invoice billing-migrate billing-workload-keys billing-workload-key-permissions"
+  fi
+  if [ "$enable_production" != true ]; then
+    disabled_services="$disabled_services production-operations production-migrate production-workload-keys production-workload-key-permissions"
+  fi
+  if [ "$enable_approval_audit_results" != true ]; then
+    disabled_services="$disabled_services approval-audit-results approval-audit-results-migrate approval-audit-results-workload-keys approval-audit-results-workload-key-permissions"
+  fi
+  if [ "$enable_cost_outsourcing" != true ]; then
+    disabled_services="$disabled_services cost-outsourcing cost-outsourcing-migrate cost-outsourcing-workload-keys cost-outsourcing-workload-key-permissions"
+  fi
+  if [ "$enable_bonus_distribution" != true ]; then
+    disabled_services="$disabled_services bonus-distribution bonus-distribution-migrate bonus-distribution-workload-keys bonus-distribution-workload-key-permissions"
+  fi
+  if [ -n "$disabled_services" ]; then
+    # Service names are fixed literals selected above, not user input.
+    # shellcheck disable=SC2086
+    compose_all rm --stop --force $disabled_services >/dev/null 2>&1 || true
+  fi
+}
+
+start_prepared_stack() {
+  if [ "$evidence_storage_mode" != local ]; then
+    EVIDENCE_IMDS_NETWORK=$(env_value EVIDENCE_EGRESS_NETWORK) sh "$script_dir/evidence-imds-guard" status
+  fi
+  mkdir -p "$backup_dir"
+  chmod 700 "$backup_dir"
+  if [ "$image_mode" = pull ]; then
+    compose_enabled up --detach --no-build --pull never --wait
+  else
+    compose_enabled up --detach --no-build --wait
+  fi
+  remove_disabled
+  compose_enabled up --detach --force-recreate --wait unified-workbench gateway nginx
+}
+
+bring_up() {
+  render_manifest
+  prepare_images
+  start_prepared_stack
+}
+
+preflight_upgrade() {
+  render_manifest
+  prepare_images
+  echo "validating candidate IAM parsers against bundled capability and policy contracts"
+  compose_enabled run --rm --no-deps -T identity-access /app/ops validate-contracts
+}
+
+check_stack_selection() {
+  check_contract=$1
+  check_money=$2
+  check_people=$3
+  check_party=$4
+  check_project=$5
+  check_evidence=$6
+  check_business_engagement=$7
+  check_billing=$8
+  check_production=$9
+  check_approval_audit_results=${10}
+  check_cost_outsourcing=${11}
+  check_bonus_distribution=${12}
+
+  compose exec -T identity-access /app/ops check
+  if [ "$check_contract" = true ]; then
+    compose_all exec -T contract-ledger /app/ops check --require-current
+  fi
+  if [ "$check_money" = true ]; then
+    compose_all exec -T money-flow-ledger /app/ops check --require-current
+  fi
+  if [ "$check_people" = true ]; then
+    compose_all exec -T people-groups /app/ops check
+  fi
+  if [ "$check_party" = true ]; then
+    compose_all exec -T party-directory /app/ops check
+  fi
+  if [ "$check_project" = true ]; then
+    compose_all exec -T project-workspace /app/ops check
+  fi
+  if [ "$check_evidence" = true ]; then
+    compose_all exec -T evidence-service /app/ops check
+  fi
+  if [ "$check_business_engagement" = true ]; then
+    compose_all exec -T business-engagement /app/ops check
+  fi
+  if [ "$check_billing" = true ]; then
+    compose_all exec -T billing-invoice /app/ops check
+  fi
+  if [ "$check_production" = true ]; then
+    compose_all exec -T production-operations /app/ops check
+  fi
+  if [ "$check_approval_audit_results" = true ]; then
+    compose_all exec -T approval-audit-results /app/ops check
+  fi
+  if [ "$check_cost_outsourcing" = true ]; then
+    compose_all exec -T cost-outsourcing /app/ops check
+  fi
+  if [ "$check_bonus_distribution" = true ]; then
+    compose_all exec -T bonus-distribution /app/ops check
+  fi
+}
+
+check_stack() {
+  if [ "$enable_evidence" = true ]; then
+    compose_all exec -T evidence-service sh -s -- "$evidence_storage_mode" "$(env_value EVIDENCE_PRIMARY_STORAGE_PROVIDER)" < "$script_dir/check-evidence-runtime-profile"
+  fi
+  check_stack_selection \
+    "$enable_contract" "$enable_money" "$enable_people" "$enable_party" \
+    "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution"
+}
+
+service_in_selection() {
+  printf '%s\n' "$1" | grep -Fxq "$2"
+}
+
+run_party_map() {
+  application="${1:-}"
+  input="${2:-}"
+  [ "$enable_party" = true ] || { echo "party-map requires ENABLE_PARTY=true" >&2; exit 2; }
+  [ -n "$input" ] && [ -f "$input" ] || { echo "party-map requires an existing INPUT_JSON file" >&2; exit 2; }
+  case "$application" in
+    contract)
+      [ "$enable_contract" = true ] || { echo "party-map contract requires ENABLE_CONTRACT=true" >&2; exit 2; }
+      service=contract-ledger
+      ;;
+    money)
+      [ "$enable_money" = true ] || { echo "party-map money requires ENABLE_MONEY=true" >&2; exit 2; }
+      service=money-flow-ledger
+      ;;
+    *)
+      echo "party-map application must be contract or money" >&2
+      exit 2
+      ;;
+  esac
+  compose_all exec -T "$service" sh -eu -c 'temporary=$(mktemp); trap '\''rm -f "$temporary"'\'' EXIT; cat >"$temporary"; /app/ops party-migration-map --input "$temporary"' <"$input"
+}
+
+digest_file() {
+  openssl dgst -sha256 -r "$1" | awk '{print $1}'
+}
+
+create_backup() {
+  selection_source=${1:-configured}
+  backup_enable_contract=$enable_contract
+  backup_enable_money=$enable_money
+  backup_enable_people=$enable_people
+  backup_enable_party=$enable_party
+  backup_enable_project=$enable_project
+  backup_enable_evidence=$enable_evidence
+  backup_enable_business_engagement=$enable_business_engagement
+  backup_enable_billing=$enable_billing
+  backup_enable_production=$enable_production
+  backup_enable_approval_audit_results=$enable_approval_audit_results
+  backup_enable_cost_outsourcing=$enable_cost_outsourcing
+  backup_enable_bonus_distribution=$enable_bonus_distribution
+  if [ "$selection_source" = running ]; then
+    running_selection=$(compose_all ps --all --services)
+    service_in_selection "$running_selection" identity-access || {
+      echo "cannot create upgrade backup: the current Identity & Access service is absent" >&2
+      exit 1
+    }
+    backup_enable_contract=false
+    backup_enable_money=false
+    backup_enable_people=false
+    backup_enable_party=false
+    backup_enable_project=false
+    backup_enable_evidence=false
+    backup_enable_business_engagement=false
+    backup_enable_billing=false
+    backup_enable_production=false
+    backup_enable_approval_audit_results=false
+    backup_enable_cost_outsourcing=false
+    backup_enable_bonus_distribution=false
+    service_in_selection "$running_selection" contract-ledger && backup_enable_contract=true
+    service_in_selection "$running_selection" money-flow-ledger && backup_enable_money=true
+    service_in_selection "$running_selection" people-groups && backup_enable_people=true
+    service_in_selection "$running_selection" party-directory && backup_enable_party=true
+    service_in_selection "$running_selection" project-workspace && backup_enable_project=true
+    service_in_selection "$running_selection" evidence-service && backup_enable_evidence=true
+    service_in_selection "$running_selection" business-engagement && backup_enable_business_engagement=true
+    service_in_selection "$running_selection" billing-invoice && backup_enable_billing=true
+    service_in_selection "$running_selection" production-operations && backup_enable_production=true
+    service_in_selection "$running_selection" approval-audit-results && backup_enable_approval_audit_results=true
+    service_in_selection "$running_selection" cost-outsourcing && backup_enable_cost_outsourcing=true
+    service_in_selection "$running_selection" bonus-distribution && backup_enable_bonus_distribution=true
+  elif [ "$selection_source" != configured ]; then
+    echo "unsupported backup selection source: $selection_source" >&2
+    exit 2
+  fi
+
+  check_stack_selection \
+    "$backup_enable_contract" "$backup_enable_money" "$backup_enable_people" "$backup_enable_party" \
+    "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" "$backup_enable_bonus_distribution" \
+    >/dev/null
+  # Capture the running owners, not a candidate env that may select a new
+  # overlay during upgrade. These are public version choices, never secrets.
+  backup_bonus_profile=''
+  backup_personnel_profile=''
+  backup_stage_profile=''
+  backup_oms_qualification_party_id=''
+  if [ "$backup_enable_bonus_distribution" = true ]; then
+    backup_bonus_profile=$(compose_all exec -T bonus-distribution sh -c 'printf "%s\n" "${REFERENCE_OA_BONUS_PROFILE-}"')
+  fi
+  if [ "$backup_enable_project" = true ]; then
+    backup_personnel_profile=$(compose_all exec -T project-workspace sh -c 'printf "%s\n" "${REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE-}"')
+  fi
+  if [ "$backup_enable_production" = true ]; then
+    backup_stage_profile=$(compose_all exec -T production-operations sh -c 'printf "%s\n" "${REFERENCE_STAGE_MATERIAL_PROFILE-}"')
+  fi
+  backup_stage_workbench_profile=$(compose_all exec -T unified-workbench sh -c 'printf "%s\n" "${REFERENCE_OA_PRODUCTION_STAGE_PROFILE-}"')
+  backup_oms_qualification_party_id=$(compose_all exec -T unified-workbench sh -c 'printf "%s\n" "${OMS_QUALIFICATION_PARTY_ID-}"')
+  [ "$backup_stage_profile" = "$backup_stage_workbench_profile" ] || { echo "running Production and Workbench stage profiles disagree" >&2; exit 1; }
+  case "$backup_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "running Bonus profile is unsupported" >&2; exit 1 ;; esac
+  case "$backup_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "running personnel profile is unsupported" >&2; exit 1 ;; esac
+  case "$backup_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "running stage profile is unsupported" >&2; exit 1 ;; esac
+  if [ -n "$backup_oms_qualification_party_id" ] && ! printf '%s\n' "$backup_oms_qualification_party_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    echo "running OMS qualification Party ID is invalid" >&2; exit 1
+  fi
+  if [ "$backup_bonus_profile" = reference-oa-bonus-v3 ] && [ "$backup_personnel_profile" != reference-oa-production-personnel-v1 ]; then
+    echo "running professional Bonus has no matching personnel profile" >&2; exit 1
+  fi
+  backup_id=$(date -u '+%Y%m%dT%H%M%SZ')
+  target="$backup_dir/$backup_id"
+  host_uid=$(id -u)
+  host_gid=$(id -g)
+  evidence_stopped=false
+  backup_owner=host
+
+  restore_backup_state() {
+    if [ "$evidence_stopped" = true ]; then
+      compose_all up --detach --no-deps --no-build --wait evidence-service >/dev/null 2>&1 || true
+      evidence_stopped=false
+    fi
+    if [ "$backup_owner" = container ]; then
+      compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" -e HOST_UID="$host_uid" -e HOST_GID="$host_gid" \
+        identity-access sh -eu -c \
+        'chown -R "$HOST_UID:$HOST_GID" "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"; find "/backups/$BACKUP_ID" -type f -exec chmod 0600 {} +' \
+        >/dev/null 2>&1 || true
+      backup_owner=host
+    fi
+    chmod 0700 "$backup_dir" >/dev/null 2>&1 || true
+  }
+  trap restore_backup_state EXIT HUP INT TERM
+
+  mkdir -p "$target"
+  chmod 700 "$target"
+  chmod 0711 "$backup_dir"
+  compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
+    'chown postgres:postgres "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"'
+  backup_owner=container
+
+  compose exec -T -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
+    'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --exclude-table-data=public.suite_sessions --file="/backups/$BACKUP_ID/identity-access.dump"; install -m 600 /data/iam/signing-keys.json "/backups/$BACKUP_ID/signing-keys.json"'
+  if [ "$backup_enable_contract" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" contract-ledger \
+      /app/backup create --output "/backups/$backup_id/contract-ledger.zip"
+  fi
+  if [ "$backup_enable_money" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" money-flow-ledger \
+      /app/backup create --output "/backups/$backup_id/money-flow-ledger.zip"
+  fi
+  if [ "$backup_enable_people" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" people-groups sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/people-groups.dump"'
+  fi
+  if [ "$backup_enable_party" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" party-directory \
+      /app/backup create --output "/backups/$backup_id/party-directory.zip"
+  fi
+  if [ "$backup_enable_project" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" project-workspace sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/project-workspace.dump"'
+  fi
+  if [ "$backup_enable_evidence" = true ]; then
+    evidence_stopped=true
+    compose_all stop evidence-service >/dev/null
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" evidence-service \
+      /app/backup create --output "/backups/$backup_id/evidence-service.zip" --confirm-service-stopped
+    compose_all up --detach --no-deps --no-build --wait evidence-service >/dev/null
+    evidence_stopped=false
+  fi
+  if [ "$backup_enable_business_engagement" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" business-engagement sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/business-engagement.dump"'
+  fi
+  if [ "$backup_enable_billing" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" billing-invoice sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/billing-invoice.dump"'
+  fi
+  if [ "$backup_enable_production" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" production-operations sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/production-operations.dump"'
+  fi
+  if [ "$backup_enable_approval_audit_results" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" approval-audit-results sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/approval-audit-results.dump"'
+  fi
+  if [ "$backup_enable_cost_outsourcing" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" cost-outsourcing sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/cost-outsourcing.dump"'
+  fi
+  if [ "$backup_enable_bonus_distribution" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" bonus-distribution sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/bonus-distribution.dump"'
+  fi
+
+  compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" -e HOST_UID="$host_uid" -e HOST_GID="$host_gid" \
+    identity-access sh -eu -c \
+    'chown -R "$HOST_UID:$HOST_GID" "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"; find "/backups/$BACKUP_ID" -type f -exec chmod 0600 {} +'
+  backup_owner=host
+  chmod 0700 "$backup_dir"
+
+  {
+    printf 'ENABLE_CONTRACT=%s\n' "$backup_enable_contract"
+    printf 'ENABLE_MONEY=%s\n' "$backup_enable_money"
+    printf 'ENABLE_PEOPLE=%s\n' "$backup_enable_people"
+    printf 'ENABLE_PARTY=%s\n' "$backup_enable_party"
+    printf 'ENABLE_PROJECT=%s\n' "$backup_enable_project"
+    printf 'ENABLE_EVIDENCE=%s\n' "$backup_enable_evidence"
+    printf 'ENABLE_BUSINESS_ENGAGEMENT=%s\n' "$backup_enable_business_engagement"
+    printf 'ENABLE_BILLING=%s\n' "$backup_enable_billing"
+    printf 'ENABLE_PRODUCTION=%s\n' "$backup_enable_production"
+    printf 'ENABLE_APPROVAL_AUDIT_RESULTS=%s\n' "$backup_enable_approval_audit_results"
+    printf 'ENABLE_COST_OUTSOURCING=%s\n' "$backup_enable_cost_outsourcing"
+    printf 'ENABLE_BONUS_DISTRIBUTION=%s\n' "$backup_enable_bonus_distribution"
+    printf 'REFERENCE_OA_BONUS_PROFILE=%s\n' "$backup_bonus_profile"
+    printf 'REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE=%s\n' "$backup_personnel_profile"
+    printf 'REFERENCE_OA_PRODUCTION_STAGE_PROFILE=%s\n' "$backup_stage_profile"
+    printf 'OMS_QUALIFICATION_PARTY_ID=%s\n' "$backup_oms_qualification_party_id"
+  } >"$target/suite-selection.env"
+
+  manifest="$target/checksums.sha256"
+  : >"$manifest"
+  for artifact in "$target"/*; do
+    [ "$(basename "$artifact")" = checksums.sha256 ] && continue
+    printf '%s  %s\n' "$(digest_file "$artifact")" "$(basename "$artifact")" >>"$manifest"
+  done
+  chmod 600 "$target"/*
+  trap - EXIT HUP INT TERM
+  echo "backup created: $backup_id ($target)"
+}
+
+verify_backup() {
+  target="$1"
+  [ -f "$target/checksums.sha256" ] || { echo "backup checksum manifest is missing" >&2; exit 1; }
+  while read -r expected filename; do
+    [ -n "$expected" ] || continue
+    actual=$(digest_file "$target/$filename")
+    [ "$actual" = "$expected" ] || { echo "backup checksum mismatch: $filename" >&2; exit 1; }
+  done <"$target/checksums.sha256"
+}
+
+verify_backup_selection_value() {
+  selection_file=$1
+  key=$2
+  configured_value=$3
+  backed_up_value=$(awk -F= -v key="$key" '$1 == key {print $2}' "$selection_file")
+  case "$backed_up_value" in
+    true|false) ;;
+    *) echo "backup application selection is invalid for $key" >&2; exit 1 ;;
+  esac
+  [ "$backed_up_value" = "$configured_value" ] || {
+    echo "backup application selection mismatch for $key: backup=$backed_up_value configured=$configured_value" >&2
+    exit 1
+  }
+}
+
+verify_backup_profile_value() {
+  selection_file=$1
+  key=$2
+  configured_value=$3
+  count=$(awk -F= -v key="$key" '$1 == key {n++} END {print n+0}' "$selection_file")
+  if [ "$count" = 0 ]; then
+    # Pre-profile backups remain compatible only with profiles disabled.
+    [ -z "$configured_value" ] || { echo "backup profile declaration is missing for $key" >&2; exit 1; }
+    return 0
+  fi
+  [ "$count" = 1 ] || { echo "duplicate backup profile declaration for $key" >&2; exit 1; }
+  backed_up_value=$(awk -F= -v key="$key" '$1 == key {print substr($0,length(key)+2)}' "$selection_file")
+  case "$key:$backed_up_value" in
+    REFERENCE_OA_BONUS_PROFILE:|REFERENCE_OA_BONUS_PROFILE:reference-oa-bonus-v2|REFERENCE_OA_BONUS_PROFILE:reference-oa-bonus-v3|REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE:|REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE:reference-oa-production-personnel-v1|REFERENCE_OA_PRODUCTION_STAGE_PROFILE:|REFERENCE_OA_PRODUCTION_STAGE_PROFILE:reference-oa-stage-materials-v1) ;;
+    *) echo "backup profile declaration is invalid for $key" >&2; exit 1 ;;
+  esac
+  [ "$backed_up_value" = "$configured_value" ] || { echo "backup profile mismatch for $key: backup=$backed_up_value configured=$configured_value" >&2; exit 1; }
+}
+
+verify_backup_oms_party_value() {
+  selection_file=$1
+  configured_value=$2
+  count=$(awk -F= '$1 == "OMS_QUALIFICATION_PARTY_ID" {n++} END {print n+0}' "$selection_file")
+  if [ "$count" = 0 ]; then
+    [ -z "$configured_value" ] || { echo "backup OMS qualification Party declaration is missing" >&2; exit 1; }
+    return 0
+  fi
+  [ "$count" = 1 ] || { echo "duplicate backup OMS qualification Party declaration" >&2; exit 1; }
+  backed_up_value=$(awk -F= '$1 == "OMS_QUALIFICATION_PARTY_ID" {print substr($0,length($1)+2)}' "$selection_file")
+  if [ -n "$backed_up_value" ] && ! printf '%s\n' "$backed_up_value" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    echo "backup OMS qualification Party declaration is invalid" >&2; exit 1
+  fi
+  [ "$backed_up_value" = "$configured_value" ] || { echo "backup OMS qualification Party mismatch: backup=$backed_up_value configured=$configured_value" >&2; exit 1; }
+}
+
+verify_backup_selection() {
+  selection_file=$1
+  if [ ! -f "$selection_file" ]; then
+    [ -z "$reference_oa_bonus_profile" ] && [ -z "$reference_oa_personnel_profile" ] && [ -z "$reference_oa_stage_profile" ] && [ -z "$oms_qualification_party_id" ] || { echo "backup selection is missing for an enabled customer profile" >&2; exit 1; }
+    return 0
+  fi
+  verify_backup_selection_value "$selection_file" ENABLE_CONTRACT "$enable_contract"
+  verify_backup_selection_value "$selection_file" ENABLE_MONEY "$enable_money"
+  verify_backup_selection_value "$selection_file" ENABLE_PEOPLE "$enable_people"
+  verify_backup_selection_value "$selection_file" ENABLE_PARTY "$enable_party"
+  verify_backup_selection_value "$selection_file" ENABLE_PROJECT "$enable_project"
+  verify_backup_selection_value "$selection_file" ENABLE_EVIDENCE "$enable_evidence"
+  verify_backup_selection_value "$selection_file" ENABLE_BUSINESS_ENGAGEMENT "$enable_business_engagement"
+  verify_backup_selection_value "$selection_file" ENABLE_BILLING "$enable_billing"
+  verify_backup_selection_value "$selection_file" ENABLE_PRODUCTION "$enable_production"
+  verify_backup_selection_value "$selection_file" ENABLE_APPROVAL_AUDIT_RESULTS "$enable_approval_audit_results"
+  verify_backup_selection_value "$selection_file" ENABLE_COST_OUTSOURCING "$enable_cost_outsourcing"
+  verify_backup_selection_value "$selection_file" ENABLE_BONUS_DISTRIBUTION "$enable_bonus_distribution"
+  verify_backup_profile_value "$selection_file" REFERENCE_OA_BONUS_PROFILE "$reference_oa_bonus_profile"
+  verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE "$reference_oa_personnel_profile"
+  verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_STAGE_PROFILE "$reference_oa_stage_profile"
+  verify_backup_oms_party_value "$selection_file" "$oms_qualification_party_id"
+}
+
+restore_backup() {
+  backup_id="${1:-}"
+  [ -n "$backup_id" ] || usage
+  case "$backup_id" in *[!A-Za-z0-9_.-]*) echo "invalid backup ID" >&2; exit 2;; esac
+  [ "${D1_CONFIRM_EMPTY_RESTORE:-}" = yes ] || {
+    echo "restore replaces this Compose project's volumes; rerun with D1_CONFIRM_EMPTY_RESTORE=yes" >&2
+    exit 2
+  }
+  target="$backup_dir/$backup_id"
+  [ -d "$target" ] || { echo "backup not found: $target" >&2; exit 2; }
+  verify_backup "$target"
+  verify_backup_selection "$target/suite-selection.env"
+  [ -f "$target/identity-access.dump" ] && [ -f "$target/signing-keys.json" ] || {
+    echo "IAM backup artifacts are incomplete" >&2; exit 1;
+  }
+  [ "$enable_contract" != true ] || [ -f "$target/contract-ledger.zip" ] || { echo "Contract backup is missing" >&2; exit 1; }
+  [ "$enable_money" != true ] || [ -f "$target/money-flow-ledger.zip" ] || { echo "Money Flow backup is missing" >&2; exit 1; }
+  [ "$enable_people" != true ] || [ -f "$target/people-groups.dump" ] || { echo "People & Groups backup is missing" >&2; exit 1; }
+  [ "$enable_party" != true ] || [ -f "$target/party-directory.zip" ] || { echo "Party Directory backup is missing" >&2; exit 1; }
+  [ "$enable_project" != true ] || [ -f "$target/project-workspace.dump" ] || { echo "Project Workspace backup is missing" >&2; exit 1; }
+  [ "$enable_evidence" != true ] || [ -f "$target/evidence-service.zip" ] || { echo "Evidence Service backup is missing" >&2; exit 1; }
+  [ "$enable_business_engagement" != true ] || [ -f "$target/business-engagement.dump" ] || { echo "Business Engagement backup is missing" >&2; exit 1; }
+  [ "$enable_billing" != true ] || [ -f "$target/billing-invoice.dump" ] || { echo "Billing backup is missing" >&2; exit 1; }
+  [ "$enable_production" != true ] || [ -f "$target/production-operations.dump" ] || { echo "Production Operations backup is missing" >&2; exit 1; }
+  [ "$enable_approval_audit_results" != true ] || [ -f "$target/approval-audit-results.dump" ] || { echo "Approval & Audit Results backup is missing" >&2; exit 1; }
+  [ "$enable_cost_outsourcing" != true ] || [ -f "$target/cost-outsourcing.dump" ] || { echo "Cost & Outsourcing backup is missing" >&2; exit 1; }
+  [ "$enable_bonus_distribution" != true ] || [ -f "$target/bonus-distribution.dump" ] || { echo "Bonus Distribution backup is missing" >&2; exit 1; }
+
+  restore_host_uid=$(id -u)
+  restore_host_gid=$(id -g)
+  restore_backup_owner=host
+  restore_backup_permissions() {
+    if [ "$restore_backup_owner" = container ]; then
+      compose run --rm --no-deps --user 0:0 \
+        -e BACKUP_ID="$backup_id" -e HOST_UID="$restore_host_uid" -e HOST_GID="$restore_host_gid" \
+        identity-access sh -eu -c \
+        'chown -R "$HOST_UID:$HOST_GID" "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"; find "/backups/$BACKUP_ID" -type f -exec chmod 0600 {} + ' \
+        >/dev/null 2>&1 || true
+      restore_backup_owner=host
+    fi
+    chmod 0700 "$backup_dir" >/dev/null 2>&1 || true
+  }
+  trap restore_backup_permissions EXIT HUP INT TERM
+
+  render_manifest
+  prepare_images
+  # Docker can briefly retain an edge-network endpoint after the last container
+  # has been removed. A bounded retry keeps an otherwise valid restore
+  # recoverable without weakening the empty-volume precondition.
+  if ! compose_all down --volumes --remove-orphans; then
+    sleep 2
+    if ! compose_all down --volumes --remove-orphans; then
+      remaining_containers=$(compose_all ps --all --quiet)
+      [ -z "$remaining_containers" ] || {
+        echo "restore cleanup left Compose project containers behind" >&2
+        exit 1
+      }
+      echo "restore cleanup left only a stale Docker network; continuing with the empty Compose project" >&2
+    fi
+  fi
+  compose up --detach --wait postgres
+  # A completed backup is deliberately host-owned 0700/0600. Transfer only
+  # this selected backup to the common non-root runtime user while restore
+  # containers need it, then return it to the invoking host user below (and
+  # from the trap on every failure path). This avoids making database dumps
+  # or signing keys world-readable merely to cross the bind mount boundary.
+  chmod 0711 "$backup_dir"
+  compose run --rm --no-deps --user 0:0 -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
+    'chown -R postgres:postgres "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"; find "/backups/$BACKUP_ID" -type f -exec chmod 0600 {} +'
+  restore_backup_owner=container
+  compose run --rm --no-deps -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
+    'attempt=0; until pg_isready --dbname "$DATABASE_URL" >/dev/null 2>&1; do attempt=$((attempt + 1)); [ "$attempt" -lt 30 ] || { echo "PostgreSQL did not become reachable for restore" >&2; exit 1; }; sleep 1; done; install -m 600 "/backups/$BACKUP_ID/signing-keys.json" /data/iam/signing-keys.json; pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/identity-access.dump"'
+  if [ "$enable_contract" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" contract-ledger \
+      /app/backup restore --input "/backups/$backup_id/contract-ledger.zip"
+  fi
+  if [ "$enable_money" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" money-flow-ledger \
+      /app/backup restore --input "/backups/$backup_id/money-flow-ledger.zip"
+  fi
+  if [ "$enable_people" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" people-groups sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/people-groups.dump"'
+  fi
+  if [ "$enable_party" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" party-directory \
+      /app/backup restore --input "/backups/$backup_id/party-directory.zip"
+  fi
+  if [ "$enable_project" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" project-workspace sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/project-workspace.dump"'
+  fi
+  if [ "$enable_evidence" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" evidence-service \
+      /app/backup restore --input "/backups/$backup_id/evidence-service.zip"
+  fi
+  if [ "$enable_business_engagement" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" business-engagement sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/business-engagement.dump"'
+  fi
+  if [ "$enable_billing" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" billing-invoice sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/billing-invoice.dump"'
+  fi
+  if [ "$enable_production" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" production-operations sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/production-operations.dump"'
+  fi
+  if [ "$enable_approval_audit_results" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" approval-audit-results sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/approval-audit-results.dump"'
+  fi
+  if [ "$enable_cost_outsourcing" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" cost-outsourcing sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/cost-outsourcing.dump"'
+  fi
+  if [ "$enable_bonus_distribution" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" bonus-distribution sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/bonus-distribution.dump"'
+  fi
+  restore_backup_permissions
+  trap - EXIT HUP INT TERM
+  compose_enabled up --detach --wait
+  remove_disabled
+  check_stack
+  echo "backup restored and verified: $backup_id"
+}
+
+command=${1:-}
+if [ "$evidence_storage_mode" != local ]; then
+  case "$command" in up|apply|upgrade|restore|backup|check|preflight-upgrade)
+    # Fail before any image build, service stop, backup or business mutation.
+    EVIDENCE_IMDS_NETWORK=$(env_value EVIDENCE_EGRESS_NETWORK) sh "$script_dir/evidence-imds-guard" status
+    ;;
+  esac
+fi
+case "$command" in
+  up|apply) bring_up ;;
+  status) compose_enabled ps ;;
+  check) check_stack ;;
+  config) shift; compose_enabled config "$@" ;;
+  images) compose_enabled config --images | sort -u ;;
+  prepare-images) prepare_images ;;
+  preflight-upgrade) preflight_upgrade ;;
+  party-map) run_party_map "${2:-}" "${3:-}" ;;
+  backup) create_backup ;;
+  upgrade)
+    preflight_upgrade
+    echo "creating pre-mutation backup from the currently deployed application selection"
+    create_backup running
+    echo "replacing D1 containers while preserving named data volumes"
+    compose_all down --remove-orphans
+    start_prepared_stack
+    check_stack
+    ;;
+  restore) restore_backup "${2:-}" ;;
+  down) compose_all down --remove-orphans ;;
+  *) usage ;;
+esac

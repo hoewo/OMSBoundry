@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark">CL</span><span>BizFoundry · Contract Ledger</span></div>
+    <div class="user-chip">{{.Principal.DisplayName}} · {{.Principal.Role}}</div>
+  </header>
+  <main>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/" aria-current="page">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">独立业务应用 · 合同事实</p>
+        <h1>合同台账</h1>
+        <p class="hero-copy">从主体登记开始，建立合同草稿，确认后形成不可静默覆盖的正式 revision。这个 Demo 用来验证合同从建立到履行、变更与关闭的完整事实链。</p>
+      </div>
+      <span class="status-chip">{{.Status}}</span>
+    </section>
+
+    <section aria-labelledby="quick-start-title">
+      <p class="eyebrow">第一次使用</p>
+      <h2 id="quick-start-title">按这三步完成一条最小合同链</h2>
+      <div class="guide">
+        <div class="guide-step"><span>1</span><h3>登记合同主体</h3><p>先建立甲方、乙方或其他合同参与方，后续合同只引用这些稳定主体。</p></div>
+        <div class="guide-step"><span>2</span><h3>创建并检查草稿</h3><p>填写编号、标题、币种和金额；草稿阶段可以补齐参与方和依据文件。</p></div>
+        <div class="guide-step"><span>3</span><h3>激活形成正式事实</h3><p>激活后通过 revision、变更、结算和关闭记录历史，不直接覆盖既有事实。</p></div>
+      </div>
+      <a class="button" href="{{.BasePath}}/parties">从登记主体开始</a>
+    </section>
+
+    <section aria-labelledby="modules-title">
+      <p class="eyebrow">工作入口</p>
+      <h2 id="modules-title">你现在可以做什么</h2>
+      <div class="module-grid">
+        <a class="module-card" href="{{.BasePath}}/parties"><strong>主体目录</strong><small>登记与查看合同参与方，为合同建立稳定引用。</small><span class="action">进入主体目录 →</span></a>
+        <a class="module-card" href="{{.BasePath}}/contracts"><strong>合同台账</strong><small>创建草稿、激活合同，并跟踪变更、结算、终止与关闭。</small><span class="action">进入合同台账 →</span></a>
+        <a class="module-card" href="{{.BasePath}}/audit"><strong>写入审计</strong><small>核对谁在什么时间执行了哪个命令，以及事实怎样变化。</small><span class="action">查看审计记录 →</span></a>
+        {{if .CanRestore}}<a class="module-card" href="{{.BasePath}}/admin/restore"><strong>账簿恢复</strong><small>按受控流程验证备份和恢复，不覆盖现有业务历史。</small><span class="action">进入恢复工具 →</span></a>{{end}}
+        {{if .CanManage}}<a class="module-card" href="{{.BasePath}}/admin/users"><strong>本地用户</strong><small>仅用于本地模板运行时管理用户与角色。</small><span class="action">管理本地用户 →</span></a>{{end}}
+      </div>
+    </section>
+
+    <p class="page-note">边界说明：合同台账拥有合同事实，但不承担项目执行、审批流或实际资金核销。实际收付款与义务余额由 Money Flow Ledger 负责。</p>
+    <div class="quiet-actions">
+      {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改本地密码</a>{{end}}
+      <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销当前会话</button></form>
+    </div>
+  </main>
+</body>
+</html>

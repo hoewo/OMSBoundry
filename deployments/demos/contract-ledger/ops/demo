@@ -1,0 +1,139 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+demo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_root=$(CDPATH= cd -- "$demo_dir/../../.." && pwd)
+env_file="$demo_dir/.env"
+compose_file="$demo_dir/compose.yaml"
+runtime_dir="$demo_dir/.runtime"
+release_runtime="$repo_root/deployments/demos/ops/release-runtime"
+[ -f "$release_runtime" ] || { echo "missing Level A release runtime: $release_runtime" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$release_runtime"
+
+generate_env() {
+  if [ -f "$env_file" ]; then
+    return
+  fi
+  command -v openssl >/dev/null 2>&1 || { echo 'openssl is required to create local Demo credentials' >&2; exit 1; }
+  umask 077
+  {
+    echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+    echo 'LOCAL_ADMIN_USERNAME=admin'
+    echo "LOCAL_ADMIN_PASSWORD=$(openssl rand -hex 18)"
+    echo "REFERENCE_ACCESS_TOKEN=$(openssl rand -hex 32)"
+    echo "CONTRACT_DEMO_PORT=${CONTRACT_DEMO_PORT:-28081}"
+    demo_append_release_env contract-ledger
+  } >"$env_file"
+  echo "created local-only Demo credentials: $env_file"
+}
+
+require_env() {
+  if [ ! -f "$env_file" ]; then
+    echo "missing $env_file; run: $0 init" >&2
+    exit 1
+  fi
+}
+
+load_env() {
+  require_env
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
+}
+
+compose() {
+  docker compose --env-file "$env_file" -f "$compose_file" "$@"
+}
+
+verify_services() {
+  services=$(compose config --services | LC_ALL=C sort | tr '\n' ' ')
+  [ "$services" = "contract-ledger db " ] || {
+    echo "unsafe Demo service set: $services" >&2
+    exit 1
+  }
+}
+
+verify_ready() {
+  load_env
+  body=$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${CONTRACT_DEMO_PORT}/health/ready")
+  case "$body" in
+    *'"status":"ready"'*) ;;
+    *) echo "unexpected readiness body: $body" >&2; exit 1 ;;
+  esac
+  echo 'ready: contract-ledger (only its own app and PostgreSQL are running)'
+}
+
+run_acceptance() {
+  load_env
+  mkdir -p "$runtime_dir"
+  export DEMO_CONTRACT_URL="http://127.0.0.1:${CONTRACT_DEMO_PORT}"
+  export DEMO_ADMIN_USERNAME="$LOCAL_ADMIN_USERNAME"
+  export DEMO_ADMIN_PASSWORD="$LOCAL_ADMIN_PASSWORD"
+  export DEMO_REFERENCE_ACCESS_TOKEN="$REFERENCE_ACCESS_TOKEN"
+  export DEMO_STATE_PATH="$runtime_dir/state.json"
+  if demo_is_release; then
+    demo_run_release_binary contract-ledger-demo "$CONTRACT_DEMO_IMAGE" contract-ledger
+  else
+    cd "$repo_root/acceptance/contract-ledger-demo"
+    GOWORK=off go run .
+  fi
+}
+
+case "${1:-}" in
+  init)
+    generate_env
+    ;;
+  up)
+    generate_env
+    verify_services
+    demo_up
+    verify_ready
+    ;;
+  run)
+    "$0" up
+    run_acceptance
+    ;;
+  verify)
+    require_env
+    verify_services
+    verify_ready
+    ;;
+  demo|replay)
+    verify_ready
+    run_acceptance
+    ;;
+  status)
+    require_env
+    compose ps
+    ;;
+  logs)
+    require_env
+    shift
+    compose logs --tail 200 "$@"
+    ;;
+  credentials)
+    require_env
+    awk -F= '/^(LOCAL_ADMIN_USERNAME|LOCAL_ADMIN_PASSWORD|CONTRACT_DEMO_PORT)=/ {print $1 "=" $2}' "$env_file"
+    ;;
+  down)
+    require_env
+    compose down
+    ;;
+  reset)
+    require_env
+    if [ "${2:-}" != "--confirm-destroy-data" ]; then
+      echo 'reset only deletes this Contract Demo database, evidence volume and state; rerun with --confirm-destroy-data' >&2
+      exit 1
+    fi
+    verify_services
+    compose down --volumes
+    rm -rf "$runtime_dir"
+    ;;
+  *)
+    echo "usage: $0 {init|up|run|verify|demo|replay|status|logs [service]|credentials|down|reset --confirm-destroy-data}" >&2
+    exit 1
+    ;;
+esac

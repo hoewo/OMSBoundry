@@ -1,0 +1,511 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c7"}
+journey_dir=$(dirname "$evidence_dir")
+c6_state=${OA_JOURNEY_C6_STATE:-"$journey_dir/c6/state-after-c6.json"}
+c5_state=${OA_JOURNEY_C5_STATE:-"$journey_dir/c5/state-after-c5.json"}
+c2_state=${OA_JOURNEY_C2_STATE:-"$journey_dir/c2/state-after-c2.json"}
+c1_state=${OA_JOURNEY_C1_STATE:-"$journey_dir/c1/state-after-c1.json"}
+c1_private_state=${OA_JOURNEY_C1_PRIVATE_STATE:-"$journey_dir/c1/state-private-c1.json"}
+plan_state="$evidence_dir/state-plan-c7.json"
+negative_state="$evidence_dir/state-partial-c7-negative.json"
+links_state="$evidence_dir/state-partial-c7-source-links.json"
+pools_state="$evidence_dir/state-partial-c7-pools.json"
+bridge_state="$evidence_dir/state-partial-c7-party-bridge.json"
+target_fault_state="$evidence_dir/state-partial-c7-target-fault.json"
+suggestion_state="$evidence_dir/state-partial-c7-suggestion.json"
+withdrawal_state="$evidence_dir/state-partial-c7-withdrawal.json"
+completed_state="$evidence_dir/state-after-c7.json"
+
+for required in "$env_file" "$c6_state" "$c5_state" "$c2_state" "$c1_state" "$c1_private_state"; do
+  [ -f "$required" ] || { echo "required C7 input is missing: $required" >&2; exit 2; }
+done
+for command in curl jq openssl docker awk sed seq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+json_request() {
+  method=$1; url=$2; cookie=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie" --cookie-jar "$cookie"
+  [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"
+  if [ -n "$payload" ]; then set -- "$@" -H 'Content-Type: application/json' --data "$payload"; fi
+  result=$(curl "$@" "$url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ]; then
+    [ "$output" = /dev/null ] || [ ! -s "$output" ] || { cat "$output" >&2; printf '\n' >&2; }
+    echo "$label: HTTP $actual, expected $expected" >&2
+    exit 1
+  fi
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  json_request GET "$base_url/auth/api/v1/csrf" "$cookie" '' '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  json_request POST "$base_url/auth/api/v1/login" "$cookie" "$csrf" "$payload" "$output" 200 "POST login $username"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; output=$4; resource_id=${5:-}
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf"
+  if [ -n "$resource_id" ]; then
+    set -- "$@" --data-urlencode resource_type=project --data-urlencode "resource_id=$resource_id"
+  fi
+  result=$(curl "$@" "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  [ "$actual" = 303 ] || { [ ! -s "$output" ] || cat "$output" >&2; echo "authorize $app failed: HTTP $actual" >&2; exit 1; }
+}
+
+service_container() {
+  container=$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1")
+  [ -n "$container" ] || { echo "$1 container is missing from $project" >&2; exit 1; }
+  [ "$(printf '%s\n' "$container" | wc -l | tr -d ' ')" = 1 ] || { echo "$1 is not unique in $project" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+wait_healthy() {
+  service=$1; container=$(service_container "$service")
+  for _attempt in $(seq 1 90); do
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+    [ "$status" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+postgres_json() {
+  database=$1; sql=$2; container=$(service_container postgres)
+  docker exec "$container" sh -eu -c 'psql -U "$POSTGRES_USER" -d "$1" -At -c "$2"' sh "$database" "$sql"
+}
+
+capture_counts() {
+  output=$1
+  identity=$(postgres_json identity_access "SELECT jsonb_build_object('capability_grants',(SELECT count(*) FROM capability_grants));")
+  bonus=$(postgres_json bonus_distribution "SELECT jsonb_build_object(
+    'pools',(SELECT count(*) FROM bonus_pools),'pool_revisions',(SELECT count(*) FROM bonus_pool_revisions),
+    'allocations',(SELECT count(*) FROM bonus_allocations),'allocation_revisions',(SELECT count(*) FROM bonus_allocation_revisions),
+    'commands',(SELECT count(*) FROM bonus_distribution_commands),'audit_events',(SELECT count(*) FROM bonus_distribution_audit_events),
+    'suggestions',(SELECT count(*) FROM bonus_payable_suggestions),'suggestion_revisions',(SELECT count(*) FROM bonus_payable_suggestion_revisions));")
+  money=$(postgres_json money_flow "SELECT jsonb_build_object(
+    'parties',(SELECT count(*) FROM parties),'party_runtime_projections',(SELECT count(*) FROM party_directory_runtime_projections),
+    'payable_party_mappings',(SELECT count(*) FROM payable_party_source_mappings),'receipt_sets',(SELECT count(*) FROM receipt_sets),
+    'intakes',(SELECT count(*) FROM payable_suggestion_intakes),'intake_revisions',(SELECT count(*) FROM payable_suggestion_intake_revisions),
+    'obligations',(SELECT count(*) FROM obligations),'obligation_revisions',(SELECT count(*) FROM obligation_revisions));")
+  party=$(postgres_json party_directory "SELECT jsonb_build_object('parties',(SELECT count(*) FROM parties),'revisions',(SELECT count(*) FROM party_revisions));")
+  project_counts=$(postgres_json project_workspace "SELECT jsonb_build_object('projects',(SELECT count(*) FROM projects),'assignments',(SELECT count(*) FROM project_assignments),'resource_links',(SELECT count(*) FROM project_resource_links),'commands',(SELECT count(*) FROM project_commands),'history_events',(SELECT count(*) FROM project_history_events));")
+  people=$(postgres_json people_groups "SELECT jsonb_build_object('persons',(SELECT count(*) FROM persons),'groups',(SELECT count(*) FROM groups),'memberships',(SELECT count(*) FROM memberships));")
+  contract=$(postgres_json contract_ledger "SELECT jsonb_build_object('contracts',(SELECT count(*) FROM contracts),'revisions',(SELECT count(*) FROM contract_revisions),'settlements',(SELECT count(*) FROM contract_settlements));")
+  jq -n --argjson identity "$identity" --argjson bonus "$bonus" --argjson money "$money" --argjson party "$party" \
+    --argjson project "$project_counts" --argjson people "$people" --argjson contract "$contract" \
+    '{identity_access:$identity,bonus_distribution:$bonus,money_flow:$money,party_directory:$party,project_workspace:$project,people_groups:$people,contract_ledger:$contract}' >"$output"
+}
+
+ensure_grant() {
+  action=$1
+  active=$(postgres_json identity_access "SELECT count(*) FROM capability_grants WHERE subject_id='$business_subject' AND audience='bonus-distribution' AND action='$action' AND revoked_at IS NULL;")
+  case "$active" in
+    0)
+      payload=$(jq -cn --arg subject "$business_subject" --arg action "$action" '{subject_id:$subject,audience:"bonus-distribution",action:$action}')
+      json_request POST "$base_url/auth/api/v1/admin/grants" "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204 "GRANT $action"
+      ;;
+    1) ;;
+    *) echo "unexpected active grant count for $action: $active" >&2; exit 1 ;;
+  esac
+}
+
+assert_workload_audit() {
+  workload=$1; audience=$2; action=$3; resource_type=$4; resource_id=$5
+  count=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='$workload' AND details->>'audience'='$audience' AND details->'actions' @> '[\"$action\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"$resource_type\",\"id\":\"$resource_id\"}]'::jsonb;")
+  printf '%s\t%s\t%s\t%s\t%s\n' "$workload" "$audience" "$action" "$resource_type" "$resource_id" >>"$workspace/workload-audits.tsv"
+  [ "$count" -ge 1 ] || { echo "missing exact workload audit: $workload/$audience/$action/$resource_type/$resource_id" >&2; exit 1; }
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-full-oa-c7.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+stopped_service=''
+prior_pass=false
+[ ! -f "$completed_state" ] || prior_pass=true
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ -n "$stopped_service" ]; then docker start "$(service_container "$stopped_service")" >/dev/null 2>&1 || true; fi
+  mkdir -p "$evidence_dir"
+  for artifact in ownership-before.json ownership-after.json ownership-delta.json workload-audits.tsv receipt-set-runtime.json \
+    state-plan-c7.json state-partial-c7-negative.json state-partial-c7-source-links.json state-partial-c7-pools.json state-partial-c7-party-bridge.json \
+    state-partial-c7-target-fault.json state-partial-c7-suggestion.json state-partial-c7-withdrawal.json \
+    stale-source.json over-allocation.json business-published.json production-published.json business-history.json production-history.json \
+    person-directory-party.json party-projection.json party-projection-replay.json payable-party-map.json payable-party-map-replay.json \
+    suggestion-target-unavailable.json suggestion-final.json suggestion-history.json money-intake-final.json money-intake-history.json \
+    money-obligation-source.json business-withdrawn.json business-history-withdrawn.json; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  if [ "$prior_pass" = true ]; then
+    [ ! -f "$workspace/http-evidence.tsv" ] || cp "$workspace/http-evidence.tsv" "$evidence_dir/http-evidence-completed-rerun.tsv"
+    [ ! -f "$workspace/state-after-c7.json" ] || cp "$workspace/state-after-c7.json" "$evidence_dir/state-after-c7-completed-rerun.json"
+    [ ! -f "$workspace/c7-summary.md" ] || cp "$workspace/c7-summary.md" "$evidence_dir/c7-summary-completed-rerun.md"
+  else
+    [ ! -f "$workspace/http-evidence.tsv" ] || cp "$workspace/http-evidence.tsv" "$evidence_dir/http-evidence.tsv"
+    [ ! -f "$workspace/state-after-c7.json" ] || cp "$workspace/state-after-c7.json" "$completed_state"
+    [ ! -f "$workspace/c7-summary.md" ] || cp "$workspace/c7-summary.md" "$evidence_dir/c7-summary.md"
+  fi
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+tenant_id=$(env_value TENANT_ID)
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$tenant_id" ] && [ -n "$admin_password" ] || { echo 'TENANT_ID and BOOTSTRAP_ADMIN_PASSWORD are required' >&2; exit 2; }
+[ "$(stat -c '%a' "$c1_private_state" 2>/dev/null || stat -f '%Lp' "$c1_private_state")" = 600 ] || { echo 'C1 private state must have mode 0600' >&2; exit 1; }
+
+c6_sha=$(openssl dgst -sha256 "$c6_state" | awk '{print $2}')
+c5_sha=$(openssl dgst -sha256 "$c5_state" | awk '{print $2}')
+c2_sha=$(openssl dgst -sha256 "$c2_state" | awk '{print $2}')
+c1_sha=$(openssl dgst -sha256 "$c1_state" | awk '{print $2}')
+project_id=$(jq -er .project.id "$c6_state")
+project_revision=$(jq -er .project.revision "$c6_state")
+settlement_id=$(jq -er .settlement.id "$c2_state")
+settlement_revision=$(jq -er .settlement.revision "$c2_state")
+ledger_owner_directory=$(jq -er .parties.supplier.id "$c2_state")
+business_subject=$(jq -er '.actors[]|select(.role=="business_owner")|.subject_id' "$c1_private_state")
+business_username=$(jq -er '.actors[]|select(.role=="business_owner")|.username' "$c1_private_state")
+business_password=$(jq -er '.actors[]|select(.role=="business_owner")|.password' "$c1_private_state")
+business_person=$(jq -er '.people[]|select(.role=="business_owner")|.person_id' "$c1_state")
+production_person=$(jq -er '.people[]|select(.role=="production_owner")|.person_id' "$c1_state")
+business_person_revision=$(jq -er '.people[]|select(.role=="business_owner")|.person_revision' "$c1_state")
+production_person_revision=$(jq -er '.people[]|select(.role=="production_owner")|.person_revision' "$c1_state")
+business_assignment=$(jq -er --arg person "$business_person" '.assignments[]|select(.subject_id==$person)|.id' "$c1_state")
+production_assignment=$(jq -er --arg person "$production_person" '.assignments[]|select(.subject_id==$person)|.id' "$c1_state")
+business_assignment_revision=$(jq -er --arg person "$business_person" '.assignments[]|select(.subject_id==$person)|.created_project_revision' "$c1_state")
+production_assignment_revision=$(jq -er --arg person "$production_person" '.assignments[]|select(.subject_id==$person)|.created_project_revision' "$c1_state")
+business_display=$(jq -er --arg person "$business_person" '.assignments[]|select(.subject_id==$person)|.display_snapshot' "$c1_state")
+
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" '.phase=="C6" and .result=="pass" and .tenant_id==$tenant and .project.id==$project and .project.revision==11' "$c6_state" >/dev/null || { echo 'C6 state is not the required passing checkpoint' >&2; exit 1; }
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" '.phase=="C5" and .result=="pass" and .tenant_id==$tenant and .project.id==$project' "$c5_state" >/dev/null || { echo 'C5 state is not compatible with C6' >&2; exit 1; }
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" '.phase=="C2" and .result=="pass" and .tenant_id==$tenant and .project.id==$project and .settlement.revision==1' "$c2_state" >/dev/null || { echo 'C2 state is not compatible with C6' >&2; exit 1; }
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" '.phase=="C1" and .result=="pass" and .tenant_id==$tenant and .project.id==$project and (.assignments|length)==3' "$c1_state" >/dev/null || { echo 'C1 state is not compatible with C6' >&2; exit 1; }
+
+echo '[1/9] Revalidate C6, derive the retained C3 Receipt Set, and authorize the C1 actor'
+receipt_rows=$(postgres_json money_flow "SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'revision',revision,'status',status,'total_amount_minor',total_amount_minor,'currency',currency,'project_id',project_id) ORDER BY id),'[]'::jsonb) FROM receipt_sets WHERE tenant_id='$tenant_id' AND project_id='$project_id';")
+printf '%s\n' "$receipt_rows" >"$workspace/receipt-set-runtime.json"
+jq -e --arg project "$project_id" 'length==1 and .[0].project_id==$project and .[0].status=="confirmed" and .[0].revision==1 and .[0].currency=="CNY" and .[0].total_amount_minor==2500000' "$workspace/receipt-set-runtime.json" >/dev/null || { echo 'retained C3 Receipt Set runtime fact is not unique and exact' >&2; exit 1; }
+receipt_set=$(jq -er '.[0].id' "$workspace/receipt-set-runtime.json")
+receipt_sha=$(jq -Sc '.[0]' "$workspace/receipt-set-runtime.json" | openssl dgst -sha256 -r | awk '{print $1}')
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+authorize_app "$admin_cookies" "$admin_csrf" money-flow-ledger "$workspace/admin-authorize-money.out"
+authorize_app "$admin_cookies" "$admin_csrf" party-directory "$workspace/admin-authorize-party.out"
+authorize_app "$admin_cookies" "$admin_csrf" project-workspace "$workspace/admin-authorize-project.out"
+mkdir -p "$evidence_dir"
+if [ -f "$evidence_dir/ownership-before.json" ]; then cp "$evidence_dir/ownership-before.json" "$workspace/ownership-before.json"; else capture_counts "$workspace/ownership-before.json"; cp "$workspace/ownership-before.json" "$evidence_dir/ownership-before.json"; fi
+for action in \
+  bonus-pool.business.calculate bonus-pool.business.publish bonus-pool.business.withdraw \
+  bonus-pool.production.calculate bonus-pool.production.publish bonus-pool.read bonus-pool.history.read \
+  bonus-allocation.manage bonus-allocation.read bonus-allocation.amount.read \
+  bonus-payable-suggestion.create bonus-payable-suggestion.read
+do ensure_grant "$action"; done
+business_cookies="$workspace/business.cookies"
+business_csrf=$(fetch_csrf "$business_cookies" "$workspace/business-csrf.json")
+login "$business_cookies" "$business_csrf" "$business_username" "$business_password" "$workspace/business-login.json"
+authorize_app "$business_cookies" "$business_csrf" bonus-distribution "$workspace/business-authorize-bonus.out" "$project_id"
+
+if [ ! -f "$plan_state" ]; then
+  due_on=$(date -u -d '+60 days' '+%Y-%m-%d')
+  jq -n --arg tenant "$tenant_id" --arg project "$project_id" --arg c6 "$c6_sha" --arg c5 "$c5_sha" --arg c2 "$c2_sha" --arg c1 "$c1_sha" --arg receipt "$receipt_set" --arg receipt_sha "$receipt_sha" --arg due "$due_on" \
+    --arg stale "$(new_uuid)" --arg over "$(new_uuid)" --arg link_settlement "$(new_uuid)" --arg business "$(new_uuid)" --arg business_publish "$(new_uuid)" \
+    --arg production "$(new_uuid)" --arg production_publish "$(new_uuid)" --arg party "$(new_uuid)" --arg projection "$(new_uuid)" \
+    --arg mapping "$(new_uuid)" --arg suggestion "$(new_uuid)" --arg decision "$(new_uuid)" --arg synchronization "$(new_uuid)" --arg withdrawal "$(new_uuid)" \
+    '{schema_version:"1",phase:"C7-plan",tenant_id:$tenant,project_id:$project,c6_state_sha256:$c6,c5_state_sha256:$c5,c2_state_sha256:$c2,c1_state_sha256:$c1,receipt_set:{id:$receipt,revision:1,sha256:$receipt_sha},due_on:$due,commands:{stale_source:$stale,over_allocation:$over,link_settlement:$link_settlement,business_draft:$business,business_publish:$business_publish,production_draft:$production,production_publish:$production_publish,party_create:$party,party_projection:$projection,payable_party_map:$mapping,suggestion:$suggestion,money_decision:$decision,synchronization:$synchronization,business_withdrawal:$withdrawal}}' >"$plan_state"
+fi
+if ! jq -e '.commands.link_settlement' "$plan_state" >/dev/null; then
+  plan_tmp="$plan_state.tmp"
+  jq --arg settlement "$(new_uuid)" '.commands.link_settlement=$settlement' "$plan_state" >"$plan_tmp"
+  mv "$plan_tmp" "$plan_state"
+fi
+cp "$plan_state" "$workspace/state-plan-c7.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c6 "$c6_sha" --arg receipt "$receipt_set" '.phase=="C7-plan" and .tenant_id==$tenant and .project_id==$project and .c6_state_sha256==$c6 and .receipt_set.id==$receipt' "$plan_state" >/dev/null
+
+business_base=$(jq -cn --arg project "$project_id" --argjson project_revision "$project_revision" --arg settlement "$settlement_id" --argjson settlement_revision "$settlement_revision" --arg person "$business_person" --argjson person_revision "$business_person_revision" --arg assignment "$business_assignment" --argjson assignment_revision "$business_assignment_revision" \
+  '{project:{id:$project,revision:$project_revision},source:{settlement_id:$settlement,revision:$settlement_revision},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:$person_revision},assignment:{id:$assignment,revision:$assignment_revision},ratio_basis_points:10000,reason:"经营负责人参与 C7 连续旅程"}]}')
+
+if [ ! -f "$negative_state" ]; then
+  echo '[2/9] Reject stale source and over-allocation without writing Bonus facts'
+  before_negative=$(postgres_json bonus_distribution "SELECT jsonb_build_object('pools',(SELECT count(*) FROM bonus_pools),'pool_revisions',(SELECT count(*) FROM bonus_pool_revisions),'allocations',(SELECT count(*) FROM bonus_allocations),'commands',(SELECT count(*) FROM bonus_distribution_commands));")
+  stale_payload=$(printf '%s' "$business_base" | jq -c --arg command "$(jq -er .commands.stale_source "$plan_state")" '.command_id=$command|.source.revision=99')
+  over_payload=$(printf '%s' "$business_base" | jq -c --arg command "$(jq -er .commands.over_allocation "$plan_state")" '.command_id=$command|.allocations[0].ratio_basis_points=10001')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/business-drafts" "$business_cookies" '' "$stale_payload" "$workspace/stale-source.json" 422 'POST stale C7 Settlement revision'
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/business-drafts" "$business_cookies" '' "$over_payload" "$workspace/over-allocation.json" 422 'POST C7 over-allocation'
+  jq -e '.error.code=="REFERENCE_OR_POLICY_INVALID" and .error.retryable==false' "$workspace/stale-source.json" >/dev/null
+  jq -e '.error.code=="REFERENCE_OR_POLICY_INVALID" and .error.retryable==false' "$workspace/over-allocation.json" >/dev/null
+  after_negative=$(postgres_json bonus_distribution "SELECT jsonb_build_object('pools',(SELECT count(*) FROM bonus_pools),'pool_revisions',(SELECT count(*) FROM bonus_pool_revisions),'allocations',(SELECT count(*) FROM bonus_allocations),'commands',(SELECT count(*) FROM bonus_distribution_commands));")
+  [ "$before_negative" = "$after_negative" ] || { echo 'negative C7 attempts changed Bonus facts' >&2; exit 1; }
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" '{schema_version:"1",phase:"C7-partial-negative",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,checks:{stale_source_zero_write:true,over_allocation_zero_write:true}}' >"$negative_state"
+fi
+cp "$negative_state" "$workspace/state-partial-c7-negative.json"
+
+if [ ! -f "$links_state" ]; then
+  echo '[3/9] Append the exact Settlement link through Project Workspace'
+  settlement_link=$(jq -cn --arg command "$(jq -er .commands.link_settlement "$plan_state")" --arg settlement "$settlement_id" --argjson revision "$settlement_revision" '{command_id:$command,expected_revision:11,operation:"link",target_service:"contract-ledger",resource_type:"settlement",resource_id:$settlement,source_revision:$revision,relation_key:"business-settlement",note:"C7 exact business Bonus source"}')
+  json_request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$admin_csrf" "$settlement_link" "$workspace/project-settlement-link.json" 200 'POST C7 Project Settlement link'
+  jq -e --arg settlement "$settlement_id" '.project.revision==12 and .resource_link.resource_id==$settlement and .resource_link.resource_type=="settlement"' "$workspace/project-settlement-link.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg project "$project_id" --arg settlement "$settlement_id" --arg receipt "$receipt_set" '{schema_version:"1",phase:"C7-partial-source-links",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,project:{id:$project,revision:12},links:[{service:"contract-ledger",resource_type:"settlement",resource_id:$settlement,source_revision:1}],production_source:{service:"money-flow-ledger",resource_type:"receipt_set",resource_id:$receipt,source_revision:1,project_identity_verified_by_source_contract:true},checks:{formal_project_command:true,exact_business_source_link:true,production_source_self_scoped:true}}' >"$links_state"
+fi
+cp "$links_state" "$workspace/state-partial-c7-source-links.json"
+project_revision=$(jq -er .project.revision "$links_state")
+
+business_base=$(jq -cn --arg project "$project_id" --argjson project_revision "$project_revision" --arg settlement "$settlement_id" --argjson settlement_revision "$settlement_revision" --arg person "$business_person" --argjson person_revision "$business_person_revision" --arg assignment "$business_assignment" --argjson assignment_revision "$business_assignment_revision" \
+  '{project:{id:$project,revision:$project_revision},source:{settlement_id:$settlement,revision:$settlement_revision},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:$person_revision},assignment:{id:$assignment,revision:$assignment_revision},ratio_basis_points:10000,reason:"经营负责人参与 C7 连续旅程"}]}')
+production_base=$(jq -cn --arg project "$project_id" --argjson project_revision "$project_revision" --arg receipt "$receipt_set" --arg person "$production_person" --argjson person_revision "$production_person_revision" --arg assignment "$production_assignment" --argjson assignment_revision "$production_assignment_revision" \
+  '{project:{id:$project,revision:$project_revision},source:{receipt_set_id:$receipt,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:$person_revision},assignment:{id:$assignment,revision:$assignment_revision},ratio_basis_points:10000,reason:"生产负责人参与 C7 连续旅程"}]}')
+
+if [ ! -f "$pools_state" ]; then
+  echo '[4/9] Create and publish the business and production pools through the formal entry'
+  business_payload=$(printf '%s' "$business_base" | jq -c --arg command "$(jq -er .commands.business_draft "$plan_state")" '.command_id=$command')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/business-drafts" "$business_cookies" '' "$business_payload" "$workspace/business-draft.json" 201 'POST C7 business pool draft'
+  business_pool=$(jq -er .id "$workspace/business-draft.json")
+  business_publish=$(jq -cn --arg command "$(jq -er .commands.business_publish "$plan_state")" '{command_id:$command,expected_revision:1,reason:"确认经营奖金来源、策略和分配"}')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/$business_pool/publication" "$business_cookies" '' "$business_publish" "$workspace/business-published.json" 200 'POST C7 business pool publication'
+  jq -e --arg settlement "$settlement_id" '.state=="published" and .revision==2 and .amount_minor==469484 and .source.id==$settlement and (.allocations|length)==1 and .allocations[0].amount_minor==469484 and .allocations[0].revision==2' "$workspace/business-published.json" >/dev/null
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/business-drafts" "$business_cookies" '' "$business_payload" "$workspace/business-draft-replay.json" 201 'REPLAY C7 business pool draft'
+  jq -e --arg id "$business_pool" '.id==$id and .state=="draft" and .revision==1' "$workspace/business-draft-replay.json" >/dev/null
+
+  production_payload=$(printf '%s' "$production_base" | jq -c --arg command "$(jq -er .commands.production_draft "$plan_state")" '.command_id=$command')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/production-drafts" "$business_cookies" '' "$production_payload" "$workspace/production-draft.json" 201 'POST C7 production pool draft'
+  production_pool=$(jq -er .id "$workspace/production-draft.json")
+  production_publish=$(jq -cn --arg command "$(jq -er .commands.production_publish "$plan_state")" '{command_id:$command,expected_revision:1,reason:"确认生产奖金来源、策略和分配"}')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/$production_pool/publication" "$business_cookies" '' "$production_publish" "$workspace/production-published.json" 200 'POST C7 production pool publication'
+  jq -e --arg receipt "$receipt_set" '.state=="published" and .revision==2 and .amount_minor==234742 and .source.id==$receipt and (.allocations|length)==1 and .allocations[0].amount_minor==234742 and .allocations[0].revision==2' "$workspace/production-published.json" >/dev/null
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/production-drafts" "$business_cookies" '' "$production_payload" "$workspace/production-draft-replay.json" 201 'REPLAY C7 production pool draft'
+  jq -e --arg id "$production_pool" '.id==$id and .state=="draft" and .revision==1' "$workspace/production-draft-replay.json" >/dev/null
+  business_allocation=$(jq -er .allocations[0].id "$workspace/business-published.json")
+  production_allocation=$(jq -er .allocations[0].id "$workspace/production-published.json")
+  business_person_digest=$(jq -er .allocations[0].person.digest "$workspace/business-published.json")
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg business "$business_pool" --arg business_allocation "$business_allocation" --arg business_person_digest "$business_person_digest" --arg production "$production_pool" --arg production_allocation "$production_allocation" \
+    '{schema_version:"1",phase:"C7-partial-pools",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,business_pool:{id:$business,revision:2,state:"published",allocation_id:$business_allocation,person_digest:$business_person_digest,amount_minor:469484},production_pool:{id:$production,revision:2,state:"published",allocation_id:$production_allocation,amount_minor:234742},checks:{real_settlement_source:true,real_receipt_set_source:true,integer_basis_point_policy:true,same_command_replay:true}}' >"$pools_state"
+fi
+cp "$pools_state" "$workspace/state-partial-c7-pools.json"
+business_pool=$(jq -er .business_pool.id "$pools_state")
+business_allocation=$(jq -er .business_pool.allocation_id "$pools_state")
+business_person_digest=$(jq -er .business_pool.person_digest "$pools_state")
+production_pool=$(jq -er .production_pool.id "$pools_state")
+
+if [ ! -f "$bridge_state" ]; then
+  echo '[5/9] Project the retained Person through Party Directory into Money and record an immutable payable mapping'
+  registration="OA-C7-PERSON-$(printf '%s' "$business_person" | tr -d '-')"
+  party_payload=$(jq -cn --arg command "$(jq -er .commands.party_create "$plan_state")" --arg name "$business_display" --arg registration "$registration" '{command_id:$command,kind:"individual",legal_name:$name,registration_identifier:$registration}')
+  json_request POST "$base_url/party/api/v1/parties" "$admin_cookies" "$admin_csrf" "$party_payload" "$workspace/person-directory-party.json" 201 'POST C7 Person Directory Party'
+  person_party=$(jq -er .id "$workspace/person-directory-party.json")
+  jq -e --arg name "$business_display" '.kind=="individual" and .revision==1 and .legal_name==$name' "$workspace/person-directory-party.json" >/dev/null
+  projection_request=$(jq -cn --arg tenant "$tenant_id" --arg command "$(jq -er .commands.party_projection "$plan_state")" --arg party "$person_party" --arg subject "$business_subject" --arg display "$business_display" '{format:"omsbizfoundry.money-flow-party-directory-runtime-projection/v1",tenant_id:$tenant,command_id:$command,target_party_id:$party,target_party_revision:1,reviewed_by_subject_id:$subject,reviewed_by_display_name:$display,reason:"C7 奖金参与人形成 Money 应付主体前的显式投影复核"}')
+  money_container=$(service_container money-flow-ledger)
+  printf '%s\n' "$projection_request" | docker exec -i "$money_container" /app/ops party-directory-project --input /dev/stdin >"$workspace/party-projection.json"
+  printf '%s\n' "$projection_request" | docker exec -i "$money_container" /app/ops party-directory-project --input /dev/stdin >"$workspace/party-projection-replay.json"
+  local_person_party=$(jq -er .local_party_id "$workspace/party-projection.json")
+  jq -e --arg local "$local_person_party" '.replayed==true and .local_party_id==$local' "$workspace/party-projection-replay.json" >/dev/null
+  docker exec "$money_container" /app/ops payable-party-map \
+    --command-id "$(jq -er .commands.payable_party_map "$plan_state")" --tenant-id "$tenant_id" \
+    --person-id "$business_person" --person-revision "$business_person_revision" --person-digest "$business_person_digest" \
+    --local-party-id "$local_person_party" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$business_subject" \
+    --reviewed-by-display-name "$business_display" --reason 'C7 经营奖金参与人与 Money individual Party 精确映射复核' >"$workspace/payable-party-map.json"
+  docker exec "$money_container" /app/ops payable-party-map \
+    --command-id "$(jq -er .commands.payable_party_map "$plan_state")" --tenant-id "$tenant_id" \
+    --person-id "$business_person" --person-revision "$business_person_revision" --person-digest "$business_person_digest" \
+    --local-party-id "$local_person_party" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$business_subject" \
+    --reviewed-by-display-name "$business_display" --reason 'C7 经营奖金参与人与 Money individual Party 精确映射复核' >"$workspace/payable-party-map-replay.json"
+  jq -e --arg local "$local_person_party" '.replayed==true and .local_party_id==$local' "$workspace/payable-party-map-replay.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg directory "$person_party" --arg local "$local_person_party" --arg person "$business_person" --arg digest "$business_person_digest" \
+    '{schema_version:"1",phase:"C7-partial-party-bridge",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,directory_party:{id:$directory,revision:1,kind:"individual"},money_party:{id:$local,revision:1},person:{id:$person,revision:1,digest:$digest},checks:{directory_projection_reviewed:true,projection_replay:true,payable_mapping_immutable:true,mapping_replay:true}}' >"$bridge_state"
+fi
+cp "$bridge_state" "$workspace/state-partial-c7-party-bridge.json"
+person_party=$(jq -er .directory_party.id "$bridge_state")
+local_person_party=$(jq -er .money_party.id "$bridge_state")
+
+ledger_owner=$(postgres_json money_flow "SELECT jsonb_build_object('id',p.id,'revision',p.revision,'kind',p.kind,'legal_name',p.legal_name) FROM party_migration_mappings m JOIN parties p ON p.id=m.local_party_id WHERE m.tenant_id='$tenant_id' AND m.target_party_id='$ledger_owner_directory' AND m.target_party_revision=1;")
+jq -e '.id!=null and .revision==1 and (.kind=="organization" or .kind=="individual")' <<EOF >/dev/null
+$ledger_owner
+EOF
+ledger_owner_id=$(printf '%s' "$ledger_owner" | jq -er .id)
+ledger_owner_revision=$(printf '%s' "$ledger_owner" | jq -er .revision)
+ledger_owner_kind=$(printf '%s' "$ledger_owner" | jq -er .kind)
+ledger_owner_name=$(printf '%s' "$ledger_owner" | jq -er .legal_name)
+suggestion_payload=$(jq -cn --arg command "$(jq -er .commands.suggestion "$plan_state")" --arg allocation "$business_allocation" --arg owner "$ledger_owner_id" --argjson owner_revision "$ledger_owner_revision" --arg owner_kind "$ledger_owner_kind" --arg owner_name "$ledger_owner_name" --arg due "$(jq -er .due_on "$plan_state")" \
+  '{command_id:$command,allocation_id:$allocation,allocation_revision:2,ledger_owner:{id:$owner,revision:$owner_revision,kind:$owner_kind,legal_name:$owner_name},due_on:$due,purpose:"C7 经营奖金应付"}')
+
+if [ ! -f "$target_fault_state" ]; then
+  echo '[6/9] Stop only Money and retain one target_unavailable Bonus suggestion without a Money intake'
+  before_intakes=$(postgres_json money_flow "SELECT count(*) FROM payable_suggestion_intakes;")
+  echo "  Money intake count before outage: $before_intakes"
+  money_container=$(service_container money-flow-ledger)
+  docker stop "$money_container" >/dev/null; stopped_service=money-flow-ledger
+  echo '  Money stopped; submit through Bonus'
+  json_request POST "$base_url/bonus/api/v1/bonus-payable-suggestions" "$business_cookies" '' "$suggestion_payload" "$workspace/suggestion-target-unavailable.json" 201 'POST C7 suggestion with Money down'
+  jq -e '.state=="target_unavailable" and .revision==1 and ((.target_revision // 0)==0)' "$workspace/suggestion-target-unavailable.json" >/dev/null
+  suggestion_id=$(jq -er .id "$workspace/suggestion-target-unavailable.json")
+  echo "  Bonus retained retryable suggestion: $suggestion_id"
+  after_intakes=$(postgres_json money_flow "SELECT count(*) FROM payable_suggestion_intakes;")
+  echo "  Money intake count during outage: $after_intakes"
+  [ "$before_intakes" = "$after_intakes" ] || { echo 'Money outage unexpectedly created an intake' >&2; exit 1; }
+  docker start "$money_container" >/dev/null; wait_healthy money-flow-ledger; stopped_service=''
+  echo '  Money recovered and is healthy'
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg suggestion "$suggestion_id" '{schema_version:"1",phase:"C7-partial-target-fault",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,suggestion:{id:$suggestion,revision:1,target_revision:0,state:"target_unavailable"},checks:{money_outage_zero_money_write:true,bonus_retains_retryable_state:true}}' >"$target_fault_state"
+fi
+cp "$target_fault_state" "$workspace/state-partial-c7-target-fault.json"
+suggestion_id=$(jq -er .suggestion.id "$target_fault_state")
+
+if [ ! -f "$suggestion_state" ]; then
+  echo '[7/9] Replay the same command, let Money decide independently, and synchronize the result'
+  json_request POST "$base_url/bonus/api/v1/bonus-payable-suggestions" "$business_cookies" '' "$suggestion_payload" "$workspace/suggestion-proposed.json" 201 'REPLAY C7 suggestion after Money recovery'
+  jq -e --arg id "$suggestion_id" '.id==$id and .state=="proposed" and .revision==2 and .target_revision==1 and .amount_minor==469484' "$workspace/suggestion-proposed.json" >/dev/null
+  json_request GET "$base_url/money/api/v1/payable-suggestion-intakes/$suggestion_id" "$admin_cookies" "$admin_csrf" '' "$workspace/money-intake-pending.json" 200 'GET C7 Money intake pending'
+  jq -e '.status=="pending" and .revision==1' "$workspace/money-intake-pending.json" >/dev/null
+  decision_payload=$(jq -cn --arg command "$(jq -er .commands.money_decision "$plan_state")" '{command_id:$command,expected_revision:1,decision:"accept",reason:"资金负责人独立核对奖金来源、主体、金额和到期日后接受"}')
+  json_request POST "$base_url/money/api/v1/payable-suggestion-intakes/$suggestion_id/decisions" "$admin_cookies" "$admin_csrf" "$decision_payload" "$workspace/money-decision.json" 200 'POST C7 independent Money decision'
+  obligation_id=$(jq -er .intake.obligation.id "$workspace/money-decision.json")
+  jq -e '.intake.status=="accepted" and .intake.revision==2 and .intake.obligation.revision==1' "$workspace/money-decision.json" >/dev/null
+  json_request POST "$base_url/money/api/v1/payable-suggestion-intakes/$suggestion_id/decisions" "$admin_cookies" "$admin_csrf" "$decision_payload" "$workspace/money-decision-replay.json" 200 'REPLAY C7 independent Money decision'
+  jq -e --arg obligation "$obligation_id" '.replayed==true and .intake.obligation.id==$obligation' "$workspace/money-decision-replay.json" >/dev/null
+  sync_payload=$(jq -cn --arg command "$(jq -er .commands.synchronization "$plan_state")" '{command_id:$command,expected_revision:2,reason:"同步 Money 独立接受决定"}')
+  json_request POST "$base_url/bonus/api/v1/bonus-payable-suggestions/$suggestion_id/synchronization" "$business_cookies" '' "$sync_payload" "$workspace/suggestion-accepted.json" 200 'POST C7 suggestion synchronization'
+  jq -e --arg obligation "$obligation_id" '.state=="accepted" and .revision==3 and .target_revision==2 and .obligation.id==$obligation and .obligation.revision==1' "$workspace/suggestion-accepted.json" >/dev/null
+  json_request POST "$base_url/bonus/api/v1/bonus-payable-suggestions/$suggestion_id/synchronization" "$business_cookies" '' "$sync_payload" "$workspace/suggestion-sync-replay.json" 200 'REPLAY C7 suggestion synchronization'
+  jq -e --arg obligation "$obligation_id" '.state=="accepted" and .revision==3 and .obligation.id==$obligation' "$workspace/suggestion-sync-replay.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg suggestion "$suggestion_id" --arg obligation "$obligation_id" '{schema_version:"1",phase:"C7-partial-suggestion",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,suggestion:{id:$suggestion,revision:3,target_revision:2,state:"accepted"},money:{decision:"accepted",intake_revision:2,obligation_id:$obligation,obligation_revision:1},checks:{same_command_recovered:true,money_decision_independent:true,decision_replay:true,synchronization_replay:true}}' >"$suggestion_state"
+fi
+cp "$suggestion_state" "$workspace/state-partial-c7-suggestion.json"
+obligation_id=$(jq -er .money.obligation_id "$suggestion_state")
+
+if [ ! -f "$withdrawal_state" ]; then
+  echo '[8/9] Withdraw the source pool and prove no cascade into the accepted Money obligation'
+  withdrawal_payload=$(jq -cn --arg command "$(jq -er .commands.business_withdrawal "$plan_state")" '{command_id:$command,expected_revision:2,reason:"验证奖金来源撤回只追加来源历史，不改写 Money 已确认义务"}')
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/$business_pool/withdrawal" "$business_cookies" '' "$withdrawal_payload" "$workspace/business-withdrawn.json" 200 'POST C7 business pool withdrawal'
+  jq -e '.state=="withdrawn" and .revision==3 and (.allocations|length)==1 and .allocations[0].state=="withdrawn" and .allocations[0].revision==3' "$workspace/business-withdrawn.json" >/dev/null
+  json_request POST "$base_url/bonus/api/v1/bonus-pools/$business_pool/withdrawal" "$business_cookies" '' "$withdrawal_payload" "$workspace/business-withdrawal-replay.json" 200 'REPLAY C7 business pool withdrawal'
+  jq -e --arg id "$business_pool" '.id==$id and .state=="withdrawn" and .revision==3' "$workspace/business-withdrawal-replay.json" >/dev/null
+  postgres_json money_flow "SELECT jsonb_build_object('count',count(*),'direction',min(direction),'status',min(status),'source_kind',min(source_kind),'source_application',min(source_application),'source_resource_type',min(source_resource_type),'source_resource_id',min(source_resource_id::text),'source_revision',min(source_revision)) FROM obligations WHERE id='$obligation_id';" >"$workspace/money-obligation-source.json"
+  jq -e --arg source "$business_allocation" '.count==1 and .direction=="payable" and .status=="open" and .source_kind=="bonus_payable_suggestion" and .source_application=="bonus-distribution" and .source_resource_type=="bonus_allocation" and .source_resource_id==$source and .source_revision==2' "$workspace/money-obligation-source.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg pool "$business_pool" --arg allocation "$business_allocation" --arg obligation "$obligation_id" '{schema_version:"1",phase:"C7-partial-withdrawal",result:"resumable",tenant_id:$tenant,c6_state_sha256:$c6,business_pool:{id:$pool,revision:3,state:"withdrawn",allocation_id:$allocation,allocation_revision:3},money_obligation:{id:$obligation,revision:1,status:"open",source_revision:2},checks:{withdrawal_append_only:true,withdrawal_replay:true,money_no_cascade:true}}' >"$withdrawal_state"
+fi
+cp "$withdrawal_state" "$workspace/state-partial-c7-withdrawal.json"
+
+echo '[9/9] Re-read exact facts, ownership deltas, workload credentials, and 17/17 health'
+json_request GET "$base_url/bonus/api/v1/bonus-pools/$business_pool" "$business_cookies" '' '' "$workspace/business-final.json" 200 'GET final C7 business pool'
+json_request GET "$base_url/bonus/api/v1/bonus-pools/$business_pool/history" "$business_cookies" '' '' "$workspace/business-history-withdrawn.json" 200 'GET final C7 business pool history'
+json_request GET "$base_url/bonus/api/v1/bonus-pools/$production_pool" "$business_cookies" '' '' "$workspace/production-published.json" 200 'GET final C7 production pool'
+json_request GET "$base_url/bonus/api/v1/bonus-pools/$production_pool/history" "$business_cookies" '' '' "$workspace/production-history.json" 200 'GET final C7 production pool history'
+jq -e '.state=="withdrawn" and .revision==3 and .amount_minor==469484 and .allocations[0].revision==3' "$workspace/business-final.json" >/dev/null
+jq -e '([.items[].event_kind])==["drafted","published","withdrawn"] and ([.items[].revision])==[1,2,3]' "$workspace/business-history-withdrawn.json" >/dev/null
+jq -e '.state=="published" and .revision==2 and .amount_minor==234742 and .allocations[0].revision==2' "$workspace/production-published.json" >/dev/null
+jq -e '([.items[].event_kind])==["drafted","published"] and ([.items[].revision])==[1,2]' "$workspace/production-history.json" >/dev/null
+json_request GET "$base_url/bonus/api/v1/bonus-payable-suggestions/$suggestion_id" "$business_cookies" '' '' "$workspace/suggestion-final.json" 200 'GET final C7 suggestion'
+json_request GET "$base_url/bonus/api/v1/bonus-payable-suggestions/$suggestion_id/history" "$business_cookies" '' '' "$workspace/suggestion-history.json" 200 'GET final C7 suggestion history'
+jq -e --arg obligation "$obligation_id" '.state=="accepted" and .revision==3 and .target_revision==2 and .obligation.id==$obligation' "$workspace/suggestion-final.json" >/dev/null
+jq -e '([.items[].event_kind])==["proposed","submitted","accepted"] and ([.items[].revision])==[1,2,3]' "$workspace/suggestion-history.json" >/dev/null
+json_request GET "$base_url/money/api/v1/payable-suggestion-intakes/$suggestion_id" "$admin_cookies" "$admin_csrf" '' "$workspace/money-intake-final.json" 200 'GET final C7 Money intake'
+json_request GET "$base_url/money/api/v1/payable-suggestion-intakes/$suggestion_id/history" "$admin_cookies" "$admin_csrf" '' "$workspace/money-intake-history.json" 200 'GET final C7 Money intake history'
+jq -e --arg obligation "$obligation_id" '.status=="accepted" and .revision==2 and .obligation.id==$obligation' "$workspace/money-intake-final.json" >/dev/null
+jq -e '([.items[].event_kind])==["submitted","accepted"] and ([.items[].revision])==[1,2]' "$workspace/money-intake-history.json" >/dev/null
+
+printf 'workload_id\taudience\taction\tresource_type\tresource_id\n' >"$workspace/workload-audits.tsv"
+assert_workload_audit bonus-distribution project-workspace project-workspace.read project "$project_id"
+assert_workload_audit bonus-distribution people-groups people-groups.person.reference.read person "$business_person"
+assert_workload_audit bonus-distribution people-groups people-groups.person.reference.read person "$production_person"
+assert_workload_audit bonus-distribution contract-ledger contract-ledger.reference.read settlement "$settlement_id"
+assert_workload_audit bonus-distribution money-flow-ledger money-flow-ledger.receipt-set.reference.read receipt_set "$receipt_set"
+assert_workload_audit bonus-distribution money-flow-ledger money-flow-ledger.payable-suggestion.submit payable_suggestion "$suggestion_id"
+assert_workload_audit bonus-distribution money-flow-ledger money-flow-ledger.payable-suggestion.read payable_suggestion "$suggestion_id"
+assert_workload_audit money-flow-ledger party-directory party-directory.reference.read party "$person_party"
+
+capture_counts "$workspace/ownership-after.json"
+jq -n --slurpfile before "$workspace/ownership-before.json" --slurpfile after "$workspace/ownership-after.json" '
+  $after[0] as $a | $before[0] as $b |
+  reduce ($a|keys[]) as $app ({};.[$app]=reduce ($a[$app]|keys[]) as $key ({};.[$key]=($a[$app][$key]-$b[$app][$key])))
+' >"$workspace/ownership-delta.json"
+jq -e '
+  .identity_access.capability_grants==12 and
+  .bonus_distribution.pools==2 and .bonus_distribution.pool_revisions==5 and .bonus_distribution.allocations==2 and .bonus_distribution.allocation_revisions==5 and
+  .bonus_distribution.commands==8 and .bonus_distribution.audit_events==5 and .bonus_distribution.suggestions==1 and .bonus_distribution.suggestion_revisions==3 and
+  .money_flow.parties==1 and .money_flow.party_runtime_projections==1 and .money_flow.payable_party_mappings==1 and .money_flow.receipt_sets==0 and
+  .money_flow.intakes==1 and .money_flow.intake_revisions==2 and .money_flow.obligations==1 and .money_flow.obligation_revisions==1 and
+  .party_directory.parties==1 and .party_directory.revisions==1 and
+  .project_workspace.projects==0 and .project_workspace.assignments==0 and .project_workspace.resource_links==1 and .project_workspace.commands==1 and .project_workspace.history_events==1 and
+  .people_groups.persons==0 and .people_groups.groups==0 and .people_groups.memberships==0 and
+  .contract_ledger.contracts==0 and .contract_ledger.revisions==0 and .contract_ledger.settlements==0
+' "$workspace/ownership-delta.json" >/dev/null || { echo 'C7 ownership delta is unexpected' >&2; cat "$workspace/ownership-delta.json" >&2; exit 1; }
+
+running=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l | tr -d ' ')
+healthy=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.Status}}' | awk '/healthy/{count++} END{print count+0}')
+[ "$running" = 17 ] && [ "$healthy" = 17 ] || { echo "isolated stack ended $running/$healthy, expected 17/17" >&2; exit 1; }
+business_sha=$(jq -Sc . "$workspace/business-final.json" | openssl dgst -sha256 -r | awk '{print $1}')
+production_sha=$(jq -Sc . "$workspace/production-published.json" | openssl dgst -sha256 -r | awk '{print $1}')
+suggestion_sha=$(jq -Sc . "$workspace/suggestion-final.json" | openssl dgst -sha256 -r | awk '{print $1}')
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --arg captured "$captured_at" --arg tenant "$tenant_id" --arg c6 "$c6_sha" --arg project "$project_id" --arg receipt "$receipt_set" --arg receipt_sha "$receipt_sha" \
+  --arg business "$business_pool" --arg business_sha "$business_sha" --arg business_allocation "$business_allocation" --arg production "$production_pool" --arg production_sha "$production_sha" \
+  --arg directory_party "$person_party" --arg money_party "$local_person_party" --arg suggestion "$suggestion_id" --arg suggestion_sha "$suggestion_sha" --arg obligation "$obligation_id" --slurpfile delta "$workspace/ownership-delta.json" \
+  '{schema_version:"1",scenario_id:"reference-oa-full-suite-continuous-v1",phase:"C7",result:"pass",captured_at:$captured,tenant_id:$tenant,c6_state_sha256:$c6,
+    project:{id:$project,revision:12,status:"active",c7_source_links_added:1},receipt_set:{id:$receipt,revision:1,sha256:$receipt_sha,evidence_source:"runtime-derived; standalone C3 state artifact absent",project_identity_verified_by_source_contract:true},
+    business_pool:{id:$business,revision:3,state:"withdrawn",allocation_id:$business_allocation,sha256:$business_sha},production_pool:{id:$production,revision:2,state:"published",sha256:$production_sha},
+    party_bridge:{directory_party_id:$directory_party,money_party_id:$money_party},payable_suggestion:{id:$suggestion,revision:3,target_revision:2,state:"accepted",sha256:$suggestion_sha},
+    money_decision:{decision:"accepted",intake_revision:2,obligation_id:$obligation,obligation_revision:1,status_after_source_withdrawal:"open"},
+    checks:{same_tenant_and_project:"pass",real_business_and_production_sources:"pass",stale_source_and_over_allocation_zero_write:"pass",integer_basis_point_policy:"pass",directory_person_projection:"pass",money_target_failure_recovery:"pass",money_decision_independent:"pass",source_withdrawal_no_cascade:"pass",replays_single_commit:"pass",exact_workload_credentials:"pass",ownership_delta_exact:"pass",isolated_stack_health:"17/17",evidence_retention_note:"standalone C3 state artifact missing; exact retained runtime Receipt Set was revalidated"},ownership_delta:$delta[0]}' >"$workspace/state-after-c7.json"
+
+assertions=$(awk -F '\t' 'NR>1{count++} END{print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3{count++} END{print count+0}' "$http_evidence")
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat >"$workspace/c7-summary.md" <<EOF
+# C7 continuous journey result
+
+- Result: pass
+- Tenant: \`$tenant_id\`
+- Project: \`$project_id\` revision 12 after one formal Settlement source link; the Receipt Set contract independently verifies the same Project ID
+- Business pool: \`$business_pool\` revision 3, withdrawn after its revision-2 allocation produced the suggestion
+- Production pool: \`$production_pool\` revision 2, published from retained Receipt Set \`$receipt_set\`
+- Party bridge: People Person → Directory Party \`$person_party\` → Money Party \`$local_person_party\`, both operation replays verified
+- Payable Suggestion: \`$suggestion_id\` revision 3; Money independently accepted it and owns open Obligation \`$obligation_id\`
+- Boundary proof: withdrawing the Bonus source appended history but did not rewrite, close, or delete the Money obligation
+- Negative and fault paths: stale source, over-allocation, Money outage, same-command recovery and replay
+- Evidence-retention defect: the standalone C3 state file is absent; C7 revalidated the unique retained Receipt Set directly and records its canonical digest
+- HTTP assertions: $assertions; mismatches: 0
+- Isolated stack health: 17/17
+EOF
+mkdir -p "$evidence_dir"
+for artifact in ownership-before.json ownership-after.json ownership-delta.json workload-audits.tsv receipt-set-runtime.json business-final.json business-history-withdrawn.json production-published.json production-history.json suggestion-final.json suggestion-history.json money-intake-final.json money-intake-history.json money-obligation-source.json; do
+  [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+done
+cat "$workspace/c7-summary.md"

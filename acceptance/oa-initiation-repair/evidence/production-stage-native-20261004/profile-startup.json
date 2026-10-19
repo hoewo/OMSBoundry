@@ -1,0 +1,65 @@
+{
+  "started_at": "2026-10-04T16:00:22.373Z",
+  "passed": true,
+  "checks": [
+    {
+      "name": "reproduced-before-patch-accepted-missing-People",
+      "passed": true,
+      "ready": true,
+      "exit_code": null,
+      "expected_rejection": null
+    },
+    {
+      "name": "fixed-profile-rejects-missing-People",
+      "passed": true,
+      "ready": false,
+      "exit_code": 1,
+      "expected_rejection": "matching Production, Evidence, Project and People"
+    },
+    {
+      "name": "fixed-default-off-preserves-minimal-Suite-startup",
+      "passed": true,
+      "ready": true,
+      "exit_code": null,
+      "expected_rejection": null
+    },
+    {
+      "name": "fixed-profile-on-all-four-owners-starts",
+      "passed": true,
+      "ready": true,
+      "exit_code": null,
+      "expected_rejection": null
+    },
+    {
+      "name": "fixed-unknown-profile-rejected-before-listening",
+      "passed": true,
+      "ready": false,
+      "exit_code": 1,
+      "expected_rejection": "unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE"
+    }
+  ],
+  "evidence_layer": "actual-standalone-Workbench-startup-not-business-chain",
+  "local_docker_started": false,
+  "main_changed": false,
+  "owner_business_accepted": false,
+  "binaries": {
+    "before": "a3366140f3d57159180db55f0308e9388e5ef7101b9ca59c14eb848f8ec2bbf6",
+    "after": "6a882c7a0e75b3e9b6a77c142f68d074bd2203f4052463f8f0543c1784922cd5"
+  },
+  "all_processes_stopped": true,
+  "source_files": [
+    {
+      "path": "frontend/oms-workbench/internal/server/server.go",
+      "sha256": "97a54ea421b74abdc103a093bdf5d1e249717849e3513862821c299b97233fd0"
+    },
+    {
+      "path": "frontend/oms-workbench/internal/server/server_test.go",
+      "sha256": "7a4cbdeb8bbb156d4469ac07dd59aa06b407e8b98af25686eb18e4107e8d9080"
+    },
+    {
+      "path": "frontend/oms-workbench/internal/config/config.go",
+      "sha256": "64e7cb9ed8480b061ba284764a61dc2ea99f92018d088e7ab31b5657e9ebcdd0"
+    }
+  ],
+  "finished_at": "2026-10-04T16:00:22.865Z"
+}

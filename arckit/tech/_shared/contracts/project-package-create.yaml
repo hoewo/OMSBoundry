@@ -1,0 +1,52 @@
+# 创建 Project Package API 契约
+# 路径: arckit/tech/_shared/contracts/project-package-create.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-package-create.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-26"
+  updated: "2026-09-26"
+
+endpoint:
+  method: POST
+  path: "/api/v1/project-packages"
+  summary: "创建顶层 Project Package"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.hierarchy.manage"
+  scope_kind: "tenant"
+
+request:
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, name, project_type_keys]
+    properties:
+      command_id: {type: string, format: uuid}
+      project_number: {type: string, maxLength: 64, default: ""}
+      name: {type: string, minLength: 1, maxLength: 200}
+      summary: {type: string, maxLength: 2000, default: ""}
+      planned_start_date: {type: [string, "null"], format: date}
+      planned_end_date: {type: [string, "null"], format: date}
+      project_type_keys:
+        type: array
+        minItems: 1
+        maxItems: 16
+        uniqueItems: true
+        items: {type: string, pattern: "^[a-z][a-z0-9-]{0,63}$"}
+
+responses:
+  success: {status: 201, schema: {$ref: "../models/Project.yaml"}}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 409, code: PROJECT_NUMBER_CONFLICT, retryable: false}
+
+business_logic:
+  flow:
+    - "创建 node_type=package、parent_project_id=null、revision=1 的 draft 节点。"
+    - "Package 编号可空；非空编号仍遵守租户内不区分大小写唯一。"
+  side_effects: ["仅写 Project Workspace 数据库"]

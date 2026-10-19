@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omsbizfoundry.local/contracts/access/v1/suite-manifest.schema.json",
+  "title": "OMSBizFoundry Suite Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "suite_id", "tenant_id", "applications"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "suite_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "applications": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "enabled",
+          "required",
+          "route_prefix",
+          "upstream",
+          "readiness_path",
+          "audience"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+          "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+          "enabled": { "type": "boolean" },
+          "required": { "type": "boolean" },
+          "route_prefix": { "type": "string", "pattern": "^/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)*$" },
+          "upstream": { "type": "string", "format": "uri" },
+          "readiness_path": { "type": "string", "pattern": "^/" },
+          "audience": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+          "capability_namespace": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+          "capability_namespaces": {
+            "description": "Explicit native namespaces of this one audience. Exclusive with capability_namespace; does not issue actions or widen scope.",
+            "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }
+          },
+          "entry_action": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+          "entry_actions": {
+            "description": "Admission ANY set; never grants actions and never replaces target authorization. Mutually exclusive with entry_action.",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" }
+          },
+          "capability_manifest": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "show_in_workbench": { "type": "boolean" },
+          "work_item_projection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "path", "action"],
+            "properties": {
+              "schema_version": { "const": "1" },
+              "path": { "type": "string", "pattern": "^/api/" },
+              "action": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" }
+            }
+          },
+          "metric_projection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "path", "action"],
+            "properties": {
+              "schema_version": { "const": "1" },
+              "path": { "type": "string", "pattern": "^/api/" },
+              "action": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" }
+            }
+          }
+        },
+        "allOf": [{ "not": { "required": ["capability_namespace", "capability_namespaces"] } }, {
+          "if": { "properties": { "id": { "enum": ["identity-access", "unified-workbench"] } } },
+          "then": { "not": { "anyOf": [{ "required": ["entry_action"] }, { "required": ["entry_actions"] }] } },
+          "else": { "oneOf": [
+            { "required": ["entry_action"], "not": { "required": ["entry_actions"] } },
+            { "required": ["entry_actions"], "not": { "required": ["entry_action"] } }
+          ] }
+        }]
+      }
+    }
+  }
+}

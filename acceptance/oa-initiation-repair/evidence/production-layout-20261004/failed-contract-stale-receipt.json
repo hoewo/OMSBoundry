@@ -1,0 +1,29 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "7df15d8a63a0ac31a308401631aaedba38cbb2f73ba5d1334c4d9e88ed41c357",
+  "failure": {
+    "stage": "create-UI-CLIENT",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.contract-panel__group--client.contract-panel__group .contract-panel__item-number').filter({ hasText: 'UI-CLIENT' }) to be visible\u001b[22m\n"
+  },
+  "file_facts": {
+    "uploads": 0,
+    "completes": 0,
+    "access": 0,
+    "deletes": 0
+  },
+  "materials": [],
+  "business_command_count": 3,
+  "page_errors": []
+}

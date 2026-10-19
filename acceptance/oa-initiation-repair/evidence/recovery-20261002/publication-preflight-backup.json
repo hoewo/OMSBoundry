@@ -1,0 +1,43 @@
+{
+  "publication": {
+    "passed": true,
+    "official_release": false,
+    "images": {
+      "project-workspace": {
+        "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/project-workspace@sha256:0ebc8db34163de414d43009e075399201b2625cf53c71987f32738abca80bd1f",
+        "image_id": "sha256:0ebc8db34163de414d43009e075399201b2625cf53c71987f32738abca80bd1f",
+        "binary_sha256": {
+          "server": "4163b62c92b6f0a2a0e35205e3ae805a6adb2efe2a95f50c1b603a33a7a297f7",
+          "ops": "77a289562b69c07f177f9748555aff52aadca3564a7c212a652e69c51076a96b",
+          "workload-keyctl": "28b41895e256cd0248690437cc4541dfbdaac6a2b1e554b20709198030ff9a27"
+        }
+      },
+      "unified-workbench": {
+        "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:75528a75629b3662959bc685da644717481edc3811469c16ae2037603a45b198",
+        "image_id": "sha256:75528a75629b3662959bc685da644717481edc3811469c16ae2037603a45b198",
+        "binary_sha256": {
+          "server": "767f77a0cd1cd0313673da72f35a4f995e0167dbdf241d5349211e8617590273"
+        }
+      }
+    },
+    "main_unchanged": true
+  },
+  "preflight": {
+    "passed": true,
+    "iam_contracts_unchanged": true,
+    "project_schema_before": "000010_initial_dispatch_draft.sql",
+    "closure": [
+      "Project server",
+      "Workbench"
+    ],
+    "gateway_suite_manifest_unchanged": true,
+    "other_business_images_unchanged": true,
+    "official_release": false
+  },
+  "backup": {
+    "passed": true,
+    "databases": 13,
+    "evidence_provider": "local",
+    "iam_keys_preserved": true
+  }
+}

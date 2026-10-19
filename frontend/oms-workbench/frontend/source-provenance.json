@@ -1,0 +1,234 @@
+{
+  "source": "user-owned RoadSystemOA frontend",
+  "copied_at": "2026-10-03",
+  "files": [
+    {
+      "path": "src/components/production/ProductionInfo.tsx",
+      "sha256": "3e0cb5b79a9769cc31cb83bb52444b899caf2163bd1ff612292e1decc6005ebd"
+    },
+    {
+      "path": "src/components/production/ProductionInfo.css",
+      "sha256": "f37b6be103db9ceb2a87eedd2514c1b5171eed07116019596aad58c4343450b6"
+    },
+    {
+      "path": "src/components/business/BiddingFileList.tsx",
+      "sha256": "7cb045153c380c3cf76e2cd31a100255e69dc570ebc62b6a01cebc463104ff45"
+    },
+    {
+      "path": "src/components/business/BiddingFileList.css",
+      "sha256": "8ccbb8bcea90892e1e9658e86aa291f5bb031ddeea566cafae8d0ce6ac441d3b"
+    },
+    {
+      "path": "src/components/shared/SectionTitle.tsx",
+      "sha256": "3b35fcb3f1f188f6366a7d34ea5a32df73691081957bd5c1b78b6f99a23acbe0"
+    },
+    {
+      "path": "src/components/shared/FilePreviewDrawer.tsx",
+      "sha256": "503cac311c70f6a53cad3629fd8eefbd8544b29ba50501f7baf4c18f356258f6"
+    },
+    {
+      "path": "src/components/shared/FilePreviewDrawer.css",
+      "sha256": "bb1a0f21b9613f62cca26bbc2ebef75c6005785d201a42d9feead27add2fde25"
+    },
+    {
+      "path": "src/components/shared/useFilePreviewSource.tsx",
+      "sha256": "9a1a9e13b14be1ca9441e317f0dd4636723f36bfbef844b665db6280fb536fe2"
+    },
+    {
+      "path": "src/components/shared/useResizableWidth.ts",
+      "sha256": "dcf93664e0f42b108d997dbd69740d747e444f935f6f1ae923d2c8f001f854a9"
+    },
+    {
+      "path": "src/components/shared/ConfirmDeleteDialog.tsx",
+      "sha256": "0387342bf8df39ac0a79c026b334b58899c1ef3bf6395610759c0677299c9d10"
+    },
+    {
+      "path": "src/components/shared/ConfirmDeleteDialog.css",
+      "sha256": "a81efe90098da3a4548f93bbc1eaeab8799b5df8b599008ddf882581634277c3"
+    },
+    {
+      "path": "src/components/oa2026/OA2026Controls.tsx",
+      "sha256": "93ff027ae92288777aeeefcdb9c8c0996bbdc3ce4706c4ae339076a7704996c9"
+    },
+    {
+      "path": "src/components/oa2026/OA2026Controls.css",
+      "sha256": "2e243f4b0454b3eb9bd8bb88a0ff46a0b37341cad027b6418adc78b1d38591d6"
+    },
+    {
+      "path": "src/utils/upload.ts",
+      "sha256": "b5f8f1d2460695f7eac021c4c435e6ef7604a14f83c13d7e1f0ff38050df6e49"
+    },
+    {
+      "path": "src/utils/error.ts",
+      "sha256": "562e3985a55a70909fcd6e61f9fdf890567c3fe9f4562ae523ff06ae458c1e20"
+    },
+    {
+      "path": "src/components/business/BusinessPersonnelList.tsx",
+      "sha256": "5658de4815edeb6d06b5f4aac7e045ea0fe3f157b9a8d98efa8234badbfd0dfa"
+    },
+    {
+      "path": "src/components/business/BusinessPersonnelList.css",
+      "sha256": "d35cc22f403c25913187846a320f454920b665f610eee3caca82b2e47fecf4ee"
+    },
+    {
+      "path": "src/components/shared/PersonnelSelect.tsx",
+      "sha256": "5918748d823d9972f0767ae1e3eba6aa167441212356079de56421009979e0d5"
+    },
+    {
+      "path": "src/components/shared/PersonnelSelect.css",
+      "sha256": "7b9bee9a4f76e3d227c61006d4dde3c668fdb82bad056d162e87427153871f8c"
+    },
+    {
+      "path": "src/components/shared/PersonnelName.tsx",
+      "sha256": "2f2a264d1dc215408b619ac493b1508953579813590cd95db92d633db4341019"
+    },
+    {
+      "path": "src/components/shared/PersonnelName.css",
+      "sha256": "2069f23aee3b8e47ab5dd9db7dcfd1d8b0010e30c60cea46b46df4254eea4c72"
+    },
+    {
+      "path": "src/components/shared/CreateActionButton.tsx",
+      "sha256": "0fb3d7a24ee0e218ea590f88ee48f0064927828ad476201605aecacb23fc268d"
+    },
+    {
+      "path": "src/components/shared/CreateActionButton.css",
+      "sha256": "8bb11bbacf17955fabde856812b5639fab7f966e248a29474e78f9026c264003"
+    },
+    {
+      "path": "src/components/project/ProjectWorkspace.css",
+      "sha256": "56b5f8e7964d27cf02227d68ca49c79ec4c3c95e946a5766e951e45026e8152c"
+    },
+    {
+      "path": "src/utils/userRoles.ts",
+      "sha256": "151c6aa35d79ecf67844f3d14d4a63abc2a46374b6da6135c8adce05246ef92a"
+    },
+    {
+      "path": "src/components/business/ContractAndAmendments.tsx",
+      "sha256": "e4d3ef3915c9406430314790921a16e22844ea66706c120ccaadd0910d576cf2"
+    },
+    {
+      "path": "src/components/business/ContractAndAmendments.css",
+      "sha256": "936eeb962ddd5ac1d118723df03f5ebc2f793af658f315b4cdd51771a52c2c04"
+    },
+    {
+      "path": "src/components/business/BusinessPanelSurface.css",
+      "sha256": "29f6c243d0ba4f903976f021bea5089c61cbc6acf13af34033fbef9cb13d42f6"
+    },
+    {
+      "path": "src/components/contract/ContractForm.tsx",
+      "sha256": "65708db83d4a9a3d13b811412446cc6a9dee3fd4f54887753ed5ed6f5d8e0392"
+    },
+    {
+      "path": "src/components/contract/ContractForm.css",
+      "sha256": "e57b3d0cc966ebaf8568404985a379349373d8894e6ef877f76602868961f7a0"
+    },
+    {
+      "path": "src/components/contract/ContractAmendmentForm.tsx",
+      "sha256": "274fea1cabec1cf888cf9a3d16ea4b0a96ca3a504489c863e886abf2c76baa75"
+    },
+    {
+      "path": "src/components/contract/ContractAmendmentList.tsx",
+      "sha256": "2189eec9247462ec8bf91cbafa2a22c5f486a30fc719b9f7a622ca6c06576533"
+    },
+    {
+      "path": "src/components/contract/ContractAmendmentList.css",
+      "sha256": "8959007287608b141ffd803f1b259a0b35d217f220e96720ca214593bf386676"
+    },
+    {
+      "path": "src/components/shared/AttachmentUploader.tsx",
+      "sha256": "8cbcffe2e5478338b5dff121d2c8e1652f2e16dd042f06207ea27c96c34df1a9"
+    },
+    {
+      "path": "src/components/shared/AttachmentUploader.css",
+      "sha256": "9c3c1fefd2579a05bbaf9b76099005da85f81ac55a7d88e22160e08405edd96d"
+    },
+    {
+      "path": "src/components/shared/InlineFilePreviewLayout.tsx",
+      "sha256": "7ca2b88b4d7bf1164a81539f935482b34e91c5ba56a59d39ab6778aeff7c7d1d"
+    },
+    {
+      "path": "src/components/shared/InlineFilePreviewLayout.css",
+      "sha256": "591f523fa62b9022f7d6d45b88b3645fdf7a9330347005bc1170eeeb06f32d99"
+    },
+    {
+      "path": "src/components/shared/FilePreviewPane.tsx",
+      "sha256": "c58d62cbb6d044b98683359277a55a5710e20c6d9d9af03132be67d84f8004bf"
+    },
+    {
+      "path": "src/components/shared/FilePreviewPane.css",
+      "sha256": "d81d9f68b3dbc0ad9697cb6d4f67cdc73e77a175e41ca5008943012e27d151aa"
+    },
+    {
+      "path": "src/utils/contractCache.ts",
+      "sha256": "6d22068c2b9dda3be2356e702a43e062d2bf85269d7b8b54a05aaf7cbede59fc"
+    },
+    {
+      "path": "src/components/business/PaymentRecordList.tsx",
+      "sha256": "0a3e9747f1a04e382e6418dc420ef89edab66bd0fba6f3396a5495a8f673898f"
+    },
+    {
+      "path": "src/components/business/ClientPaymentForm.tsx",
+      "sha256": "2d51129d26246edffe98e7b4652e9608a865e119cd023af8c2c06a2539611073"
+    },
+    {
+      "path": "src/components/business/BusinessTransactionsPanel.css",
+      "sha256": "28efce5c1d2af809da3e3149aab375b445f1fdf07c28e497c69549dfe9218520"
+    },
+    {
+      "path": "src/components/business/BusinessTransactionForms.css",
+      "sha256": "9b6a8411aeb10864f98bd9517e1393e9f7bae32494d01e04a21d3d51dbadc242"
+    },
+    {
+      "path": "src/components/business/InvoiceRecordList.tsx",
+      "sha256": "556a92ada38c8b27adf9fb36def33dbf420df105553a27e09c3db31b902b0c48"
+    },
+    {
+      "path": "src/components/business/OurInvoiceForm.tsx",
+      "sha256": "b8b89a080694e145dc2294c13dfc2e37c0907a539ecf9cd7b3b8644149a40e00"
+    },
+    {
+      "path": "src/components/production/ProductionCostForm.tsx",
+      "sha256": "2e1a8318f098ddb239b61add48e938142a2427f0a932647fd4f1089d82269ea2"
+    },
+    {
+      "path": "src/components/production/ProductionCostList.tsx",
+      "sha256": "d5a3b80ed66e6929d74e3a0d2a37b65f9255c5c7e40091d218d2538338c31635"
+    },
+    {
+      "path": "src/components/production/ProductionCostList.css",
+      "sha256": "bdaa35d06612fa44fe4274ff3bab92968c8f18d61b00d591f3edae3bdfaac1a9"
+    },
+    {
+      "path": "src/components/shared/BonusAllocation.tsx",
+      "sha256": "c1bba4b7d2d4ef1a751fbe703d42b9aead86284ff624e37374e9d208d6b7db88"
+    },
+    {
+      "path": "src/components/shared/BonusAllocationForm.tsx",
+      "sha256": "e94cee1f9a74defd4a24de82512e06806584ff5f1540ff76285e7581b97055ab"
+    },
+    {
+      "path": "src/components/shared/BonusAllocationList.tsx",
+      "sha256": "3c849c7b4f3b5ebc6a882d62121dcf961ad6a70a2e3ee066b83562696de6c7fb"
+    },
+    {
+      "path": "src/components/shared/BonusAllocationStatistics.tsx",
+      "sha256": "cd7e64f70d112aa0cefff0aab70a4c2ec5a0cc59d15aa05b1471bd72677434f2"
+    },
+    {
+      "path": "src/components/shared/BonusAllocation.css",
+      "sha256": "bffbbea6f57ff12337ef429c8219bf5973d40d607819cc187f6b94e4c4a42d0b"
+    }
+  ],
+  "changes": [
+    "ProductionInfo: copied TabLabel/withTabScroll, original ordered type-specific tab descriptors and summary/Tabs render into src/production-layout.tsx; ProductionInfo.css is verbatim. Monolith queries are not copied: selected native Cost/Bonus mounts use existing scoped ports; unimplemented stage/personnel/commission tabs are visibly disabled, unknown summary values remain unknown, not zero. production_tab navigation and hidden-owner no-read are local candidates, not complete ProductionInfo/OA acceptance.",
+    "ProductionCostList/Form: original OA seven-category cards, scope-specific labels, drawer, optional date/description, attachments and inline preview/CSS reused. Native selected Cost-owned typed overlay separates business/production and uses exact string money. Correction/withdrawal append history; withdrawn facts and Evidence bytes retained. Native side/row actions, amount redaction and completed-upload continuation replace generic project role checks. This is a local candidate, not full production or public cost acceptance. Original hashes do not describe adapted destination files.",
+    "OA2026Controls: verbatim BiddingMethodControl slice only; unrelated controls not included",
+    "BiddingFileList: remove physical file deletion; use existing confirmation component and truthful reference-removal copy",
+    "BiddingFileList: replace whole-array update port with explicit appendUploadedFile / removeMaterialReference intents; rendering and styles reused",
+    "BusinessPersonnelList: original list, card, 520px person-only drawer and confirmation reused; explicit purpose adapter, fail-closed reads, historical end, unprovided organization metadata, pending/permission gates only",
+    "ContractAndAmendments / ContractForm / ContractAmendmentForm / ContractAmendmentList: original two-chain columns, drawers, sections, forms and styling reused; exact string money, nullable zero rates, calendar dates, native scoped ports and retained continuation; delayed number selection and distinct Form names fix focus theft and duplicate IDs. Small native-party/date/explicit-activation and amendment-confirmation blocks freeze Base history. Three material slots reuse original AttachmentUploader/FilePreviewDrawer and existing SDK with separate owned references, no physical deletion. Native progress/final settlement is explicit, source-bound, independently shown from preview; final correction, full role/entry/upgrade acceptance remain incomplete. Error dialogs do not throw handled failures; Enter cannot accidentally submit the parent form. Source hashes above describe original files, not modified destination hashes.",
+    "PaymentRecordList / ClientPaymentForm: reuse original two-list composition, 640px drawer, fee badges, dates, amount rows, form grid and original CSS. Replace wide FinancialRecord CRUD with native Money cash and Project classification links; explicit Money parties/account/basis, exact string amount and no default date. Confirmed details read-only, deletion becomes explicit reasoned reversal with preserved history; disabled invoice linkage is named and truthful. Money and Project failures resume original stage/command. These source hashes describe originals, not modified destination hashes.",
+    "InvoiceRecordList / OurInvoiceForm: original double-list/cards/fee badges/date/amount rows, 640px drawer and form grid/CSS reused. Native Billing registration, reasoned append-only correction/history/invalidation, Party active IDs/revisions, exact int64/string amounts and separate Project links replace shared FinancialRecord CRUD. Invoice files use original AttachmentUploader and FilePreviewDrawer through Evidence SDK; completed upload and owner reference confirm separately, removal retains bytes. Deliberate remaining gaps: files are added after structured creation; payment association is disabled; preview uses the separate original drawer rather than inline 1320px expansion. These gaps are not complete OA acceptance. Unknown replies retain original command/stage, no blind amount writes or role-name authorization. Original source hashes do not describe modified destination files."
+  ],
+  "ui_implemented_by_source_components": true
+}

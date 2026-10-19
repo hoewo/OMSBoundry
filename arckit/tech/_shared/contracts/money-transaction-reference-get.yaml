@@ -1,0 +1,35 @@
+# Cash Transaction 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/money-transaction-reference-get.yaml", domain: "money-flow-ledger", owner: "Money Flow Ledger", version: "1.2", created: "2026-09-25", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/references/transactions/{transaction_id}", summary: "向受信工作负载提供最小稳定 Cash Transaction 引用投影", auth_required: true, audience: "money-flow-ledger", capability: "money-flow-ledger.reference.read"}
+request:
+  path_params: [{name: transaction_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: transaction, id_from: transaction_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, resource_type, display_summary, status, revision, transaction_type, currency, effective_amount, allocated_amount, unallocated_amount, occurred_on]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: money-flow-ledger}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: transaction}
+        display_summary: {type: string, minLength: 1, description: "Money Flow 自有的资金流水说明。"}
+        status: {type: string, enum: [recorded, reversed]}
+        revision: {type: integer, const: 1, description: "实际收付款记录不可变；纠错以反向记录表达。"}
+        transaction_type: {type: string, enum: [receipt, payment]}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+        effective_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        allocated_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        unallocated_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        occurred_on: {type: string, format: date}
+  errors:
+    - {status: 401, code: INVALID_CREDENTIAL, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: TRANSACTION_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受单 action、精确 Transaction Scope 的短期凭证。", "C3 只读组合读取实际资金金额、已核销／未核销金额和发生日；不返回账户或相对方。", "消费应用不得据此修改资金事实。"]

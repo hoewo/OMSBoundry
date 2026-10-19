@@ -1,0 +1,336 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+export PROJECT_PEOPLE_BASE_URL=${PROJECT_PEOPLE_BASE_URL:-http://people-groups:8084}
+
+for command in curl jq openssl docker; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --profile contract --profile money --profile people --profile project --profile evidence "$@"
+}
+
+expect_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" \
+    "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" \
+    "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+cookie_value() {
+  cookie_file="$1"
+  cookie_name="$2"
+  awk -F '\t' -v name="$cookie_name" '$6 == name {value=$7} END {print value}' "$cookie_file"
+}
+
+decode_jwt_payload() {
+  token="$1"
+  part=$(printf '%s' "$token" | cut -d. -f2)
+  case $((${#part} % 4)) in
+    0) padding='' ;;
+    2) padding='==' ;;
+    3) padding='=' ;;
+    *) echo "invalid JWT payload encoding" >&2; return 1 ;;
+  esac
+  printf '%s%s' "$part" "$padding" | tr '_-' '/+' | openssl base64 -d -A
+}
+
+fetch_csrf() {
+  cookie_file="$1"
+  curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf" | jq -er .csrf_token
+}
+
+login() {
+  cookie_file="$1"
+  csrf_token="$2"
+  username="$3"
+  password="$4"
+  output_file="$5"
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  expect_status 200 "$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth/api/v1/login")" "login $username"
+}
+
+auth_json() {
+  path="$1"
+  cookie_file="$2"
+  csrf_token="$3"
+  payload="$4"
+  output_file="$5"
+  expected="$6"
+  actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth$path")
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then
+    cat "$output_file" >&2
+    printf '\n' >&2
+  fi
+  expect_status "$expected" "$actual" "$path"
+}
+
+authorize_app() {
+  cookie_file="$1"
+  csrf_token="$2"
+  app_id="$3"
+  resource_type="$4"
+  resource_id="$5"
+  fact_id="${6:-}"
+  fact_revision="${7:-}"
+  expected="$8"
+  output_file="$9"
+  if [ -n "$fact_id" ]; then
+    actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" --data-urlencode business_fact_kind=project_assignment \
+      --data-urlencode business_fact_source=project-workspace --data-urlencode "business_fact_id=$fact_id" \
+      --data-urlencode "business_fact_revision=$fact_revision" "$base_url/gateway/authorize/$app_id")
+  elif [ -n "$resource_id" ]; then
+    actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" "$base_url/gateway/authorize/$app_id")
+  else
+    actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" "$base_url/gateway/authorize/$app_id")
+  fi
+  expect_status "$expected" "$actual" "authorize $app_id"
+}
+
+app_json() {
+  method="$1"
+  prefix="$2"
+  path="$3"
+  cookie_file="$4"
+  payload="$5"
+  output_file="$6"
+  expected="$7"
+  if [ -n "$payload" ]; then
+    actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      -H 'Content-Type: application/json' --data "$payload" "$base_url/$prefix$path")
+  else
+    actual=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/$prefix$path")
+  fi
+  expect_status "$expected" "$actual" "$method /$prefix$path"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-business-fact.XXXXXX")
+cleanup() {
+  compose start identity-access people-groups >/dev/null 2>&1 || true
+  rm -rf "$workspace"
+}
+trap cleanup EXIT HUP INT TERM
+
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$admin_password" ] || { echo "BOOTSTRAP_ADMIN_PASSWORD is required" >&2; exit 2; }
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+operator_username="fact-$stamp"
+operator_password="Fact-policy-$stamp!42"
+payload=$(jq -cn --arg username "$operator_username" --arg display_name "Policy operator $stamp" '{username:$username,display_name:$display_name}')
+auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/invitation.json" 201
+operator_id=$(jq -er .subject.id "$workspace/invitation.json")
+invitation_token=$(jq -er .token "$workspace/invitation.json")
+
+operator_cookies="$workspace/operator.cookies"
+operator_csrf=$(fetch_csrf "$operator_cookies")
+payload=$(jq -cn --arg token "$invitation_token" --arg password "$operator_password" '{token:$token,password:$password}')
+auth_json /api/v1/activate "$operator_cookies" "$operator_csrf" "$payload" "$workspace/activation.json" 200
+login "$operator_cookies" "$operator_csrf" "$operator_username" "$operator_password" "$workspace/operator-login.json"
+
+authorize_app "$admin_cookies" "$admin_csrf" people-groups "" "" "" "" 303 "$workspace/authorize-people.out"
+
+create_person() {
+  display_name="$1"
+  iam_subject_id="$2"
+  output="$3"
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$display_name" --arg iam_subject_id "$iam_subject_id" '{command_id:$command_id,display_name:$display_name,iam_subject_id:(if $iam_subject_id == "" then null else $iam_subject_id end)}')
+  app_json POST people /api/v1/persons "$admin_cookies" "$payload" "$output" 201
+}
+
+create_person "Policy operator $stamp" "$operator_id" "$workspace/person.json"
+person_id=$(jq -er .id "$workspace/person.json")
+person_revision=$(jq -er .revision "$workspace/person.json")
+
+authorize_app "$admin_cookies" "$admin_csrf" project-workspace "" "" "" "" 303 "$workspace/authorize-project-admin.out"
+
+create_project() {
+  number="$1"
+  name="$2"
+  output="$3"
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "$number" --arg name "$name" \
+    '{command_id:$command_id,project_number:$project_number,name:$name,summary:"Business Fact Policy acceptance",planned_start_date:null,planned_end_date:null,project_type_keys:["validation"]}')
+  app_json POST project /api/v1/projects "$admin_cookies" "$payload" "$output" 201
+}
+
+create_project "FACT-A-$stamp" "Fact Project A $stamp" "$workspace/project-a.json"
+create_project "FACT-B-$stamp" "Fact Project B $stamp" "$workspace/project-b.json"
+project_a=$(jq -er .id "$workspace/project-a.json")
+project_b=$(jq -er .id "$workspace/project-b.json")
+
+project_container=$(compose ps -q project-workspace)
+[ -n "$project_container" ] || { echo "Project Workspace is not running" >&2; exit 1; }
+compose exec -T project-workspace sh -eu -c 'test -n "$IAM_SERVICE_CREDENTIAL_URL"; test -n "$WORKLOAD_KEY_FILE"; test -z "${PEOPLE_ACCESS_TOKEN:-}"'
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$person_id" --argjson source_revision "$person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"business_owner"}')
+app_json POST project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$payload" "$workspace/assignment.json" 200
+assignment_id=$(jq -er .assignment.id "$workspace/assignment.json")
+assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/assignment.json")
+
+# Rotation updates the workload key files atomically. Project reloads the active
+# private key on the next exchange; IAM reloads the public bundle per assertion.
+first_workload_key=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT details->>'workload_key_id' FROM iam_audit_entries WHERE action='iam_service_credential_issued' ORDER BY occurred_at DESC LIMIT 1\"")
+[ -n "$first_workload_key" ] || { echo "first workload exchange audit is missing" >&2; exit 1; }
+rotated_workload_key=$(compose run --rm --no-deps project-workload-keys /app/workload-keyctl rotate)
+[ -n "$rotated_workload_key" ] && [ "$rotated_workload_key" != "$first_workload_key" ] || { echo "workload key did not rotate" >&2; exit 1; }
+
+create_person "Rotation reference $stamp" "" "$workspace/person-rotation.json"
+rotation_person_id=$(jq -er .id "$workspace/person-rotation.json")
+rotation_person_revision=$(jq -er .revision "$workspace/person-rotation.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$rotation_person_id" --argjson source_revision "$rotation_person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"participant"}')
+app_json POST project "/api/v1/projects/$project_b/assignments" "$admin_cookies" "$payload" "$workspace/rotation-assignment.json" 200
+second_workload_key=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT details->>'workload_key_id' FROM iam_audit_entries WHERE action='iam_service_credential_issued' ORDER BY occurred_at DESC LIMIT 1\"")
+[ "$second_workload_key" = "$rotated_workload_key" ] || { echo "Project did not acquire a credential with the rotated key" >&2; exit 1; }
+[ "$(compose ps -q project-workspace)" = "$project_container" ] || { echo "Project was recreated during workload key rotation" >&2; exit 1; }
+
+# IAM outage: a reference needing a new exact-resource credential fails closed,
+# while existing Project facts remain readable with the already-issued user credential.
+create_person "IAM outage reference $stamp" "" "$workspace/person-iam-outage.json"
+iam_outage_person=$(jq -er .id "$workspace/person-iam-outage.json")
+iam_outage_revision=$(jq -er .revision "$workspace/person-iam-outage.json")
+create_project "FACT-C-$stamp" "Fact Project C $stamp" "$workspace/project-c.json"
+project_c=$(jq -er .id "$workspace/project-c.json")
+iam_outage_command=$(new_uuid)
+payload=$(jq -cn --arg command_id "$iam_outage_command" --arg person_id "$iam_outage_person" --argjson source_revision "$iam_outage_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"participant"}')
+iam_outage_payload=$payload
+compose stop identity-access >/dev/null
+app_json POST project "/api/v1/projects/$project_c/assignments" "$admin_cookies" "$iam_outage_payload" "$workspace/iam-outage-denied.json" 503
+app_json GET project "/api/v1/projects/$project_a" "$admin_cookies" "" "$workspace/project-readable-during-iam-outage.json" 200
+compose up --detach --no-deps --wait identity-access >/dev/null
+app_json POST project "/api/v1/projects/$project_c/assignments" "$admin_cookies" "$iam_outage_payload" "$workspace/iam-outage-recovered.json" 200
+[ "$(compose ps -q project-workspace)" = "$project_container" ] || { echo "Project was recreated during IAM recovery" >&2; exit 1; }
+
+# People outage has the same fail-closed write / readable-existing-facts boundary.
+create_person "People outage reference $stamp" "" "$workspace/person-people-outage.json"
+people_outage_person=$(jq -er .id "$workspace/person-people-outage.json")
+people_outage_revision=$(jq -er .revision "$workspace/person-people-outage.json")
+create_project "FACT-D-$stamp" "Fact Project D $stamp" "$workspace/project-d.json"
+project_d=$(jq -er .id "$workspace/project-d.json")
+people_outage_command=$(new_uuid)
+payload=$(jq -cn --arg command_id "$people_outage_command" --arg person_id "$people_outage_person" --argjson source_revision "$people_outage_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"participant"}')
+people_outage_payload=$payload
+compose stop people-groups >/dev/null
+app_json POST project "/api/v1/projects/$project_d/assignments" "$admin_cookies" "$people_outage_payload" "$workspace/people-outage-denied.json" 503
+app_json GET project "/api/v1/projects/$project_a" "$admin_cookies" "" "$workspace/project-readable-during-people-outage.json" 200
+compose up --detach --no-deps --wait people-groups >/dev/null
+app_json POST project "/api/v1/projects/$project_d/assignments" "$admin_cookies" "$people_outage_payload" "$workspace/people-outage-recovered.json" 200
+[ "$(compose ps -q project-workspace)" = "$project_container" ] || { echo "Project was recreated during People recovery" >&2; exit 1; }
+
+scope=$(jq -cn --arg project_id "$project_a" '{kind:"resources",resources:[{type:"project",id:$project_id}]}')
+fact=$(jq -cn --arg id "$assignment_id" --argjson revision "$assignment_revision" '{kind:"project_assignment",source:"project-workspace",id:$id,revision:$revision}')
+payload=$(jq -cn --arg audience project-workspace --argjson scope "$scope" --argjson business_fact "$fact" '{audience:$audience,scope:$scope,business_fact:$business_fact}')
+auth_json /api/v1/credentials "$operator_cookies" "$operator_csrf" "$payload" "$workspace/policy-credential.json" 200
+jq -e --arg assignment_id "$assignment_id" --argjson revision "$assignment_revision" '
+  .policy_decision.policy_id == "project-assignment-access" and
+  .policy_decision.policy_version == "1.0.0" and
+  .policy_decision.fact_id == $assignment_id and .policy_decision.fact_revision == $revision and
+  (.claims.actions | sort) == ["project-workspace.read","project-workspace.update"] and
+  .claims.scope.kind == "resources" and (.claims.scope.resources | length) == 1 and
+  (.claims.exp - .claims.iat) <= 300
+' "$workspace/policy-credential.json" >/dev/null
+
+authorize_app "$operator_cookies" "$operator_csrf" project-workspace project "$project_a" "$assignment_id" "$assignment_revision" 303 "$workspace/authorize-project-a.out"
+operator_credential=$(cookie_value "$operator_cookies" oms_cap_project_workspace)
+[ -n "$operator_credential" ] || { echo "Project capability credential is missing" >&2; exit 1; }
+decode_jwt_payload "$operator_credential" >"$workspace/operator-claims.json"
+jq -e --arg project_id "$project_a" '(.actions | sort) == ["project-workspace.read","project-workspace.update"] and .scope.resources == [{"type":"project","id":$project_id}]' "$workspace/operator-claims.json" >/dev/null
+
+app_json GET project "/api/v1/projects/$project_a" "$operator_cookies" "" "$workspace/operator-a.json" 200
+app_json GET project "/api/v1/projects/$project_b" "$operator_cookies" "" "$workspace/operator-b.json" 403
+updated_name="Fact Project A updated $stamp"
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg name "$updated_name" --slurpfile details "$workspace/operator-a.json" '
+  ($details[0].project) as $p |
+  {command_id:$command_id,expected_revision:$p.revision,project_number:$p.project_number,name:$name,
+   summary:$p.summary,planned_start_date:($p.planned_start_date // null),planned_end_date:($p.planned_end_date // null),project_type_keys:$p.project_type_keys}')
+app_json PUT project "/api/v1/projects/$project_a" "$operator_cookies" "$payload" "$workspace/operator-update-a.json" 200
+project_revision=$(jq -er .revision "$workspace/operator-update-a.json")
+
+# A direct, unrelated History grant can be revoked without touching the account
+# or the Business Fact Policy grant.
+grant_payload=$(jq -cn --arg subject_id "$operator_id" --arg audience project-workspace --arg action project-workspace.history.read --argjson scope "$scope" '{subject_id:$subject_id,audience:$audience,action:$action,scope:$scope}')
+auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$grant_payload" /dev/null 204
+auth_json /api/v1/credentials "$operator_cookies" "$operator_csrf" "$(jq -cn --arg audience project-workspace --argjson scope "$scope" --argjson business_fact "$fact" '{audience:$audience,scope:$scope,business_fact:$business_fact}')" "$workspace/before-revoke.json" 200
+jq -e '(.claims.actions | sort) == ["project-workspace.history.read","project-workspace.read","project-workspace.update"]' "$workspace/before-revoke.json" >/dev/null
+auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$grant_payload" "$workspace/revoke.json" 204
+auth_json /api/v1/credentials "$operator_cookies" "$operator_csrf" "$(jq -cn --arg audience project-workspace --argjson scope "$scope" --argjson business_fact "$fact" '{audience:$audience,scope:$scope,business_fact:$business_fact}')" "$workspace/after-revoke.json" 200
+jq -e '(.claims.actions | sort) == ["project-workspace.read","project-workspace.update"]' "$workspace/after-revoke.json" >/dev/null
+
+# Ending the Assignment advances its fact revision and blocks all new policy issuance.
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$assignment_id" --argjson expected_revision "$project_revision" '{command_id:$command_id,expected_revision:$expected_revision,operation:"end",assignment_id:$assignment_id,end_reason:"authorization acceptance end"}')
+app_json POST project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$payload" "$workspace/ended-assignment.json" 200
+ended_revision=$(jq -er .assignment.ended_project_revision "$workspace/ended-assignment.json")
+[ "$ended_revision" -gt "$assignment_revision" ] || { echo "Assignment fact revision did not advance" >&2; exit 1; }
+auth_json /api/v1/credentials "$operator_cookies" "$operator_csrf" "$(jq -cn --arg audience project-workspace --argjson scope "$scope" --argjson business_fact "$fact" '{audience:$audience,scope:$scope,business_fact:$business_fact}')" "$workspace/ended-denial.json" 403
+
+# The already-issued signed credential remains valid only for its documented max TTL.
+app_json GET project "/api/v1/projects/$project_a" "$operator_cookies" "" "$workspace/old-token-after-end.json" 200
+
+audit_counts=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -F"," -c "SELECT count(*) FILTER (WHERE action='"'"'iam_policy_credential_issued'"'"'),count(*) FILTER (WHERE action='"'"'iam_capability_revoked'"'"') FROM iam_audit_entries"')
+policy_audits=${audit_counts%,*}
+revoke_audits=${audit_counts#*,}
+[ "$policy_audits" -ge 3 ] && [ "$revoke_audits" -ge 1 ] || { echo "expected policy and revocation audits, got $audit_counts" >&2; exit 1; }
+service_audits=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='"'"'iam_service_credential_issued'"'"'"')
+[ "$service_audits" -ge 5 ] || { echo "expected service credential audits, got $service_audits" >&2; exit 1; }
+
+printf '%s\n' \
+  "D1 Business Fact Policy authorization acceptance passed:" \
+  "- Nginx and Gateway forwarded an opaque Project Assignment fact reference to IAM" \
+  "- IAM used short-lived signed service credentials to read Project and People versioned facts" \
+  "- Project exchanged replay-protected signed workload assertions for <=60s exact-Person credentials; no static People bearer was configured" \
+  "- workload key rotation was picked up without recreating Project; both key IDs were recorded in immutable IAM audit" \
+  "- IAM or People outage failed new reference validation closed while existing Project facts stayed readable; recovery needed no Project restart" \
+  "- a non-admin subject received only read/update for exactly Project A; Project B was denied" \
+  "- revoking one direct History grant preserved the account, policy-derived read/update, and unrelated authorization" \
+  "- ending the Assignment advanced its revision and denied new issuance; the old token remained bounded to <=300 seconds" \
+  "- policy issuance, service credential exchange, and per-grant revocation were recorded in immutable IAM audit entries"

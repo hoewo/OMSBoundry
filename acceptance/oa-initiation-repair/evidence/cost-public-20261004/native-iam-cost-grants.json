@@ -1,0 +1,64 @@
+{
+  "passed": true,
+  "subject_id": "12e800ac-00bf-4516-8748-b45c5623493a",
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "project_number": "OA-VERIFY-20261002-C",
+  "authorization": "human explicitly approved this and later individually identified acceptance projects; no tenant or customer-project expansion",
+  "audience": "cost-outsourcing",
+  "actions": [
+    "cost-entry.create",
+    "cost-entry.read",
+    "cost-entry.amount.read",
+    "cost-entry.correct",
+    "cost-entry.withdraw",
+    "cost-entry.evidence.manage",
+    "cost-entry.history.read"
+  ],
+  "scope": {
+    "kind": "resources",
+    "resources": [
+      {
+        "type": "business_cost_project",
+        "id": "70edead7-9dc9-44a3-9b35-b9d41b83264e"
+      },
+      {
+        "type": "production_cost_project",
+        "id": "70edead7-9dc9-44a3-9b35-b9d41b83264e"
+      }
+    ]
+  },
+  "native_iam_requests": [
+    {
+      "action": "cost-entry.create",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.read",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.amount.read",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.correct",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.withdraw",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.evidence.manage",
+      "status": 204
+    },
+    {
+      "action": "cost-entry.history.read",
+      "status": 204
+    }
+  ],
+  "resource_rows": 14,
+  "other_resource_grants_unchanged": true,
+  "tenant_grants_unchanged": true,
+  "business_facts_sequences_unchanged": true
+}

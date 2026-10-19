@@ -1,0 +1,22 @@
+# Optional D1 profile extension v1. App/data networks remain internal.
+# The external network must be provisioned and IMDS-guarded before startup.
+services:
+  evidence-service:
+    environment:
+      STORAGE_PROVIDER: ${D1_EVIDENCE_STORAGE_PROVIDER:?set explicit OSS storage mode}
+      PRIMARY_STORAGE_PROVIDER: ${EVIDENCE_PRIMARY_STORAGE_PROVIDER:-}
+      OSS_REGION: ${EVIDENCE_OSS_REGION:?set OSS region}
+      OSS_BUCKET: ${EVIDENCE_OSS_BUCKET:?set private files bucket}
+      OSS_ROLE_ARN: ${EVIDENCE_OSS_UPLOAD_ROLE_ARN:?set bounded upload role ARN}
+      OSS_BROWSER_ENDPOINT: ${EVIDENCE_OSS_BROWSER_ENDPOINT:?set public files endpoint}
+      OSS_BROWSER_CNAME: ${EVIDENCE_OSS_BROWSER_CNAME:-false}
+      OSS_SERVICE_ENDPOINT: ${EVIDENCE_OSS_SERVICE_ENDPOINT:?set server-side endpoint}
+      OSS_STS_ENDPOINT: ${EVIDENCE_OSS_STS_ENDPOINT:?set STS endpoint}
+      ALIBABA_CLOUD_ECS_METADATA: ${EVIDENCE_ECS_ROLE_NAME:?set instance service role}
+      ALIBABA_CLOUD_ECS_IMDSV2_ENABLE: "true"
+    networks: [app, data, evidence-egress]
+
+networks:
+  evidence-egress:
+    external: true
+    name: ${EVIDENCE_EGRESS_NETWORK:?set pre-provisioned guarded network}

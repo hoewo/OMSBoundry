@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>当前经营收支汇总 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary" aria-current="page">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>当前经营收支汇总</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>按本方账簿主体和币种隔离，只汇总当前正式义务余额、当前有效实际收付款和未分配资金。未分配金额是有效资金的一部分，不应再次相加。</p>
+    <p>生成时间：{{.Report.GeneratedAt}}</p>
+
+    {{if .Report.Groups}}
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">本方账簿主体</th>
+          <th scope="col">币种</th>
+          <th scope="col">当前应收余额</th>
+          <th scope="col">当前应付余额</th>
+          <th scope="col">当前有效实际收款</th>
+          <th scope="col">当前有效实际付款</th>
+          <th scope="col">未分配收款</th>
+          <th scope="col">未分配付款</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.Groups}}
+        <tr>
+          <td>{{.LedgerOwnerLegalName}}<br><small>{{.LedgerOwnerPartyID}}</small></td>
+          <td>{{.Currency}}</td>
+          <td>{{if .ReceivableOutstanding.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.ReceivableOutstanding.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.ReceivableOutstanding.Amount}} {{.Currency}}（{{.ReceivableOutstanding.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+          <td>{{if .PayableOutstanding.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.PayableOutstanding.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.PayableOutstanding.Amount}} {{.Currency}}（{{.PayableOutstanding.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+          <td>{{if .ReceiptEffective.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.ReceiptEffective.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.ReceiptEffective.Amount}} {{.Currency}}（{{.ReceiptEffective.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+          <td>{{if .PaymentEffective.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.PaymentEffective.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.PaymentEffective.Amount}} {{.Currency}}（{{.PaymentEffective.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+          <td>{{if .ReceiptUnallocated.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.ReceiptUnallocated.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.ReceiptUnallocated.Amount}} {{.Currency}}（{{.ReceiptUnallocated.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+          <td>{{if .PaymentUnallocated.FactCount}}<a href="{{basePath}}/operating-summary/details?metric={{.PaymentUnallocated.Metric}}&amp;ledger_owner_party_id={{.LedgerOwnerPartyID}}&amp;currency={{.Currency}}">{{.PaymentUnallocated.Amount}} {{.Currency}}（{{.PaymentUnallocated.FactCount}} 条）</a>{{else}}0 {{.Currency}}{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p>当前没有正金额的正式义务余额或有效经营收付款。</p>
+    {{end}}
+
+    <p>本页不是会计收入、利润、银行账户余额或历史报表；Internal Transfer、退款、坏账、票据和 Contract Ledger 均未混入。</p>
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

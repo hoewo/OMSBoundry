@@ -1,0 +1,29 @@
+{
+  "passed": false,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": true,
+  "identity_template": true,
+  "production_iam": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "mixed-business",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#business').getByRole('button', { name: '分配奖金', exact: true })\u001b[22m\n"
+  },
+  "post_attempt_count": 0,
+  "page_errors": []
+}

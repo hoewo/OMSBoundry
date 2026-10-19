@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "main_changed": false,
+  "public_tls_accepted": false,
+  "clean_host_release_accepted": false,
+  "full_suite_accepted": false,
+  "full_oa_accepted": false,
+  "selected_apps": [
+    "identity-access",
+    "contract-ledger",
+    "people-groups",
+    "project-workspace",
+    "evidence-service",
+    "bonus-distribution",
+    "unified-workbench",
+    "gateway"
+  ],
+  "scenarios": [],
+  "stage": "fixture",
+  "error": "preflight-upgrade failed; see private log 2\n\n1 !== 0\n",
+  "page_errors": [],
+  "cleanup": {
+    "runtime_stopped": true,
+    "private_volumes_and_backups_retained": true,
+    "projects": {
+      "source": "oa-professional-169a5a0b-source",
+      "target": "oa-professional-169a5a0b-restore"
+    }
+  }
+}

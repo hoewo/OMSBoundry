@@ -1,0 +1,475 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+overlay=${C3_ROLE_OVERLAY:-"$repo_dir/contracts/access/v1/examples/reference-oa-c1-role-overlay.json"}
+
+for command in curl jq openssl docker awk sed sort; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$overlay" ] || { echo "C3 role overlay not found: $overlay" >&2; exit 2; }
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" --file "$d1_dir/compose.yaml" \
+    --profile contract --profile money --profile people --profile party --profile project --profile evidence \
+    --profile business-engagement --profile billing "$@"
+}
+
+expect_status() {
+  expected="$1"; actual="$2"; label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" \
+    "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" \
+    "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+hidden_value() {
+  name="$1"; file="$2"
+  sed -n "s/.*name=\"$name\" value=\"\([^\"]*\)\".*/\1/p" "$file" | head -1
+}
+
+cookie_value() {
+  cookie_file="$1"; cookie_name="$2"
+  awk -F '\t' -v name="$cookie_name" '$6 == name {value=$7} END {print value}' "$cookie_file"
+}
+
+fetch_csrf() {
+  cookie_file="$1"
+  result=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code} %{time_total}' \
+    --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"
+  expect_status 200 "$actual" 'fetch IAM csrf'
+  jq -er .csrf_token "$workspace/csrf.json"
+}
+
+login() {
+  cookie_file="$1"; csrf_token="$2"; username="$3"; password="$4"; output_file="$5"; expected="${6:-200}"
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth/api/v1/login")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /auth/api/v1/login' "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "login $username"
+}
+
+auth_json() {
+  path="$1"; cookie_file="$2"; csrf_token="$3"; payload="$4"; output_file="$5"; expected="$6"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "$path"
+}
+
+authorize_app() {
+  cookie_file="$1"; csrf_token="$2"; application_id="$3"; output_file="$4"; expected="${5:-303}"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" --data-urlencode "csrf_token=$csrf_token" \
+    "$base_url/gateway/authorize/$application_id")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$application_id" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "authorize $application_id"
+}
+
+project_json() {
+  method="$1"; path="$2"; cookie_file="$3"; payload="$4"; output_file="$5"; expected="$6"
+  if [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      -H 'Content-Type: application/json' --data "$payload" "$base_url/project$path")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/project$path")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$method /project$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then
+    printf '%s\n' "Project response for $method $path:" >&2
+    cat "$output_file" >&2
+    printf '\n' >&2
+  fi
+  expect_status "$expected" "$actual" "$method /project$path"
+}
+
+summary_get() {
+  cookie_file="$1"; output_file="$2"; expected="$3"; label="$4"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" "$base_url/project/api/v1/projects/$project_id/commercial-summary")
+  actual=${result%% *}; duration=${result#* }
+  record_http "GET /project/api/v1/projects/{id}/commercial-summary ($label)" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "$label"
+}
+
+post_form() {
+  app_path="$1"; cookie_file="$2"; output_prefix="$3"; shift 3
+  result=$(curl --silent --show-error --output "$output_prefix.body" --dump-header "$output_prefix.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$cookie_file" --cookie-jar "$cookie_file" "$@" "$base_url$app_path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST $app_path" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "POST $app_path"
+}
+
+location_value() {
+  key="$1"; headers="$2"
+  sed -n "s/.*[?&]$key=\([^&[:space:]]*\).*/\1/p" "$headers" | tr -d '\r' | head -1
+}
+
+location_resource_id() {
+  resource="$1"; headers="$2"
+  sed -n "s#^[Ll]ocation: .*\/$resource\/\([0-9a-f-]*\).*#\1#p" "$headers" | tr -d '\r' | head -1
+}
+
+assert_summary_all_available() {
+  file="$1"
+  jq -e --arg project_id "$project_id" --arg contract_id "$contract_id" --arg obligation_id "$obligation_id" \
+    --arg transaction_id "$transaction_id" --arg invoice_id "$invoice_id" '
+    .project_id == $project_id and .project_revision == 6 and
+    [.segments[].resource_type] == ["contract","obligation","transaction","invoice_registration"] and
+    all(.segments[]; .state == "available" and .source_revision == 1 and .linked_revision == 1) and
+    (.segments[0] | .resource_id == $contract_id and .contract.currency == "CNY" and (.contract.current_effective_amount | tonumber) == 100000) and
+    (.segments[1] | .resource_id == $obligation_id and .obligation.direction == "receivable" and (.obligation.effective_amount | tonumber) == 60000) and
+    (.segments[2] | .resource_id == $transaction_id and .transaction.transaction_type == "receipt" and (.transaction.effective_amount | tonumber) == 25000) and
+    (.segments[3] | .resource_id == $invoice_id and .invoice_registration.amount_minor == 3000000 and .invoice_registration.currency == "CNY")
+  ' "$file" >/dev/null || { echo "commercial summary did not preserve typed source facts" >&2; cat "$file" >&2; exit 1; }
+}
+
+assert_state() {
+  file="$1"; resource_type="$2"; expected="$3"
+  jq -e --arg resource_type "$resource_type" --arg expected "$expected" \
+    'any(.segments[]; .resource_type == $resource_type and .state == $expected)' "$file" >/dev/null || {
+      echo "$resource_type was not $expected" >&2; cat "$file" >&2; exit 1;
+    }
+}
+
+wait_healthy() {
+  service="$1"; attempts=0
+  while :; do
+    container_id=$(compose ps -q "$service")
+    health=""
+    [ -z "$container_id" ] || health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")
+    [ "$health" = healthy ] && return 0
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 45 ] || { echo "$service did not become healthy" >&2; return 1; }
+    sleep 1
+  done
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c3-commercial.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+services_stopped=false
+cleanup() {
+  if [ "$services_stopped" = true ]; then
+    compose start identity-access contract-ledger money-flow-ledger billing-invoice >/dev/null 2>&1 || true
+  fi
+  D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null 2>&1 || true
+  if [ -n "${C3_EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$C3_EVIDENCE_DIR"
+    for artifact in http-evidence.tsv c3-summary.json performance.tsv result.md ids.json; do
+      [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$C3_EVIDENCE_DIR/$artifact"
+    done
+  fi
+  rm -rf "$workspace"
+}
+trap cleanup EXIT HUP INT TERM
+
+jq -e '
+  .overlay_id == "reference-oa-c1" and .overlay_version == "1.1.0" and
+  (.site_roles.general_manager.actions | index("project-workspace.commercial-summary.read")) != null and
+  (.site_roles.finance.actions | index("project-workspace.commercial-summary.read")) != null and
+  (.site_roles.production_manager.actions | index("project-workspace.commercial-summary.read")) == null
+' "$overlay" >/dev/null
+
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$admin_password" ] || { echo 'BOOTSTRAP_ADMIN_PASSWORD is required' >&2; exit 2; }
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+admin_subject_id=$(curl --fail --silent --show-error --cookie "$admin_cookies" "$base_url/auth/api/v1/session" | jq -er .principal.subject_id)
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+
+for application_id in party-directory contract-ledger money-flow-ledger project-workspace billing-invoice; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$application_id" "$workspace/admin-authorize-$application_id.out"
+done
+
+echo '[1/8] 建立 Project、Contract、Money 与 Billing 来源事实'
+project_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "C3-$stamp" --arg name "C3 项目经营验证 $stamp" \
+  '{command_id:$command_id,project_number:$project_number,name:$name,summary:"C3 typed read composition",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+project_json POST /api/v1/projects "$admin_cookies" "$project_payload" "$workspace/project.json" 201
+project_id=$(jq -er .id "$workspace/project.json")
+initiation_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:1}')
+project_json POST "/api/v1/projects/$project_id/complete-initiation" "$admin_cookies" "$initiation_payload" "$workspace/project-pending.json" 422
+jq -e '.error.code == "initiation_incomplete" and .error.project.status == "pending_completion" and .error.project.revision == 2' "$workspace/project-pending.json" >/dev/null || {
+  echo 'Project did not enter pending_completion revision 2' >&2; cat "$workspace/project-pending.json" >&2; exit 1;
+}
+
+curl --fail --silent --show-error --cookie "$admin_cookies" --cookie-jar "$admin_cookies" "$base_url/contract/contracts" >"$workspace/contract-form.html"
+contract_csrf=$(hidden_value csrf_token "$workspace/contract-form.html")
+contract_command=$(hidden_value command_id "$workspace/contract-form.html")
+[ -n "$contract_csrf" ] && [ -n "$contract_command" ] || { echo 'Contract form tokens are missing' >&2; exit 1; }
+post_form /contract/contracts "$admin_cookies" "$workspace/contract-create" \
+  --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" \
+  --data-urlencode number_namespace=C3 --data-urlencode "contract_number=C3-CONTRACT-$stamp" \
+  --data-urlencode "title=C3 主合同 $stamp" --data-urlencode category=design \
+  --data-urlencode currency=CNY --data-urlencode total_amount=100000.00 \
+  --data-urlencode signed_on= --data-urlencode effective_on=
+contract_id=$(location_value contract_id "$workspace/contract-create.headers")
+[ -n "$contract_id" ] || { echo 'Contract id is missing from redirect' >&2; cat "$workspace/contract-create.headers" >&2; exit 1; }
+
+create_money_party() {
+  slug="$1"; name="$2"
+  curl --fail --silent --show-error --cookie "$admin_cookies" --cookie-jar "$admin_cookies" "$base_url/money/parties" >"$workspace/money-party-$slug.html"
+  csrf_token=$(hidden_value csrf_token "$workspace/money-party-$slug.html")
+  command_id=$(hidden_value command_id "$workspace/money-party-$slug.html")
+  post_form /money/parties "$admin_cookies" "$workspace/money-party-$slug-create" \
+    --data-urlencode "csrf_token=$csrf_token" --data-urlencode "command_id=$command_id" \
+    --data-urlencode kind=organization --data-urlencode "legal_name=$name" \
+    --data-urlencode "registration_identifier=C3-MONEY-$slug-$stamp"
+  location_value party_id "$workspace/money-party-$slug-create.headers"
+}
+money_owner_id=$(create_money_party owner "C3 本方 $stamp")
+money_counterparty_id=$(create_money_party counterparty "C3 客户 $stamp")
+[ -n "$money_owner_id" ] && [ -n "$money_counterparty_id" ] || { echo 'Money party ids are missing' >&2; exit 1; }
+
+curl --fail --silent --show-error --cookie "$admin_cookies" --cookie-jar "$admin_cookies" "$base_url/money/obligations" >"$workspace/obligation-form.html"
+money_csrf=$(hidden_value csrf_token "$workspace/obligation-form.html")
+money_command=$(hidden_value command_id "$workspace/obligation-form.html")
+post_form /money/obligations "$admin_cookies" "$workspace/obligation-create" \
+  --data-urlencode "csrf_token=$money_csrf" --data-urlencode "command_id=$money_command" \
+  --data-urlencode direction=receivable --data-urlencode "ledger_owner_party_id=$money_owner_id" \
+  --data-urlencode "counterparty_party_id=$money_counterparty_id" --data-urlencode "title=C3 合同首期应收 $stamp" \
+  --data-urlencode original_amount=60000.00 --data-urlencode currency=CNY \
+  --data-urlencode "due_on=$(date -u -v+30d '+%Y-%m-%d' 2>/dev/null || date -u -d '+30 days' '+%Y-%m-%d')" \
+  --data-urlencode "manual_source_reference=C3-CONTRACT-$stamp"
+obligation_id=$(location_resource_id obligations "$workspace/obligation-create.headers")
+[ -n "$obligation_id" ] || { echo 'Obligation id is missing from redirect' >&2; cat "$workspace/obligation-create.headers" >&2; exit 1; }
+
+curl --fail --silent --show-error --cookie "$admin_cookies" --cookie-jar "$admin_cookies" "$base_url/money/cash-transactions" >"$workspace/transaction-form.html"
+money_csrf=$(hidden_value csrf_token "$workspace/transaction-form.html")
+money_command=$(hidden_value command_id "$workspace/transaction-form.html")
+post_form /money/cash-transactions "$admin_cookies" "$workspace/transaction-create" \
+  --data-urlencode "csrf_token=$money_csrf" --data-urlencode "command_id=$money_command" \
+  --data-urlencode type=receipt --data-urlencode "ledger_owner_party_id=$money_owner_id" \
+  --data-urlencode "counterparty_party_id=$money_counterparty_id" --data-urlencode "description=C3 首期回款 $stamp" \
+  --data-urlencode amount=25000.00 --data-urlencode currency=CNY --data-urlencode "occurred_on=$(date -u '+%Y-%m-%d')" \
+  --data-urlencode account_reference=C3-ACCOUNT --data-urlencode "manual_source_reference=C3-CONTRACT-$stamp" \
+  --data-urlencode "external_transaction_reference=C3-TX-$stamp"
+transaction_id=$(location_resource_id cash-transactions "$workspace/transaction-create.headers")
+[ -n "$transaction_id" ] || { echo 'Transaction id is missing from redirect' >&2; cat "$workspace/transaction-create.headers" >&2; exit 1; }
+
+create_party_directory_party() {
+  slug="$1"; name="$2"
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg legal_name "$name" --arg registration_identifier "C3-PARTY-$slug-$stamp" \
+    '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+  result=$(curl --silent --show-error --output "$workspace/party-$slug.json" --write-out '%{http_code} %{time_total}' \
+    --cookie "$admin_cookies" -H 'Content-Type: application/json' --data "$payload" "$base_url/party/api/v1/parties")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /party/api/v1/parties' 201 "$actual" "$duration"
+  expect_status 201 "$actual" "create Party Directory $slug"
+}
+create_party_directory_party issuer "C3 开票方 $stamp"
+create_party_directory_party recipient "C3 收票方 $stamp"
+issuer_id=$(jq -er .id "$workspace/party-issuer.json"); issuer_revision=$(jq -er .revision "$workspace/party-issuer.json")
+recipient_id=$(jq -er .id "$workspace/party-recipient.json"); recipient_revision=$(jq -er .revision "$workspace/party-recipient.json")
+billing_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg issued_on "$(date -u '+%Y-%m-%d')" \
+  --arg issuer_id "$issuer_id" --argjson issuer_revision "$issuer_revision" \
+  --arg recipient_id "$recipient_id" --argjson recipient_revision "$recipient_revision" \
+  --arg project_id "$project_id" \
+  '{command_id:$command_id,issued_on:$issued_on,amount_minor:3000000,currency:"CNY",issuer_party_ref:{id:$issuer_id,revision:$issuer_revision},recipient_party_ref:{id:$recipient_id,revision:$recipient_revision},source_refs:[{kind:"project",resource_id:$project_id,source_revision:2}],note:"C3 invoice registration"}')
+result=$(curl --silent --show-error --output "$workspace/invoice.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$admin_cookies" -H 'Content-Type: application/json' --data "$billing_payload" "$base_url/billing/api/v1/invoice-registrations")
+actual=${result%% *}; duration=${result#* }
+record_http 'POST /billing/api/v1/invoice-registrations' 201 "$actual" "$duration"
+[ "$actual" = 201 ] || { echo 'Billing registration response:' >&2; cat "$workspace/invoice.json" >&2; printf '\n' >&2; }
+expect_status 201 "$actual" 'create Billing registration'
+invoice_id=$(jq -er .id "$workspace/invoice.json")
+
+echo '[2/8] 通过 Project Resource Link 连接四类来源'
+project_revision=2
+link_resource() {
+  service="$1"; resource_type="$2"; resource_id="$3"; relation_key="$4"; output="$5"
+  printf '  - %s / %s / %s\n' "$service" "$resource_type" "$resource_id"
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson expected_revision "$project_revision" \
+    --arg service "$service" --arg resource_type "$resource_type" --arg resource_id "$resource_id" --arg relation_key "$relation_key" \
+    '{command_id:$command_id,expected_revision:$expected_revision,operation:"link",target_service:$service,resource_type:$resource_type,resource_id:$resource_id,source_revision:1,relation_key:$relation_key,note:"C3 validation"}')
+  project_json POST "/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$payload" "$output" 200
+  project_revision=$(jq -er .project.revision "$output")
+}
+link_resource contract-ledger contract "$contract_id" primary-contract "$workspace/link-contract.json"
+link_resource money-flow-ledger obligation "$obligation_id" receivable "$workspace/link-obligation.json"
+link_resource money-flow-ledger transaction "$transaction_id" receipt "$workspace/link-transaction.json"
+link_resource billing-invoice invoice_registration "$invoice_id" invoice-registration "$workspace/link-invoice.json"
+[ "$project_revision" = 6 ] || { echo "Project revision=$project_revision, expected 6" >&2; exit 1; }
+
+echo '[3/8] 验证类型化分段、顺序、未知不等于 0 与精确工作负载凭证'
+summary_get "$admin_cookies" "$workspace/c3-summary.json" 200 baseline
+assert_summary_all_available "$workspace/c3-summary.json"
+for expectation in \
+  "contract-ledger|contract-ledger.reference.read|contract|$contract_id" \
+  "money-flow-ledger|money-flow-ledger.reference.read|obligation|$obligation_id" \
+  "money-flow-ledger|money-flow-ledger.reference.read|transaction|$transaction_id" \
+  "billing-invoice|billing-invoice.reference.read|invoice_registration|$invoice_id"
+do
+  IFS='|' read -r audience action resource_type resource_id <<EOF
+$expectation
+EOF
+  count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='$audience' AND details->'actions' @> '[\\\"$action\\\"]'::jsonb AND details->'scope'->'resources' @> '[{\\\"type\\\":\\\"$resource_type\\\",\\\"id\\\":\\\"$resource_id\\\"}]'::jsonb\"")
+  [ "$count" -ge 1 ] || { echo "missing exact workload audit: $expectation" >&2; exit 1; }
+done
+
+echo '[4/8] 验证参考 OA 角色：总经理／财务允许，生产经理拒绝'
+create_actor() {
+  role="$1"; display_name="$2"; username="c3-$(printf '%s' "$role" | tr '_' '-')-$stamp"; password="C3-${role}-${stamp}!Aa7"
+  payload=$(jq -cn --arg username "$username" --arg display_name "$display_name" '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/$role-invitation.json" 201
+  subject_id=$(jq -er .subject.id "$workspace/$role-invitation.json"); token=$(jq -er .token "$workspace/$role-invitation.json")
+  cookie_file="$workspace/$role.cookies"; csrf_token=$(fetch_csrf "$cookie_file")
+  payload=$(jq -cn --arg token "$token" --arg password "$password" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$cookie_file" "$csrf_token" "$payload" "$workspace/$role-activation.json" 200
+  login "$cookie_file" "$csrf_token" "$username" "$password" "$workspace/$role-login.json"
+  jq -cn --arg subject_id "$subject_id" --arg username "$username" --arg password "$password" --arg csrf "$csrf_token" \
+    '{subject_id:$subject_id,username:$username,password:$password,csrf:$csrf}' >"$workspace/$role-meta.json"
+  jq -r --arg role "$role" '.site_roles[$role].actions[]' "$overlay" | while IFS= read -r action; do
+    payload=$(jq -cn --arg subject_id "$subject_id" --arg action "$action" '{subject_id:$subject_id,audience:"project-workspace",action:$action}')
+    auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+  done
+}
+create_actor general_manager 总经理
+create_actor finance 财务
+create_actor production_manager 生产经理
+
+for role in general_manager finance production_manager; do
+  role_csrf=$(jq -er .csrf "$workspace/$role-meta.json")
+  authorize_app "$workspace/$role.cookies" "$role_csrf" project-workspace "$workspace/$role-authorize.out"
+  project_json GET "/api/v1/projects/$project_id" "$workspace/$role.cookies" '' "$workspace/$role-project.json" 200
+done
+jq -e '(.allowed_actions | index("project-workspace.commercial-summary.read")) != null' "$workspace/general_manager-project.json" >/dev/null
+jq -e '(.allowed_actions | index("project-workspace.commercial-summary.read")) != null' "$workspace/finance-project.json" >/dev/null
+jq -e '(.allowed_actions | index("project-workspace.commercial-summary.read")) == null' "$workspace/production_manager-project.json" >/dev/null
+summary_get "$workspace/general_manager.cookies" "$workspace/general-manager-summary.json" 200 general-manager-allowed
+summary_get "$workspace/finance.cookies" "$workspace/finance-summary.json" 200 finance-allowed
+summary_get "$workspace/production_manager.cookies" "$workspace/production-manager-summary.json" 403 production-manager-denied
+
+echo '[5/8] 验证撤权、重新签发与账号停用'
+finance_subject=$(jq -er .subject_id "$workspace/finance-meta.json")
+finance_csrf=$(jq -er .csrf "$workspace/finance-meta.json")
+payload=$(jq -cn --arg subject_id "$finance_subject" '{subject_id:$subject_id,audience:"project-workspace",action:"project-workspace.commercial-summary.read"}')
+auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+summary_get "$workspace/finance.cookies" "$workspace/finance-old-credential.json" 200 revoked-residual-window
+authorize_app "$workspace/finance.cookies" "$finance_csrf" project-workspace "$workspace/finance-refresh-after-revoke.out"
+summary_get "$workspace/finance.cookies" "$workspace/finance-after-revoke.json" 403 revoked-fresh-credential
+auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+authorize_app "$workspace/finance.cookies" "$finance_csrf" project-workspace "$workspace/finance-refresh-after-restore.out"
+summary_get "$workspace/finance.cookies" "$workspace/finance-after-restore.json" 200 restored-fresh-credential
+payload=$(jq -cn --arg subject_id "$finance_subject" '{subject_id:$subject_id,status:"disabled"}')
+auth_json /api/v1/admin/status "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+summary_get "$workspace/finance.cookies" "$workspace/finance-disabled-residual.json" 200 disabled-residual-window
+result=$(curl --silent --show-error --output "$workspace/finance-disabled-session.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$workspace/finance.cookies" "$base_url/auth/api/v1/session")
+actual=${result%% *}; duration=${result#* }; record_http 'GET /auth/api/v1/session disabled' 401 "$actual" "$duration"; expect_status 401 "$actual" 'disabled finance session'
+authorize_app "$workspace/finance.cookies" "$finance_csrf" project-workspace "$workspace/finance-disabled-authorize.json" 401
+[ -z "$(cookie_value "$workspace/finance.cookies" oms_cap_project_workspace)" ] || { echo 'disabled account retained Project credential after refresh' >&2; exit 1; }
+
+echo '[6/8] 测量并行组合耗时与串行等价分段耗时'
+printf 'parallel_ms\tserial_equivalent_ms\n' >"$workspace/performance.tsv"
+index=1
+while [ "$index" -le 30 ]; do
+  summary_get "$admin_cookies" "$workspace/perf-$index.json" 200 "performance-$index"
+  jq -r '[.total_duration_ms, ([.segments[].duration_ms] | add // 0)] | @tsv' "$workspace/perf-$index.json" >>"$workspace/performance.tsv"
+  index=$((index + 1))
+done
+parallel_p50=$(tail -n +2 "$workspace/performance.tsv" | cut -f1 | sort -n | sed -n '15p')
+parallel_p95=$(tail -n +2 "$workspace/performance.tsv" | cut -f1 | sort -n | sed -n '29p')
+serial_p50=$(tail -n +2 "$workspace/performance.tsv" | cut -f2 | sort -n | sed -n '15p')
+serial_p95=$(tail -n +2 "$workspace/performance.tsv" | cut -f2 | sort -n | sed -n '29p')
+[ "$parallel_p95" -le 800 ] || { echo "parallel p95=${parallel_p95}ms exceeds 800ms" >&2; exit 1; }
+
+if [ "${C3_ENABLE_FAULTS:-false}" = true ]; then
+  echo '[7/8] 注入 Contract、Money、Billing 与 IAM 故障并验证局部降级／恢复'
+  services_stopped=true
+  compose stop contract-ledger >/dev/null
+  summary_get "$admin_cookies" "$workspace/contract-outage.json" 200 contract-outage
+  assert_state "$workspace/contract-outage.json" contract unavailable
+  assert_state "$workspace/contract-outage.json" obligation available
+  assert_state "$workspace/contract-outage.json" invoice_registration available
+  compose up --detach --no-deps --no-build contract-ledger >/dev/null; wait_healthy contract-ledger
+  summary_get "$admin_cookies" "$workspace/contract-recovered.json" 200 contract-recovered; assert_summary_all_available "$workspace/contract-recovered.json"
+
+  compose stop money-flow-ledger >/dev/null
+  summary_get "$admin_cookies" "$workspace/money-outage.json" 200 money-outage
+  assert_state "$workspace/money-outage.json" obligation unavailable
+  assert_state "$workspace/money-outage.json" transaction unavailable
+  assert_state "$workspace/money-outage.json" contract available
+  compose up --detach --no-deps --no-build money-flow-ledger >/dev/null; wait_healthy money-flow-ledger
+  summary_get "$admin_cookies" "$workspace/money-recovered.json" 200 money-recovered; assert_summary_all_available "$workspace/money-recovered.json"
+
+  compose stop billing-invoice >/dev/null
+  summary_get "$admin_cookies" "$workspace/billing-outage.json" 200 billing-outage
+  assert_state "$workspace/billing-outage.json" invoice_registration unavailable
+  assert_state "$workspace/billing-outage.json" contract available
+  compose up --detach --no-deps --no-build billing-invoice >/dev/null; wait_healthy billing-invoice
+  summary_get "$admin_cookies" "$workspace/billing-recovered.json" 200 billing-recovered; assert_summary_all_available "$workspace/billing-recovered.json"
+
+  compose stop identity-access >/dev/null
+  compose up --detach --no-deps --no-build --force-recreate project-workspace >/dev/null
+  wait_healthy project-workspace
+  summary_get "$admin_cookies" "$workspace/iam-outage.json" 200 iam-outage
+  jq -e 'all(.segments[]; .state == "unavailable")' "$workspace/iam-outage.json" >/dev/null || { echo 'IAM outage did not fail every fresh service credential exchange' >&2; exit 1; }
+  compose up --detach --no-deps --no-build identity-access >/dev/null; wait_healthy identity-access
+  summary_get "$admin_cookies" "$workspace/iam-recovered.json" 200 iam-recovered; assert_summary_all_available "$workspace/iam-recovered.json"
+  services_stopped=false
+else
+  echo '[7/8] 未启用故障注入；设置 C3_ENABLE_FAULTS=true 可执行停服矩阵'
+fi
+
+echo '[8/8] 固化可复核证据'
+jq -cn --arg project_id "$project_id" --arg contract_id "$contract_id" --arg obligation_id "$obligation_id" \
+  --arg transaction_id "$transaction_id" --arg invoice_id "$invoice_id" \
+  '{project_id:$project_id,contract_id:$contract_id,obligation_id:$obligation_id,transaction_id:$transaction_id,invoice_registration_id:$invoice_id}' >"$workspace/ids.json"
+assertions=$(awk -F '\t' 'NR > 1 {count++} END {print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR > 1 && $2 != $3 {count++} END {print count+0}' "$http_evidence")
+cat >"$workspace/result.md" <<EOF
+# C3 D1 运行验收结果
+
+- HTTP 断言：$assertions
+- 状态不匹配：$mismatches
+- Project：${project_id}（revision ${project_revision}）
+- 四类来源：Contract、Obligation、Transaction、Invoice Registration 全部类型化可读
+- 角色矩阵：总经理允许、财务允许、生产经理拒绝
+- 权限变化：撤权残余窗口可解释；重新签发后 403；恢复后 200；账号停用后新签发 401
+- 并行组合 p50/p95：${parallel_p50}ms / ${parallel_p95}ms
+- 同批来源分段耗时串行等价 p50/p95：${serial_p50}ms / ${serial_p95}ms
+- 故障矩阵：${C3_ENABLE_FAULTS:-false}
+EOF
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat "$workspace/result.md"

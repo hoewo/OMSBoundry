@@ -1,0 +1,42 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+project=${D1_PROJECT_NAME:-omsd1c6}
+base_url=${D1_PUBLIC_URL:-http://127.0.0.1:18170}
+evidence_dir=${C6_D1_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c6-d1-evidence"}
+override=${D1_COMPOSE_OVERRIDE_FILE:-"$script_dir/compose.override.yaml"}
+d1="$repo_dir/deployments/d1/ops/d1"
+
+export D1_ENV_FILE="$env_file"
+export D1_PROJECT_NAME="$project"
+export D1_PUBLIC_URL="$base_url"
+export D1_COMPOSE_OVERRIDE_FILE="$override"
+export C6_D1_EVIDENCE_DIR="$evidence_dir"
+
+case "${1:-full}" in
+  up) "$d1" up ;;
+  verify) "$script_dir/verify-running" ;;
+  verify-restored) "$script_dir/verify-restored" ;;
+  verify-disabled) "$script_dir/verify-disabled" ;;
+  run)
+    "$d1" up
+    "$script_dir/verify-running"
+    ;;
+  full)
+    "$d1" up
+    "$script_dir/verify-running"
+    backup_output=$("$d1" backup)
+    printf '%s\n' "$backup_output"
+    backup_id=$(printf '%s\n' "$backup_output" | sed -n 's/^backup created: \([^ ]*\).*/\1/p')
+    [ -n "$backup_id" ] || { echo 'C6 D1 backup ID is missing' >&2; exit 1; }
+    printf '%s\n' "$backup_id" >"$evidence_dir/backup-id.txt"
+    D1_CONFIRM_EMPTY_RESTORE=yes "$d1" restore "$backup_id"
+    "$script_dir/verify-disabled"
+    "$script_dir/verify-restored"
+    ;;
+  down) "$d1" down ;;
+  *) echo "usage: $0 up|verify|run|verify-disabled|verify-restored|full|down" >&2; exit 2 ;;
+esac

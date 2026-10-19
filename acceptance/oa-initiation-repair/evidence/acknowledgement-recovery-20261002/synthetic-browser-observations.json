@@ -1,0 +1,190 @@
+{
+  "scope": "synthetic_ui_only_no_IAM_or_DB_no_local_Docker",
+  "observations": [
+    {
+      "stage": "before_fix",
+      "native_observation": "后端已 active，页面误称立项尚未完成；显式重试进入同一详情。",
+      "ui_passed": false,
+      "recovered_by": "explicit_retry",
+      "state": {
+        "activation_reply_lost": true,
+        "assignments": {
+          "33333333-3333-4333-8333-000000000001": [
+            {
+              "display_snapshot": "经营负责人（隔离测试）",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "project_id": "33333333-3333-4333-8333-000000000001",
+              "role_key": "business_owner",
+              "source_revision": 2,
+              "subject_id": "55555555-5555-4555-8555-555555555555",
+              "subject_kind": "person",
+              "tenant_id": "11111111-1111-4111-8111-111111111111"
+            }
+          ]
+        },
+        "basic_info_role": "",
+        "client_name_read_fail": false,
+        "completion_failure": "activation-unknown-once",
+        "counterparty_contexts": {},
+        "counts": {
+          "activation_requests": 2,
+          "basic_info_change": 1,
+          "complete": 1,
+          "directory_read": 1,
+          "dispatch": 1,
+          "production_assignment": 0,
+          "profile_correction": 0,
+          "update": 0
+        },
+        "projects": {
+          "33333333-3333-4333-8333-000000000001": {
+            "created_at": "2026-10-02T00:00:00Z",
+            "id": "33333333-3333-4333-8333-000000000001",
+            "name": "立项结果未知（隔离验证）",
+            "node_type": "project",
+            "planned_end_date": null,
+            "planned_start_date": null,
+            "project_number": "HNJH2026-998",
+            "project_type_keys": [
+              "design"
+            ],
+            "revision": 3,
+            "status": "active",
+            "summary": "",
+            "tenant_id": "11111111-1111-4111-8111-111111111111"
+          }
+        },
+        "synthetic_ui_only": true
+      }
+    },
+    {
+      "stage": "message_only_fix",
+      "native_observation": "提交结果待确认，输入保留；重新加载读取详情但旧完成抽屉遮挡。",
+      "ui_passed": false,
+      "recovered_by": "reload_with_stale_drawer",
+      "state": {
+        "activation_reply_lost": true,
+        "assignments": {
+          "33333333-3333-4333-8333-000000000001": [
+            {
+              "display_snapshot": "经营负责人（隔离测试）",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "project_id": "33333333-3333-4333-8333-000000000001",
+              "role_key": "business_owner",
+              "source_revision": 2,
+              "subject_id": "55555555-5555-4555-8555-555555555555",
+              "subject_kind": "person",
+              "tenant_id": "11111111-1111-4111-8111-111111111111"
+            }
+          ]
+        },
+        "basic_info_role": "",
+        "client_name_read_fail": false,
+        "completion_failure": "activation-unknown-once",
+        "counterparty_contexts": {},
+        "counts": {
+          "activation_requests": 1,
+          "basic_info_change": 1,
+          "complete": 1,
+          "dispatch": 1,
+          "production_assignment": 0,
+          "profile_correction": 0,
+          "update": 0
+        },
+        "projects": {
+          "33333333-3333-4333-8333-000000000001": {
+            "created_at": "2026-10-02T00:00:00Z",
+            "id": "33333333-3333-4333-8333-000000000001",
+            "name": "立项结果未知（修复后隔离验证）",
+            "node_type": "project",
+            "planned_end_date": null,
+            "planned_start_date": null,
+            "project_number": "HNJH2026-998",
+            "project_type_keys": [
+              "design"
+            ],
+            "revision": 3,
+            "status": "active",
+            "summary": "",
+            "tenant_id": "11111111-1111-4111-8111-111111111111"
+          }
+        },
+        "synthetic_ui_only": true
+      }
+    },
+    {
+      "stage": "message_and_drawer_fix",
+      "native_observation": "提交结果待确认，输入保留；原生重新加载关闭旧抽屉，进入同一详情，无重放写入。",
+      "ui_passed": true,
+      "recovered_by": "explicit_read_same_project",
+      "state": {
+        "activation_reply_lost": true,
+        "assignments": {
+          "33333333-3333-4333-8333-000000000001": [
+            {
+              "display_snapshot": "经营负责人（隔离测试）",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "project_id": "33333333-3333-4333-8333-000000000001",
+              "role_key": "business_owner",
+              "source_revision": 2,
+              "subject_id": "55555555-5555-4555-8555-555555555555",
+              "subject_kind": "person",
+              "tenant_id": "11111111-1111-4111-8111-111111111111"
+            }
+          ]
+        },
+        "basic_info_role": "",
+        "client_name_read_fail": false,
+        "completion_failure": "activation-unknown-once",
+        "counterparty_contexts": {},
+        "counts": {
+          "activation_requests": 1,
+          "basic_info_change": 1,
+          "complete": 1,
+          "dispatch": 1,
+          "production_assignment": 0,
+          "profile_correction": 0,
+          "update": 0
+        },
+        "projects": {
+          "33333333-3333-4333-8333-000000000001": {
+            "created_at": "2026-10-02T00:00:00Z",
+            "id": "33333333-3333-4333-8333-000000000001",
+            "name": "立项未知结果最终恢复（隔离）",
+            "node_type": "project",
+            "planned_end_date": null,
+            "planned_start_date": null,
+            "project_number": "HNJH2026-998",
+            "project_type_keys": [
+              "design"
+            ],
+            "revision": 3,
+            "status": "active",
+            "summary": "",
+            "tenant_id": "11111111-1111-4111-8111-111111111111"
+          }
+        },
+        "synthetic_ui_only": true
+      }
+    }
+  ],
+  "ordinary_check_results": {
+    "runtime": 44,
+    "directory": 7,
+    "csrf": 8,
+    "frontend_total": 59,
+    "failed": 0,
+    "skipped": 0,
+    "workbench_go_test": true,
+    "workbench_go_vet": true,
+    "python_phase_gates": 6,
+    "syntax": true,
+    "diff_check": true
+  },
+  "native_retry_on_final_candidate_run": false,
+  "all_probes_stopped": true,
+  "temporary_tab_closed": true,
+  "public_release_validation_pending": true,
+  "full_initiation_accepted": false,
+  "full_oa_accepted": false
+}

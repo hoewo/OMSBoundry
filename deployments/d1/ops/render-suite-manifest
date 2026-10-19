@@ -1,0 +1,218 @@
+#!/bin/sh
+set -eu
+
+output="${1:?usage: render-suite-manifest OUTPUT}"
+mkdir -p "$(dirname "$output")"
+enable_contract="${ENABLE_CONTRACT:-true}"
+enable_money="${ENABLE_MONEY:-true}"
+enable_people="${ENABLE_PEOPLE:-true}"
+enable_party="${ENABLE_PARTY:-true}"
+enable_project="${ENABLE_PROJECT:-true}"
+enable_evidence="${ENABLE_EVIDENCE:-true}"
+enable_business_engagement="${ENABLE_BUSINESS_ENGAGEMENT:-false}"
+enable_billing="${ENABLE_BILLING:-false}"
+enable_production="${ENABLE_PRODUCTION:-false}"
+enable_approval_audit_results="${ENABLE_APPROVAL_AUDIT_RESULTS:-false}"
+enable_cost_outsourcing="${ENABLE_COST_OUTSOURCING:-false}"
+enable_bonus_distribution="${ENABLE_BONUS_DISTRIBUTION:-false}"
+bonus_profile="${REFERENCE_OA_BONUS_PROFILE:-}"
+case "$bonus_profile" in
+  '') bonus_admission='"capability_namespace": "bonus-pool", "entry_action": "bonus-pool.read"' ;;
+  reference-oa-bonus-v2|reference-oa-bonus-v3) bonus_admission='"capability_namespaces": ["bonus-pool", "bonus-manual-allocation"], "entry_actions": ["bonus-pool.read", "bonus-manual-allocation.read"]' ;;
+  *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;;
+esac
+for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution"; do
+  case "$value" in true|false) ;; *) echo "application enable flags must be true or false" >&2; exit 2 ;; esac
+done
+
+temporary="${output}.tmp.$$"
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+cat >"$temporary" <<JSON
+{
+  "schema_version": "1",
+  "suite_id": "omsbizfoundry-d1",
+  "tenant_id": "${TENANT_ID:?TENANT_ID is required}",
+  "applications": [
+    {
+      "id": "identity-access",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/auth",
+      "upstream": "http://identity-access:8080",
+      "readiness_path": "/health/ready",
+      "audience": "identity-access"
+    },
+    {
+      "id": "unified-workbench",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/workbench",
+      "upstream": "http://unified-workbench:8082",
+      "readiness_path": "/health/ready",
+      "audience": "unified-workbench"
+    },
+    {
+      "id": "people-groups",
+      "version": "0.1.0",
+      "enabled": $enable_people,
+      "required": false,
+      "route_prefix": "/people",
+      "upstream": "http://people-groups:8084",
+      "readiness_path": "/health/ready",
+      "audience": "people-groups",
+      "entry_action": "people-groups.view",
+      "capability_manifest": "/config/people-groups-capabilities.json"
+    },
+    {
+      "id": "party-directory",
+      "version": "0.1.0",
+      "enabled": $enable_party,
+      "required": false,
+      "route_prefix": "/party",
+      "upstream": "http://party-directory:8090",
+      "readiness_path": "/health/ready",
+      "audience": "party-directory",
+      "entry_action": "party-directory.read",
+      "capability_manifest": "/config/party-directory-capabilities.json"
+    },
+    {
+      "id": "project-workspace",
+      "version": "0.1.0",
+      "enabled": $enable_project,
+      "required": false,
+      "route_prefix": "/project",
+      "upstream": "http://project-workspace:8086",
+      "readiness_path": "/health/ready",
+      "audience": "project-workspace",
+      "entry_action": "project-workspace.read",
+      "capability_manifest": "/config/project-workspace-capabilities.json"
+    },
+    {
+      "id": "contract-ledger",
+      "version": "0.1.0",
+      "enabled": $enable_contract,
+      "required": false,
+      "route_prefix": "/contract",
+      "upstream": "http://contract-ledger:8081",
+      "readiness_path": "/health/ready",
+      "audience": "contract-ledger",
+      "entry_action": "contract-ledger.view",
+      "capability_manifest": "/config/contract-ledger-capabilities.json"
+    },
+    {
+      "id": "money-flow-ledger",
+      "version": "0.1.0",
+      "enabled": $enable_money,
+      "required": false,
+      "route_prefix": "/money",
+      "upstream": "http://money-flow-ledger:8083",
+      "readiness_path": "/health/ready",
+      "audience": "money-flow-ledger",
+      "entry_action": "money-flow-ledger.view",
+      "capability_manifest": "/config/money-flow-ledger-capabilities.json",
+      "metric_projection": {
+        "schema_version": "1",
+        "path": "/api/v1/metrics/operating-summary",
+        "action": "money-flow-ledger.statistics.read"
+      }
+    },
+    {
+      "id": "evidence-service",
+      "version": "0.1.0",
+      "enabled": $enable_evidence,
+      "required": false,
+      "route_prefix": "/evidence",
+      "upstream": "http://evidence-service:8085",
+      "readiness_path": "/health/ready",
+      "audience": "evidence-service",
+      "entry_actions": ["evidence-service.view", "evidence-service.metadata.read", "evidence-service.upload", "evidence-service.download"],
+      "capability_manifest": "/config/evidence-service-capabilities.json",
+      "show_in_workbench": false
+    },
+    {
+      "id": "business-engagement",
+      "version": "0.1.0",
+      "enabled": $enable_business_engagement,
+      "required": false,
+      "route_prefix": "/business",
+      "upstream": "http://business-engagement:8089",
+      "readiness_path": "/health/ready",
+      "audience": "business-engagement",
+      "entry_action": "business-engagement.read",
+      "capability_manifest": "/config/business-engagement-capabilities.json"
+    },
+    {
+      "id": "billing-invoice",
+      "version": "0.1.0",
+      "enabled": $enable_billing,
+      "required": false,
+      "route_prefix": "/billing",
+      "upstream": "http://billing-invoice:8091",
+      "readiness_path": "/health/ready",
+      "audience": "billing-invoice",
+      "entry_action": "billing-invoice.read",
+      "capability_manifest": "/config/billing-invoice-capabilities.json"
+    },
+    {
+      "id": "production-operations",
+      "version": "0.1.0",
+      "enabled": $enable_production,
+      "required": false,
+      "route_prefix": "/production",
+      "upstream": "http://production-operations:8087",
+      "readiness_path": "/health/ready",
+      "audience": "production-operations",
+      "capability_namespace": "production-work-item",
+      "entry_action": "production-work-item.read",
+      "capability_manifest": "/config/production-operations-capabilities.json",
+      "work_item_projection": {
+        "schema_version": "1",
+        "path": "/api/v1/work-items",
+        "action": "production-work-item.work-items.read"
+      }
+    },
+    {
+      "id": "approval-audit-results",
+      "version": "0.1.0",
+      "enabled": $enable_approval_audit_results,
+      "required": false,
+      "route_prefix": "/results",
+      "upstream": "http://approval-audit-results:8095",
+      "readiness_path": "/health/ready",
+      "audience": "approval-audit-results",
+      "capability_namespace": "approval-audit-result",
+      "entry_action": "approval-audit-result.read",
+      "capability_manifest": "/config/approval-audit-results-capabilities.json"
+    },
+    {
+      "id": "cost-outsourcing",
+      "version": "0.1.0",
+      "enabled": $enable_cost_outsourcing,
+      "required": false,
+      "route_prefix": "/cost-outsourcing",
+      "upstream": "http://cost-outsourcing:8096",
+      "readiness_path": "/health/ready",
+      "audience": "cost-outsourcing",
+      "capability_namespace": "cost-entry",
+      "entry_action": "cost-entry.read",
+      "capability_manifest": "/config/cost-outsourcing-capabilities.json"
+    },
+    {
+      "id": "bonus-distribution",
+      "version": "0.1.0",
+      "enabled": $enable_bonus_distribution,
+      "required": false,
+      "route_prefix": "/bonus",
+      "upstream": "http://bonus-distribution:8097",
+      "readiness_path": "/health/ready",
+      "audience": "bonus-distribution",
+      $bonus_admission,
+      "capability_manifest": "/config/bonus-distribution-capabilities.json"
+    }
+  ]
+}
+JSON
+mv "$temporary" "$output"
+trap - EXIT HUP INT TERM

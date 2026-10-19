@@ -1,0 +1,72 @@
+{
+  "schema_version": "oa-initiation-counterexample-inspection-v1",
+  "project_id": "f75d4570-5d6a-42ba-ade6-d1cda913ddda",
+  "project_number": "OA-2026-101",
+  "status": "pending_completion",
+  "revision": 6,
+  "project_type_keys": [
+    "consultation",
+    "survey"
+  ],
+  "owners": [
+    {
+      "role_key": "production_owner",
+      "subject_kind": "person",
+      "created_project_revision": 5,
+      "ended_project_revision": null,
+      "ended_at": null
+    }
+  ],
+  "history": [
+    {
+      "event_type": "project_initiation_pending",
+      "project_revision": 6,
+      "missing": [
+        "business_owner"
+      ],
+      "initiation_profile": "business-owner-v1"
+    },
+    {
+      "event_type": "assignment_started",
+      "project_revision": 5,
+      "missing": [],
+      "initiation_profile": null
+    },
+    {
+      "event_type": "project_initiation_pending",
+      "project_revision": 4,
+      "missing": [
+        "business_owner"
+      ],
+      "initiation_profile": "business-owner-v1"
+    },
+    {
+      "event_type": "project_details_replaced",
+      "project_revision": 3,
+      "missing": [],
+      "initiation_profile": null
+    },
+    {
+      "event_type": "project_initiation_pending",
+      "project_revision": 2,
+      "missing": [
+        "business_owner"
+      ],
+      "initiation_profile": "business-owner-v1"
+    },
+    {
+      "event_type": "project_created",
+      "project_revision": 1,
+      "missing": [],
+      "initiation_profile": null
+    }
+  ],
+  "completion_action_available": true,
+  "business_owner_assignment_action_available": true,
+  "public_runtime_sha256": "588eb7fa8f0869c8730721e967089bea0a455ce8910bfd06740f0d0d276f7bcf",
+  "project_facts_unchanged_during_readback": true,
+  "business_writes": 0,
+  "grant_writes": 0,
+  "browser_click_test": false,
+  "full_oa_accepted": false
+}

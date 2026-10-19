@@ -1,0 +1,16 @@
+{
+  "node": {
+    "tests": 347,
+    "passed": 347,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typescript": true,
+  "go_vet": true,
+  "workbench_gateway_go": true,
+  "d1_shell_syntax": true,
+  "d1_upgrade_selection_mock": true,
+  "d1_profile_guard_tests": 24,
+  "d1_suite_restore_accepted": false,
+  "main_deployed": false
+}

@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 4 ]; then
+  echo "usage: verify-same-host CONTRACT_BUNDLE CONTRACT_CHECKSUM MONEY_BUNDLE MONEY_CHECKSUM" >&2
+  exit 2
+fi
+
+contract_bundle=$1
+contract_checksum=$2
+money_bundle=$3
+money_checksum=$4
+
+for artifact in "$contract_bundle" "$contract_checksum" "$money_bundle" "$money_checksum"; do
+  case "$artifact" in
+    /*) ;;
+    *) echo "all release artifact paths must be absolute" >&2; exit 2 ;;
+  esac
+  if [ ! -f "$artifact" ]; then
+    echo "release artifact must be a regular file: $artifact" >&2
+    exit 2
+  fi
+done
+
+if [ -z "${CONTRACT_TEST_DATABASE_URL:-}" ]; then
+  echo "CONTRACT_TEST_DATABASE_URL is required" >&2
+  exit 2
+fi
+if [ -z "${MONEY_FLOW_TEST_DATABASE_URL:-}" ]; then
+  echo "MONEY_FLOW_TEST_DATABASE_URL is required" >&2
+  exit 2
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$script_dir"
+CONTRACT_DELIVERY_BUNDLE_PATH="$contract_bundle" \
+CONTRACT_DELIVERY_BUNDLE_SHA256_PATH="$contract_checksum" \
+MONEY_FLOW_DELIVERY_BUNDLE_PATH="$money_bundle" \
+MONEY_FLOW_DELIVERY_BUNDLE_SHA256_PATH="$money_checksum" \
+GOWORK=off \
+go test -count=1 -run '^TestActualBundlesCoexistAndIsolateSingleSideFailure$' ./...

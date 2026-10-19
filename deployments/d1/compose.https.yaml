@@ -1,0 +1,19 @@
+services:
+  nginx:
+    ports: !override
+      - ${PUBLIC_BIND:-0.0.0.0}:${PUBLIC_HTTP_PORT:-80}:8080
+      - ${PUBLIC_BIND:-0.0.0.0}:${PUBLIC_HTTPS_PORT:-443}:8443
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - type: bind
+        source: ${D1_TLS_CERT_FILE:?set D1_TLS_CERT_FILE to an absolute certificate path}
+        target: /etc/nginx/tls/fullchain.pem
+        read_only: true
+      - type: bind
+        source: ${D1_TLS_KEY_FILE:?set D1_TLS_KEY_FILE to an absolute private-key path}
+        target: /etc/nginx/tls/privkey.pem
+        read_only: true

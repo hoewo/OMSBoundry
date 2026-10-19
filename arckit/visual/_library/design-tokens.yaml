@@ -1,0 +1,110 @@
+# Design Tokens — BizFoundry Demo operational baseline
+
+metadata:
+  project: "BizFoundry Demo"
+  last_updated: "2026-09-25"
+  brief: "./brief.md"
+  theme_scope: "light operational demo"
+
+colors:
+  accent:
+    default:
+      light: "#3157A4"
+      dark: "#8FAFF5"
+    hover:
+      light: "#28498B"
+      dark: "#A9C0F7"
+    active:
+      light: "#203C75"
+      dark: "#C1D1F8"
+  background:
+    primary:
+      light: "#FFFFFF"
+      dark: "#161A21"
+    secondary:
+      light: "#F7F8FA"
+      dark: "#202630"
+    tertiary:
+      light: "#EEF1F4"
+      dark: "#2B333F"
+  text:
+    primary:
+      light: "#18212F"
+      dark: "#F3F5F7"
+    secondary:
+      light: "#566273"
+      dark: "#B5BECA"
+    tertiary:
+      light: "#7A8594"
+      dark: "#929EAD"
+    inverse:
+      light: "#FFFFFF"
+      dark: "#18212F"
+  semantic:
+    success:
+      light: "#26734D"
+      dark: "#58B58A"
+    warning:
+      light: "#8A5A00"
+      dark: "#E2AE4F"
+    destructive:
+      light: "#A93A33"
+      dark: "#F1847D"
+    information:
+      light: "#3157A4"
+      dark: "#8FAFF5"
+  border:
+    subtle:
+      light: "#E2E6EB"
+      dark: "#343D49"
+    strong:
+      light: "#B9C1CC"
+      dark: "#657181"
+    focus:
+      light: "#2F6FDB"
+      dark: "#8FAFF5"
+
+typography:
+  page_title: { size: 28, line_height: 1.25, weight: 680, family: "system-ui" }
+  section_title: { size: 18, line_height: 1.35, weight: 650, family: "system-ui" }
+  item_title: { size: 15, line_height: 1.45, weight: 620, family: "system-ui" }
+  body: { size: 15, line_height: 1.6, weight: 400, family: "system-ui" }
+  label: { size: 13, line_height: 1.4, weight: 600, family: "system-ui" }
+  caption: { size: 12, line_height: 1.45, weight: 400, family: "system-ui" }
+  metric: { size: 26, line_height: 1.2, weight: 680, family: "system-ui" }
+  code: { size: 12, line_height: 1.5, weight: 450, family: "SFMono-Regular" }
+
+spacing:
+  xxs: 2
+  xs: 4
+  sm: 8
+  md: 12
+  lg: 16
+  xl: 24
+  xxl: 32
+  section: 48
+
+corner_radius:
+  small: 4
+  medium: 7
+  large: 10
+  full: 999
+
+shadows:
+  focus: { color: "rgba(47,111,219,0.28)", x: 0, y: 0, blur: 0, spread: 3 }
+  overlay: { color: "rgba(24,33,47,0.16)", x: 0, y: 12, blur: 28, spread: 0 }
+
+animation:
+  fast: { duration_ms: 120, easing: "easeOut" }
+  normal: { duration_ms: 180, easing: "easeInOut" }
+  reveal: { duration_ms: 240, easing: "easeOut" }
+  reduced_motion: { duration_ms: 0, easing: "linear" }
+
+layout:
+  content_max_width: 1280
+  readable_text_max_width: 720
+  sidebar_width: 224
+  header_height: 56
+  control_height_small: 32
+  control_height_medium: 38
+  table_row_min_height: 48

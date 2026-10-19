@@ -1,0 +1,8 @@
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+RUN mkdir -p /app /public /workload-private /workload-public /backups \
+    && chown -R postgres:postgres /app /backups
+COPY --chown=postgres:postgres server ops workload-keyctl /app/
+USER postgres
+ENTRYPOINT []
+CMD ["/app/server"]

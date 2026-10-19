@@ -1,0 +1,226 @@
+{
+  "passed": true,
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "administrator_only": true,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "1a03b0dd-d855-4f5e-b468-662c35792b13"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/d8ac01c0-9ec8-49fe-9272-e8ed8ed467b0/withdrawal",
+      "command_id": "3d3668e4-a111-4ca3-a720-60a80b562b83"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "457997ae-e2f3-4b47-ab9d-ea27c81de8b1"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/5ad580f5-6677-467f-a47b-27bd6a489082/withdrawal",
+      "command_id": "704a5f51-2710-4676-9db4-d150f2ea3815"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "d194534e-66f3-410e-8ae8-7160bc449070"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/03b80be9-01eb-4817-946f-5d388b8e2fa8/withdrawal",
+      "command_id": "ea570bde-abe8-4d8d-a074-15941d91fd92"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "4c8dfd14-0454-4ad0-8a82-bc2ab35de1f7"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/d1f5fce7-e9a1-47b6-910c-ba193546ab94/withdrawal",
+      "command_id": "f0e319ca-7e04-4c88-a181-efeef40fc646"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "993a31fb-8cd1-4876-a8c1-4c6215a6797d"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/57e87db5-3591-4285-afb8-79b58d0657fd/withdrawal",
+      "command_id": "debd84a8-2692-4682-8e65-6b2bf1dffb82"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "2e336454-6462-4a82-a8a0-ae362558f8e5"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/c70a6307-5f8e-4064-9410-e6c1c5c4c75c/withdrawal",
+      "command_id": "795cb6e6-b1e8-45f4-9f47-fd7e81a6916a"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "a24001ab-519b-49c0-ae5a-29412c537be7"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/f356e4d7-999a-4934-a3c7-6e5da5eff24d/withdrawal",
+      "command_id": "8193ed81-812f-4f5b-ba0a-f215c4e2ebc3"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "62d45e7a-8c96-456c-9d27-5018d4fd8d64"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/44df6750-5eca-42e0-b83b-156df5ed04f1/withdrawal",
+      "command_id": "49fedb06-fa22-45fb-9995-91e1641aced6"
+    }
+  ],
+  "page_errors": [],
+  "scenarios": [
+    {
+      "side": "business",
+      "category": "accommodation",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "business",
+      "category": "expert_fee",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "business",
+      "category": "bid_signup_fee",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "business",
+      "category": "bid_service_fee",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "production",
+      "category": "vehicle",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "production",
+      "category": "accommodation",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "production",
+      "category": "transport",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "production",
+      "category": "other",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    }
+  ],
+  "native_records": [
+    {
+      "id": "03b80be9-01eb-4817-946f-5d388b8e2fa8",
+      "scope": "business",
+      "category": "bid_signup_fee",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "5ad580f5-6677-467f-a47b-27bd6a489082",
+      "scope": "business",
+      "category": "expert_fee",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "d1f5fce7-e9a1-47b6-910c-ba193546ab94",
+      "scope": "business",
+      "category": "bid_service_fee",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "d8ac01c0-9ec8-49fe-9272-e8ed8ed467b0",
+      "scope": "business",
+      "category": "accommodation",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "44df6750-5eca-42e0-b83b-156df5ed04f1",
+      "scope": "production",
+      "category": "other",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "57e87db5-3591-4285-afb8-79b58d0657fd",
+      "scope": "production",
+      "category": "vehicle",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "c70a6307-5f8e-4064-9410-e6c1c5c4c75c",
+      "scope": "production",
+      "category": "accommodation",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    },
+    {
+      "id": "f356e4d7-999a-4934-a3c7-6e5da5eff24d",
+      "scope": "production",
+      "category": "transport",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "1"
+    }
+  ],
+  "dropdown_diagnostic": {
+    "side": "production",
+    "popups": 1,
+    "contents": 5,
+    "options": 0,
+    "text": "vehicle\naccommodation\n用车\n住宿\n交通\n方案评审专家费\n其他"
+  },
+  "runtime_asset_path": "/workbench/assets/reference-oa-react-bidding.js",
+  "runtime_asset_sha256": "d2b6e8f5b52859548d370c1f76e80642ac3ddb332ba213f6412c0e6ebff25883",
+  "project_revision": 18,
+  "configured_cost_route": "/cost-outsourcing",
+  "full_role_acceptance": false,
+  "full_oa_accepted": false
+}

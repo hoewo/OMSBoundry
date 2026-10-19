@@ -1,0 +1,94 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the restored D1 Nginx entry URL}
+evidence_dir=${C7_D1_EVIDENCE_DIR:-"$d1_dir/.runtime/c7-d1-evidence"}
+ids_file="$evidence_dir/ids.json"
+state_file="$evidence_dir/state.json"
+
+for command in curl jq openssl awk; do command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }; done
+[ -f "$ids_file" ] && [ -f "$state_file" ] || { echo 'C7 pre-backup evidence is missing' >&2; exit 2; }
+env_value() { awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file"; }
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" "$(printf '%s' "$value" | cut -c21-32)"
+}
+expect_status() { [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }; }
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c7-restored.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/admin.cookies"
+status=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code}' --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf")
+expect_status 200 "$status" 'fetch CSRF after restore'
+csrf=$(jq -er .csrf_token "$workspace/csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME)" --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+status=$(curl --silent --show-error --output "$workspace/login.json" --write-out '%{http_code}' --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" "$base_url/auth/api/v1/login")
+expect_status 200 "$status" 'login after restore'
+
+project_id=$(jq -er .project_id "$ids_file")
+business_pool=$(jq -er .business_pool_id "$ids_file")
+production_pool=$(jq -er .production_pool_id "$ids_file")
+status=$(curl --silent --show-error --output "$workspace/authorize.out" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+  --data-urlencode resource_type=project --data-urlencode "resource_id=$project_id" \
+  "$base_url/gateway/authorize/bonus-distribution")
+expect_status 303 "$status" 'authorize C7 after restore'
+
+get_json() {
+  path=$1; output=$2; label=$3
+  status=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --cookie "$cookies" "$base_url$path")
+  expect_status 200 "$status" "$label"
+}
+get_json "/bonus/api/v1/bonus-pools/$business_pool" "$workspace/business.json" 'read restored business Pool'
+get_json "/bonus/api/v1/bonus-pools/$production_pool" "$workspace/production.json" 'read restored production Pool'
+get_json "/bonus/api/v1/bonus-pools/$business_pool/history" "$workspace/business-history.json" 'read restored business history'
+get_json "/bonus/api/v1/bonus-pools/$production_pool/history" "$workspace/production-history.json" 'read restored production history'
+cp "$workspace/business.json" "$evidence_dir/business-restored.json"
+cp "$workspace/production.json" "$evidence_dir/production-restored.json"
+cp "$workspace/business-history.json" "$evidence_dir/business-history-restored.json"
+cp "$workspace/production-history.json" "$evidence_dir/production-history-restored.json"
+
+business_sha=$(jq -Sc '{id,tenant_id,bonus_type,state,project,source,policy,amount_minor,unallocated_minor,revision,allocations,supersedes,superseded_by}' "$workspace/business.json" | openssl dgst -sha256 -r | awk '{print $1}')
+business_history_sha=$(jq -Sc . "$workspace/business-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+[ "$business_sha" = "$(jq -er .business_sha256 "$state_file")" ] || { echo 'restored business Pool canonical digest mismatch' >&2; exit 1; }
+[ "$business_history_sha" = "$(jq -er .business_history_sha256 "$state_file")" ] || { echo 'restored business history digest mismatch' >&2; exit 1; }
+
+production_state=$(jq -er .state "$workspace/production.json")
+production_revision=$(jq -er .revision "$workspace/production.json")
+case "$production_state:$production_revision" in
+  published:2)
+    production_sha=$(jq -Sc '{id,tenant_id,bonus_type,state,project,source,policy,amount_minor,unallocated_minor,revision,allocations,supersedes,superseded_by}' "$workspace/production.json" | openssl dgst -sha256 -r | awk '{print $1}')
+    production_history_sha=$(jq -Sc . "$workspace/production-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+    [ "$production_sha" = "$(jq -er .production_sha256 "$state_file")" ] || { echo 'restored production Pool canonical digest mismatch' >&2; exit 1; }
+    [ "$production_history_sha" = "$(jq -er .production_history_sha256 "$state_file")" ] || { echo 'restored production history digest mismatch' >&2; exit 1; }
+    payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:2,reason:"C7 D1 空目标恢复后继续写入"}')
+    status=$(curl --silent --show-error --output "$workspace/production-withdrawn.json" --write-out '%{http_code}' \
+      --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+      "$base_url/bonus/api/v1/bonus-pools/$production_pool/withdrawal")
+    expect_status 200 "$status" 'withdraw production Pool after restore'
+    get_json "/bonus/api/v1/bonus-pools/$production_pool/history" "$workspace/production-history-after.json" 'read production history after continued write'
+    ;;
+  withdrawn:3)
+    production_sha=$(jq -Sc '.items[1].snapshot | {id,tenant_id,bonus_type,state,project,source,policy,amount_minor,unallocated_minor,revision,allocations,supersedes,superseded_by}' "$workspace/production-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+    production_history_sha=$(jq -Sc '{items: .items[0:2]}' "$workspace/production-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+    [ "$production_sha" = "$(jq -er .production_sha256 "$state_file")" ] || { echo 'pre-withdrawal production Pool canonical digest mismatch' >&2; exit 1; }
+    [ "$production_history_sha" = "$(jq -er .production_history_sha256 "$state_file")" ] || { echo 'pre-withdrawal production history digest mismatch' >&2; exit 1; }
+    cp "$workspace/production.json" "$workspace/production-withdrawn.json"
+    cp "$workspace/production-history.json" "$workspace/production-history-after.json"
+    ;;
+  *)
+    echo "restored production Pool has unexpected state/revision: $production_state/$production_revision" >&2
+    exit 1
+    ;;
+esac
+jq -e '.state == "withdrawn" and .revision == 3' "$workspace/production-withdrawn.json" >/dev/null
+jq -e '(.items | length) == 3 and [.items[].event_kind] == ["drafted","published","withdrawn"] and [.items[].revision] == [1,2,3]' "$workspace/production-history-after.json" >/dev/null
+
+cp "$workspace/production-withdrawn.json" "$evidence_dir/restored-production-withdrawn.json"
+cp "$workspace/production-history-after.json" "$evidence_dir/restored-production-history.json"
+printf '%s\n' '# C7 D1 空目标恢复复验' '' "- 经营 Pool canonical SHA-256：$business_sha" "- 生产 Pool canonical SHA-256：$production_sha" "- 经营历史 SHA-256：$business_history_sha" "- 生产历史 SHA-256：$production_history_sha" '- Pool／Allocation ID、revision、来源／策略／人员快照和发布历史保持。' '- 恢复后生产 Pool 追加撤回成功，revision 2 → 3；既有事实未被原地覆盖。' >"$evidence_dir/restore-result.md"
+cat "$evidence_dir/restore-result.md"

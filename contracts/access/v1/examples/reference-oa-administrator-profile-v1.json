@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "profile_id": "reference-oa-administrator-v1",
+  "profile_version": "1.0.0",
+  "source_ruleset": "reference-oa-permission-rules@1.0.0",
+  "subject_selection": "explicit",
+  "scope_kind": "tenant",
+  "identity_administrator_implies_profile": false,
+  "action_resolution": {
+    "mode": "installed-capability-catalog-exact-expansion",
+    "wildcards_allowed": false,
+    "reconcile_on_manifest_change": true
+  },
+  "target_authorization": {
+    "resource_scope_required": true,
+    "business_state_required": true,
+    "expected_revision_required_for_writes": true,
+    "allowed_actions_are_authoritative": true
+  }
+}

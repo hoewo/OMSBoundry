@@ -1,0 +1,103 @@
+# Component visual catalog — BizFoundry Demo
+
+metadata:
+  project: "BizFoundry Demo"
+  last_updated: "2026-09-25"
+  tokens: "./design-tokens.yaml"
+
+components:
+  AppShell:
+    role: "保持每个独立产品可识别、可导航并显示演示环境"
+    variants: [standalone, composed]
+    sizes: [desktop]
+    states: [default, service_degraded]
+    token_refs: [colors.background.primary, colors.border.subtle, layout.header_height, layout.sidebar_width]
+    accessibility: "当前页面、环境和身份均有文本标签"
+
+  PageHeader:
+    role: "说明当前页面处理的业务事实并承载单一主操作"
+    variants: [standard, with_status, with_breadcrumb]
+    sizes: [desktop]
+    states: [default, loading]
+    token_refs: [typography.page_title, typography.body, spacing.xl, colors.text.primary]
+    accessibility: "标题使用页面最高语义层级，说明文字保持可读行宽"
+
+  Button:
+    role: "承载明确操作并区分主要、次要和危险动作"
+    variants: [primary, secondary, quiet, destructive]
+    sizes: [small, medium]
+    states: [default, hover, active, focus, disabled, loading]
+    token_refs: [colors.accent.default, colors.accent.hover, colors.accent.active, colors.semantic.destructive, colors.border.focus, corner_radius.medium, animation.fast]
+    accessibility: "正文对比度不低于 4.5:1，focus 状态使用可见焦点环"
+
+  LocalNavigation:
+    role: "在首页、领域记录和历史之间提供稳定局部导航"
+    variants: [horizontal, sidebar]
+    sizes: [desktop]
+    states: [default, hover, active, focus, disabled]
+    token_refs: [colors.text.secondary, colors.accent.default, colors.background.secondary, spacing.lg]
+    accessibility: "当前项同时使用位置、字重和标记，不只依赖颜色"
+
+  StatusBadge:
+    role: "用短文本表达业务状态、环境或可用性"
+    variants: [neutral, information, success, warning, destructive]
+    sizes: [small]
+    states: [default]
+    token_refs: [typography.caption, corner_radius.full, colors.semantic.success, colors.semantic.warning, colors.semantic.destructive]
+    accessibility: "状态标签始终包含可读文字"
+
+  SummaryPanel:
+    role: "显示一组具有独立业务含义的关键事实或推荐路径"
+    variants: [metric, recommended_path, help, diagnostic]
+    sizes: [standard, wide]
+    states: [default, loading, degraded]
+    token_refs: [colors.background.secondary, colors.border.subtle, spacing.xl, corner_radius.large]
+    accessibility: "面板标题描述内容，不使用位置或颜色作为唯一含义"
+
+  DataList:
+    role: "以领域语言显示业务记录及其关键状态"
+    variants: [comfortable, compact]
+    sizes: [responsive_desktop]
+    states: [loading, content, empty, error, row_hover, row_focus, selected]
+    token_refs: [layout.table_row_min_height, colors.border.subtle, colors.background.secondary, typography.item_title]
+    accessibility: "行主要目标可键盘聚焦，窄窗口保留关键列并允许横向滚动"
+
+  Field:
+    role: "持续显示标签、输入值、说明和原位错误"
+    variants: [text, amount, date, select, textarea, readonly]
+    sizes: [small, medium]
+    states: [default, hover, focus, filled, disabled, invalid]
+    token_refs: [layout.control_height_medium, colors.border.strong, colors.border.focus, colors.semantic.destructive, corner_radius.medium]
+    accessibility: "标签不依赖占位文字，错误与字段建立程序化关联"
+
+  ActionPanel:
+    role: "在记录上下文中解释影响、收集必要输入并反馈结果"
+    variants: [standard, high_risk, success, conflict]
+    sizes: [standard]
+    states: [ready, editing, confirming, submitting, success, error, conflict]
+    token_refs: [colors.background.primary, colors.border.subtle, shadows.overlay, spacing.xl, animation.reveal]
+    accessibility: "打开后焦点进入面板，关闭后返回触发控件，高风险影响可被朗读"
+
+  InlineFeedback:
+    role: "在触发操作附近显示进行、成功、警告或失败结果"
+    variants: [progress, success, warning, error, information]
+    sizes: [inline, block]
+    states: [visible, dismissible, persistent]
+    token_refs: [colors.semantic.success, colors.semantic.warning, colors.semantic.destructive, colors.semantic.information, typography.body]
+    accessibility: "重要结果使用合适 live region，信息不只依赖图标或颜色"
+
+  EmptyState:
+    role: "解释没有数据或没有结果的原因并提供一个推荐下一步"
+    variants: [no_data, no_results, unavailable]
+    sizes: [standard]
+    states: [default]
+    token_refs: [typography.section_title, typography.body, colors.text.secondary, spacing.xxl]
+    accessibility: "标题、原因和恢复动作具有连续阅读顺序"
+
+  HelpDisclosure:
+    role: "按需提供访问方式、账号来源、重跑、重置、健康检查和 API 信息"
+    variants: [inline, side_panel]
+    sizes: [standard]
+    states: [collapsed, expanded]
+    token_refs: [colors.background.secondary, colors.border.subtle, spacing.lg, animation.normal]
+    accessibility: "触发控件暴露展开状态，敏感凭据不直接显示"

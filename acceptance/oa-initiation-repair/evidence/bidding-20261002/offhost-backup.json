@@ -1,0 +1,11 @@
+{
+  "archive_sha256": "5f11147d37ac85390855e96ade6856dbe7c451de6103f94ed60b6d3f4b526f9d",
+  "bytes": 219831,
+  "transfer": "authenticated-existing-aliyun-workbench-download",
+  "offhost_sha256_equal": true,
+  "local_directory_mode": "0700",
+  "local_archive_mode": "0600",
+  "archive_in_repository": false,
+  "no_public_backup_endpoint": true,
+  "restore_and_rollout_receipts_read_from_verified_archive": true
+}

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "iam_contracts_unchanged": true,
+  "project_schema_before": "000010_initial_dispatch_draft.sql",
+  "closure": [
+    "Business Engagement read API (schema unchanged)",
+    "Workbench B03 method/applicability connector"
+  ],
+  "gateway_suite_manifest_unchanged": true,
+  "other_business_images_unchanged": true,
+  "official_release": false
+}

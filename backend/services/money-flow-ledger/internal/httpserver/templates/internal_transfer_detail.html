@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Transfer.Description}} · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/internal-transfers">← 返回内部转账列表</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers" aria-current="page">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>{{.Transfer.Description}}</h1>
+    {{if .Created}}<p role="status">内部转账已登记。</p>{{end}}
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>这是单一、不可变的非经营性资金移动事实：来源账户减少、目标账户增加同一金额；它没有往来方，不参与义务核销。</p>
+
+    <dl>
+      <dt>状态</dt><dd>{{.Transfer.Status}}</dd>
+      <dt>转账金额</dt><dd>{{.Transfer.Amount}} {{.Transfer.Currency}}</dd>
+      <dt>转账发生日</dt><dd>{{.Transfer.OccurredOn}}</dd>
+      <dt>来源账户标签</dt><dd>{{.Transfer.SourceAccountReference}}</dd>
+      <dt>目标账户标签</dt><dd>{{.Transfer.DestinationAccountReference}}</dd>
+      <dt>来源类型</dt><dd>{{.Transfer.SourceKind}}</dd>
+      <dt>人工来源依据</dt><dd>{{.Transfer.ManualSourceReference}}</dd>
+      <dt>外部转账流水号</dt><dd>{{if .Transfer.ExternalTransferReference}}{{.Transfer.ExternalTransferReference}}{{else}}—{{end}}</dd>
+      <dt>登记人</dt><dd>{{.Transfer.RecordedBy.DisplayName}}（{{.Transfer.RecordedBy.Kind}} / {{.Transfer.RecordedBy.ID}}）</dd>
+      <dt>登记时间</dt><dd>{{.Transfer.RecordedAt}}</dd>
+    </dl>
+
+    <h2>登记时本方主体快照</h2>
+    <dl>
+      <dt>类型</dt><dd>{{.Transfer.LedgerOwner.Kind}}</dd>
+      <dt>法定名称或姓名</dt><dd>{{.Transfer.LedgerOwner.LegalName}}</dd>
+      <dt>登记标识</dt><dd>{{if .Transfer.LedgerOwner.RegistrationIdentifier}}{{.Transfer.LedgerOwner.RegistrationIdentifier}}{{else}}—{{end}}</dd>
+      <dt>Party revision</dt><dd>{{.Transfer.LedgerOwner.PartyRevision}}</dd>
+    </dl>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

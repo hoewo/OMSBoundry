@@ -1,0 +1,17 @@
+{
+  "passed": false,
+  "application": "business-engagement",
+  "checks": [],
+  "main_unchanged": true,
+  "public_browser_or_full_oa": false,
+  "failed_assertion": "TestMaterialCollectionAppendRemoveOneLegacyAndHistory: reflect.DeepEqual of first result and replay",
+  "native_command_error": null,
+  "subsequent_limit_concurrency_and_existing_lifecycle_tests_passed": true,
+  "migration_group_not_run": true,
+  "http_group_not_run": true,
+  "diagnostic_retained_in_stopped_container": "oa_initiation_repair_20261002b_engagement",
+  "suspected_test_issue": "PG scanner represents the same timestamp in time.Local, JSON replay in time.UTC; c must prove complete wire equality and exact unchanged table facts.",
+  "server_sha256": "cc3c4db93d7008bbc547900db0fd295c162672a6b10ff511bcf39205f6fbfbe4",
+  "uploaded_bundle_sha256": "3947979bc25bd0c1bd9cf56686478e33820767ea575b26bdb8c7260a9fb14bfa",
+  "observation_overwritten": false
+}

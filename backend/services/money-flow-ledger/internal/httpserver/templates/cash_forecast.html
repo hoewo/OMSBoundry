@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>当前预计现金排期 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    {{$root := .}}
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast" aria-current="page">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>当前预计现金排期</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>预计现金日期是独立的经营判断，不会修改义务到期日。预计金额始终取查询时的当前未结余额；本页不是银行余额、利润、付款承诺或会计现金流量表。</p>
+    <p>生成时间：{{.Report.GeneratedAt}}</p>
+    {{if .Recorded}}<p role="status">预计现金日期已记录。</p>{{end}}
+    {{if .Cleared}}<p role="status">当前预计现金排期已清除，义务进入未排期。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="set-expectation-heading">
+      <h2 id="set-expectation-heading">设置或调整预计日期</h2>
+      {{if or .Report.ScheduledItems .Report.UnscheduledItems}}
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/cash-expectations">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.SetForm.CommandID}}">
+        <input type="hidden" name="action" value="set">
+
+        <label for="obligation_selection">义务</label>
+        <select id="obligation_selection" name="obligation_selection" required>
+          <option value="">请选择</option>
+          {{range .Report.ScheduledItems}}
+          <option value="{{.Obligation.ID}}:{{.Obligation.CurrentRevision}}" {{if eq .Obligation.ID $root.SetForm.ObligationID}}selected{{end}}>{{.Obligation.Direction.Label}} · {{.Obligation.Title}} · {{.Obligation.OutstandingAmount}} {{.Obligation.Currency}} · 当前 {{.Expectation.ExpectedOn}}</option>
+          {{end}}
+          {{range .Report.UnscheduledItems}}
+          <option value="{{.Obligation.ID}}:{{.Obligation.CurrentRevision}}" {{if eq .Obligation.ID $root.SetForm.ObligationID}}selected{{end}}>{{.Obligation.Direction.Label}} · {{.Obligation.Title}} · {{.Obligation.OutstandingAmount}} {{.Obligation.Currency}} · 未排期</option>
+          {{end}}
+        </select>
+
+        <label for="expected_on">预计现金日期</label>
+        <input id="expected_on" name="expected_on" type="date" value="{{.SetForm.ExpectedOn}}" required>
+
+        <label for="expectation_reason">本次判断原因</label>
+        <input id="expectation_reason" name="expectation_reason" value="{{.SetForm.Reason}}" maxlength="200" required>
+
+        <button type="submit">记录预计日期</button>
+      </form>{{end}}
+      {{else}}
+      <p>当前没有可排期的 open 正余额义务。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="scheduled-summary-heading">
+      <h2 id="scheduled-summary-heading">已排期汇总</h2>
+      {{if .Report.ScheduledSummaries}}
+      <table>
+        <thead>
+          <tr><th scope="col">预计日期</th><th scope="col">本方</th><th scope="col">方向</th><th scope="col">币种</th><th scope="col">义务数</th><th scope="col">当前预计金额</th></tr>
+        </thead>
+        <tbody>
+          {{range .Report.ScheduledSummaries}}
+          <tr><td>{{.ExpectedOn}}</td><td>{{.LedgerOwnerLegalName}}</td><td>{{.Direction.Label}}</td><td>{{.Currency}}</td><td>{{.ObligationCount}}</td><td>{{.OutstandingAmount}} {{.Currency}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>当前没有已排期义务。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="scheduled-detail-heading">
+      <h2 id="scheduled-detail-heading">已排期明细</h2>
+      {{if .ScheduledItems}}
+      <table>
+        <thead>
+          <tr><th scope="col">预计日期</th><th scope="col">义务</th><th scope="col">方向</th><th scope="col">本方</th><th scope="col">往来方</th><th scope="col">到期日</th><th scope="col">当前预计金额</th><th scope="col">当前依据</th><th scope="col">操作</th></tr>
+        </thead>
+        <tbody>
+          {{range .ScheduledItems}}
+          <tr>
+            <td>{{.Row.Expectation.ExpectedOn}}</td>
+            <td><a href="{{basePath}}/obligations/{{.Row.Obligation.ID}}">{{.Row.Obligation.Title}}</a> · <a href="{{basePath}}/cash-forecast?history_obligation_id={{.Row.Obligation.ID}}#history">历史</a></td>
+            <td>{{.Row.Obligation.Direction.Label}}</td>
+            <td>{{.Row.Obligation.LedgerOwner.LegalName}}</td>
+            <td>{{.Row.Obligation.Counterparty.LegalName}}</td>
+            <td>{{.Row.Obligation.DueOn}}</td>
+            <td>{{.Row.Obligation.OutstandingAmount}} {{.Row.Obligation.Currency}}</td>
+            <td>seq {{.Row.Expectation.Sequence}} · {{.Row.Expectation.Reason}}</td>
+            <td>
+              {{if can $.Principal "obligation.manage"}}<form method="post" action="{{basePath}}/cash-expectations">
+                <input type="hidden" name="csrf_token" value="{{$root.CSRFToken}}">
+                <input type="hidden" name="command_id" value="{{.ClearCommandID}}">
+                <input type="hidden" name="action" value="clear">
+                <input type="hidden" name="obligation_id" value="{{.Row.Obligation.ID}}">
+                <input type="hidden" name="expected_current_revision" value="{{.Row.Obligation.CurrentRevision}}">
+                <label>清除原因 <input name="expectation_reason" maxlength="200" required></label>
+                <button type="submit">清除排期</button>
+              </form>{{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>没有已排期明细。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="unscheduled-summary-heading">
+      <h2 id="unscheduled-summary-heading">未排期汇总</h2>
+      <p>这里的金额不会被到期日自动补入任何预计日期。</p>
+      {{if .Report.UnscheduledSummaries}}
+      <table>
+        <thead><tr><th scope="col">本方</th><th scope="col">方向</th><th scope="col">币种</th><th scope="col">义务数</th><th scope="col">当前未排期金额</th></tr></thead>
+        <tbody>
+          {{range .Report.UnscheduledSummaries}}
+          <tr><td>{{.LedgerOwnerLegalName}}</td><td>{{.Direction.Label}}</td><td>{{.Currency}}</td><td>{{.ObligationCount}}</td><td>{{.OutstandingAmount}} {{.Currency}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>当前没有未排期义务。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="unscheduled-detail-heading">
+      <h2 id="unscheduled-detail-heading">未排期明细</h2>
+      {{if .Report.UnscheduledItems}}
+      <table>
+        <thead><tr><th scope="col">义务</th><th scope="col">方向</th><th scope="col">本方</th><th scope="col">往来方</th><th scope="col">到期日</th><th scope="col">当前未结金额</th><th scope="col">历史</th></tr></thead>
+        <tbody>
+          {{range .Report.UnscheduledItems}}
+          <tr>
+            <td><a href="{{basePath}}/obligations/{{.Obligation.ID}}">{{.Obligation.Title}}</a></td><td>{{.Obligation.Direction.Label}}</td>
+            <td>{{.Obligation.LedgerOwner.LegalName}}</td><td>{{.Obligation.Counterparty.LegalName}}</td><td>{{.Obligation.DueOn}}</td>
+            <td>{{.Obligation.OutstandingAmount}} {{.Obligation.Currency}}</td><td><a href="{{basePath}}/cash-forecast?history_obligation_id={{.Obligation.ID}}#history">查看</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>没有未排期明细。</p>
+      {{end}}
+    </section>
+
+    {{if .HasHistory}}
+    <section id="history" aria-labelledby="expectation-history-heading">
+      <h2 id="expectation-history-heading">{{.History.Obligation.Title}} · 预计日期历史</h2>
+      <p>义务到期日：{{.History.Obligation.DueOn}}；当前 revision：{{.History.Obligation.CurrentRevision}}；当前状态：{{.History.Obligation.Status}}。</p>
+      {{if .History.Facts}}
+      <table>
+        <thead><tr><th scope="col">Sequence</th><th scope="col">动作</th><th scope="col">预计日期</th><th scope="col">义务 revision</th><th scope="col">原因</th><th scope="col">记录人</th><th scope="col">记录时间</th></tr></thead>
+        <tbody>
+          {{range .History.Facts}}
+          <tr><td>{{.Sequence}}</td><td>{{.Action.Label}}</td><td>{{if .ExpectedOn}}{{.ExpectedOn}}{{else}}—{{end}}</td><td>{{.ObligationRevision}}</td><td>{{.Reason}}</td><td>{{.RecordedBy.DisplayName}}（{{.RecordedBy.Kind}} / {{.RecordedBy.ID}}）</td><td>{{.RecordedAt}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>该义务尚无预计日期事实。</p>
+      {{end}}
+    </section>
+    {{end}}
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "status": 200,
+  "html_cache_control": "no-store",
+  "configured_iam_route": "/auth",
+  "login_error_container_present": true,
+  "public_asset_bytes_match_local": true,
+  "assets": {
+    "reference-oa-login.js": "4fe272ab3a84c8173becd3ed416786a4a1d711a6a06c083db0c79360a7fa7010",
+    "reference-oa-initiation-runtime.js": "9f3da47d3994a0f69d274b798c2953a755bc967317282b17d4df1072f3d304d1"
+  }
+}

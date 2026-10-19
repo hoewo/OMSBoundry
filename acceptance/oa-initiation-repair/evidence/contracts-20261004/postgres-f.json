@@ -1,0 +1,17 @@
+{
+  "passed": false,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 22,
+  "evidence_reference_provider": "explicit_test_fixture",
+  "evidence_bytes_verified": false,
+  "exit_code": 1,
+  "test_started": true,
+  "test_pass": false,
+  "test_skipped": false,
+  "binary_sha256": "5024e0709ec62fa574dbbd167d2e424670a9eee2a197ce3235ad0d2acaa4b29f",
+  "failure_type": "AssertionError",
+  "main_unchanged": true,
+  "private_pg_stopped": true,
+  "diagnosis": "Exact Contract capability verifier had not included existing evidence.manage for the new material port; credential was rejected before command. Failure retained, not replaced by a passing rerun."
+}

@@ -1,0 +1,67 @@
+{
+  "passed": false,
+  "main_changed": false,
+  "public_tls_accepted": false,
+  "clean_host_release_accepted": false,
+  "full_suite_accepted": false,
+  "full_oa_accepted": false,
+  "selected_apps": [
+    "identity-access",
+    "contract-ledger",
+    "people-groups",
+    "project-workspace",
+    "evidence-service",
+    "bonus-distribution",
+    "unified-workbench",
+    "gateway"
+  ],
+  "scenarios": [
+    {
+      "name": "current-source-selected-images-build-and-real-IAM-contract-preflight",
+      "passed": true
+    },
+    {
+      "name": "fresh-selected-D1-own-databases-real-nginx-gateway-workbench-ready",
+      "passed": true
+    },
+    {
+      "name": "formal-native-API-only-fixtures-exact-project-grants-no-SQL-seed",
+      "passed": true
+    },
+    {
+      "name": "native-Evidence-file-id-version-and-real-local-bytes",
+      "passed": true
+    }
+  ],
+  "images": {
+    "identity-access": "sha256:a2a84b5d2b5b38cc780777cdcf8881f49de9cb1dc71ef438e0f586ac481f4ab8",
+    "contract-ledger": "sha256:b9902a705cf648e61d6dfc2a3c62a65791487ece19aee3e98906b70b489da8a1",
+    "people-groups": "sha256:1be92107c6d0b2aa97bb779a86b83a68a14b71061ae46e49eaecbbe8bc7382e6",
+    "project-workspace": "sha256:4dd2d42e13ac758fc828fa45ad903998163d58de532b8ee42f9570ecf711deaf",
+    "evidence-service": "sha256:97f79eae7664aa067068ee703c3f8fe39b8c062f61f0327031829a7ba936402b",
+    "bonus-distribution": "sha256:c7a89559f56eb7fb1e9797d34112bf1fa8f6f54b032e45bd6670b231e7d3259e",
+    "unified-workbench": "sha256:c0e1456c4c2019e29236e91ac0d34de593e56add4936edca8b8c50df3ac72187",
+    "gateway": "sha256:c589172af361d6a0f37fa31dfcde698601395cddd3a6698f0dfb67db5187b7e3"
+  },
+  "file": {
+    "id": "20aae7b8-031b-4347-be7a-46640d9aed68",
+    "version": 1,
+    "sha256": "fe23c72c523223f86ded13ef50a41b79810de3768a77aab77adcef4c2a218c52",
+    "size": 45
+  },
+  "stage": "source-original-UI",
+  "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-view=\"project-real-detail\"]').locator('[data-real-production-bonus]').getByText('D1 恢复前双专业登记', { exact: true }).first() to be visible\u001b[22m\n",
+  "page_errors": [],
+  "cleanup": {
+    "runtime_stopped": true,
+    "remaining": {
+      "source": 0,
+      "target": 0
+    },
+    "private_volumes_and_backups_retained": true,
+    "projects": {
+      "source": "oa-professional-d478bfdc-source",
+      "target": "oa-professional-d478bfdc-restore"
+    }
+  }
+}

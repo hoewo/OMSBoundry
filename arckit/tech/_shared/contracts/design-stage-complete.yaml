@@ -1,0 +1,23 @@
+# 完成 Design Stage API 契约
+metadata: {path: "tech/_shared/contracts/design-stage-complete.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/stages/{stage_key}/complete", summary: "完成当前 Design Stage", auth_required: true, audience: "design-operations", capability: "design-work-item.stage.manage"}
+request:
+  path_params:
+    - {name: work_item_id, type: string, format: uuid, required: true}
+    - {name: stage_key, type: string, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignWorkItem.yaml"}}
+  errors:
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 422, code: STAGE_COMPLETION_GAPS, retryable: false}
+    - {status: 422, code: OWNER_ASSIGNMENT_INACTIVE, retryable: false}
+    - {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["只允许 ready Stage。", "重新验证 owner 与全部 active 必交 Evidence Version。", "完成 Stage 并推进 frontier；最后 Stage 同时完成 Work Item。"]

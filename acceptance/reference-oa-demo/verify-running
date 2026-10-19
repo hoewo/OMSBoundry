@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+check_ready() {
+  name=$1
+  url=$2
+  body=$(curl --fail --silent --show-error --max-time 5 "$url")
+  case "$body" in
+    *'"status":"ready"'*) ;;
+    *) echo "$name returned an unexpected readiness body: $body" >&2; exit 1 ;;
+  esac
+  echo "ready: $name"
+}
+
+check_ready contract-ledger "http://127.0.0.1:${CONTRACT_HOST_PORT:-18081}/health/ready"
+check_ready money-flow-ledger "http://127.0.0.1:${MONEY_HOST_PORT:-18083}/health/ready"
+check_ready people-groups "http://127.0.0.1:${PEOPLE_HOST_PORT:-18084}/health/ready"
+check_ready evidence-service "http://127.0.0.1:${EVIDENCE_HOST_PORT:-18085}/health/ready"
+check_ready project-workspace "http://127.0.0.1:${PROJECT_HOST_PORT:-18086}/health/ready"
+check_ready design-operations "http://127.0.0.1:${DESIGN_HOST_PORT:-18087}/health/ready"
+
+echo 'local OA application group is ready (business journey data is not seeded by this check)'

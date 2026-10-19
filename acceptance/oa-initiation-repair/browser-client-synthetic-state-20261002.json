@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-088",
+  "synthetic_ui_only": true,
+  "formal_iam_gateway_pg_or_public_chain": false,
+  "fault_probe": {
+    "duration_seconds": 153.05,
+    "client_commands": 1,
+    "client_reads": 3,
+    "other_write_commands": 0,
+    "invalid_phone_zero_write": true,
+    "save_then_read_503_preserves_input_and_disables_resubmit": true,
+    "explicit_reload_recovers_without_second_post": true
+  },
+  "normal_final_probe": {
+    "duration_seconds": 217.63,
+    "client_commands": 3,
+    "client_reads": 5,
+    "other_write_commands": 0,
+    "cancel_and_empty_required_name_zero_write": true,
+    "save_then_read_and_refresh_same_project_business_tab": true,
+    "no_op_revision_4_unchanged": true,
+    "clear_optional_contacts_revision_5": true,
+    "final_name": "示例甲方（隔离测试）",
+    "final_contact_name": "",
+    "final_contact_phone": ""
+  },
+  "read_only_probe": {
+    "duration_seconds": 127.15,
+    "client_reads": 1,
+    "client_commands": 0,
+    "business_panel_visible": true,
+    "edit_and_form_hidden": true
+  },
+  "initial_navigation_failure": "Business URL tab was read after restoring a list URL, so refresh returned to Basic. Requested tab is now captured before list-context changes; normal final probe verified refresh remains in Business.",
+  "viewport": {"width": 1280, "height": 720},
+  "save_geometry": {"x": 1169, "y": 452.4375, "width": 64, "height": 32, "center_hit": true},
+  "form_height": 188,
+  "main_overflow_y": "auto",
+  "console_errors": 0,
+  "screenshots_inspected_in_tool": true,
+  "archived_screenshot_file": false,
+  "local_probes_finished": true,
+  "source_sha256": {
+    "reference_oa_initiation_runtime.js": "1aedf7ca896c497ec349def7173e320a8804a95449211846261dd29cad9d5d93",
+    "reference_oa_real_projects.html": "2e1cf40de4c93d0a13bc7883bf4f0a8a75e24359520c6af6101d2b90c77cc149",
+    "reference_oa_detail.css": "960d323757583c438fbcdd6d605d5c2d43850d4214edfdd530fe968e15e72c96",
+    "browser_fixture": "e4e29bf4e08122882fe951036a307966c1ac7546f0db68b4aa64ae7a8d1b9641"
+  },
+  "historical_name_completion_parity": false,
+  "original_business_participant_permission_mapping": false,
+  "main_deployed": false,
+  "b01_complete": false,
+  "full_oa_accepted": false
+}

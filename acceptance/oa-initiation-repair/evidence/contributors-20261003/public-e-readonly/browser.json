@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "business_posts": 0,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "errors": [],
+  "responses": [],
+  "full_oa_accepted": false,
+  "native_revision": 10,
+  "assignments": [
+    {
+      "id": "ed437a15-51ca-48d7-953f-716b8ee7ae31",
+      "role_key": "business_owner",
+      "ended": true
+    },
+    {
+      "id": "abfc5bd4-7b09-4633-bbc9-483db5c466fd",
+      "role_key": "production_owner",
+      "ended": true
+    },
+    {
+      "id": "7e647206-9958-4b47-a772-053557bfd888",
+      "role_key": "production_owner",
+      "ended": false
+    },
+    {
+      "id": "b5c6b822-fb29-4c27-bb60-d87772165ca7",
+      "role_key": "business_owner",
+      "ended": false
+    },
+    {
+      "id": "fb088d95-d3ef-46e2-9d22-7d22bcc711b5",
+      "role_key": "commercial_contributor",
+      "ended": true
+    }
+  ],
+  "adapter_validation": true,
+  "active_assignment_count": 2,
+  "active_validation": true
+}

@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-02",
+  "surface": "native Google Chrome",
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "fixture_number": "OA-VERIFY-20261002-C",
+  "previous_batch_evidence": "../navigation-20261002/browser-observation.json",
+  "user_project_writes": 0,
+  "grant_writes": 0,
+  "before_fix": [
+    {
+      "operation": "production owner clear attempt 2",
+      "selection_confirmed": true,
+      "passed": false,
+      "result": "Explicit native dropdown value was 不设置 / 清除当前负责人. Save displayed 安全校验失败；当前输入保留，可重试. Native revision 4, two current owners, four events and six receipts, unchanged from attempt 1.",
+      "raw_remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/production-clear-attempt2-csrf.json"
+    }
+  ],
+  "normal_refresh_recovery": [
+    {
+      "operation": "normal browser reload, same IAM session; explicit production clear",
+      "passed": true,
+      "revision": 5,
+      "result": "No new login or Grant; production cleared, old assignment retained with end revision 5."
+    },
+    {
+      "operation": "explicit business clear",
+      "passed": true,
+      "revision": 6,
+      "result": "Both owners display 待设置; old business assignment retained with end revision 6."
+    }
+  ],
+  "after_release_4": [
+    {
+      "operation": "restore both owners with expired CSRF cookie",
+      "passed": true,
+      "no_page_refresh": true,
+      "input_retained": true,
+      "csrf_cookie_absence_observed": true,
+      "session_unchanged": true,
+      "result": "Native DevTools expired only oms_iam_csrf. Initial typeText punctuation failed, creating an unrelated temporary cookie; it was removed. Corrected native paste and boolean observation confirmed target cookie absent before Save. Original form saved successfully, revision 7, old snapshots retained and two new assignments created.",
+      "gateway_trace": "./gateway-renewal-trace.json",
+      "business_write_requests": 1
+    },
+    {
+      "operation": "formal number Enter search and reopen same project",
+      "passed": true,
+      "result": "One matching C, same OA basic-info detail."
+    },
+    {
+      "operation": "refresh details",
+      "passed": true,
+      "result": "Same C ID, date, summary, types and both owners."
+    },
+    {
+      "operation": "browser Back and Forward",
+      "passed": true,
+      "result": "Back retained formal-number search; Forward returned to C."
+    },
+    {
+      "operation": "page return to project list",
+      "passed": true,
+      "result": "Formal-number search and unique result retained."
+    }
+  ],
+  "continuous_core_browser_journey_finished": true,
+  "final_native_readback_passed": true,
+  "full_initiation_accepted": false,
+  "original_oa_live_browser_comparison": false,
+  "screenshots_inspected_inline_not_archived": true,
+  "full_oa_accepted": false
+}

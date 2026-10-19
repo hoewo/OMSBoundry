@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 1,
+  "iam_provider": "real_verifier_test_issuer",
+  "original_components_verified": false,
+  "tests": [
+    {
+      "test": "TestProtectedHTTPWithNativeIAMPostgresAndTypedResolver",
+      "exit_code": 0,
+      "started": true,
+      "passed": true,
+      "skipped": false,
+      "binary_sha256": "6943c38f307b65c2f8ae5b54e4f20c2b77cbcdc21d22935d733bd361769ab6fb"
+    },
+    {
+      "test": "TestPostgresRemoveLastEvidencePreservesHistoryAndReplay",
+      "exit_code": 0,
+      "started": true,
+      "passed": true,
+      "skipped": false,
+      "binary_sha256": "3f6a1c5d9233956fd7aa6b3b6641a26ed27641160f25b4f9ba74014526d90238"
+    }
+  ],
+  "own_database": "oa_invoice_candidate_20261004c",
+  "test_schemas_cleaned": true,
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

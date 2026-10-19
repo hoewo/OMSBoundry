@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "application_id": "party-directory",
+  "application_version": "0.1.0",
+  "audience": "party-directory",
+  "capabilities": [
+    { "id": "party-directory.read", "description": "查看和搜索租户内主体当前档案", "risk": "read", "resource_types": ["party"] },
+    { "id": "party-directory.create", "description": "登记组织或个人主体", "risk": "write", "resource_types": ["party"] },
+    { "id": "party-directory.update", "description": "以期望 revision 更正主体当前资料", "risk": "write", "resource_types": ["party"] },
+    { "id": "party-directory.status.manage", "description": "停用或重新启用主体", "risk": "privileged", "resource_types": ["party"] },
+    { "id": "party-directory.history.read", "description": "读取主体不可变 revision 历史", "risk": "read", "resource_types": ["party"] },
+    { "id": "party-directory.reference.read", "description": "供已声明消费应用读取精确 Party 引用", "risk": "privileged", "resource_types": ["party"] }
+  ]
+}

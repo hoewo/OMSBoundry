@@ -1,0 +1,89 @@
+# 获取 Project API 契约
+# 路径: arckit/tech/_shared/contracts/project-get.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-get.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.2"
+  created: "2026-09-25"
+  updated: "2026-09-27"
+
+endpoint:
+  method: GET
+  path: "/api/v1/projects/{project_id}"
+  summary: "读取 Project 自有事实和稳定引用"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.read"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  query_params:
+    - {name: include_inactive, type: boolean, required: false, default: false}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [project, children, assignments, resource_links, allowed_actions]
+      properties:
+        project: {$ref: "../models/Project.yaml"}
+        parent:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            id: {type: string, format: uuid}
+            project_number: {type: string}
+            name: {type: string}
+            node_type: {type: string, enum: [project, package]}
+            parent_project_id: {type: [string, "null"], format: uuid}
+            sort_order: {type: integer, minimum: 0}
+            status: {type: string}
+            revision: {type: integer, minimum: 1}
+          description: "只含 Project Workspace 摘要字段；不聚合外部业务事实。"
+        children:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, project_number, name, node_type, sort_order, status, revision]
+            properties:
+              id: {type: string, format: uuid}
+              project_number: {type: string}
+              name: {type: string}
+              node_type: {type: string, enum: [project, package]}
+              parent_project_id: {type: [string, "null"], format: uuid}
+              sort_order: {type: integer, minimum: 0}
+              status: {type: string}
+              revision: {type: integer, minimum: 1}
+          description: "直接子 Project 摘要；最多两级。"
+        assignments:
+          type: array
+          items: {$ref: "../models/ProjectAssignment.yaml"}
+        resource_links:
+          type: array
+          items: {$ref: "../models/ProjectResourceLink.yaml"}
+        active_package_conversion:
+          $ref: "../models/ProjectPackageConversion.yaml"
+          description: "仅在当前 Project 存在可审计的 active attach／wrap 转换时返回，供安全撤销命令使用。"
+        allowed_actions:
+          type: array
+          items: {type: string}
+          description: "当前凭证 action、scope 与 Project 当前状态共同收敛后的动作；不是客户角色名，也不是仅供展示的授权结论。"
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+
+business_logic:
+  flow:
+    - "按 tenant 和 scope 读取；不可见与不存在统一返回 404。"
+    - "默认只返回 active Assignment 和 Link；显式参数可读取历史记录。"
+    - "不实时聚合目标应用完整业务数据。"
+    - "客户端只按 allowed_actions 展示或启用动作；服务端在写入时重新验证 credential、scope、revision 和状态。"
+    - "权限刷新失败时 Gateway 必须清除该应用旧 Capability Cookie；旧页面进入只读恢复态，不保留可编辑假象。"
+  state_transitions: []
+  side_effects: []

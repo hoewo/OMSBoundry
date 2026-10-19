@@ -1,0 +1,99 @@
+{
+  "schema_version": "1",
+  "suite_id": "omsbizfoundry-demo",
+  "tenant_id": "22222222-2222-4222-8222-222222222222",
+  "applications": [
+    {
+      "id": "identity-access",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/auth",
+      "upstream": "http://identity-access:8080",
+      "readiness_path": "/health/ready",
+      "audience": "identity-access"
+    },
+    {
+      "id": "unified-workbench",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/workbench",
+      "upstream": "http://unified-workbench:8082",
+      "readiness_path": "/health/ready",
+      "audience": "unified-workbench"
+    },
+    {
+      "id": "people-groups",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/people",
+      "upstream": "http://people-groups:8084",
+      "readiness_path": "/health/ready",
+      "audience": "people-groups",
+      "entry_action": "people-groups.view",
+      "capability_manifest": "contracts/access/v1/examples/people-groups-capabilities.json"
+    },
+    {
+      "id": "contract-ledger",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/contract",
+      "upstream": "http://contract-ledger:8081",
+      "readiness_path": "/health/ready",
+      "audience": "contract-ledger",
+      "entry_action": "contract-ledger.view",
+      "capability_manifest": "contracts/access/v1/examples/contract-ledger-capabilities.json"
+    },
+    {
+      "id": "money-flow-ledger",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/money",
+      "upstream": "http://money-flow-ledger:8083",
+      "readiness_path": "/health/ready",
+      "audience": "money-flow-ledger",
+      "entry_action": "money-flow-ledger.view",
+      "capability_manifest": "contracts/access/v1/examples/money-flow-ledger-capabilities.json",
+      "metric_projection": {
+        "schema_version": "1",
+        "path": "/api/v1/metrics/operating-summary",
+        "action": "money-flow-ledger.statistics.read"
+      }
+    },
+    {
+      "id": "evidence-service",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/evidence",
+      "upstream": "http://evidence-service:8085",
+      "readiness_path": "/health/ready",
+      "audience": "evidence-service",
+      "entry_actions": ["evidence-service.view", "evidence-service.metadata.read", "evidence-service.upload", "evidence-service.download"],
+      "capability_manifest": "contracts/access/v1/examples/evidence-service-capabilities.json",
+      "show_in_workbench": false
+    },
+    {
+      "id": "production-operations",
+      "version": "0.1.0",
+      "enabled": false,
+      "required": false,
+      "route_prefix": "/production",
+      "upstream": "http://production-operations:8087",
+      "readiness_path": "/health/ready",
+      "audience": "production-operations",
+      "capability_namespace": "production-work-item",
+      "entry_action": "production-work-item.read",
+      "capability_manifest": "contracts/access/v1/examples/production-operations-capabilities.json",
+      "work_item_projection": {
+        "schema_version": "1",
+        "path": "/api/v1/work-items",
+        "action": "production-work-item.work-items.read"
+      }
+    }
+  ]
+}

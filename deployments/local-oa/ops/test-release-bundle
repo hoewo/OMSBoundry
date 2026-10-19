@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-local-oa-release-test.XXXXXX")
+version=v0.0.0-bundle-test
+prefix=omsbizfoundry/local-oa-bundle-test
+fixture=omsbizfoundry/design-operations:local
+created_images=''
+cleanup() {
+  for image in $created_images; do docker image rm "$image" >/dev/null 2>&1 || true; done
+  rm -rf "$test_root"
+}
+trap cleanup EXIT HUP INT TERM
+
+docker image inspect "$fixture" >/dev/null 2>&1 || {
+  docker buildx build --load --tag "$fixture" --file "$repo_dir/deployments/local-oa/Dockerfile.app" --build-arg APP=design-operations "$repo_dir" >/dev/null
+}
+target=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$fixture")
+for name in postgres contract-ledger money-flow-ledger people-groups evidence-service project-workspace design-operations project-reference-stub design-reference-stub; do
+  image="$prefix/$name:$version"
+  docker tag "$fixture" "$image"
+  created_images="$created_images $image"
+done
+
+LOCAL_OA_TARGET_PLATFORM="$target" LOCAL_OA_USE_EXISTING_IMAGES=true LOCAL_OA_IMAGE_PREFIX="$prefix" \
+RELEASE_PROVENANCE_MODE=development RELEASE_COMMIT=test RELEASE_BUILT_AT=2026-09-25T00:00:00Z \
+  "$script_dir/build-release" "$version" "$test_root/out" > "$test_root/result"
+archive=$(sed -n '1p' "$test_root/result")
+checksum=$(sed -n '2p' "$test_root/result")
+[ -f "$archive" ] && [ -f "$checksum" ] || { echo "local OA release outputs are missing" >&2; exit 1; }
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$checksum")") >/dev/null
+else
+  (cd "$(dirname "$archive")" && shasum -a 256 -c "$(basename "$checksum")") >/dev/null
+fi
+
+mkdir "$test_root/extracted"
+tar -xzf "$archive" -C "$test_root/extracted"
+root="$test_root/extracted/$(basename "$archive" .tar.gz)"
+"$root/deployments/local-oa/ops/verify-release" >/dev/null
+
+for path in \
+  images.tar \
+  bin/reference-oa-demo \
+  bin/contract-ledger-demo \
+  bin/money-flow-demo \
+  bin/people-groups-demo \
+  bin/evidence-service-demo \
+  bin/project-workspace-demo \
+  bin/design-operations-demo \
+  deployments/local-oa/.env.example \
+  deployments/local-oa/.release-bundle \
+  deployments/local-oa/compose.yaml \
+  deployments/local-oa/ops/local-oa \
+  deployments/local-oa/ops/preflight-host \
+  deployments/demos/.release-bundle \
+  deployments/demos/ops/level-a \
+  deployments/demos/ops/release-runtime \
+  deployments/demos/contract-ledger/ops/demo \
+  deployments/demos/project-workspace/compose.yaml \
+  acceptance/reference-oa-demo/verify-running \
+  docs/operations/local-oa-ubuntu-demo.md \
+  RELEASE-METADATA \
+  RELEASE-CHECKSUMS.sha256; do
+  [ -e "$root/$path" ] || { echo "local OA release is missing $path" >&2; exit 1; }
+done
+if find "$root" -type f \( -name '.env' -o -name '*.key' -o -name '*.pem' -o -name 'demo-state.json' \) -print | grep -q .; then
+  echo "local OA release contains runtime state or a secret-shaped file" >&2
+  exit 1
+fi
+if [ -e "$root/apps" ] || [ -e "$root/deployments/local-oa/Dockerfile.app" ]; then
+  echo "local OA release contains target-build inputs" >&2
+  exit 1
+fi
+
+echo "PASS local OA release bundle test"

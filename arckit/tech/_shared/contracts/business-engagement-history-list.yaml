@@ -1,0 +1,13 @@
+# 查询 Business Engagement 历史 API 契约
+metadata: {path: "tech/_shared/contracts/business-engagement-history-list.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/business-engagements/{engagement_id}/history", summary: "读取不可变经营承接历史", auth_required: true, audience: "business-engagement", capability: "business-engagement.history.read"}
+request:
+  path_params: [{name: engagement_id, type: string, format: uuid, required: true}]
+  query:
+    properties:
+      after_sequence: {type: integer, minimum: 0, default: 0}
+      limit: {type: integer, minimum: 1, maximum: 200, default: 50}
+responses:
+  success: {status: 200, schema: {$ref: "../models/BusinessEngagementHistoryPage.yaml"}}
+  errors: [{status: 403, code: CAPABILITY_DENIED, retryable: false}, {status: 403, code: SCOPE_DENIED, retryable: false}, {status: 404, code: BUSINESS_ENGAGEMENT_NOT_FOUND, retryable: false}]
+business_logic: {flow: ["按 event_sequence 升序稳定分页。", "读取不调用外部应用。"]}

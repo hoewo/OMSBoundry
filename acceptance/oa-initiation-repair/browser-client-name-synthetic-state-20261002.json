@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-089",
+  "synthetic": true,
+  "formal_iam_or_persistence_or_gateway": false,
+  "original_source_commit": "826e0fc65aa09947fc4f64f62a2644fa5d11a302",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "initial_attempt": {
+    "duration_seconds": 359.47,
+    "client_context_read": 1,
+    "client_name_suggestions_read": 1,
+    "directory_read": 1,
+    "writes": 0,
+    "prefix_hint_visible": true,
+    "tab_value": "甲方单位",
+    "tab_focus": "contact_name",
+    "failures": [
+      "plain input style was not applied; height 24px",
+      "invalid detail URL wrote error into hidden initiation panel"
+    ]
+  },
+  "final_attempt": {
+    "duration_seconds": 259.2,
+    "counts": {
+      "basic_info_change": 0,
+      "client_context_change": 1,
+      "client_context_read": 3,
+      "client_name_suggestions_read": 7,
+      "complete": 0,
+      "directory_read": 2,
+      "dispatch": 0,
+      "production_assignment": 0,
+      "profile_correction": 0,
+      "update": 0
+    },
+    "checks": {
+      "prefix_hint_does_not_autofill": true,
+      "tab_accepts_and_focuses_contact": true,
+      "shift_tab_does_not_accept": true,
+      "fuzzy_hint_arrow_and_explicit_tab_accept": true,
+      "equal_candidate_excluded_other_contains_allowed_as_original": true,
+      "only_equal_candidate_no_hint": true,
+      "leading_whitespace_no_hint": true,
+      "clear_name_hides_hint_and_clear_button": true,
+      "clear_contact_and_cancel_zero_write": true,
+      "explicit_save_one_write": true,
+      "readback_and_refresh_same_project_business_tab": true,
+      "invalid_detail_error_visible_and_reload_list_recovers": true,
+      "console_errors": 0
+    },
+    "input_height_px": 40,
+    "input_border_radius_px": 6,
+    "input_font_size_px": 13,
+    "save_visible": true,
+    "save_center_hit_test": true
+  },
+  "screenshot_inspected_inline": true,
+  "screenshot_file_archived": false,
+  "latency_failure_or_auth_revocation_browser_matrix_complete": false,
+  "probe_stopped": true,
+  "temporary_tab_closed": true,
+  "viewport_override_used": false,
+  "main_deployed": false,
+  "full_oa_accepted": false
+}

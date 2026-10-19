@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "application_id": "contract-ledger",
+  "application_version": "0.1.0",
+  "audience": "contract-ledger",
+  "capabilities": [
+    { "id": "contract-ledger.view", "description": "查看合同、主体、关系、结算、证据元数据和审计", "risk": "read", "resource_types": ["contract", "party"] },
+    { "id": "contract-ledger.party.register", "description": "登记合同应用自己的签约主体", "risk": "write", "resource_types": ["party"] },
+    { "id": "contract-ledger.draft.manage", "description": "建立、编辑、取消合同草稿并维护签约主体", "risk": "write", "resource_types": ["contract"] },
+    { "id": "contract-ledger.lifecycle.manage", "description": "激活、变更、终止、结算和关闭合同", "risk": "write", "resource_types": ["contract"] },
+    { "id": "contract-ledger.correct", "description": "追加受控更正文书", "risk": "privileged", "resource_types": ["contract"] },
+    { "id": "contract-ledger.evidence.manage", "description": "新增合同证据和证据版本", "risk": "write", "resource_types": ["contract", "evidence"] },
+    { "id": "contract-ledger.export", "description": "导出可校验合同账簿", "risk": "privileged", "resource_types": ["contract"] },
+    { "id": "contract-ledger.restore", "description": "恢复合同账簿", "risk": "privileged", "resource_types": ["contract"] },
+    { "id": "contract-ledger.reference.read", "description": "供受信工作负载读取精确合同或结算摘要", "risk": "privileged", "resource_types": ["contract", "settlement"] }
+  ]
+}

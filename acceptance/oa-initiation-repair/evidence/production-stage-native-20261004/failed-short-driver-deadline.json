@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-04T14:54:06.829Z",
+  "passed": false,
+  "private_native": true,
+  "public_main_changed": false,
+  "full_oa_accepted": false,
+  "local_docker_started": false,
+  "scenarios": [
+    {
+      "name": "private-Nginx-Gateway-formal-IAM-independent-PG18-owners-four-project-types",
+      "passed": true
+    },
+    {
+      "name": "normal-Workbench-original-shared-scheme-panel-lazy-read-zero-owner-writes",
+      "passed": true
+    },
+    {
+      "name": "original-main-required-and-cancel-zero-native-commands",
+      "passed": true
+    }
+  ],
+  "infrastructure": {
+    "pg": "oa-stage-pg-ccbb3ee836",
+    "edge": "oa-stage-edge-ccbb3ee836",
+    "remote": "/tmp/oa-stage-suite-ccbb3ee836",
+    "local_docker": false,
+    "main_changed": false,
+    "nginx_sha256": "84bd149a231d0377653be8edf133944d5b8716728128870e292281ee60b6a805"
+  },
+  "tenant_id": "d8a7a8fe-39b9-4611-8a84-c38d7380b6db",
+  "project_id": "febc568d-fb48-4cdf-8eef-274e9a04f83d",
+  "subject_id": "1a4f87f3-0427-4e74-b365-544fdb4a8d55",
+  "stage": "native-multi-save",
+  "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible') to be hidden\u001b[22m\n\u001b[2m    27 × locator resolved to visible <div tabindex=\"-1\" class=\"ant-drawer ant-drawer-right css-ac2jek ant-drawer-open\">…</div>\u001b[22m\n",
+  "page_errors": [],
+  "fixture_stopped": true,
+  "finished_at": "2026-10-04T14:55:35.348Z"
+}

@@ -1,0 +1,16 @@
+{
+  "version": "v0.1.0-oa.20261003.5",
+  "official_release": false,
+  "source_kind": "saved dirty-worktree personnel readback repair",
+  "source_archive_sha256": "692c43ca43da39f9cd8aa2926038cbe5d87c03b19bff8da23d285501017ab288",
+  "schema_change": false,
+  "closure": [
+    "unified-workbench"
+  ],
+  "applications": {
+    "unified-workbench": {
+      "server": "b64df547573c3157817e6efdbff44762fc907d05baf0c7e99d3475c27af6b4d3"
+    }
+  },
+  "full_oa_accepted": false
+}

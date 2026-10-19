@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omsbizfoundry.local/contracts/scenario-evidence/v1/scenario-evidence.schema.json",
+  "title": "OMSBizFoundry Customer Scenario Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_id",
+    "title",
+    "source_kind",
+    "claim_scope",
+    "assessment_status",
+    "problem",
+    "source_evidence",
+    "facts",
+    "applications",
+    "differences",
+    "connectors",
+    "boundary_signals",
+    "acceptance_evidence",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": { "const": "customer-scenario-evidence/v1" },
+    "scenario_id": { "$ref": "#/$defs/identifier" },
+    "title": { "$ref": "#/$defs/nonEmptyString" },
+    "source_kind": {
+      "enum": ["reference_product", "real_customer_anonymized", "hypothetical_probe"]
+    },
+    "claim_scope": {
+      "enum": ["none", "reference_baseline", "single_customer_scenario"]
+    },
+    "assessment_status": {
+      "enum": ["draft", "evidence_ready", "passed", "failed"]
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "observable_outcomes", "out_of_scope"],
+      "properties": {
+        "statement": { "$ref": "#/$defs/nonEmptyString" },
+        "observable_outcomes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "out_of_scope": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "source_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_refs", "customer_confirmation_refs"],
+      "properties": {
+        "evidence_refs": { "$ref": "#/$defs/stringArray" },
+        "customer_confirmation_refs": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "owner", "meaning", "states", "correction", "evidence_refs"],
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "owner": { "$ref": "#/$defs/nonEmptyString" },
+          "meaning": { "$ref": "#/$defs/nonEmptyString" },
+          "states": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/nonEmptyString" }
+          },
+          "correction": { "$ref": "#/$defs/nonEmptyString" },
+          "evidence_refs": { "$ref": "#/$defs/stringArray" }
+        }
+      }
+    },
+    "applications": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "disabled"],
+      "properties": {
+        "enabled": { "$ref": "#/$defs/identifierArray" },
+        "disabled": { "$ref": "#/$defs/identifierArray" }
+      }
+    },
+    "differences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "requirement",
+          "layer",
+          "disposition",
+          "rationale",
+          "fact_refs",
+          "delivery_artifacts",
+          "evidence_refs"
+        ],
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "requirement": { "$ref": "#/$defs/nonEmptyString" },
+          "layer": {
+            "enum": [
+              "stable_core",
+              "configuration",
+              "policy",
+              "typed_extension",
+              "customer_assembly",
+              "customer_specific"
+            ]
+          },
+          "disposition": {
+            "enum": ["implemented", "accepted_deferred", "rejected", "needs_business_evidence"]
+          },
+          "rationale": { "$ref": "#/$defs/nonEmptyString" },
+          "fact_refs": { "$ref": "#/$defs/identifierArray" },
+          "delivery_artifacts": { "$ref": "#/$defs/stringArray" },
+          "evidence_refs": { "$ref": "#/$defs/stringArray" },
+          "policy_evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["version", "inputs", "output", "correction", "runtime_evidence_refs"],
+            "properties": {
+              "version": { "$ref": "#/$defs/nonEmptyString" },
+              "inputs": { "$ref": "#/$defs/identifierArray" },
+              "output": { "$ref": "#/$defs/nonEmptyString" },
+              "correction": { "$ref": "#/$defs/nonEmptyString" },
+              "runtime_evidence_refs": { "$ref": "#/$defs/stringArray" }
+            }
+          }
+        }
+      }
+    },
+    "connectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "difference_ref",
+          "source_application",
+          "target_application",
+          "source_contract",
+          "target_contract",
+          "idempotency",
+          "failure_recovery",
+          "target_confirmation"
+        ],
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "difference_ref": { "$ref": "#/$defs/identifier" },
+          "source_application": { "$ref": "#/$defs/identifier" },
+          "target_application": { "$ref": "#/$defs/identifier" },
+          "source_contract": { "$ref": "#/$defs/nonEmptyString" },
+          "target_contract": { "$ref": "#/$defs/nonEmptyString" },
+          "idempotency": { "$ref": "#/$defs/nonEmptyString" },
+          "failure_recovery": { "$ref": "#/$defs/nonEmptyString" },
+          "target_confirmation": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "boundary_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "customer_core_branches",
+        "customer_databases",
+        "shared_business_tables",
+        "customer_business_migrations",
+        "cross_app_internal_reads",
+        "onsite_core_patches",
+        "hidden_mandatory_dependencies"
+      ],
+      "properties": {
+        "customer_core_branches": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "customer_databases": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "shared_business_tables": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "customer_business_migrations": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "cross_app_internal_reads": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "onsite_core_patches": { "$ref": "#/$defs/optionalNonNegativeInteger" },
+        "hidden_mandatory_dependencies": { "$ref": "#/$defs/optionalNonNegativeInteger" }
+      }
+    },
+    "acceptance_evidence": { "$ref": "#/$defs/stringArray" },
+    "limitations": { "$ref": "#/$defs/stringArray" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "identifierArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "optionalNonNegativeInteger": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonNegativeInteger" },
+        { "type": "null" }
+      ]
+    }
+  }
+}

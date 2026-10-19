@@ -1,0 +1,85 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the restored isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the restored D1 Nginx entry URL}
+evidence_dir=${C6_D1_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c6-d1-evidence"}
+ids_file="$evidence_dir/ids.json"
+state_file="$evidence_dir/state.json"
+
+for command in curl jq openssl awk docker; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$ids_file" ] && [ -f "$state_file" ] || { echo 'C6 pre-backup evidence is missing' >&2; exit 2; }
+
+env_value() { awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file"; }
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --file "${D1_COMPOSE_OVERRIDE_FILE:?set D1_COMPOSE_OVERRIDE_FILE}" \
+    --profile contract --profile people --profile party --profile project --profile evidence --profile cost-outsourcing "$@"
+}
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" "$(printf '%s' "$value" | cut -c21-32)"
+}
+expect_status() { [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }; }
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c6-restored.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/admin.cookies"
+result=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code}' --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf")
+expect_status 200 "$result" 'fetch CSRF after restore'
+csrf=$(jq -er .csrf_token "$workspace/csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME)" --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+result=$(curl --silent --show-error --output "$workspace/login.json" --write-out '%{http_code}' --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" "$base_url/auth/api/v1/login")
+expect_status 200 "$result" 'login after restore'
+result=$(curl --silent --show-error --output "$workspace/authorize.out" --write-out '%{http_code}' --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" "$base_url/gateway/authorize/cost-outsourcing")
+expect_status 303 "$result" 'authorize C6 after restore'
+
+project_id=$(jq -er .project_id "$ids_file"); cost_id=$(jq -er .cost_id "$ids_file"); engagement_id=$(jq -er .engagement_id "$ids_file"); contract_engagement_id=$(jq -er .contract_engagement_id "$ids_file"); evidence_file=$(jq -er .evidence_file_id "$ids_file"); migration_batch=$(jq -er .migration_batch_id "$ids_file")
+result=$(curl --silent --show-error --output "$workspace/costs.json" --write-out '%{http_code}' --cookie "$cookies" "$base_url/cost-outsourcing/api/v1/cost-entries?project_id=$project_id")
+expect_status 200 "$result" 'read restored Costs'
+jq -e --arg id "$cost_id" '(.items | length) == 1 and .items[0].id == $id and .items[0].revision == 1' "$workspace/costs.json" >/dev/null
+jq --arg id "$cost_id" '.items[] | select(.id == $id)' "$workspace/costs.json" >"$workspace/cost.json"
+result=$(curl --silent --show-error --output "$workspace/engagements.json" --write-out '%{http_code}' --cookie "$cookies" "$base_url/cost-outsourcing/api/v1/outsourcing-engagements?project_id=$project_id")
+expect_status 200 "$result" 'read restored Engagements'
+jq -e --arg id "$engagement_id" --arg contract_id "$contract_engagement_id" '(.items | length) == 2 and any(.items[]; .id == $id and .revision == 1) and any(.items[]; .id == $contract_id and .revision == 1)' "$workspace/engagements.json" >/dev/null
+jq --arg id "$engagement_id" '.items[] | select(.id == $id)' "$workspace/engagements.json" >"$workspace/engagement.json"
+
+runtime_state=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d contract_ledger -At -F '|' -c \"SELECT action,migration_batch_id,sequence,(SELECT count(*) FROM party_migration_mappings WHERE tenant_id=t.tenant_id AND migration_batch_id=t.migration_batch_id) FROM party_runtime_transitions t ORDER BY sequence DESC LIMIT 1\"")
+[ "$runtime_state" = "cutover|$migration_batch|$(jq -er .party_runtime_sequence "$state_file")|2" ] || { echo "restored Contract Party runtime state mismatch: $runtime_state" >&2; exit 1; }
+
+cost_sha=$(jq -Sc '{id,tenant_id,project,category,occurred_on,currency,amount_minor,distance_meters,description,evidence,state,revision,created_by,updated_by,created_at,updated_at}' "$workspace/cost.json" | openssl dgst -sha256 -r | awk '{print $1}')
+engagement_sha=$(jq -Sc '{id,tenant_id,project,provider,scope,currency,amount_minor,contract,evidence,note,state,revision,created_by,updated_by,created_at,updated_at}' "$workspace/engagement.json" | openssl dgst -sha256 -r | awk '{print $1}')
+[ "$cost_sha" = "$(jq -er .cost_sha256 "$state_file")" ] || { echo 'restored Cost canonical digest mismatch' >&2; exit 1; }
+[ "$engagement_sha" = "$(jq -er .engagement_sha256 "$state_file")" ] || { echo 'restored Engagement canonical digest mismatch' >&2; exit 1; }
+
+for kind in cost engagement assessment; do
+  case "$kind" in
+    cost) url="$base_url/cost-outsourcing/api/v1/cost-entries/$cost_id/history" ;;
+    engagement) url="$base_url/cost-outsourcing/api/v1/outsourcing-engagements/$engagement_id/history" ;;
+    assessment) url="$base_url/cost-outsourcing/api/v1/outsourcing-engagements/$engagement_id/assessments" ;;
+  esac
+  result=$(curl --silent --show-error --output "$workspace/$kind-history.json" --write-out '%{http_code}' --cookie "$cookies" "$url")
+  expect_status 200 "$result" "read restored $kind history"
+  jq -e '.items | length == 1' "$workspace/$kind-history.json" >/dev/null
+done
+assessment_sha=$(jq -Sc . "$workspace/assessment-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+[ "$assessment_sha" = "$(jq -er .assessment_sha256 "$state_file")" ] || { echo 'restored Assessment canonical digest mismatch' >&2; exit 1; }
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg evidence "$evidence_file" --arg occurred_on "$(jq -er .occurred_on "$workspace/cost.json")" '{command_id:$command_id,expected_revision:1,reason:"空目标恢复后继续写入",category:"vehicle",occurred_on:$occurred_on,currency:"CNY",amount_minor:12445,distance_meters:6789,description:"C6 D1 现场车辆成本（恢复后补停车费）",evidence_refs:[{file_id:$evidence,version:1,slot:"receipt"}]}')
+result=$(curl --silent --show-error --output "$workspace/cost-corrected.json" --write-out '%{http_code}' --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" "$base_url/cost-outsourcing/api/v1/cost-entries/$cost_id/corrections")
+expect_status 200 "$result" 'correct Cost after empty-target restore'
+jq -e '.revision == 2 and .amount_minor == 12445 and .description == "C6 D1 现场车辆成本（恢复后补停车费）"' "$workspace/cost-corrected.json" >/dev/null
+result=$(curl --silent --show-error --output "$workspace/cost-history-after.json" --write-out '%{http_code}' --cookie "$cookies" "$base_url/cost-outsourcing/api/v1/cost-entries/$cost_id/history")
+expect_status 200 "$result" 'read Cost history after continued write'
+jq -e '[.items[].event_kind] == ["recorded","corrected"] and [.items[].revision] == [1,2]' "$workspace/cost-history-after.json" >/dev/null
+
+cp "$workspace/cost-corrected.json" "$evidence_dir/restored-cost-corrected.json"
+cp "$workspace/cost-history-after.json" "$evidence_dir/restored-cost-history.json"
+printf '%s\n' '# C6 D1 空目标恢复复验' '' "- Cost canonical SHA-256：$cost_sha" "- Engagement canonical SHA-256：$engagement_sha" "- Assessment canonical SHA-256：$assessment_sha" "- Contract Party runtime：$runtime_state" '- ID、revision、显式 Party 映射、切换序列、精确 Project／Party／Evidence 快照和三类历史保持。' '- 恢复后追加 Cost correction 成功，revision 1 → 2，历史为 recorded → corrected。' >"$evidence_dir/restore-result.md"
+cat "$evidence_dir/restore-result.md"

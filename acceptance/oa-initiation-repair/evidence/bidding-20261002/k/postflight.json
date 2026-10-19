@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "business_databases_preserved": 12,
+  "iam_static_facts_preserved": true,
+  "before_native_mount_snapshot_available": false,
+  "mount_validation": "old-declarative-config-and-preexisting-volume",
+  "initial_failure_retained": true,
+  "container_recreates": 0,
+  "business_api_writes": 0,
+  "checker_sha256": "883d4b7fa847a2f918886b399ddbf48908e0348d19d7994c74bef2b304c82e01"
+}

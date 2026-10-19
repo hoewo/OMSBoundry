@@ -1,0 +1,34 @@
+# 查询 Project 列表 API 契约
+metadata: {path: "tech/_shared/contracts/project-list.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.1", created: "2026-09-25", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/projects", summary: "按租户读取最近更新的 Project 当前投影", auth_required: true, audience: "project-workspace", capability: "project-workspace.read"}
+request:
+  query_params:
+    - {name: limit, type: integer, minimum: 1, maximum: 100, required: false, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items, allowed_actions]
+      properties:
+        items:
+          type: array
+          items: {$ref: "../models/Project.yaml"}
+        allowed_actions:
+          type: array
+          items: {type: string}
+          description: "当前已验证凭证在列表上下文中的稳定 Project Capability；客户端不得根据客户角色名自行推断。"
+  errors:
+    - {status: 400, code: invalid_request, retryable: false}
+    - {status: 401, code: credential_required, retryable: false}
+    - {status: 403, code: capability_denied, retryable: false}
+    - {status: 403, code: scope_denied, retryable: false}
+business_logic:
+  flow:
+    - "只返回访问凭证 tenant 内的 Project，不跨租户聚合。"
+    - "按 updated_at 与 id 倒序返回，列表项保持 Project 自有当前投影。"
+    - "列表不实时聚合 Assignment、Resource Link 或目标应用业务数据。"
+    - "新建 Project／Package 等入口只由 allowed_actions 驱动；服务端仍对每个写命令重新鉴权。"
+  state_transitions: []
+  side_effects: []

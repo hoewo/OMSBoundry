@@ -1,0 +1,63 @@
+{
+  "passed": false,
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "administrator_only": true,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "1a03b0dd-d855-4f5e-b468-662c35792b13"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/d8ac01c0-9ec8-49fe-9272-e8ed8ed467b0/withdrawal",
+      "command_id": "3d3668e4-a111-4ca3-a720-60a80b562b83"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "457997ae-e2f3-4b47-ab9d-ea27c81de8b1"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/5ad580f5-6677-467f-a47b-27bd6a489082/withdrawal",
+      "command_id": "704a5f51-2710-4676-9db4-d150f2ea3815"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "d194534e-66f3-410e-8ae8-7160bc449070"
+    }
+  ],
+  "page_errors": [],
+  "scenarios": [
+    {
+      "side": "business",
+      "category": "accommodation",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    },
+    {
+      "side": "business",
+      "category": "expert_fee",
+      "amount_minor": "1",
+      "revisions": 2,
+      "passed": true
+    }
+  ],
+  "native_records": [],
+  "dropdown_diagnostic": {
+    "side": "business",
+    "popups": 1,
+    "contents": 7,
+    "options": 7,
+    "text": "vehicle\naccommodation\n用车\n住宿\n交通\n评标专家费\n投标报名费\n中标服务费\n其他"
+  },
+  "failure": {
+    "stage": "open-business",
+    "type": "AssertionError",
+    "message": "Expected values to be strictly equal:\n\n404 !== 200\n"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "empty_databases": 13,
+  "facts_and_sequences_equal": true,
+  "files_and_iam_key_bytes_equal": true,
+  "schema_7_to_10": false,
+  "schema_10_unchanged": true,
+  "existing_project_facts_unchanged": true,
+  "full_suite_restore_runtime": false
+}

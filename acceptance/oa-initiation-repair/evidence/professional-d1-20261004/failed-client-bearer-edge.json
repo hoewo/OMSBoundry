@@ -1,0 +1,39 @@
+{
+  "passed": false,
+  "main_changed": false,
+  "public_tls_accepted": false,
+  "clean_host_release_accepted": false,
+  "full_suite_accepted": false,
+  "full_oa_accepted": false,
+  "selected_apps": [
+    "identity-access",
+    "contract-ledger",
+    "people-groups",
+    "project-workspace",
+    "evidence-service",
+    "bonus-distribution",
+    "unified-workbench",
+    "gateway"
+  ],
+  "scenarios": [
+    {
+      "name": "current-source-selected-images-build-and-real-IAM-contract-preflight",
+      "passed": true
+    },
+    {
+      "name": "fresh-selected-D1-own-databases-real-nginx-gateway-workbench-ready",
+      "passed": true
+    }
+  ],
+  "stage": "seed-native",
+  "error": "people-groups /api/v1/persons status 401\n\n401 !== 201\n",
+  "page_errors": [],
+  "cleanup": {
+    "runtime_stopped": true,
+    "private_volumes_and_backups_retained": true,
+    "projects": {
+      "source": "oa-professional-a2a201a8-source",
+      "target": "oa-professional-a2a201a8-restore"
+    }
+  }
+}

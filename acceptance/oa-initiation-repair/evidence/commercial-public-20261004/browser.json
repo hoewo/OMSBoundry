@@ -1,0 +1,301 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "run_id": "35jPS3",
+  "public_real_owners": true,
+  "administrator_only": true,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts",
+      "command_id": "bea18308-360b-4b82-8510-67e331c403ec"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "5916fd71-fc12-4279-bbf4-9bbc43e0543d",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "45a562d4-5c65-4458-897b-728b621bdf10",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "45a562d4-5c65-4458-897b-728b621bdf10",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts",
+      "command_id": "3b78f858-9b26-4245-95e8-76f5293a8dd2"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/beb67167-60a8-446b-a6ca-744bb2ddfde9/reference-oa-draft",
+      "command_id": "7b2bec18-fb03-4ed8-90cf-3ad4ab8df223",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "040ee5e2-6f95-434d-9471-56c3756dfc70",
+      "expected_revision": 15
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1",
+      "command_id": "3f3e233e-076e-41b9-b1ca-92a24d350ec2"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1",
+      "command_id": "6aeca373-3abf-4df5-a5d6-29ea77e6e422"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/parties",
+      "command_id": "5e92e1cd-c805-413f-9fd1-8643e4ff8983"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/parties",
+      "command_id": "d9406bd9-6c0a-49cf-a2d2-2757fe152168"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/activate",
+      "command_id": "517bc605-243a-4a84-9ec8-ac33293c5dfb"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "2b89a008-cec1-4c04-bf09-01f36f56294f",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/a2489a5d-0cd7-4ee1-9c47-83fe7fab542a/confirm",
+      "command_id": "9c3e1d4c-4ecf-44ad-a4a0-9d2001fdc6ca"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "72ddeb38-abb4-46c9-9f40-3c365346d5a3",
+      "expected_revision": 2
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/1e79f629-81d8-4d52-b85d-08037d06ff7d/confirm",
+      "command_id": "9cba67e7-ad0c-4dc1-91de-f2f92300a401"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "7a078a0d-0912-417f-9a3c-5cd379891313",
+      "expected_revision": 3
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/22e5c1e7-f21a-408f-ab10-9ff839f03139/confirm",
+      "command_id": "5add80f6-f067-4f53-bc50-635b48b8cdcc"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/settlements",
+      "command_id": "3f71ae82-926a-4f39-9af9-4b53aeef6df7"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/settlements",
+      "command_id": "8d17caa5-b8c6-4a38-8e76-82c86298a072"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/upload-sessions"
+    },
+    {
+      "method": "PUT",
+      "path": "/evidence/v1/local-uploads/a8a296c7-8976-41fc-bbde-a985a2eac8b0"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/upload-sessions/a8a296c7-8976-41fc-bbde-a985a2eac8b0/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-materials",
+      "command_id": "15361b22-e8bf-4ddd-b70a-da6a6c94184d",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/files/7cba8faf-b963-4145-a289-2e565e9b069d/versions/1/access-grants"
+    },
+    {
+      "method": "POST",
+      "path": "/money/api/v1/cash-transactions",
+      "command_id": "1611e324-5412-4514-bb71-231af5dd8ad8"
+    },
+    {
+      "method": "POST",
+      "path": "/money/api/v1/cash-transactions",
+      "command_id": "1611e324-5412-4514-bb71-231af5dd8ad8"
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "031c7618-81ac-475c-8a37-b53f2fbd180e",
+      "expected_revision": 16
+    },
+    {
+      "method": "POST",
+      "path": "/money/api/v1/cash-transactions",
+      "command_id": "619ed983-c143-4b19-a4ba-8cbe19bb4f21"
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "25a20b27-a07a-4f83-94af-b425f9abb940",
+      "expected_revision": 17
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/files/7cba8faf-b963-4145-a289-2e565e9b069d/versions/1/access-grants"
+    },
+    {
+      "method": "POST",
+      "path": "/money/api/v1/cash-transactions/023c24f5-36de-42f0-a8a9-702e82d3e793/reversal",
+      "command_id": "bcdc221c-5ade-4c30-b3a4-1e41ba610917"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "resume-existing-contract-same-link-command",
+      "passed": true
+    },
+    {
+      "name": "real-two-chain-contract-save-reload-zero-write",
+      "passed": true
+    },
+    {
+      "name": "real-contract-native-activation-freezes-draft",
+      "passed": true
+    },
+    {
+      "name": "real-contract-three-amendment-types-explicit-confirmation",
+      "passed": true
+    },
+    {
+      "name": "real-contract-progress-final-settlement-cancel-freeze-history",
+      "passed": true
+    },
+    {
+      "name": "real-evidence-contract-reference-byte-exact-download",
+      "passed": true
+    },
+    {
+      "name": "real-cash-committed-lost-reply-reload-same-command",
+      "passed": true
+    },
+    {
+      "name": "real-cash-immutable-detail-explicit-reversal",
+      "passed": true
+    },
+    {
+      "name": "same-project-cash-native-readback-original-and-effective-amount",
+      "passed": true
+    }
+  ],
+  "page_errors": [],
+  "native_records": [
+    {
+      "application": "contract-ledger",
+      "resource_type": "contract",
+      "id": "dd3a4a04-abde-4a2e-8023-c007aac470a1",
+      "relation_key": "reference-oa-contract-v1-client"
+    },
+    {
+      "application": "contract-ledger",
+      "resource_type": "contract",
+      "id": "beb67167-60a8-446b-a6ca-744bb2ddfde9",
+      "relation_key": "reference-oa-contract-v1-income"
+    },
+    {
+      "application": "money-flow-ledger",
+      "resource_type": "transaction",
+      "id": "023c24f5-36de-42f0-a8a9-702e82d3e793",
+      "relation_key": "reference-oa-cash-v1-client-design",
+      "native_status": "reversed",
+      "native_revision": 1,
+      "amount": "1.01",
+      "effective_amount": "0"
+    },
+    {
+      "application": "money-flow-ledger",
+      "resource_type": "transaction",
+      "id": "e3120f76-abad-49c4-82e8-49513702ecd8",
+      "relation_key": "reference-oa-cash-v1-income-consultation",
+      "native_status": "recorded",
+      "native_revision": 1,
+      "amount": "2.02",
+      "effective_amount": "2.02"
+    }
+  ],
+  "project_revision_before": 14,
+  "existing_resource_ids": [
+    "bbccf086-b1e9-45dc-a71f-eb8207bf95c7"
+  ],
+  "http_failures": [
+    {
+      "status": 400,
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "code": "invalid_request",
+      "message": "invalid resource link"
+    },
+    {
+      "status": 422,
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1"
+    },
+    {
+      "status": 503,
+      "path": "/money/api/v1/cash-transactions",
+      "message": "验收：真实业务已回复，但浏览器未收到回执"
+    }
+  ],
+  "invoice_ids": [],
+  "lost_reply_money": {
+    "method": "POST",
+    "path": "/money/api/v1/cash-transactions",
+    "committed": true
+  },
+  "project_revision_after": 18,
+  "blocked_authority": {
+    "application": "billing-invoice",
+    "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+    "reason": "No native project-scoped Billing registration authority; Cost approval is not Billing approval."
+  },
+  "failure": {
+    "stage": "invoices",
+    "type": "Error",
+    "message": "Billing project-level authorization is missing; no grant or business write was attempted."
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "passed": true,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "e9f67ef24d4d396d6c1df1d48aeecb63178d7cd4ba733c0591096962b6609861",
+  "scenarios": [
+    {
+      "name": "original-double-lists-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--client设计费",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--client勘察费",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--client咨询费",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--income设计费",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--income勘察费",
+      "passed": true
+    },
+    {
+      "name": "original-create-.transaction-panel__group--income咨询费",
+      "passed": true
+    },
+    {
+      "name": "six-classifications-exact-wire-refresh-zero-write",
+      "passed": true
+    },
+    {
+      "name": "append-correction-unknown-same-command-frozen-history",
+      "passed": true
+    },
+    {
+      "name": "unknown-create-reload-same-command-no-duplicate",
+      "passed": true
+    },
+    {
+      "name": "unknown-link-reload-same-command-no-duplicate",
+      "passed": true
+    },
+    {
+      "name": "actual-sdk-complete-reference-unknown-preview-download-remove-keeps-bytes",
+      "passed": true
+    },
+    {
+      "name": "reasoned-invalidation-unknown-same-command-no-tax-delete",
+      "passed": true
+    },
+    {
+      "name": "readonly-no-write",
+      "passed": true
+    },
+    {
+      "name": "amount-redacted-no-blind-write",
+      "passed": true
+    }
+  ],
+  "business_command_count": 25,
+  "native_registrations": 8,
+  "file_facts": {
+    "uploads": 1,
+    "completes": 1,
+    "access": 2,
+    "deletes": 0
+  },
+  "page_errors": []
+}

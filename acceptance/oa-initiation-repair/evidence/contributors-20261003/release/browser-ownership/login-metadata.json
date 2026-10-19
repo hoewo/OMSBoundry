@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "restored_baseline_full_digest_equals_frozen_before": true,
+  "baseline_subjects_digest": "37:c8d33bbd39154c86308f5ff2425172d3",
+  "frozen_before_subjects_digest": "37:c8d33bbd39154c86308f5ff2425172d3",
+  "current_subjects_digest": "37:e08e13432e6dc68c5635211e78c3d128",
+  "account_count": 37,
+  "changed_columns": [
+    {
+      "subject_id": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "columns": [
+        "updated_at"
+      ],
+      "administrator": true
+    }
+  ],
+  "all_account_fields_except_updated_at_equal": true,
+  "business_writes": 0,
+  "other_preserved_tables_equal": true,
+  "full_oa_accepted": false
+}

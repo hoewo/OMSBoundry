@@ -1,0 +1,35 @@
+{
+  "passed": false,
+  "full_oa_accepted": false,
+  "browser_error": "\u627f\u63a5\u8bb0\u5f55\u4e0e\u5f53\u524d\u9879\u76ee\u4e0d\u4e00\u81f4",
+  "business_api_writes_by_diagnostic": 0,
+  "project": {
+    "id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+    "revision": 3,
+    "status": "active"
+  },
+  "engagement": [
+    {
+      "id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+      "revision": 1,
+      "applicability": "undetermined",
+      "engagement_method": null
+    }
+  ],
+  "command_response_keys": [
+    {
+      "key": "materials"
+    },
+    {
+      "key": "engagement"
+    },
+    {
+      "key": "requirements"
+    },
+    {
+      "key": "missing_requirements"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "observation": "native Chrome opened lens on current bidding tab after final refresh",
+  "version": "v0.1.0-oa.20261002.11",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "displayed_flow": ["Nginx 接收入口请求", "Workbench 组织用户操作／校验立项输入", "Gateway 建立 Project 受保护入口", "IAM 签发 Project 能力", "同一 Project 已完成立项"],
+  "business_engagement_call_chain_shown": false,
+  "architecture_learning_for_current_bidding_operation_passed": false,
+  "business_write_performed": false,
+  "lens_closed_after_observation": true,
+  "followup": "Replace initiation-only trace with current action and actual owner/connector/authorization/result steps; keep debug noise hidden."
+}

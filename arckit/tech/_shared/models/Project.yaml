@@ -1,0 +1,141 @@
+# Project 数据模型
+# 路径: arckit/tech/_shared/models/Project.yaml
+
+metadata:
+  path: "tech/_shared/models/Project.yaml"
+  domain: "project-workspace"
+  entity_name: "Project"
+  storage: "PostgreSQL"
+  owner: "Project Workspace"
+  version: "1.3"
+  created: "2026-09-25"
+  updated: "2026-10-02"
+
+type: object
+additionalProperties: false
+description: "Project Workspace 自己拥有的项目身份和当前投影；不包含其他应用业务事实。"
+
+required:
+  - id
+  - tenant_id
+  - project_number
+  - node_type
+  - sort_order
+  - name
+  - project_type_keys
+  - status
+  - revision
+  - created_by
+  - created_at
+  - updated_at
+
+properties:
+  id:
+    type: string
+    format: uuid
+    readOnly: true
+  tenant_id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    readOnly: true
+  project_number:
+    type: string
+    maxLength: 64
+    description: "展示值；非空值使用 trim 后的小写标准化值并限定 tenant 唯一。派发 draft／pending 可暂缺，active 普通／子 Project 必须非空；business-owner-v1 的 Package 编号可选。"
+  node_type:
+    type: string
+    enum: [project, package]
+    description: "package 永远是顶层；project 可以是顶层或 package 的直接子项。"
+  parent_project_id:
+    type: [string, "null"]
+    format: uuid
+    description: "仅 project 可设置，且目标必须是同租户 package；不允许第三层。"
+  sort_order:
+    type: integer
+    minimum: 0
+  name:
+    type: string
+    minLength: 1
+    maxLength: 200
+  summary:
+    type: string
+    maxLength: 2000
+    default: ""
+  planned_start_date:
+    type: [string, "null"]
+    format: date
+  planned_end_date:
+    type: [string, "null"]
+    format: date
+    description: "存在时不得早于 planned_start_date。"
+  project_type_keys:
+    type: array
+    minItems: 0
+    maxItems: 16
+    uniqueItems: true
+    description: "初始派发 draft 可为空；完成立项进入 active 时必须至少一项。原严格 Create API 仍要求至少一项。"
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9-]{0,63}$"
+  client_party:
+    type: [object, "null"]
+    additionalProperties: false
+    description: "Project 创建时经 Party Directory 精确验证并冻结的客户主体最小快照；它解释项目发生时的选择，不是当前主体档案。Package 不得设置。"
+    required: [party_id, source_revision, kind, legal_name]
+    properties:
+      party_id: {type: string, format: uuid}
+      source_revision: {type: integer, minimum: 1}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+  status:
+    type: string
+    enum: [draft, pending_completion, active, cancelled]
+  revision:
+    type: integer
+    minimum: 1
+    readOnly: true
+  cancellation_reason:
+    type: [string, "null"]
+    maxLength: 1000
+    readOnly: true
+  created_by:
+    type: string
+    minLength: 1
+    maxLength: 256
+    readOnly: true
+  created_at:
+    type: string
+    format: date-time
+    readOnly: true
+  updated_at:
+    type: string
+    format: date-time
+    readOnly: true
+
+relationships:
+  assignments:
+    type: one-to-many
+    target: ProjectAssignment
+    ownership: project-workspace
+  resource_links:
+    type: one-to-many
+    target: ProjectResourceLink
+    ownership: project-workspace
+  history:
+    type: one-to-many
+    target: ProjectHistoryEvent
+    ownership: project-workspace
+
+indexes:
+  - name: projects_tenant_number_active_idx
+    columns: [tenant_id, project_number_normalized]
+    unique: true
+    where: "project_number_normalized <> ''"
+  - name: projects_parent_idx
+    columns: [tenant_id, parent_project_id, sort_order, created_at, id]
+  - name: ix_projects_tenant_status_created
+    columns: [tenant_id, status, created_at, id]
+  - name: projects_client_party_idx
+    columns: [tenant_id, client_party_id]
+    where: "client_party_id IS NOT NULL"

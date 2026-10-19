@@ -1,0 +1,89 @@
+{
+  "initial_apply_exit": 1,
+  "initial_assertion_line": 57,
+  "initial_mount_order_comparison_failed": true,
+  "readonly_samples": [
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/public",
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/public",
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/public",
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/var/lib/postgresql",
+        "/public",
+        "/workload-private",
+        "/backups"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/public",
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql",
+        "/public"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/public",
+        "/workload-private",
+        "/backups",
+        "/var/lib/postgresql"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    },
+    {
+      "container_id": "9e6a8a294cde4713a574068aafcccd6ed656d95cedde4a811388ee42c1448eee",
+      "mount_order": [
+        "/var/lib/postgresql",
+        "/public",
+        "/workload-private",
+        "/backups"
+      ],
+      "canonical_sha256": "028c07c0f42409fc9ed3abec0067e86168294976ee7f86cd105351685ef5c49d"
+    }
+  ],
+  "before_native_mount_snapshot_available": false,
+  "no_container_recreate_in_diagnostic": true
+}

@@ -1,0 +1,24 @@
+# Bonus Distribution 受保护 API 契约
+metadata: {path: "tech/_shared/contracts/bonus-distribution-api.yaml", domain: "bonus-distribution", owner: "Bonus Distribution", version: "1.0", created: "2026-09-28", updated: "2026-09-28"}
+auth: {required: true, audience: bonus-distribution, algorithm: EdDSA, max_credential_seconds: 300, scopes: [tenant, project, bonus_pool, bonus_allocation]}
+endpoints:
+  - {method: GET, path: "/api/v1/bonus-pools?project_id={project_id}", capability: bonus-pool.read, result: "Project 范围 current 列表与动态 allowed_actions"}
+  - {method: POST, path: "/api/v1/bonus-pools/business-drafts", capability: "bonus-pool.business.calculate + bonus-allocation.manage + bonus-allocation.amount.read", result: "冻结 Project、Settlement、Person、Assignment、Policy 并建立 draft"}
+  - {method: POST, path: "/api/v1/bonus-pools/production-drafts", capability: "bonus-pool.production.calculate + bonus-allocation.manage + bonus-allocation.amount.read", result: "冻结 Project、Receipt Set、Person、Assignment、Policy 并建立 draft"}
+  - {method: GET, path: "/api/v1/bonus-pools/{pool_id}", capability: bonus-pool.read, result: "current 与动态 allowed_actions"}
+  - {method: GET, path: "/api/v1/bonus-pools/{pool_id}/history", capability: bonus-pool.history.read, result: "不可变 Pool revision"}
+  - {method: POST, path: "/api/v1/bonus-pools/{pool_id}/publication", capability: "类型化 publish + bonus-allocation.amount.read", result: "expected_revision 发布"}
+  - {method: POST, path: "/api/v1/bonus-pools/supersession", capability: "类型化 supersede + bonus-allocation.amount.read", result: "原 Pool superseded 与替代 Pool published 同事务"}
+  - {method: POST, path: "/api/v1/bonus-pools/{pool_id}/withdrawal", capability: "类型化 withdraw", result: "追加 withdrawn revision"}
+  - {method: GET, path: "/api/v1/bonus-allocations/{allocation_id}/history", capability: bonus-allocation.read, result: "不可变 Allocation revision"}
+response_rules:
+  - "无 bonus-allocation.amount.read 时，Pool amount_minor／unallocated_minor、来源总额／条目金额和 Allocation amount_minor 在 current、history 与 allocation history 均返回 null。"
+  - "所有入口删除外部传入的身份 Header，只信任验证后的签名上下文；目标应用最终复验 Tenant、action、资源 Scope、奖金类型和状态。"
+  - "成功 Command 重放先命中本地 receipt，不再次读取依赖；同 Command 不同摘要返回 409。"
+errors:
+  - {status: 401, code: UNAUTHENTICATED, meaning: "缺少、过期、错签名、错 audience 或错 tenant 凭证"}
+  - {status: 403, code: CAPABILITY_DENIED, meaning: "缺少 action 或精确资源 Scope"}
+  - {status: 404, code: NOT_FOUND, meaning: "目标资源不存在或跨 Tenant 隐藏"}
+  - {status: 409, code: CONFLICT, meaning: "expected revision、状态或 Command 摘要冲突"}
+  - {status: 422, code: INVALID_REFERENCE, meaning: "Project／来源／人员／Assignment／策略不满足约束"}
+  - {status: 503, code: REFERENCE_UNAVAILABLE, meaning: "必需引用服务暂不可用，零业务写入"}

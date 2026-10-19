@@ -1,0 +1,69 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "a761b9b69438285cd166cf477619493647e48669e3b59e98ef2253717afedde2",
+  "scenarios": [
+    {
+      "name": "original-two-side-lists-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-business-closed-category-options",
+      "passed": true
+    },
+    {
+      "name": "original-production-closed-category-options",
+      "passed": true
+    },
+    {
+      "name": "exact-int64-string-null-date-frozen-project",
+      "passed": true
+    },
+    {
+      "name": "production-side-zero-amount-scope-isolation",
+      "passed": true
+    },
+    {
+      "name": "refresh-and-reopen-no-command",
+      "passed": true
+    },
+    {
+      "name": "append-correction-lost-reply-same-command-original-history",
+      "passed": true
+    },
+    {
+      "name": "actual-sdk-complete-lost-owner-reply-preview-byte-exact-no-reupload",
+      "passed": true
+    },
+    {
+      "name": "reasoned-withdrawal-replay-retains-record-amount-file-history",
+      "passed": true
+    },
+    {
+      "name": "native-readonly-no-hidden-write",
+      "passed": true
+    },
+    {
+      "name": "amount-redacted-current-and-history-zero-write",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "normal-modal-repeat-2",
+    "type": "AssertionError",
+    "message": "normal confirmation is covered by another surface"
+  },
+  "command_count": 11,
+  "native_records": 5,
+  "file_facts": {
+    "uploads": 1,
+    "completes": 1,
+    "access": 2,
+    "deletes": 0
+  },
+  "page_errors": []
+}

@@ -1,0 +1,32 @@
+# Contract 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/contract-reference-get.yaml", domain: "contract-ledger", owner: "Contract Ledger", version: "1.3", created: "2026-09-25", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/contracts/{contract_id}", summary: "向受信工作负载提供最小稳定 Contract 引用投影", auth_required: true, audience: "contract-ledger", capability: "contract-ledger.reference.read"}
+request:
+  path_params: [{name: contract_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: contract, id_from: contract_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, resource_type, display_summary, status, revision, currency]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: contract-ledger}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: contract}
+        display_summary: {type: string, minLength: 1, description: "Contract 自有且随 revision 读取的合同标题。"}
+        status: {type: string, enum: [draft, active, terminated, closed, cancelled]}
+        revision: {type: integer, minimum: 1, description: "草稿为 draft version；生效后为 contract revision。"}
+        category: {type: string, minLength: 1, description: "Contract 自有的稳定合同类别；存在时由消费策略按版本化映射解释。"}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+        current_effective_amount: {type: [string, "null"], pattern: "^[0-9]+(\\.[0-9]{1,6})?$", description: "Contract 当前 revision 的有效合同金额；缺失或 null 表示未知，不能按 0 处理。"}
+  errors:
+    - {status: 401, code: INVALID_CREDENTIAL, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: CONTRACT_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受单 action、精确 Contract Scope 的短期凭证。", "受信消费端可读取类别、当前有效金额和币种，但相对方、Evidence 和完整 Contract 模型仍不外泄。", "金额未知时返回 null 或省略；消费端必须显示未知，禁止替换为 0。"]

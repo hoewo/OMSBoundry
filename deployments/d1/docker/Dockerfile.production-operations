@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+ARG GO_IMAGE=golang:1.26.0-alpine
+ARG RUNTIME_IMAGE=postgres:18.6-alpine
+FROM ${GO_IMAGE} AS build
+ARG TARGETOS
+ARG TARGETARCH
+ARG BUILD_GOMAXPROCS=2
+WORKDIR /src
+COPY packages/workload-identity ./packages/workload-identity
+COPY backend/services/design-operations/go.mod backend/services/design-operations/go.sum ./backend/services/design-operations/
+RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked cd backend/services/design-operations && go mod download
+COPY backend/services/design-operations/ ./backend/services/design-operations/
+RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=oms-go-build,target=/root/.cache/go-build,sharing=locked \
+    cd backend/services/design-operations \
+    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -p 1 -trimpath -ldflags='-s -w' -o /out/server ./cmd/server \
+    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -p 1 -trimpath -ldflags='-s -w' -o /out/ops ./cmd/ops \
+    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -p 1 -trimpath -ldflags='-s -w' -o /out/workload-keyctl ./cmd/workload-keyctl
+
+FROM ${RUNTIME_IMAGE}
+RUN mkdir -p /app /workload-private /workload-public /backups && chown -R postgres:postgres /app /backups
+COPY --from=build /out/server /out/ops /out/workload-keyctl /app/
+USER postgres
+ENTRYPOINT []
+CMD ["/app/server"]

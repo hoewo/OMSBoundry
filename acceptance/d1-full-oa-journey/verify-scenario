@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+scenario="$script_dir/scenario-v1.json"
+
+command -v jq >/dev/null 2>&1 || { echo 'jq is required' >&2; exit 2; }
+
+jq -e '
+  .schema_version == "1" and
+  .scenario_id == "reference-oa-full-suite-continuous-v1" and
+  .suite_profile == "d1-full-twelve-apps" and
+  .continuity.same_tenant == true and
+  .continuity.same_project_for_phases == ["C1","C2","C3","C4","C5","C6","C7","C8"] and
+  .continuity.reuse_party_from == "C1" and
+  .continuity.reuse_people_assignments_from == "C1" and
+  .continuity.writes_through_formal_entry == true and
+  .continuity.cross_application_database_writes_allowed == false and
+  ([.phases[].id] == ["C0","C1","C2","C3","C4","C5","C6","C7","C8"]) and
+  ([.phases[] | select((.normal | length) == 0 or (.negative | length) == 0 or (.recovery_or_correction | length) == 0 or (.outputs | length) == 0)] | length) == 0 and
+  ([.phases[] | select(.id != "C0") | .owner] | unique | length) == 8
+' "$scenario" >/dev/null
+
+for overlay in reference-oa-c1 reference-oa-c2 reference-oa-c5-v1 reference-oa-bonus-v1@1.0.0; do
+  jq -e --arg overlay "$overlay" '.overlay_versions | index($overlay) != null' "$scenario" >/dev/null
+done
+
+echo 'PASS full OA continuous journey scenario v1'

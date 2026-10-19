@@ -1,0 +1,41 @@
+# Party Directory 当前主体投影
+metadata:
+  path: "tech/_shared/models/Party.yaml"
+  domain: "party-directory"
+  entity_name: "Party"
+  storage: "PostgreSQL"
+  owner: "Party Directory"
+  version: "1.0"
+  created: "2026-09-27"
+  updated: "2026-09-27"
+
+type: object
+additionalProperties: false
+description: "Party Directory 拥有的租户内当前主体档案；客户业务角色由消费应用拥有。"
+required: [id, tenant_id, kind, legal_name, status, revision, created_at, updated_at, allowed_actions]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  kind: {type: string, enum: [organization, individual]}
+  legal_name: {type: string, minLength: 1, maxLength: 200}
+  registration_identifier:
+    type: [string, "null"]
+    minLength: 1
+    maxLength: 100
+    description: "不声明全局唯一，不执行真实性核验。"
+  status: {type: string, enum: [active, inactive]}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  updated_at: {type: string, format: date-time, readOnly: true}
+  allowed_actions:
+    type: array
+    uniqueItems: true
+    readOnly: true
+    items:
+      type: string
+      enum: [read, update, status_manage, history_read]
+
+indexes:
+  - {name: parties_tenant_id_idx, columns: [tenant_id, id], unique: true}
+  - {name: parties_tenant_name_idx, columns: [tenant_id, legal_name_normalized, legal_name, id]}
+  - {name: parties_tenant_registration_idx, columns: [tenant_id, registration_identifier_normalized, id]}

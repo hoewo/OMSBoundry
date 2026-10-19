@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "archive_sha256": "c651fc10530595118f685c1782669d7a69bb86ea06f766cdf6cc3b6499d6f015",
+  "files": {
+    "manifest.json": "b6d1554e144604216bf6afca5a31e0235e4f7e1fea793f20e921002e02320369",
+    "publication.json": "e0c5bc04736f81874be56b57a6723402eed1569a6cc0e1ec638bae17688b57f0",
+    "preflight.json": "33e83bbd4702e65d50d5c651a2645e5cd42a3820e22cb2495d256f4cdfd03f77",
+    "cold-backup.json": "3943a15f0623cf1386c0e4227258275a356ed446a6b7f52631242f8518db1cae",
+    "restore.json": "1af6a8eeeffde3766281aaa93eec61a9abb5b8e92c9f15ac33f9fe19909371d2",
+    "rollout.json": "1e9b0eb38a5a0abdf5e9cbffc47068729b0177caf15f00f2d6989a25051bee75",
+    "offhost-export.json": "e8fa4ca7d2eca5d5004d6614c6c9a00b45a1381692ff5e72f9de02173d7ac5ec",
+    "offhost-confirmed.json": "a80853364dae09986e13a05b65aacccf4c0ba4db0b0f297aa225d6116ee4c54f",
+    "browser-after.json": "7a873d67673fe7dc7ecbe3a3ba3e499dd466c5bc14916152a2a900e14b12ad1f"
+  },
+  "credentials_included": false,
+  "local_file_hashes_equal": true
+}

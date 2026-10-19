@@ -1,0 +1,66 @@
+{
+  "schema_version": "1",
+  "overlay_id": "reference-oa-c5",
+  "overlay_version": "1.0.0",
+  "application_id": "approval-audit-results",
+  "audience": "approval-audit-results",
+  "site_roles": {
+    "identity_super_admin": {
+      "display_name": "身份超级管理员",
+      "scope_kind": "tenant",
+      "actions": []
+    },
+    "oa_business_admin": {
+      "display_name": "OA 业务管理员",
+      "scope_kind": "tenant",
+      "actions": [
+        "approval-audit-result.create",
+        "approval-audit-result.read",
+        "approval-audit-result.amount.read",
+        "approval-audit-result.correct",
+        "approval-audit-result.withdraw",
+        "approval-audit-result.evidence.manage",
+        "approval-audit-result.history.read"
+      ]
+    },
+    "production_manager": {
+      "display_name": "生产经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "approval-audit-result.create",
+        "approval-audit-result.read",
+        "approval-audit-result.amount.read",
+        "approval-audit-result.correct",
+        "approval-audit-result.evidence.manage",
+        "approval-audit-result.history.read"
+      ]
+    },
+    "general_manager": {
+      "display_name": "总经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "approval-audit-result.read",
+        "approval-audit-result.amount.read",
+        "approval-audit-result.history.read"
+      ]
+    },
+    "business_manager": {
+      "display_name": "经营经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "approval-audit-result.read",
+        "approval-audit-result.amount.read",
+        "approval-audit-result.history.read"
+      ]
+    },
+    "finance": {
+      "display_name": "财务",
+      "scope_kind": "tenant",
+      "actions": [
+        "approval-audit-result.read",
+        "approval-audit-result.amount.read",
+        "approval-audit-result.history.read"
+      ]
+    }
+  }
+}

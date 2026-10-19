@@ -1,0 +1,77 @@
+{
+  "schema_version": "1",
+  "passed": true,
+  "observed_at": "2026-10-05T07:11:17.432Z",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+  "subject_id": "12e800ac-00bf-4516-8748-b45c5623493a",
+  "username": "admin",
+  "profile": "reference-oa-administrator-v1",
+  "scope": "tenant",
+  "catalog": {
+    "manifest_count": 12,
+    "capability_count": 132,
+    "active_grants_before": 83,
+    "missing_before": 49,
+    "created_via_native_iam": 49,
+    "active_grants_after": 132
+  },
+  "latest_reconciliation": {
+    "observed_at": "2026-10-05T10:09:50.191Z",
+    "reason": "Project, Production and Bonus manifests published additional native capabilities after the first reconciliation",
+    "manifest_count": 12,
+    "capability_count": 145,
+    "active_grants_before": 145,
+    "missing_before": 0,
+    "created_via_native_iam": 0,
+    "active_grants_after": 145,
+    "credential_checks": 12,
+    "all_catalog_capabilities_issued": true,
+    "rate_limit_retries": 0,
+    "iam_grant_audits_added": 0
+  },
+  "credential_checks": [
+    { "audience": "contract-ledger", "action_count": 9 },
+    { "audience": "money-flow-ledger", "action_count": 17 },
+    { "audience": "people-groups", "action_count": 9 },
+    { "audience": "party-directory", "action_count": 6 },
+    { "audience": "project-workspace", "action_count": 21 },
+    { "audience": "evidence-service", "action_count": 4 },
+    { "audience": "business-engagement", "action_count": 8 },
+    { "audience": "billing-invoice", "action_count": 8 },
+    { "audience": "production-operations", "action_count": 9 },
+    { "audience": "approval-audit-results", "action_count": 7 },
+    { "audience": "cost-outsourcing", "action_count": 18 },
+    { "audience": "bonus-distribution", "action_count": 16 }
+  ],
+  "latest_credential_checks": [
+    { "audience": "contract-ledger", "action_count": 9 },
+    { "audience": "money-flow-ledger", "action_count": 17 },
+    { "audience": "people-groups", "action_count": 9 },
+    { "audience": "party-directory", "action_count": 6 },
+    { "audience": "project-workspace", "action_count": 25 },
+    { "audience": "evidence-service", "action_count": 4 },
+    { "audience": "business-engagement", "action_count": 8 },
+    { "audience": "billing-invoice", "action_count": 8 },
+    { "audience": "production-operations", "action_count": 13 },
+    { "audience": "approval-audit-results", "action_count": 7 },
+    { "audience": "cost-outsourcing", "action_count": 18 },
+    { "audience": "bonus-distribution", "action_count": 21 }
+  ],
+  "invariants": {
+    "native_iam_grant_audits_added": 49,
+    "business_databases_unchanged": 12,
+    "other_subject_tenant_grants_unchanged": true,
+    "resource_grants_unchanged": true,
+    "running_containers_unchanged": 17,
+    "rate_limit_retries": 0,
+    "direct_database_grant_writes": 0,
+    "business_api_writes": 0
+  },
+  "interpretation": [
+    "Full access means every capability published by the twelve currently installed versioned Capability Manifests at tenant scope.",
+    "The IAM administrator flag alone does not infer business access; this named OA administrator received explicit audited grants.",
+    "Target applications still enforce resource validity, current state, expected revision and final authorization.",
+    "A newly installed application or newly published capability requires the bootstrap full-access reconciliation to run again."
+  ]
+}

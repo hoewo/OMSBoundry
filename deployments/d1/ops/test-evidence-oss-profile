@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Render-only D1 cloud extension checks; starts no business containers."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+directory = Path(__file__).resolve().parent.parent
+baseline = {}
+for line in (directory / ".env.example").read_text().splitlines():
+    if line and not line.startswith("#") and "=" in line:
+        key, value = line.split("=", 1)
+        baseline[key] = value
+for key in baseline:
+    if key.endswith("_PASSWORD"):
+        baseline[key] = key + "_TestOnly_123456789"
+baseline.update({"PARTY_CURSOR_HMAC_KEY": "TestOnlyPartyCursorKey_1234567890123456",
+                 "EVIDENCE_LOCAL_SIGNING_KEY": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE"})
+cloud = {"D1_EVIDENCE_STORAGE_PROVIDER": "hybrid", "EVIDENCE_PRIMARY_STORAGE_PROVIDER": "aliyun-oss",
+         "EVIDENCE_OSS_REGION": "cn-hangzhou", "EVIDENCE_OSS_BUCKET": "fixture-private-files",
+         "EVIDENCE_OSS_UPLOAD_ROLE_ARN": "acs:ram::1234567890123456:role/fixture-upload",
+         "EVIDENCE_OSS_BROWSER_ENDPOINT": "https://files.example.test", "EVIDENCE_OSS_BROWSER_CNAME": "true",
+         "EVIDENCE_OSS_SERVICE_ENDPOINT": "https://oss-cn-hangzhou-internal.aliyuncs.com",
+         "EVIDENCE_OSS_STS_ENDPOINT": "sts.cn-hangzhou.aliyuncs.com",
+         "EVIDENCE_ECS_ROLE_NAME": "FixtureEvidenceService", "EVIDENCE_EGRESS_NETWORK": "fixture-evidence-egress"}
+with tempfile.TemporaryDirectory(prefix="oms-d1-oss-profile-") as temporary:
+    environment = Path(temporary) / "test.env"
+    def render(values, allowed=True):
+        environment.write_text("".join(key + "=" + value + "\n" for key, value in values.items()))
+        environment.chmod(0o600)
+        result = subprocess.run(["sh", str(directory / "ops/d1"), "config", "--format", "json"],
+                                env={**os.environ, "D1_ENV_FILE": str(environment), "D1_PROJECT_NAME": "oms-oss-profile-test"},
+                                capture_output=True, text=True, timeout=30)
+        assert (result.returncode == 0) == allowed, "profile acceptance/rejection mismatch: " + result.stderr[:200]
+        return json.loads(result.stdout) if allowed else None
+    local = render(baseline)
+    assert "evidence-egress" not in local["networks"]
+    assert local["services"]["evidence-service"]["environment"]["STORAGE_PROVIDER"] == "local"
+    for primary in ("local", "aliyun-oss"):
+        config = render({**baseline, **cloud, "EVIDENCE_PRIMARY_STORAGE_PROVIDER": primary})
+        owners = [name for name, item in config["services"].items() if "evidence-egress" in item.get("networks", {})]
+        assert owners == ["evidence-service"]
+        assert config["networks"]["app"]["internal"] and config["networks"]["data"]["internal"]
+        assert config["networks"]["evidence-egress"]["external"]
+        env = config["services"]["evidence-service"]["environment"]
+        assert env["STORAGE_PROVIDER"] == "hybrid" and env["PRIMARY_STORAGE_PROVIDER"] == primary
+        assert env["ALIBABA_CLOUD_ECS_IMDSV2_ENABLE"] == "true"
+        assert env["IDENTITY_PROVIDER"] == "iam" and env["LOCAL_SIGNING_KEY"] == baseline["EVIDENCE_LOCAL_SIGNING_KEY"]
+        assert [name for name, item in config["services"].items() if item.get("ports")] == ["nginx"]
+    render({**baseline, **cloud, "D1_EVIDENCE_STORAGE_PROVIDER": "aliyun-oss", "EVIDENCE_PRIMARY_STORAGE_PROVIDER": ""})
+    for invalid in ({"D1_EVIDENCE_STORAGE_PROVIDER": "unknown"}, {"EVIDENCE_PRIMARY_STORAGE_PROVIDER": ""},
+                    {"ENABLE_EVIDENCE": "false"}, {"EVIDENCE_OSS_SERVICE_ENDPOINT": "http://unsafe.test"},
+                    {"EVIDENCE_OSS_UPLOAD_ROLE_ARN": ""}, {"EVIDENCE_OSS_BROWSER_CNAME": "1"}):
+        render({**baseline, **cloud, **invalid}, allowed=False)
+print("PASS D1 Local / hybrid / OSS profile render, single privileged owner and six invalid configurations")

@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-02",
+  "origin": "https://oatest.antuinfo.cn",
+  "workbench_version": "v0.1.0-oa.20261002.6",
+  "surface": "native Google Chrome on the user's Mac",
+  "subject": "existing system administrator",
+  "project_id": "f75d4570-5d6a-42ba-ade6-d1cda913ddda",
+  "writes_submitted": 0,
+  "observations": [
+    {"tab": "overview", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "no active commercial link; not asserted empty at source"},
+    {"tab": "client", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "existing user-entered contact context displayed; personal values not archived"},
+    {"tab": "personnel", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "explicitly unimplemented; no fake participants"},
+    {"tab": "bidding", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "no active engagement link; not asserted empty at source"},
+    {"tab": "contracts", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "no active commercial link; forms still pending"},
+    {"tab": "payments", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "loading settled to explicit no active link"},
+    {"tab": "invoices", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "loading settled to explicit no active link"},
+    {"tab": "costs", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "current account denied by source authorization; not asserted zero or empty"},
+    {"tab": "bonus", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "current account denied by source authorization; not asserted zero or empty"},
+    {"tab": "production", "clicked": true, "same_project": true, "selected_and_panel_agree": true, "state": "no active work-item link; stage entry still pending"}
+  ],
+  "refresh_same_project_and_bonus_tab": true,
+  "browser_back_to_overview_forward_to_bonus": true,
+  "client_editor_open_contract_switch_rejected_with_preserved_inputs": true,
+  "client_cancel_then_contract_switch_succeeds": true,
+  "visual_contract_panel_inspected": true,
+  "navigation_repair_passed": true,
+  "populated_financial_source_browser_validation": false,
+  "business_crud_validation": false,
+  "permission_role_matrix_validation": false,
+  "full_oa_accepted": false
+}

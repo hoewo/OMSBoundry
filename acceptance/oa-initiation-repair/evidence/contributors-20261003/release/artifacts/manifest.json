@@ -1,0 +1,33 @@
+{
+  "version": "v0.1.0-oa.20261003.3",
+  "official_release": false,
+  "source_kind": "saved dirty-worktree candidate; unrelated files preserved",
+  "source_archive_sha256": "76d27a1415da39e988f136fdce58c3e78e1dbbc53092c65dc19d75f91d5983e6",
+  "schema_change": "Project 10 -> 11",
+  "closure": [
+    "project-workspace server/ops schema11",
+    "unified-workbench original personnel adapter",
+    "identity-access same image/new catalog0.7"
+  ],
+  "gateway_manifest_unchanged": true,
+  "assignment_policies_unchanged": true,
+  "grant_writes_by_release": 0,
+  "applications": {
+    "project-workspace": {
+      "server": "6aebbd93f484c4347c56f27cbc9c78a88fdb7b611a312af4ba149676a19cc62f",
+      "ops": "6ad2159901bc07c7030529b1de96d56a9724ab204bcd7db3fc1b31e2e1a020e1",
+      "workload-keyctl": "28b41895e256cd0248690437cc4541dfbdaac6a2b1e554b20709198030ff9a27"
+    },
+    "unified-workbench": {
+      "server": "002c5c86547c5e724fd407bf3d6e8b580150a8cc7c62eee7fc4bdaaed2ed9ed5"
+    }
+  },
+  "contracts": {
+    "project-workspace-capabilities.json": "b509c270cfe72960e854275b39fef00c10bf46b2edfc174e2d8985f7e5d084b4"
+  },
+  "assets": {
+    "reference-oa-react-bidding.js": "e989976f69c9d9513bc6b39211ae242e3c9d808b9ecbf0df95fc0c0c81f3d632",
+    "reference-oa-react-bidding.css": "ca0a66f13e939296c6f0bd1ba0b0b59b2f41986fb42ee61d5f3bcb11707fd72f"
+  },
+  "full_oa_accepted": false
+}

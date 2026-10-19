@@ -1,0 +1,22 @@
+# 重开 Design Stage API 契约
+metadata: {path: "tech/_shared/contracts/design-stage-reopen.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/stages/{stage_key}/reopen", summary: "显式重开已完成 Stage", auth_required: true, audience: "design-operations", capability: "design-work-item.stage.manage"}
+request:
+  path_params:
+    - {name: work_item_id, type: string, format: uuid, required: true}
+    - {name: stage_key, type: string, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignWorkItem.yaml"}}
+  errors:
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 422, code: STAGE_STATE_INVALID, retryable: false}
+business_logic:
+  flow: ["目标 completed Stage 变为 ready。", "其后 completed Stage 变为 pending；not-applicable 决定保留。", "成果和历史不删除。"]

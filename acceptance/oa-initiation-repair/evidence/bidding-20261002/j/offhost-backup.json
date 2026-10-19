@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "archive_sha256": "b5ba511c9b5ea4dc88e30950ee23682b88e3112539bb9ea178b177bf19bd7fe0",
+  "bytes": 221681,
+  "mode": "0600",
+  "local_private_directory": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-bidding-backup-20261002.LTRwQH",
+  "local_filename": "oa-public-20261002j-backup.tar.gz",
+  "transport": "existing Aliyun Workbench download and native Save dialog",
+  "local_file_sha256_and_size_verified": true,
+  "private_archive_committed": false,
+  "full_suite_restore_runtime": false
+}

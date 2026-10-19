@@ -1,0 +1,97 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-host-preflight-test.XXXXXX")
+cleanup() {
+  rm -rf "$test_root"
+}
+trap cleanup EXIT HUP INT TERM
+
+bundle="$test_root/bundle"
+fakebin="$test_root/fakebin"
+mkdir -p "$bundle/deployments/local-oa/ops" "$fakebin"
+cp "$script_dir/preflight-host" "$bundle/deployments/local-oa/ops/preflight-host"
+chmod 0755 "$bundle/deployments/local-oa/ops/preflight-host"
+printf 'target=linux/amd64\n' > "$bundle/deployments/local-oa/.release-bundle"
+printf 'ID=ubuntu\nVERSION_ID="22.04"\n' > "$test_root/os-release"
+printf 'MemTotal:       2097152 kB\nSwapTotal:      2097152 kB\n' > "$test_root/meminfo"
+
+cat > "$fakebin/uname" <<'EOF'
+#!/bin/sh
+case "${1:-}" in
+  -s) printf '%s\n' "${PREFLIGHT_FAKE_KERNEL:-Linux}" ;;
+  -m) printf '%s\n' "${PREFLIGHT_FAKE_MACHINE:-x86_64}" ;;
+  *) exit 2 ;;
+esac
+EOF
+cat > "$fakebin/docker" <<'EOF'
+#!/bin/sh
+case "${1:-} ${2:-}" in
+  'version --format')
+    [ "${PREFLIGHT_FAKE_DOCKER_DOWN:-false}" = false ] || exit 1
+    printf '%s\n' "${PREFLIGHT_FAKE_DOCKER_TARGET:-linux/amd64}"
+    ;;
+  'compose version')
+    [ "${PREFLIGHT_FAKE_COMPOSE_DOWN:-false}" = false ] || exit 1
+    if [ "${3:-}" = --short ]; then printf '%s\n' '2.40.3'; else printf '%s\n' 'Docker Compose version v2.40.3'; fi
+    ;;
+  'ps --all'|'network ls'|'volume ls')
+    [ "${PREFLIGHT_FAKE_EXISTING_PROJECT:-false}" = false ] || printf '%s\n' deadbeef
+    ;;
+  *) exit 2 ;;
+esac
+EOF
+cat > "$fakebin/df" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on'
+printf '/dev/fake 20000000 1000000 %s 5%% /\n' "${PREFLIGHT_FAKE_FREE_KIB:-12000000}"
+EOF
+cat > "$fakebin/ss" <<'EOF'
+#!/bin/sh
+[ -n "${PREFLIGHT_FAKE_BUSY_PORT:-}" ] || exit 0
+printf 'LISTEN 0 4096 127.0.0.1:%s 0.0.0.0:*\n' "$PREFLIGHT_FAKE_BUSY_PORT"
+EOF
+chmod 0755 "$fakebin/uname" "$fakebin/docker" "$fakebin/df" "$fakebin/ss"
+
+run_preflight() {
+  PATH="$fakebin:$PATH" \
+  LOCAL_OA_PREFLIGHT_OS_RELEASE="$test_root/os-release" \
+  LOCAL_OA_PREFLIGHT_MEMINFO="$test_root/meminfo" \
+    "$bundle/deployments/local-oa/ops/preflight-host" "$@"
+}
+
+run_preflight > "$test_root/pass.out" 2> "$test_root/pass.err"
+grep -q '^HOST_PREFLIGHT_STATUS=passed ' "$test_root/pass.out"
+
+if PREFLIGHT_FAKE_MACHINE=aarch64 run_preflight > "$test_root/arch.out" 2> "$test_root/arch.err"; then
+  echo 'architecture mismatch unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'expected linux/amd64' "$test_root/arch.err"
+
+if PREFLIGHT_FAKE_BUSY_PORT=18085 run_preflight > "$test_root/port.out" 2> "$test_root/port.err"; then
+  echo 'busy port unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'required loopback demo ports are already listening: 18085' "$test_root/port.err"
+
+if PREFLIGHT_FAKE_FREE_KIB=1048576 run_preflight > "$test_root/disk.out" 2> "$test_root/disk.err"; then
+  echo 'low disk unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'at least 8192 MiB is required' "$test_root/disk.err"
+
+if PREFLIGHT_FAKE_DOCKER_DOWN=true run_preflight > "$test_root/docker.out" 2> "$test_root/docker.err"; then
+  echo 'unreachable Docker daemon unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'Docker daemon is not reachable by the current user' "$test_root/docker.err"
+
+if PREFLIGHT_FAKE_EXISTING_PROJECT=true run_preflight > "$test_root/project.out" 2> "$test_root/project.err"; then
+  echo 'existing Compose resources unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'existing Docker resources use reserved demo project names' "$test_root/project.err"
+
+printf 'PASS local OA target-host preflight positive and negative cases\n'

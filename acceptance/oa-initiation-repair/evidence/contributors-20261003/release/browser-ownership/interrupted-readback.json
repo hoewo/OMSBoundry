@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "browser_run": "public-i-continuation",
+  "browser_passed": false,
+  "interrupted_before_receipt_export": true,
+  "native_commit_confirmed": {
+    "command_id": "fec5a126-ba4b-4453-af23-4b085dca8858",
+    "status": 200,
+    "project_revision": 11,
+    "assignment_id": "7949ae50-3614-4097-9f21-88863c405126",
+    "subject_id": "0a2aebfa-eb6e-492a-a5f4-1220b1f2b6a7",
+    "source_revision": 1
+  },
+  "observed_current_revision": 11,
+  "business_writes_by_checker": 0,
+  "full_oa_accepted": false
+}

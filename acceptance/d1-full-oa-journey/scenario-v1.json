@@ -1,0 +1,101 @@
+{
+  "schema_version": "1",
+  "scenario_id": "reference-oa-full-suite-continuous-v1",
+  "suite_profile": "d1-full-twelve-apps",
+  "overlay_versions": [
+    "reference-oa-c1",
+    "reference-oa-c2",
+    "reference-oa-c5-v1",
+    "reference-oa-bonus-v1@1.0.0"
+  ],
+  "continuity": {
+    "same_tenant": true,
+    "same_project_for_phases": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
+    "reuse_party_from": "C1",
+    "reuse_people_assignments_from": "C1",
+    "writes_through_formal_entry": true,
+    "cross_application_database_writes_allowed": false
+  },
+  "phases": [
+    {
+      "id": "C0",
+      "owner": "assembly",
+      "normal": ["twelve-app-selection", "seventeen-services-healthy", "schemas-current", "contracts-valid"],
+      "negative": ["non-nginx-host-port-rejected"],
+      "recovery_or_correction": ["none-preflight-only"],
+      "outputs": ["image-digests", "schema-versions", "fact-baseline"]
+    },
+    {
+      "id": "C1",
+      "owner": "project-workspace",
+      "dependencies": ["party-directory", "people-groups", "identity-access"],
+      "normal": ["party-create", "people-create", "project-create", "assign-responsibilities", "complete-initiation"],
+      "negative": ["neighbor-project-scope-denied", "stale-project-revision-denied"],
+      "recovery_or_correction": ["command-replay-same-identity"],
+      "outputs": ["party", "people", "assignments", "project"]
+    },
+    {
+      "id": "C2",
+      "owner": "business-engagement",
+      "dependencies": ["project-workspace", "evidence-service", "contract-ledger"],
+      "normal": ["engagement-ready", "contract-active", "settlement-confirmed"],
+      "negative": ["stale-engagement-revision-denied", "evidence-unavailable-no-write"],
+      "recovery_or_correction": ["dependency-recovery-single-commit"],
+      "outputs": ["engagement", "contract", "settlement", "evidence"]
+    },
+    {
+      "id": "C3",
+      "owner": "money-flow-ledger",
+      "dependencies": ["billing-invoice", "contract-ledger", "party-directory"],
+      "normal": ["invoice-register", "receivable-confirm", "receipt-record", "allocation-confirm", "receipt-set-confirm"],
+      "negative": ["amount-without-capability-redacted", "source-unavailable-segment-only"],
+      "recovery_or_correction": ["invoice-correction", "money-command-replay"],
+      "outputs": ["invoice", "obligation", "cash-transaction", "allocation", "receipt-set"]
+    },
+    {
+      "id": "C4",
+      "owner": "production-operations",
+      "dependencies": ["project-workspace", "people-groups", "evidence-service"],
+      "normal": ["design-v1-lifecycle", "consultation-v1-lifecycle"],
+      "negative": ["cross-type-artifact-denied", "stale-work-item-revision-denied"],
+      "recovery_or_correction": ["artifact-replacement-or-rework"],
+      "outputs": ["design-work-item", "consultation-work-item", "production-evidence"]
+    },
+    {
+      "id": "C5",
+      "owner": "approval-audit-results",
+      "dependencies": ["project-workspace", "contract-ledger", "evidence-service"],
+      "normal": ["approval-register", "audit-register", "completion-evaluate", "checkpoint-confirm"],
+      "negative": ["get-causes-no-write", "source-drift-visible"],
+      "recovery_or_correction": ["result-correction-or-withdrawal"],
+      "outputs": ["approval-result", "audit-result", "completion-evaluation", "project-checkpoint"]
+    },
+    {
+      "id": "C6",
+      "owner": "cost-outsourcing",
+      "dependencies": ["project-workspace", "party-directory", "contract-ledger", "evidence-service", "money-flow-ledger"],
+      "normal": ["cost-register", "outsourcing-register", "assessment-register", "payable-suggestion-submit"],
+      "negative": ["neighbor-project-scope-denied", "dependency-unavailable-no-write"],
+      "recovery_or_correction": ["cost-or-assessment-correction", "money-independent-decision"],
+      "outputs": ["cost", "outsourcing-engagement", "assessment", "payable-suggestion", "money-decision"]
+    },
+    {
+      "id": "C7",
+      "owner": "bonus-distribution",
+      "dependencies": ["project-workspace", "people-groups", "contract-ledger", "money-flow-ledger"],
+      "normal": ["business-pool-publish", "production-pool-publish", "payable-suggestion-submit"],
+      "negative": ["source-revision-mismatch-denied", "over-allocation-denied"],
+      "recovery_or_correction": ["pool-supersede-or-withdraw", "money-independent-decision-no-cascade"],
+      "outputs": ["business-bonus-pool", "production-bonus-pool", "allocations", "money-decision"]
+    },
+    {
+      "id": "C8",
+      "owner": "read-projections",
+      "dependencies": ["project-workspace", "evidence-service", "unified-workbench", "money-flow-ledger", "production-operations"],
+      "normal": ["project-materials-read", "evidence-download-authorize", "personal-work-read", "money-metrics-read"],
+      "negative": ["neighbor-subject-empty", "amount-redacted-not-zero"],
+      "recovery_or_correction": ["single-source-unavailable-and-recover", "reads-preserve-source-digests"],
+      "outputs": ["materials-projection", "work-items-projection", "metrics-projection", "source-digests"]
+    }
+  ]
+}

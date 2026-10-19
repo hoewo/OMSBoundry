@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>合同台账 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/">Contract Ledger</a>
+    <h1>合同台账</h1>
+    <p>检索草稿与正式合同；草稿激活前不会形成正式 revision。</p>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts" aria-current="page">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销</button></form>
+  </header>
+
+  <main>
+    {{if .Created}}<p role="status">合同草稿已创建。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="search-contract-title">
+      <h2 id="search-contract-title">检索与筛选</h2>
+      <form method="get">
+        <label for="search_q">关键词</label>
+        <input id="search_q" name="q" value="{{.SearchForm.Keyword}}" maxlength="100" placeholder="命名空间、合同编号或标题">
+
+        <label for="search_status">状态</label>
+        <select id="search_status" name="status">
+          {{if and (ne .SearchForm.Status "") (ne .SearchForm.Status "draft") (ne .SearchForm.Status "active") (ne .SearchForm.Status "terminated") (ne .SearchForm.Status "closed") (ne .SearchForm.Status "cancelled")}}<option value="{{.SearchForm.Status}}" selected>无效状态：{{.SearchForm.Status}}</option>{{end}}
+          <option value="" {{if eq .SearchForm.Status ""}}selected{{end}}>全部状态</option>
+          <option value="draft" {{if eq .SearchForm.Status "draft"}}selected{{end}}>草稿</option>
+          <option value="active" {{if eq .SearchForm.Status "active"}}selected{{end}}>已激活</option>
+          <option value="terminated" {{if eq .SearchForm.Status "terminated"}}selected{{end}}>已终止</option>
+          <option value="closed" {{if eq .SearchForm.Status "closed"}}selected{{end}}>已关闭</option>
+          <option value="cancelled" {{if eq .SearchForm.Status "cancelled"}}selected{{end}}>已取消</option>
+        </select>
+
+        <label for="search_currency">币种</label>
+        <input id="search_currency" name="currency" value="{{.SearchForm.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" placeholder="例如 CNY">
+
+        <button type="submit">查询</button>
+        {{if .HasFilters}}<a href="{{.BasePath}}/contracts">清除筛选</a>{{end}}
+      </form>
+    </section>
+
+    {{if .CanManageDraft}}<section aria-labelledby="create-contract-title">
+      <h2 id="create-contract-title">新建合同草稿</h2>
+      <form method="post" action="{{.BasePath}}/contracts">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+
+        <label for="number_namespace">编号命名空间</label>
+        <input id="number_namespace" name="number_namespace" value="{{.Form.NumberNamespace}}" maxlength="64" required>
+
+        <label for="contract_number">合同编号</label>
+        <input id="contract_number" name="contract_number" value="{{.Form.ContractNumber}}" maxlength="100" required>
+
+        <label for="title">合同标题</label>
+        <input id="title" name="title" value="{{.Form.Title}}" maxlength="200" required>
+
+        <label for="category">通用分类（可选）</label>
+        <input id="category" name="category" value="{{.Form.Category}}" maxlength="100">
+
+        <label for="currency">币种</label>
+        <input id="currency" name="currency" value="{{.Form.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+
+        <label for="total_amount">合同总额（可暂不确定）</label>
+        <input id="total_amount" name="total_amount" value="{{.Form.TotalAmount}}" inputmode="decimal" placeholder="例如 1000000.00">
+
+        <label for="signed_on">签署日期（可选）</label>
+        <input id="signed_on" name="signed_on" type="date" value="{{.Form.SignedOn}}">
+
+        <label for="effective_on">生效日期（可选）</label>
+        <input id="effective_on" name="effective_on" type="date" value="{{.Form.EffectiveOn}}">
+
+        <button type="submit">创建合同草稿</button>
+      </form>
+    </section>{{end}}
+
+    <section aria-labelledby="contract-list-title">
+      <h2 id="contract-list-title">合同列表</h2>
+      {{if .Contracts}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">编号</th>
+            <th scope="col">标题</th>
+            <th scope="col">分类</th>
+            <th scope="col">金额</th>
+            <th scope="col">签署／生效</th>
+            <th scope="col">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Contracts}}
+          <tr>
+            <td>{{.NumberNamespace}} / {{.ContractNumber}}</td>
+            <td><a href="{{$.BasePath}}/contracts/{{.ID}}">{{.Title}}</a></td>
+            <td>{{if .Category}}{{.Category}}{{else}}—{{end}}</td>
+            <td>{{if .TotalAmount}}{{.TotalAmount}} {{.Currency}}{{else}}待确定（{{.Currency}}）{{end}}</td>
+            <td>{{if .SignedOn}}{{.SignedOn}}{{else}}—{{end}} / {{if .EffectiveOn}}{{.EffectiveOn}}{{else}}—{{end}}</td>
+            <td>{{if eq .Status "draft"}}草稿 v{{.DraftVersion}}{{else if eq .Status "active"}}已激活 r{{.CurrentRevision}}{{else if eq .Status "terminated"}}已终止 r{{.CurrentRevision}}{{else if eq .Status "closed"}}已关闭 r{{.CurrentRevision}}{{else if eq .Status "cancelled"}}已取消 v{{.DraftVersion}}{{else}}{{.Status}}{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      {{if .HasFilters}}<p>没有符合当前筛选条件的合同。</p>{{else}}<p>尚未创建合同。</p>{{end}}
+      {{end}}
+      {{if .NextURL}}<p><a href="{{.NextURL}}">下一页</a></p>{{end}}
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "passed": false,
+  "native_project": true,
+  "formal_iam": true,
+  "real_people_http": true,
+  "postgresql_18": true,
+  "original_component": true,
+  "main_deployed": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "suite_restore_accepted": false,
+  "asset_sha256": "5e09162202ee5a4322117f0d2076875c07e7fe1eee56cf621694d80ad6e2e864",
+  "scenarios": [],
+  "failure": {
+    "stage": "startup",
+    "type": "AssertionError",
+    "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n    kind: 'tenant',\n+   resources: []\n  }\n"
+  },
+  "page_errors": []
+}

@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$d1_dir/../.." && pwd)
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 2; }
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+if [ -n "${D1_PUBLIC_URL:-}" ]; then
+  base_url=$D1_PUBLIC_URL
+elif [ "$ingress_mode" = https ]; then
+  public_host=$(env_value D1_PUBLIC_HOST)
+  public_https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+  if [ "$public_https_port" = 443 ]; then base_url="https://$public_host"; else base_url="https://$public_host:$public_https_port"; fi
+else
+  base_url="http://$(env_value PUBLIC_BIND 127.0.0.1):$(env_value PUBLIC_PORT 18000)"
+fi
+username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+case "$password" in replace-with-*|'') echo "replace BOOTSTRAP_ADMIN_PASSWORD" >&2; exit 2;; esac
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-grant.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/cookies"
+response="$workspace/response"
+rate_limit_pause_seconds=${D1_GRANT_RATE_LIMIT_PAUSE_SECONDS:-61}
+
+case "$rate_limit_pause_seconds" in
+  ''|*[!0-9]*) echo "D1_GRANT_RATE_LIMIT_PAUSE_SECONDS must be a non-negative integer" >&2; exit 2 ;;
+esac
+
+csrf=$(curl --fail --silent --show-error --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf" | jq -er .csrf_token)
+login_payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+curl --fail --silent --show-error --cookie "$cookies" --cookie-jar "$cookies" \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data "$login_payload" "$base_url/auth/api/v1/login" >"$response"
+subject_id=$(curl --fail --silent --show-error --cookie "$cookies" "$base_url/auth/api/v1/session" | jq -er .principal.subject_id)
+
+grant_manifest() {
+  manifest="$1"
+  jq -r '.audience as $audience | .capabilities[].id | [$audience,.] | @tsv' "$manifest" |
+  while IFS="$(printf '\t')" read -r audience action; do
+    payload=$(jq -cn --arg subject_id "$subject_id" --arg audience "$audience" --arg action "$action" \
+      '{subject_id:$subject_id,audience:$audience,action:$action}')
+    attempt=1
+    while :; do
+      status=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+        --cookie "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+        --data "$payload" "$base_url/auth/api/v1/admin/grants")
+      case "$status" in
+        204|409) break ;;
+        429)
+          [ "$attempt" -lt 2 ] || {
+            echo "grant remained rate limited for $action after one bounded retry: $(cat "$response")" >&2
+            exit 1
+          }
+          echo "grant rate limit reached; waiting ${rate_limit_pause_seconds}s before one bounded retry" >&2
+          sleep "$rate_limit_pause_seconds"
+          attempt=$((attempt + 1))
+          ;;
+        *) echo "grant failed for $action (HTTP $status): $(cat "$response")" >&2; exit 1 ;;
+      esac
+    done
+  done
+}
+
+[ "$(env_value ENABLE_CONTRACT true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/contract-ledger-capabilities.json"
+[ "$(env_value ENABLE_MONEY true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/money-flow-ledger-capabilities.json"
+[ "$(env_value ENABLE_PEOPLE true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/people-groups-capabilities.json"
+[ "$(env_value ENABLE_PARTY true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/party-directory-capabilities.json"
+[ "$(env_value ENABLE_PROJECT true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/project-workspace-capabilities.json"
+[ "$(env_value ENABLE_EVIDENCE true)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/evidence-service-capabilities.json"
+[ "$(env_value ENABLE_BUSINESS_ENGAGEMENT false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/business-engagement-capabilities.json"
+[ "$(env_value ENABLE_BILLING false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/billing-invoice-capabilities.json"
+[ "$(env_value ENABLE_PRODUCTION false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/production-operations-capabilities.json"
+[ "$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/approval-audit-results-capabilities.json"
+[ "$(env_value ENABLE_COST_OUTSOURCING false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/cost-outsourcing-capabilities.json"
+[ "$(env_value ENABLE_BONUS_DISTRIBUTION false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/bonus-distribution-capabilities.json"
+echo "bootstrap administrator capabilities are ready: $subject_id"

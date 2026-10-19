@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+host_script="$script_dir/bootstrap-host"
+action=${1:-}
+
+usage() {
+  cat >&2 <<USAGE
+usage: D1_SSH_TARGET=user@host D1_SSH_KEY=/absolute/private-key $0 plan|apply|check
+       $0 self-test
+
+Optional:
+  D1_SSH_PORT=22
+  D1_ACR_MIRROR=https://ACCOUNT.mirror.aliyuncs.com
+  D1_HOST_SWAP_MIB=2048
+  D1_HOST_APT_UPGRADE=yes|no
+  D1_CONFIRM_SSH_KEY_LOGIN=yes   required by apply
+
+The SSH host key must already be present in known_hosts. Connect once and
+verify its fingerprint before using this non-interactive wrapper.
+USAGE
+  exit 2
+}
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+[ -x "$host_script" ] || fail "host bootstrap script is not executable: $host_script"
+
+case "$action" in
+  self-test)
+    exec "$host_script" self-test
+    ;;
+  plan|apply|check) ;;
+  *) usage ;;
+esac
+
+ssh_target=${D1_SSH_TARGET:-}
+ssh_key=${D1_SSH_KEY:-}
+ssh_port=${D1_SSH_PORT:-22}
+swap_mib=${D1_HOST_SWAP_MIB:-2048}
+apt_upgrade=${D1_HOST_APT_UPGRADE:-yes}
+confirm_ssh_key=${D1_CONFIRM_SSH_KEY_LOGIN:-no}
+acr_mirror=${D1_ACR_MIRROR:-}
+
+printf '%s\n' "$ssh_target" | grep -Eq '^[A-Za-z0-9._-]+@[A-Za-z0-9._:-]+$' || {
+  fail "D1_SSH_TARGET must use user@host without SSH options"
+}
+case "$ssh_target" in -*|*' '*|*'\t'*) fail "D1_SSH_TARGET contains unsupported characters" ;; esac
+[ -n "$ssh_key" ] && [ "${ssh_key#/}" != "$ssh_key" ] && [ -r "$ssh_key" ] || {
+  fail "D1_SSH_KEY must be an absolute readable private-key path"
+}
+case "$ssh_port" in ''|*[!0-9]*) fail "D1_SSH_PORT must be an integer" ;; esac
+[ "$ssh_port" -ge 1 ] && [ "$ssh_port" -le 65535 ] || fail "D1_SSH_PORT is outside 1-65535"
+case "$swap_mib" in ''|*[!0-9]*) fail "D1_HOST_SWAP_MIB must be an integer" ;; esac
+case "$apt_upgrade" in yes|no) ;; *) fail "D1_HOST_APT_UPGRADE must be yes or no" ;; esac
+case "$confirm_ssh_key" in yes|no) ;; *) fail "D1_CONFIRM_SSH_KEY_LOGIN must be yes or no" ;; esac
+if [ -n "$acr_mirror" ]; then
+  acr_mirror=${acr_mirror%/}
+  printf '%s\n' "$acr_mirror" | grep -Eq '^https://[a-z0-9-]+\.mirror\.aliyuncs\.com$' || {
+    fail "D1_ACR_MIRROR must be an account-specific https://*.mirror.aliyuncs.com URL"
+  }
+fi
+
+host_user=${ssh_target%@*}
+if [ "$action" = plan ]; then
+  D1_HOST_USER="$host_user" \
+  D1_HOST_SWAP_MIB="$swap_mib" \
+  D1_HOST_APT_UPGRADE="$apt_upgrade" \
+  D1_CONFIRM_SSH_KEY_LOGIN="$confirm_ssh_key" \
+  D1_ACR_MIRROR="$acr_mirror" \
+    exec "$host_script" plan
+fi
+
+remote_command="D1_HOST_USER=$host_user D1_HOST_SWAP_MIB=$swap_mib D1_HOST_APT_UPGRADE=$apt_upgrade D1_CONFIRM_SSH_KEY_LOGIN=$confirm_ssh_key"
+if [ -n "$acr_mirror" ]; then
+  remote_command="$remote_command D1_ACR_MIRROR=$acr_mirror"
+fi
+remote_command="$remote_command sh -s -- $action"
+
+ssh \
+  -i "$ssh_key" \
+  -p "$ssh_port" \
+  -o IdentitiesOnly=yes \
+  -o BatchMode=yes \
+  -o ConnectTimeout=10 \
+  "$ssh_target" \
+  "$remote_command" <"$host_script"

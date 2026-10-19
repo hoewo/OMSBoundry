@@ -1,0 +1,28 @@
+# 查询 Design Work Item 列表 API 契约
+metadata: {path: "tech/_shared/contracts/design-work-item-list.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/api/v1/design-work-items", summary: "读取凭证范围内最近更新的设计工作项", auth_required: true, audience: "design-operations", capability: "design-work-item.read"}
+request:
+  query_params:
+    - {name: limit, type: integer, minimum: 1, maximum: 100, required: false, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "../models/DesignWorkItem.yaml"}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+business_logic:
+  flow:
+    - "先按 tenant 读取，再按凭证的 Work Item 或 Project 资源范围过滤。"
+    - "按 updated_at 与 id 倒序返回，不泄露范围外工作项是否存在。"
+    - "列表不聚合 Stage、Deliverable 或外部 Reference 当前投影。"
+  state_transitions: []
+  side_effects: []

@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-089",
+  "candidate_only": true,
+  "postgresql": {
+    "run": "r",
+    "passed": true,
+    "projects_pass_records": 112,
+    "httpserver_pass_records": 85,
+    "records_include_subtests": true,
+    "skip_records": 0,
+    "fail_records": 0,
+    "projects_test_sha256": "f43e4b3cf38a4dab869bb07d8c56509a22dcbe8dde78bd64cf53b11ed247eb51",
+    "httpserver_test_sha256": "4142ae4a08036c86b6f547e99b512bc3abe710a629bbfa459b11454f83aafb26",
+    "main_unchanged": true,
+    "checks": [
+      "history_and_creation_snapshot_names",
+      "tenant_and_project_scope",
+      "empty_resource_scope_returns_no_names",
+      "bounded_literal_case_insensitive_query",
+      "names_only_no_ids_or_contacts",
+      "GET_history_digest_revision_command_assignment_counts_unchanged",
+      "native_HTTP_to_service_to_PG",
+      "untrusted_identity_headers_stripped",
+      "duplicate_unknown_scope_override_query_denied"
+    ]
+  },
+  "independent_startup": {
+    "run": "s",
+    "passed": true,
+    "schema": 10,
+    "actual_server_startup": true,
+    "private_owned_database": "oa_initiation_startup_20261002s",
+    "anonymous_native_routes_denied": 8,
+    "restart_facts_unchanged": true,
+    "server_sha256": "4b767844a155e99e32784f5aae664641c3bfe823f144f21d476534abf8ccb814",
+    "formal_iam_or_full_suite": false,
+    "main_unchanged": true
+  },
+  "local": {
+    "project_go_test_and_vet": true,
+    "workbench_go_test_and_vet": true,
+    "node_pass": 32,
+    "node_skip": 0,
+    "js_syntax": true,
+    "original_oa_worktree_clean": true,
+    "local_docker_started": false
+  },
+  "assets": {
+    "runtime_sha256": "2db7d8fd2491bcb2a59ce13c625cb24750d7ebaeeba2e85bdd7fb1a909e1f6cb",
+    "real_projects_html_sha256": "aaff1d30562cecb40acce8ab40b3a830cc51f315e8b1b65c73046890d55fc4d7",
+    "detail_css_sha256": "ececeda41c5b94dec6140efc8c6e0eae485d606f36ea269c1086fa4e0301c17d",
+    "browser_fixture_sha256": "6cb660025bbed17fa50fdc00ce057e73efed16505b14c8fb7ed0833789ab263e"
+  },
+  "remote_root_prefix": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002",
+  "runner_plus_pg_limits": {
+    "cpu": 0.45,
+    "memory_mib": 448
+  },
+  "startup_plus_pg_limits": {
+    "cpu": 0.4,
+    "memory_mib": 352
+  },
+  "remote_probes_stopped_exit_zero_no_oom": true,
+  "private_pg_stopped": true,
+  "main_13_database_digests_and_17_container_ids_unchanged": true,
+  "fixture_failures_corrected_not_production_rules_relaxed": [
+    "service unit fixture omitted mandatory ReferenceValidator; constructor rejected it",
+    "Postgres fixture used nonexistent CreateInput NodeType field; corrected ordinary-project input"
+  ],
+  "main_deployed": false,
+  "b01_complete": false,
+  "full_oa_accepted": false
+}

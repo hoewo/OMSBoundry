@@ -1,0 +1,39 @@
+# Project 下批复审计最小引用集合契约
+metadata: {path: "tech/_shared/contracts/approval-audit-project-results-reference.yaml", domain: "approval-audit-results", owner: "Approval & Audit Results", version: "1.0", created: "2026-09-28", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/projects/{project_id}/approval-audit-results", summary: "向受信 Project 工作负载提供该项目两类结果的最小当前引用", auth_required: true, audience: "approval-audit-results", capability: "approval-audit-result.read"}
+request:
+  path_params: [{name: project_id, type: string, format: uuid, required: true}]
+  scope: {resource_type: project, resource_id: "{project_id}", exact: true}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, project_id, items]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: approval-audit-results}
+        project_id: {type: string, format: uuid}
+        items:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [id, tenant_id, project_id, resource_type, kind, state, revision, digest, display_summary]
+            properties:
+              id: {type: string, format: uuid}
+              tenant_id: {type: string, format: uuid}
+              project_id: {type: string, format: uuid}
+              resource_type: {type: string, const: approval_audit_result}
+              kind: {type: string, enum: [approval, audit]}
+              state: {type: string, enum: [recorded, withdrawn]}
+              revision: {type: integer, minimum: 1}
+              digest: {type: string, minLength: 1}
+              display_summary: {type: string, minLength: 1}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+business_logic:
+  - "响应不含金额、Evidence 详情或内部领域对象。"
+  - "Results 保持来源所有权；GET 不追加 revision、Command 或 Audit。"

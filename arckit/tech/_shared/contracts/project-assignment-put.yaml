@@ -1,0 +1,64 @@
+# Project Assignment 命令 API 契约
+# 路径: arckit/tech/_shared/contracts/project-assignment-put.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-assignment-put.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+endpoint:
+  method: POST
+  path: "/api/v1/projects/{project_id}/assignments"
+  summary: "建立或结束 Project Assignment"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "按实际职责检查管理能力；commercial_contributor 必须有显式 project-workspace.assignment.commercial-contributor.manage，旧 assignment.manage 不隐含新职责"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, operation]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      operation: {type: string, enum: [assign, end]}
+      assignment_id: {type: [string, "null"], format: uuid, description: "end 时必填"}
+      subject_kind: {type: [string, "null"], enum: [person, group, null], description: "assign 时必填"}
+      subject_id: {type: [string, "null"], format: uuid, description: "assign 时必填"}
+      source_revision: {type: [integer, "null"], minimum: 1, description: "assign 时必填"}
+      role_key: {type: [string, "null"], enum: [business_owner, production_owner, participant, commercial_contributor, null]}
+      effective_from: {type: [string, "null"], format: date-time}
+      end_reason: {type: [string, "null"], maxLength: 500}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [project, assignment]
+      properties:
+        project: {$ref: "../models/Project.yaml"}
+        assignment: {$ref: "../models/ProjectAssignment.yaml"}
+  errors:
+    - {status: 400, code: INVALID_ASSIGNMENT_COMMAND, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_OR_ASSIGNMENT_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: ACTIVE_OWNER_CONFLICT, retryable: false}
+    - {status: 422, code: PEOPLE_REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: PEOPLE_REFERENCE_UNAVAILABLE, retryable: true}
+
+business_logic:
+  flow:
+    - "assign 先经 People v1 验证 tenant、kind、ID、revision 和非归档状态。"
+    - "end 只结束现有 active Assignment，不修改引用主体或旧记录。"
+    - "锁定 Project，校验负责人唯一和 revision，原子写 Assignment、Project revision 与历史事件。"
+  state_transitions: ["assignment absent -> active", "assignment active -> ended"]
+  side_effects: ["只读调用 People v1；不写 People 数据"]

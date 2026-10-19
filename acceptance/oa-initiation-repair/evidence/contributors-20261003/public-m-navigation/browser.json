@@ -1,0 +1,199 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "native_revision": 13,
+  "continued_from": "public-j-continuation",
+  "business_posts": 0,
+  "grant_writes": 0,
+  "scenarios": [],
+  "responses": [],
+  "page_errors": [],
+  "projection_requests": [],
+  "request_paths": [
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.js"
+    },
+    {
+      "phase": "login",
+      "method": "POST",
+      "path": "/gateway/login"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-project-directory.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-architecture-lens.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-bidding-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/workbench.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/project/api/v1/project-directory"
+    }
+  ],
+  "full_oa_accepted": false,
+  "failure": {
+    "type": "TimeoutError",
+    "phase": "login-idle"
+  },
+  "dom_diagnostic": {
+    "active_views": [
+      "projects"
+    ],
+    "directory_lists": 1,
+    "directory_names": 15,
+    "directory_button_boxes": [
+      {
+        "display": "grid",
+        "width": 982,
+        "height": 76.78125
+      },
+      {
+        "display": "grid",
+        "width": 982,
+        "height": 76.78125
+      },
+      {
+        "display": "grid",
+        "width": 982,
+        "height": 76.78125
+      },
+      {
+        "display": "grid",
+        "width": 982,
+        "height": 76.78125
+      },
+      {
+        "display": "grid",
+        "width": 982,
+        "height": 76.78125
+      }
+    ]
+  },
+  "test_session_logged_out": true
+}

@@ -1,0 +1,17 @@
+# 取消 Business Engagement API 契约
+metadata: {path: "tech/_shared/contracts/business-engagement-cancel.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/business-engagements/{engagement_id}/cancel", summary: "取消经营承接记录并保留事实", auth_required: true, audience: "business-engagement", capability: "business-engagement.cancel"}
+request:
+  path_params: [{name: engagement_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/BusinessEngagementDetails.yaml"}}
+  errors: [{status: 409, code: REVISION_CONFLICT, retryable: true}, {status: 409, code: ENGAGEMENT_STATE_CONFLICT, retryable: false}]
+business_logic: {flow: ["追加 cancelled revision 和不可变事件。", "取消后除读取／历史外所有写命令失败关闭。"]}

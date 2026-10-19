@@ -1,0 +1,6 @@
+# Preserve the already verified edge runtime, replacing the embedded Go UI.
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+COPY --chown=oms:oms server /app/server
+USER oms
+ENTRYPOINT ["/app/server"]

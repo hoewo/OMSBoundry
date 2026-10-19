@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "policy_id": "production-operations-project-access",
+  "policy_version": "1.0.0",
+  "audience": "production-operations",
+  "capability_namespace": "production-work-item",
+  "roles": {
+    "production_owner": [
+      "production-work-item.create",
+      "production-work-item.read",
+      "production-work-item.owner.manage",
+      "production-work-item.deliverable.manage",
+      "production-work-item.stage.manage",
+      "production-work-item.cancel",
+      "production-work-item.history.read"
+    ]
+  }
+}

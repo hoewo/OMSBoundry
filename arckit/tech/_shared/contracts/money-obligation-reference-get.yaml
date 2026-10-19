@@ -1,0 +1,36 @@
+# Obligation 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/money-obligation-reference-get.yaml", domain: "money-flow-ledger", owner: "Money Flow Ledger", version: "1.2", created: "2026-09-25", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/references/obligations/{obligation_id}", summary: "向受信工作负载提供最小稳定 Obligation 引用投影", auth_required: true, audience: "money-flow-ledger", capability: "money-flow-ledger.reference.read"}
+request:
+  path_params: [{name: obligation_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: obligation, id_from: obligation_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, resource_type, display_summary, status, revision, direction, currency, effective_amount, allocated_amount, remitted_amount, outstanding_amount]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: money-flow-ledger}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: obligation}
+        display_summary: {type: string, minLength: 1, description: "Money Flow 自有且随 revision 读取的义务标题。"}
+        status: {type: string, enum: [draft, open, closed]}
+        revision: {type: integer, minimum: 1, description: "草稿为 draft version；确认后为 obligation revision。"}
+        direction: {type: string, enum: [receivable, payable]}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+        effective_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        allocated_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        remitted_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        outstanding_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$"}
+        balance_sequence: {type: integer, minimum: 0, description: "核销／汇付余额快照序号；0 表示尚未产生余额事件。"}
+  errors:
+    - {status: 401, code: INVALID_CREDENTIAL, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: OBLIGATION_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受单 action、精确 Obligation Scope 的短期凭证。", "C3 只读组合读取当前确认金额、核销、汇付和未清余额，不保存这些投影。", "确认、核销、余额与纠错仍由 Money Flow 拥有。"]

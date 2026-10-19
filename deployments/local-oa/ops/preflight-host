@@ -1,0 +1,154 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+deployment_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+bundle_root=$(CDPATH= cd -- "$deployment_dir/../.." && pwd)
+release_marker="$deployment_dir/.release-bundle"
+os_release=${LOCAL_OA_PREFLIGHT_OS_RELEASE:-/etc/os-release}
+meminfo=${LOCAL_OA_PREFLIGHT_MEMINFO:-/proc/meminfo}
+min_free_mib=${LOCAL_OA_PREFLIGHT_MIN_FREE_MIB:-8192}
+min_memory_mib=${LOCAL_OA_PREFLIGHT_MIN_MEMORY_MIB:-3072}
+failures=0
+
+pass() {
+  printf 'PASS %s\n' "$1"
+}
+
+fail() {
+  printf 'FAIL %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+case "$min_free_mib" in
+  ''|*[!0-9]*) echo "LOCAL_OA_PREFLIGHT_MIN_FREE_MIB must be a positive integer" >&2; exit 2 ;;
+  0) echo "LOCAL_OA_PREFLIGHT_MIN_FREE_MIB must be greater than zero" >&2; exit 2 ;;
+esac
+case "$min_memory_mib" in
+  ''|*[!0-9]*) echo "LOCAL_OA_PREFLIGHT_MIN_MEMORY_MIB must be a positive integer" >&2; exit 2 ;;
+  0) echo "LOCAL_OA_PREFLIGHT_MIN_MEMORY_MIB must be greater than zero" >&2; exit 2 ;;
+esac
+
+[ -f "$release_marker" ] || {
+  echo "release marker is missing: $release_marker" >&2
+  echo "run this command from an extracted local OA release bundle" >&2
+  exit 2
+}
+
+release_target=$(awk -F= '$1 == "target" {print $2; exit}' "$release_marker")
+case "$release_target" in
+  linux/amd64|linux/arm64) pass "release target is $release_target" ;;
+  *) fail "release target is unsupported or missing: ${release_target:-missing}" ;;
+esac
+
+required_commands='awk curl df docker grep openssl sed sha256sum sort ss tr uname'
+for command_name in $required_commands; do
+  if command -v "$command_name" >/dev/null 2>&1; then
+    pass "required command is available: $command_name"
+  else
+    fail "required command is missing: $command_name"
+  fi
+done
+
+host_kernel=$(uname -s 2>/dev/null || true)
+host_machine=$(uname -m 2>/dev/null || true)
+case "$host_kernel/$host_machine" in
+  Linux/x86_64) host_target=linux/amd64 ;;
+  Linux/aarch64|Linux/arm64) host_target=linux/arm64 ;;
+  *) host_target=unsupported ;;
+esac
+if [ "$host_target" = "$release_target" ]; then
+  pass "host platform matches release target: $host_target"
+else
+  fail "host platform $host_kernel/$host_machine maps to $host_target, expected $release_target"
+fi
+
+if [ -f "$os_release" ]; then
+  os_id=$(awk -F= '$1 == "ID" {value=$2; gsub(/^"|"$/, "", value); print value; exit}' "$os_release")
+  os_version=$(awk -F= '$1 == "VERSION_ID" {value=$2; gsub(/^"|"$/, "", value); print value; exit}' "$os_release")
+  os_major=${os_version%%.*}
+  if [ "$os_id" = ubuntu ] && [ -n "$os_major" ] && [ "$os_major" -ge 22 ] 2>/dev/null; then
+    pass "supported operating system: Ubuntu $os_version"
+  else
+    fail "supported target requires Ubuntu 22.04 or newer; found ${os_id:-unknown} ${os_version:-unknown}"
+  fi
+else
+  fail "operating-system metadata is missing: $os_release"
+fi
+
+docker_server_target=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}' 2>/dev/null || true)
+if [ "$docker_server_target" = "$release_target" ]; then
+  pass "Docker daemon is reachable and matches $release_target"
+elif [ -n "$docker_server_target" ]; then
+  fail "Docker daemon target is $docker_server_target, expected $release_target"
+else
+  fail "Docker daemon is not reachable by the current user"
+fi
+
+if docker compose version >/dev/null 2>&1; then
+  compose_version=$(docker compose version --short 2>/dev/null || docker compose version 2>/dev/null || true)
+  pass "Docker Compose v2 is available${compose_version:+: $compose_version}"
+else
+  fail "Docker Compose v2 plugin is unavailable"
+fi
+
+free_mib=$(df -Pk "$bundle_root" 2>/dev/null | awk 'END {print int($4 / 1024)}')
+case "$free_mib" in
+  ''|*[!0-9]*) fail "free disk space could not be measured for $bundle_root" ;;
+  *)
+    if [ "$free_mib" -ge "$min_free_mib" ]; then
+      pass "free disk is ${free_mib} MiB (minimum ${min_free_mib} MiB)"
+    else
+      fail "free disk is ${free_mib} MiB; at least ${min_free_mib} MiB is required"
+    fi
+    ;;
+esac
+
+if [ -f "$meminfo" ]; then
+  memory_kib=$(awk '$1 == "MemTotal:" {memory=$2} $1 == "SwapTotal:" {swap=$2} END {print memory + swap}' "$meminfo")
+  memory_mib=$((memory_kib / 1024))
+  if [ "$memory_mib" -ge "$min_memory_mib" ]; then
+    pass "memory plus swap is ${memory_mib} MiB (minimum ${min_memory_mib} MiB)"
+  else
+    fail "memory plus swap is ${memory_mib} MiB; at least ${min_memory_mib} MiB is required"
+  fi
+else
+  fail "memory information is missing: $meminfo"
+fi
+
+required_ports='18081 18083 18084 18085 18086 18087 19081 19083 19084 19085 19086 19087 28081 28083 28084 28085 28086 28087'
+listening_endpoints=$(ss -H -ltn 2>/dev/null | awk '{print $4}' || true)
+busy_ports=''
+for port in $required_ports; do
+  if printf '%s\n' "$listening_endpoints" | grep -Eq ":${port}$"; then
+    busy_ports="$busy_ports $port"
+  fi
+done
+if [ -n "$busy_ports" ]; then
+  fail "required loopback demo ports are already listening:${busy_ports}"
+else
+  pass "all independent, subset and full-suite demo ports are free"
+fi
+
+project_names='omsbizfoundry-local-oa omsbizfoundry-design-delivery-audit omsbizfoundry-commercial-ledger-audit omsbizfoundry-level-a-contract omsbizfoundry-level-a-money omsbizfoundry-level-a-people omsbizfoundry-level-a-evidence omsbizfoundry-level-a-project omsbizfoundry-level-a-design'
+existing_projects=''
+for project_name in $project_names; do
+  if [ -n "$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)" ] ||
+     [ -n "$(docker network ls --quiet --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)" ] ||
+     [ -n "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)" ]; then
+    existing_projects="$existing_projects $project_name"
+  fi
+done
+if [ -n "$existing_projects" ]; then
+  fail "existing Docker resources use reserved demo project names:${existing_projects}"
+else
+  pass "reserved demo Compose project names are unused"
+fi
+
+if [ "$failures" -ne 0 ]; then
+  printf 'HOST_PREFLIGHT_STATUS=failed failures=%s\n' "$failures" >&2
+  exit 1
+fi
+
+printf 'HOST_PREFLIGHT_STATUS=passed release_target=%s host_target=%s free_mib=%s memory_plus_swap_mib=%s\n' \
+  "$release_target" "$host_target" "$free_mib" "$memory_mib"

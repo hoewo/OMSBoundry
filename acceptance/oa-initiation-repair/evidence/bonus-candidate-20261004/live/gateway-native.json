@@ -1,0 +1,145 @@
+{
+  "passed": true,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": false,
+  "identity_template": false,
+  "native_iam_project_people": true,
+  "native_gateway": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "real-iam-scope-amount-revoke-candidates-and-people-failure-zero-bonus-write",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-business-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-production-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-reload-retains-two-sides-without-write",
+      "passed": true
+    },
+    {
+      "name": "normal-withdraw-modal-click-retains-record-and-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "native-cold-empty-target-pg18-restore-identical-head-history-command-audit",
+      "passed": true
+    },
+    {
+      "name": "restored-native-pending-replay-one-batch-not-duplicate",
+      "passed": true
+    },
+    {
+      "name": "restored-independent-server-continues-write-and-refresh",
+      "passed": true
+    },
+    {
+      "name": "real-iam-revocation-visible-current-and-history-redaction-no-write",
+      "passed": true
+    }
+  ],
+  "native_preflight": {
+    "legacy_scope_denied": true,
+    "side_scope_denied": true,
+    "native_candidate_roles": true,
+    "formal_amount_revoke_hides_record": true,
+    "real_people_outage_zero_source_write": true,
+    "native_gateway_legacy_pool_compatible": true,
+    "gateway_cannot_widen_scope_or_accept_forged_headers": true,
+    "record_does_not_imply_read_admission": true
+  },
+  "backup_sha256": "fa33b883fbd3f79a2a83b26569a945141a665c3810b8a59f4c2f87889b9a30b8",
+  "native_facts": {
+    "heads": 6,
+    "revisions": 7,
+    "commands": 5,
+    "audits": 7,
+    "pools": 0,
+    "suggestions": 0,
+    "digest": "cc605dd08065e7653aa2aae2313c7018"
+  },
+  "native_afterflight": {
+    "native_current_and_history_five_amount_fields_absent": true,
+    "revoked_amount_record_denied": true
+  },
+  "post_attempt_count": 6,
+  "page_errors": [],
+  "source_digest": {
+    "project": "031ad1af483c90c041b021200a828297f7a23d6b6d4faa5e1466cd60c4a2051c",
+    "people": "62929e579055b85a8cb4d297bb0e3a5633c535154a0f50a399a6f8bf2005a0ff",
+    "contract_count": "0"
+  },
+  "workload_exchanges": [
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    }
+  ],
+  "native_sources_unchanged_and_stopped": true
+}

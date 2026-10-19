@@ -1,0 +1,42 @@
+# ProjectCompletionConfirmation 数据模型
+metadata:
+  path: "tech/_shared/models/ProjectCompletionConfirmation.yaml"
+  domain: "project-workspace"
+  entity_name: "ProjectCompletionConfirmation"
+  storage: "PostgreSQL"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+type: object
+additionalProperties: false
+description: "用户显式确认某一 Completion Profile 时冻结的不可变 Project 自有检查点。"
+required: [id, tenant_id, project_id, profile_key, observed_project_revision, confirmed_project_revision, sources, command_id, confirmed_by, confirmed_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  project_id: {type: string, format: uuid, readOnly: true}
+  profile_key: {type: string, const: reference-oa-c5-v1}
+  observed_project_revision: {type: integer, minimum: 1}
+  confirmed_project_revision: {type: integer, minimum: 2, readOnly: true}
+  sources:
+    type: array
+    minItems: 2
+    maxItems: 2
+    items:
+      type: object
+      additionalProperties: false
+      required: [requirement_key, result_id, result_kind, revision, digest]
+      properties:
+        requirement_key: {type: string, enum: [approval_result_recorded, audit_result_recorded]}
+        result_id: {type: string, format: uuid}
+        result_kind: {type: string, enum: [approval, audit]}
+        revision: {type: integer, minimum: 1}
+        digest: {type: string, minLength: 1}
+  command_id: {type: string, format: uuid}
+  confirmed_by: {type: string, format: uuid}
+  confirmed_at: {type: string, format: date-time}
+invariants:
+  - "记录只追加，不允许 UPDATE 或 DELETE。"
+  - "确认仅推进 Project revision；Project 保持 active，Results 不发生写入。"
+  - "同 Command ID 和同请求先返回原确认，不依赖 Results 在线。"

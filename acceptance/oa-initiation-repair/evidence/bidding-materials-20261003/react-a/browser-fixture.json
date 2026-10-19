@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "scope": "Rendering/interaction only, fixture HTTP owner APIs",
+  "facts": {
+    "writes": 0,
+    "uploads": 0,
+    "access": 0,
+    "deletes": 0
+  },
+  "browser_errors": [
+    "process is not defined",
+    "Cannot read properties of undefined (reading 'createWorkspace')"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "environment": "Main before login repair",
+  "browser": "native Chrome isolated context",
+  "csrf_refresh_route": "/auth/api/v1/csrf",
+  "csrf_refresh_status": 200,
+  "initial_form_token_differs_from_rotated_cookie": true,
+  "old_form_post_status": 403,
+  "old_form_error_code": "csrf_failed",
+  "credentials_submitted": false,
+  "tokens_exported": false,
+  "scope": "same class of failure reproduced; original human browser cookie state not inspected"
+}

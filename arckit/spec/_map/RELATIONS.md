@@ -1,0 +1,21 @@
+# 功能规格关系
+
+- `assembly/full-reference-oa-validation.md` 组合并验证 `project-workspace/project-initiation.md`、`design-operations/design-production-delivery.md` 及其他独立业务应用的版本化能力。
+- `assembly/full-reference-oa-validation.md` 的 C2 由 `business-engagement/engagement-lifecycle.md` 拥有经营承接事实；Project 只提供引用／责任事实，Contract／Money 独立确认下游建议。
+- `assembly/full-reference-oa-validation.md` 的 C3 由 `billing-invoice/invoice-registration.md` 拥有已开票登记；Contract 拥有合同／结算，Money Flow 拥有义务、实际资金、核销和余额，组合层只读聚合并下钻来源。
+- `assembly/full-reference-oa-validation.md` 的 C4 由 `production-operations/multi-type-production.md` 约束；现有 `design-operations/design-production-delivery.md` 是 `design-v1` 兼容基线，`consultation-v1` 是第一条反证增量。
+- `assembly/full-reference-oa-validation.md` 的 C5 由 `approval-audit-results/result-registration.md` 约束；Results 独立拥有批复／审计结果、精确金额、来源快照和纠错，Project 只读评估完成条件。
+- `assembly/full-reference-oa-validation.md` 的 C6 由 `cost-outsourcing/cost-outsourcing-lifecycle.md` 约束；Cost & Outsourcing 独立拥有发生原因、精确金额、Provider 快照、评分、Evidence 引用和付款建议，Contract、Money、Billing、Party 与 Evidence 继续拥有各自正式事实。
+- `assembly/full-reference-oa-validation.md` 的 C7 由 `bonus-distribution/bonus-lifecycle.md` 约束；Bonus Distribution 独立拥有奖池、计算策略快照、分配和发布历史，Contract／Money 提供类型化金额来源，People／Project 提供精确人员与 Assignment 事实，Money 独立确认应付建议。
+- `production-operations/multi-type-production.md` 复用一个 Production Work Item／Stage／Evidence／revision 内核，但每种类型有代码拥有、版本化、逐类型验收的定义；它不把阶段规则放入 Project，也不提供用户可编辑的通用流程。
+- `assembly/c3-commercial-summary.md` 实现上述 C3 的第一条跨应用读旅程；Project Workspace 只拥有 Resource Link 和组合上下文，Contract、Money、Billing 继续拥有并纠错各自事实。
+- `billing-invoice/invoice-registration.md` 通过版本化精确引用使用 Party、Project、Contract、Money Flow 和 Evidence；它不共享目标数据库、不把票据文件冒充票据事实，也不把开票金额推导为回款。
+- `assembly/full-reference-oa-validation.md` 的结构化甲方、资质单位和合作方由 `party-directory/party-lifecycle.md` 提供当前档案；消费应用继续拥有上下文角色和业务发生时快照。
+- `party-directory/party-lifecycle.md` 约束 Contract、Money、Project 和 Business Engagement 只能通过版本化精确引用使用 Party，不共享表、ORM 或可写当前目录。
+- `assembly/reference-oa-demo.md` 是完全体验证的既有 J1～J4 参考基线，不替代 C1～C8 的完整业务证据。
+- `assembly/customer-scenario-evidence.md` 约束参考 OA、OMS 和真实客户材料的证据等级。
+- `assembly/demo-validation-2.md` 与 `assembly/demo-experience-baseline.md` 分别约束装配／可移植性和人类可用性。
+- `project-workspace/project-initiation.md` 拥有 Project／Package 关系和转换事实；设计、合同、资金、Evidence 等应用只通过版本化引用接入。
+- `approval-audit-results/result-registration.md` 通过版本化精确引用使用 Project、Contract／Settlement、前序批复与 Evidence；Project 的 `reference-oa-c5-v1` 只读评估反向消费 Results 最小项目引用并只在显式确认时追加 Project 自有检查点；双方不共享表或互写来源事实。
+- `cost-outsourcing/cost-outsourcing-lifecycle.md` 的 Cost Entry 与 Outsourcing Engagement 共享同一部署边界但不共用宽记录模型；后续出现第二个稳定用途、不同生命周期或独立部署证据时才重新评估拆分。
+- `bonus-distribution/bonus-lifecycle.md` 把经营／生产奖金保留在一个部署边界中的类型化来源规则内，不复制人员、项目、合同、回款或义务表；客户特定公式只作为版本化 Overlay，不能进入公共金额内核。

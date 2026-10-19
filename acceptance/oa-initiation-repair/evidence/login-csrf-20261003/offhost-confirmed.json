@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "archive_sha256": "e1fbac45b5e10b92e018082d7335c845dbbfaafbff0f2bac9c6946bf49da0f05",
+  "bytes": 237971,
+  "local_mode": "0600",
+  "local_archive_ignored": true,
+  "copy_and_hash_verified_before_apply": true,
+  "archive_contents_not_exported_to_repository": true
+}

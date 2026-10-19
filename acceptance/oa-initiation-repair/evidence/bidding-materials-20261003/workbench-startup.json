@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "cycles": [
+    {"cycle": 1, "readiness": true, "anonymous_login_only": true, "four_embedded_runtimes_match": true, "reference_css": true},
+    {"cycle": 2, "readiness": true, "anonymous_login_only": true, "four_embedded_runtimes_match": true, "reference_css": true}
+  ],
+  "probe_stopped": true,
+  "assets_sha256": {
+    "/assets/reference-oa-architecture-lens.js": "d18fd5a6dff937c148e692d629d69b10d6bae853d945d9fdb69b45c128d54006",
+    "/assets/reference-oa-bidding-runtime.js": "e2722dc970486cec274242310ee430b1684698ab5f1d00ad2de858808960ae67",
+    "/assets/reference-oa-initiation-runtime.js": "2de9277dc4ae299d1684550ced7462183ceeae47c7c2c59d2dd7263082749b4e",
+    "/assets/reference-oa-business-runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec"
+  },
+  "binary_sha256": "82c9c5d3a1ba5619b0da2cafe61ebee291a5fd00aa3bdc12a2cb373fa9c53440",
+  "scope": "Native standalone process with declared example Suite; no identity headers, protected user APIs, DB writes, Docker, Main deployment or public browser journey."
+}

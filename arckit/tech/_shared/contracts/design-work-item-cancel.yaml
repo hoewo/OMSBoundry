@@ -1,0 +1,20 @@
+# 取消 Design Work Item API 契约
+metadata: {path: "tech/_shared/contracts/design-work-item-cancel.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/cancel", summary: "取消 Work Item 并保留历史", auth_required: true, audience: "design-operations", capability: "design-work-item.cancel"}
+request:
+  path_params: [{name: work_item_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignWorkItem.yaml"}}
+  errors:
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: WORK_ITEM_CANCELLED, retryable: false}
+business_logic:
+  flow: ["设置 cancelled 并追加事件。", "不修改 Project、Assignment 或 Evidence。"]

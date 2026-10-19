@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "healthy_main_services": 17,
+  "all_old_tables_and_sequences_preserved": true,
+  "both_tenant_and_resource_grants_unchanged": true,
+  "cost_schema": "0003_reference_oa_cost_entries.sql",
+  "new_cost_tables_empty": true,
+  "restore_probe_stopped": true,
+  "restore20_stopped": true,
+  "public_business_journey_verified": false,
+  "full_oa_accepted": false
+}

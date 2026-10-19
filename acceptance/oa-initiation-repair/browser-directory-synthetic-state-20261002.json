@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-02",
+  "synthetic_ui_only": true,
+  "real_iam_gateway_postgresql_or_public_acceptance": false,
+  "probe_test": "TestReferenceOAInitiationBrowserProbe",
+  "directory_probe_enabled": true,
+  "duration_seconds": 364.16,
+  "project_count": 28,
+  "visible_roots": 26,
+  "counts": {"directory_read": 9, "dispatch": 0, "update": 0, "complete": 0, "production_assignment": 0, "profile_correction": 0},
+  "observed_ui": {
+    "number_years_not_2030_start_date": {"2026": 15, "2025": 10, "unnumbered": 1},
+    "paged_10_second_page_range": "11–20 / 共 26 个项目",
+    "typed_search_not_applied_before_enter": true,
+    "child_search_keeps_parent_and_two_children": true,
+    "child_refresh_and_return_to_package": true,
+    "package_return_keeps_filtered_list_and_expansion": true,
+    "browser_back_and_forward_keep_project_context": true,
+    "actual_mouse_scroll_789_to_501": true,
+    "coordinate_click_return_restores_exact_scroll": {"before": 406, "after": 406, "page": 2},
+    "page_size_20_jump_to_last_page": {"page": 2, "range": "21–26 / 共 26 个项目", "next_disabled": true},
+    "empty_search": "0–0 / 共 0 个项目",
+    "sidebar_reentry_resets_search_year_mode_scroll": true,
+    "console_errors": 0,
+    "viewport": {"width": 1280, "height": 720}
+  },
+  "pre_fix_failure": "main overflow:hidden prevented actual mouse scrolling although list data was complete; fixed with real-workspace scoped scroll container and verified after probe restart",
+  "screenshots_inspected_in_tool": true,
+  "archived_screenshot_file": false,
+  "probe_stopped_and_agent_tab_closed": true,
+  "source_sha256": {
+    "reference_oa_project_directory.js": "03effc01f5f3d127598d0aa4fc09a2ddcd5e5c9fda8acab49f931743f14324d0",
+    "reference_oa_initiation_runtime.js": "25e55ff96c9d982593ea1fde5a3082afda5ca6d09c87504cf598eaabfaac6f58",
+    "reference_oa_workspace.css": "7b3b5439eceb20b8368d7bed4a422c7356b31eda3a2f5df3a4d1449afaa9d6fc",
+    "reference_oa_real_projects.html": "6a026ca3c5d8acbf403b940d7ddab0f5c8483064c42df57cf244fb7309dcb615",
+    "server.go": "b497ea08d718692394766a8568a665650663d6439bb4a7f2129d01072fecd0a9",
+    "reference_oa_initiation_browser_probe_test.go": "d193872fbb7f0f7c01a1f5141fbd8ec8e61cadb96f58fd20ed19a274a88a5312"
+  }
+}

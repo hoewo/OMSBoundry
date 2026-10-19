@@ -1,0 +1,24 @@
+# 查询登记 revision 历史 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-history-list.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/invoice-registrations/{invoice_registration_id}/history", summary: "读取不可变登记历史", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.history.read"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  query_params:
+    - {name: before_revision, type: integer, minimum: 2, required: false}
+    - {name: limit, type: integer, minimum: 1, maximum: 100, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: "../models/InvoiceRegistrationRevisionView.yaml"}}
+        next_before_revision: {type: [integer, "null"], minimum: 2}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: INVOICE_REGISTRATION_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["按 revision 倒序读取数据库中的完整不可变快照。", "服务端把每个 snapshot 投影为相同权限视图；无 amount.read 时全部历史金额和币种均为 null 且 amount_visible=false。"]

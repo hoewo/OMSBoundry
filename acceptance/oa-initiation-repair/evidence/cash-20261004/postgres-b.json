@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 23,
+  "iam_provider": "real_verifier_test_issuer",
+  "original_components_verified": false,
+  "tests": [
+    {
+      "test": "TestCashWorkspacePostgresExactMoneyScopeHistoryAndReplay",
+      "exit_code": 0,
+      "started": true,
+      "passed": true,
+      "skipped": false,
+      "binary_sha256": "6fd91f3fdc74d395b49238e8cbbb08c3706fa9d2da45e75cf6b8315cecd2d11a"
+    },
+    {
+      "test": "TestWorkspaceNativePostgresExactMoneyHistoryAndReplay",
+      "exit_code": 0,
+      "started": true,
+      "passed": true,
+      "skipped": false,
+      "binary_sha256": "8b2f1e0b5aaa88ced7ffc92ea69482fdf2519ac4f6cf79fb1f7b4636c8599a03"
+    }
+  ],
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

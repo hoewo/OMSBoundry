@@ -1,0 +1,20 @@
+// Generated delivery artifacts only. Source is already saved/checked separately.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {copyFileSync,readFileSync,writeFileSync,existsSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../../',import.meta.url));
+const out=process.argv[2];
+assert(/^\/tmp\/oa-complete-operations\.[A-Za-z0-9]+$/.test(out));
+const artifacts=out+'/artifacts', archive=out+'/source.tar.gz';
+assert(!existsSync(archive)&&!existsSync(artifacts+'/manifest.json'));
+for(const [app,template] of [['project-workspace','contributors-project.Dockerfile'],['unified-workbench','contributors-workbench.Dockerfile']])copyFileSync(fileURLToPath(new URL(template,import.meta.url)),artifacts+'/'+app+'/Dockerfile');
+copyFileSync(root+'/contracts/access/v1/examples/project-workspace-capabilities.json',artifacts+'/contracts/project-workspace-capabilities.json');
+execFileSync('tar',['-czf',archive,'--exclude=node_modules','--exclude=.npm-cache','--exclude=.runtime','--exclude=.env','--exclude=__pycache__','--exclude=dist','--exclude=bin','--exclude=*.test','backend/services/project-workspace','frontend/oms-workbench','packages/file-transfer-core','packages/workload-identity','contracts/access/v1/examples/project-workspace-capabilities.json','arckit/spec/project-workspace/commercial-contributors.md','acceptance/oa-initiation-repair/contributors-release-ecs.py','acceptance/oa-initiation-repair/contributors-project.Dockerfile','acceptance/oa-initiation-repair/contributors-workbench.Dockerfile','acceptance/oa-initiation-repair/package-contributors.mjs','go.work','go.work.sum'],{cwd:root});
+const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
+const applications={};
+for(const app of ['project-workspace','unified-workbench'])applications[app]=Object.fromEntries((app==='project-workspace'?['server','ops','workload-keyctl']:['server']).map(n=>[n,hash(artifacts+'/'+app+'/'+n)]));
+const manifest={version:'v0.1.0-oa.20261003.3',official_release:false,source_kind:'saved dirty-worktree candidate; unrelated files preserved',source_archive_sha256:hash(archive),schema_change:'Project 10 -> 11',closure:['project-workspace server/ops schema11','unified-workbench original personnel adapter','identity-access same image/new catalog0.7'],gateway_manifest_unchanged:true,assignment_policies_unchanged:true,grant_writes_by_release:0,applications,contracts:{'project-workspace-capabilities.json':hash(artifacts+'/contracts/project-workspace-capabilities.json')},assets:{'reference-oa-react-bidding.js':hash(root+'/frontend/oms-workbench/internal/server/reference_oa_react_bidding.js'),'reference-oa-react-bidding.css':hash(root+'/frontend/oms-workbench/internal/server/reference_oa_react_bidding.css')},full_oa_accepted:false};
+writeFileSync(artifacts+'/manifest.json',JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o600});
+console.log(JSON.stringify(manifest));

@@ -1,0 +1,52 @@
+# Project Package Conversion 数据模型
+# 路径: arckit/tech/_shared/models/ProjectPackageConversion.yaml
+
+metadata:
+  path: "tech/_shared/models/ProjectPackageConversion.yaml"
+  domain: "project-workspace"
+  entity_name: "ProjectPackageConversion"
+  storage: "PostgreSQL"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-26"
+  updated: "2026-09-26"
+
+type: object
+additionalProperties: false
+description: "既有 Project 进入 Package 的不可变转换事实；不包含合同、资金或生产数据。"
+required:
+  - id
+  - tenant_id
+  - operation
+  - project_id
+  - package_id
+  - previous_sort_order
+  - created_package
+  - created_project_revision
+  - created_package_revision
+  - status
+  - created_by
+  - created_at
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  operation: {type: string, enum: [attach_existing, wrap_as_package], readOnly: true}
+  project_id: {type: string, format: uuid, readOnly: true}
+  package_id: {type: string, format: uuid, readOnly: true}
+  previous_parent_project_id: {type: [string, "null"], format: uuid, readOnly: true}
+  previous_sort_order: {type: integer, minimum: 0, readOnly: true}
+  created_package: {type: boolean, readOnly: true}
+  created_project_revision: {type: integer, minimum: 1, readOnly: true}
+  created_package_revision: {type: integer, minimum: 1, readOnly: true}
+  status: {type: string, enum: [active, rolled_back], readOnly: true}
+  created_by: {type: string, format: uuid, readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  rolled_back_by: {type: [string, "null"], format: uuid, readOnly: true}
+  rolled_back_at: {type: [string, "null"], format: date-time, readOnly: true}
+  rollback_reason: {type: [string, "null"], maxLength: 1000, readOnly: true}
+
+invariants:
+  - "同一 Project 同时最多一个 active conversion。"
+  - "转换和撤销保留原 Project ID、Assignment、Resource Link 与外部资源 ID。"
+  - "自动外层 Package 被继续使用后拒绝自动撤销。"
+  - "记录不物理删除；rolled_back 只追加撤销 Actor、时间与原因。"

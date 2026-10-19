@@ -1,0 +1,55 @@
+{
+  "restore": {
+    "passed": true,
+    "empty_databases": 13,
+    "facts_and_sequences_equal": true,
+    "files_and_iam_key_bytes_equal": true,
+    "schema_7_to_10": false,
+    "schema_10_unchanged": true,
+    "existing_project_facts_unchanged": true,
+    "full_suite_restore_runtime": false
+  },
+  "rollout": {
+    "passed": true,
+    "schema": 10,
+    "changed_containers": [
+      "project-workspace",
+      "unified-workbench"
+    ],
+    "other_container_ids_unchanged": 15,
+    "project_facts_preserved": true,
+    "d1_check": true,
+    "official_release": false
+  },
+  "readback": {
+    "passed": true,
+    "fixture_id": "5db2eb3f-7125-4190-bbb0-59ce0beab79d",
+    "status": "active",
+    "revision": 5,
+    "same_project_completed": true,
+    "business_owner_recovered": true,
+    "production_replaced_with_history": true,
+    "existing_project_rows_unchanged": true,
+    "user_project_untouched": true,
+    "grant_writes": 0,
+    "runtime_sha256": "588eb7fa8f0869c8730721e967089bea0a455ce8910bfd06740f0d0d276f7bcf",
+    "browser_observation_recorded_separately": true,
+    "full_oa_accepted": false
+  },
+  "offhost_backup": {
+    "phase": "backup-export",
+    "sha256": "c115b4ce647ac679edfcfcb65f679cba55f960d20278f0a98724ebbdeabb91f9",
+    "bytes": 211761,
+    "path": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-recovery-backup-20261002.jRGK8L/oa-public-20261002b-backup.tar.gz",
+    "archive_mode": "0600",
+    "directory_mode": "0700"
+  },
+  "release": {
+    "version": "v0.1.0-oa.20261002.2",
+    "official_release": false,
+    "source_commit": "unknown-dirty-tree",
+    "source_sha256": "be4ae399624784f880d34e1ac37cd872cbc44c3ac20ad1cc6e2bf91ef4d5cb1c",
+    "project_digest": "0ebc8db34163de414d43009e075399201b2625cf53c71987f32738abca80bd1f",
+    "workbench_digest": "75528a75629b3662959bc685da644717481edc3811469c16ae2037603a45b198"
+  }
+}

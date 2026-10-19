@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "application": "business-engagement",
+  "checks": [
+    {"group": "engagement", "passed": true, "tests": 17},
+    {"group": "database", "passed": true, "tests": 1},
+    {"group": "httpserver", "passed": true, "tests": 22}
+  ],
+  "main_unchanged": true,
+  "probe_stopped": true,
+  "public_browser_or_full_oa": false,
+  "uploaded_bundle_sha256": "80945f28d64c874d7fffbe03265d42531917e961f13ba6fd2f24135a6a43554d",
+  "engagement_test_sha256": "ebc9629b477bf8d2d800cadd8d8cd437be86f7ddc9023bf10f954da8f3f8b2ce",
+  "receipt_source": "/opt/omsbizfoundry/acceptance/oa-bidding-validation-20261002e/results.json",
+  "scope": "Isolated PG18 owner databases, including an actual same-tenant neighbouring Engagement reference rejection and both owners' unchanged full wire details. Synthetic external references; not Main migration or real browser upload."
+}

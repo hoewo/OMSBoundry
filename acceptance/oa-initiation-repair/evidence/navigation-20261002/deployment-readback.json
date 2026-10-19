@@ -1,0 +1,96 @@
+{
+  "manifest": {
+    "version": "v0.1.0-oa.20261002.3",
+    "platform": "linux/amd64",
+    "official_release": false,
+    "commit": "unknown",
+    "source_archive_sha256": "3f8e9b10ff731254c2dc1236cb216d21688f267c640fb26150409e6e2c5a0f95",
+    "applications": {
+      "unified-workbench": {
+        "Dockerfile": "67cfaf74008175c3884e0df4022f2a5914314ea8e9a89246583561d388620b5c",
+        "server": "6b226734de0e93f06f490396ade59e278db66ca41589223fe476b3bd786e7629"
+      }
+    },
+    "contracts": {
+      "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+      "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb"
+    },
+    "assets": {
+      "reference-oa-initiation-runtime.js": "24f15d3af276c8cd7561cde0020c52f6a105d9b74ae02361fb1c0e7f099d5bcb"
+    }
+  },
+  "publication": {
+    "passed": true,
+    "official_release": false,
+    "images": {
+      "unified-workbench": {
+        "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:bfd416532c8c32ab925f994e764ff3c8a338c68ac11d06d093b3f6c1c9baa6e1",
+        "image_id": "sha256:bfd416532c8c32ab925f994e764ff3c8a338c68ac11d06d093b3f6c1c9baa6e1",
+        "binary_sha256": {
+          "server": "6b226734de0e93f06f490396ade59e278db66ca41589223fe476b3bd786e7629"
+        }
+      }
+    },
+    "main_unchanged": true
+  },
+  "preflight": {
+    "passed": true,
+    "iam_contracts_unchanged": true,
+    "project_schema_before": "000010_initial_dispatch_draft.sql",
+    "closure": [
+      "Workbench"
+    ],
+    "gateway_suite_manifest_unchanged": true,
+    "other_business_images_unchanged": true,
+    "official_release": false
+  },
+  "restore": {
+    "passed": true,
+    "empty_databases": 13,
+    "facts_and_sequences_equal": true,
+    "files_and_iam_key_bytes_equal": true,
+    "schema_7_to_10": false,
+    "schema_10_unchanged": true,
+    "existing_project_facts_unchanged": true,
+    "full_suite_restore_runtime": false
+  },
+  "rollout": {
+    "passed": true,
+    "schema": 10,
+    "changed_containers": [
+      "unified-workbench"
+    ],
+    "other_container_ids_unchanged": 16,
+    "project_facts_preserved": true,
+    "d1_check": true,
+    "official_release": false
+  },
+  "private_postgres_running": false,
+  "restore20_running_count": 0,
+  "d1_check_after_browser": true,
+  "offhost_backup": {
+    "path": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-navigation-backup-20261002.RYhDap/oa-public-20261002c-backup.tar.gz",
+    "bytes": 214978,
+    "directory_mode": "0700",
+    "archive_mode": "0600",
+    "sha256": "eb82f2bb0e3efd2932a929fcd18031999391023d6b817f27822b6ff50052451e",
+    "private_contents_not_committed": true
+  },
+  "preflight_rejection_before_publication_snapshot": {
+    "passed": false,
+    "reason": "prepare was attempted before publication completed; published.passed gate rejected it before backup, env or container mutation; publication completed then prepare reran successfully."
+  },
+  "local_checks": {
+    "node_runtime": 37,
+    "node_directory": 7,
+    "node_skips": 0,
+    "workbench_go_test": true,
+    "workbench_go_vet": true,
+    "javascript_syntax": true,
+    "python_compile": true,
+    "python_pure_phase_gate_tests": 6,
+    "git_diff_check": true,
+    "synthetic_opt_in_browser_probe_run": false
+  },
+  "full_oa_accepted": false
+}

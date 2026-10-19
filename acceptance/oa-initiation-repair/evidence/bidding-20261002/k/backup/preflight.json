@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "iam_contracts_unchanged": true,
+  "project_schema_before": "000010_initial_dispatch_draft.sql",
+  "closure": [
+    "Project declared BE endpoint configuration (same image/schema/IAM)",
+    "Workbench attachment-status text"
+  ],
+  "gateway_suite_manifest_unchanged": true,
+  "other_business_images_unchanged": true,
+  "official_release": false
+}

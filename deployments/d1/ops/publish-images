@@ -1,0 +1,289 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
+action=${1:-}
+
+registry=${D1_REGISTRY:-}
+namespace=${D1_REGISTRY_NAMESPACE:-}
+release_version=${D1_RELEASE_VERSION:-}
+manifest_out=${D1_IMAGE_MANIFEST_OUT:-"$repo_root/deployments/d1/.runtime/published-images-${release_version:-unset}.env"}
+
+source_postgres=${D1_SOURCE_POSTGRES_IMAGE:-postgres:18.6-alpine}
+source_nginx=${D1_SOURCE_NGINX_IMAGE:-nginx:1.28-alpine}
+source_golang=${D1_SOURCE_GOLANG_IMAGE:-golang:1.26.0-alpine}
+source_alpine=${D1_SOURCE_ALPINE_IMAGE:-alpine:3.22}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: D1_REGISTRY=host D1_REGISTRY_NAMESPACE=namespace D1_RELEASE_VERSION=version \
+       publish-images plan|publish|self-test
+
+The operator must run an interactive `docker login D1_REGISTRY` first. This
+script never accepts, stores, or prints the Registry password.
+USAGE
+  exit 2
+}
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+validate_coordinates() {
+  printf '%s\n' "$registry" | grep -Eq '^[a-z0-9][a-z0-9.-]+(:[0-9]+)?$' || {
+    fail 'D1_REGISTRY must be a registry hostname without scheme or path'
+  }
+  printf '%s\n' "$namespace" | grep -Eq '^[a-z0-9][a-z0-9._-]{1,63}$' || {
+    fail 'D1_REGISTRY_NAMESPACE must be 2-64 lowercase letters, digits, dot, underscore, or dash'
+  }
+  printf '%s\n' "$release_version" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' || {
+    fail 'D1_RELEASE_VERSION is not a valid container tag'
+  }
+  case "$release_version" in latest|dev) fail 'D1_RELEASE_VERSION must identify an immutable release, not latest or dev' ;; esac
+}
+
+image_tag() {
+  repository=$1
+  tag=$2
+  printf '%s/%s/%s:%s' "$registry" "$namespace" "$repository" "$tag"
+}
+
+image_digest() {
+  reference=$1
+  digest_json=$(docker buildx imagetools inspect "$reference" --format '{{json .Manifest.Digest}}')
+  digest=${digest_json#\"}
+  digest=${digest%\"}
+  printf '%s\n' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "could not read pushed digest for $reference"
+  printf '%s' "$digest"
+}
+
+copy_base() {
+  key=$1
+  source=$2
+  repository=$3
+  tag=$4
+  target=$(image_tag "$repository" "$tag")
+  echo "copy linux/amd64 base: $source -> $target"
+  # Pull through the local Docker daemon so its configured registry mirrors are
+  # honored. A remote-to-remote imagetools copy reaches Docker Hub directly and
+  # is unreliable on networks where Docker Hub requires an accelerator.
+  docker pull --platform linux/amd64 "$source"
+  source_platform=$(docker image inspect --platform linux/amd64 "$source" --format '{{.Os}}/{{.Architecture}}')
+  [ "$source_platform" = linux/amd64 ] || fail "pulled base is $source_platform, expected linux/amd64: $source"
+  docker tag "$source" "$target"
+  target_platform=$(docker image inspect --platform linux/amd64 "$target" --format '{{.Os}}/{{.Architecture}}')
+  [ "$target_platform" = linux/amd64 ] || fail "tagged base is $target_platform, expected linux/amd64: $target"
+  # Docker Desktop's containerd image store can retain a multi-platform index
+  # under the tag. An unqualified push from Apple Silicon may then publish the
+  # native arm64 child even after an amd64 pull. Select the pushed platform
+  # explicitly and verify the Registry result before recording its digest.
+  docker push --platform linux/amd64 "$target"
+  published_image=$(docker buildx imagetools inspect "$target" --format '{{json .Image}}')
+  published_platform=$(printf '%s\n' "$published_image" | jq -r '(.os // "") + "/" + (.architecture // "")')
+  [ "$published_platform" = linux/amd64 ] || fail "published base is $published_platform, expected linux/amd64: $target"
+  digest=$(image_digest "$target")
+  eval "$key=\$target@\$digest"
+}
+
+build_app() {
+  key=$1
+  repository=$2
+  dockerfile=$3
+  shift 3
+  target=$(image_tag "$repository" "$release_version")
+  metadata="$work_dir/$repository.json"
+  echo "build linux/amd64 application: $target"
+  docker buildx build \
+    --platform linux/amd64 \
+    --provenance=true \
+    --push \
+    --metadata-file "$metadata" \
+    --tag "$target" \
+    --file "$repo_root/$dockerfile" \
+    "$@" \
+    "$repo_root"
+  digest=$(jq -r '."containerimage.digest" // empty' "$metadata")
+  printf '%s\n' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "build metadata has no valid digest for $target"
+  published_image=$(docker buildx imagetools inspect "$target@$digest" --format '{{json .Image}}')
+  published_platform=$(printf '%s\n' "$published_image" | jq -r '(.os // "") + "/" + (.architecture // "")')
+  [ "$published_platform" = linux/amd64 ] || fail "published application is $published_platform, expected linux/amd64: $target@$digest"
+  eval "$key=\$target@\$digest"
+}
+
+assert_build_contract() {
+  for dockerfile in \
+    deployments/d1/docker/Dockerfile.identity \
+    deployments/d1/docker/Dockerfile.ledger \
+    deployments/d1/docker/Dockerfile.people \
+    deployments/d1/docker/Dockerfile.party \
+    deployments/d1/docker/Dockerfile.project \
+    deployments/d1/docker/Dockerfile.evidence \
+    deployments/d1/docker/Dockerfile.business-engagement \
+    deployments/d1/docker/Dockerfile.billing \
+    deployments/d1/docker/Dockerfile.production-operations \
+    deployments/d1/docker/Dockerfile.approval-audit-results \
+    deployments/d1/docker/Dockerfile.cost-outsourcing \
+    deployments/d1/docker/Dockerfile.bonus-distribution \
+    deployments/d1/docker/Dockerfile.edge; do
+    path="$repo_root/$dockerfile"
+    grep -qx 'ARG TARGETOS' "$path" || fail "$dockerfile must declare BuildKit TARGETOS"
+    grep -qx 'ARG TARGETARCH' "$path" || fail "$dockerfile must declare BuildKit TARGETARCH"
+    grep -q 'GOOS="\$TARGETOS" GOARCH="\$TARGETARCH" go build' "$path" || {
+      fail "$dockerfile must compile Go executables for the requested target platform"
+    }
+  done
+}
+
+print_plan() {
+  cat <<PLAN
+OMSBizFoundry D1 ACR publish plan
+  registry: $registry
+  namespace: $namespace
+  release: $release_version
+  platform: linux/amd64
+  manifest output: $manifest_out
+
+Base repositories:
+  base-postgres <- $source_postgres
+  base-nginx    <- $source_nginx
+  base-golang   <- $source_golang
+  base-alpine   <- $source_alpine
+
+Application repositories:
+  identity-access, contract-ledger, money-flow-ledger, people-groups,
+  party-directory, project-workspace, evidence-service, business-engagement,
+  billing-invoice, production-operations, approval-audit-results, cost-outsourcing,
+  bonus-distribution, unified-workbench, gateway
+
+The publish action copies four base images, builds fifteen application images,
+pushes all artifacts, then writes only digest-pinned D1_IMAGE_* references.
+No Registry password is accepted by this script.
+PLAN
+}
+
+run_self_test() {
+  old_registry=$registry
+  old_namespace=$namespace
+  old_release=$release_version
+  registry=crpi-example.cn-beijing.personal.cr.aliyuncs.com
+  namespace=omsbizfoundry
+  release_version=v0.1.0-test.1
+  assert_build_contract
+  validate_coordinates
+  [ "$(image_tag gateway "$release_version")" = "$registry/$namespace/gateway:$release_version" ] || fail 'image coordinate rendering failed'
+  digest_json='"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'
+  digest=${digest_json#\"}
+  digest=${digest%\"}
+  [ "$digest" = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] || fail 'digest JSON parsing failed'
+  release_version=latest
+  if (validate_coordinates) >/dev/null 2>&1; then fail 'mutable latest tag was accepted'; fi
+  release_version=v0.1.0-test.1
+  (
+    docker() {
+      case "$*" in
+        'pull --platform linux/amd64 nginx:1.28-alpine') return 0 ;;
+        'image inspect --platform linux/amd64 nginx:1.28-alpine --format {{.Os}}/{{.Architecture}}') printf '%s\n' linux/amd64 ;;
+        "tag nginx:1.28-alpine $registry/$namespace/base-nginx:1.28-alpine") return 0 ;;
+        "image inspect --platform linux/amd64 $registry/$namespace/base-nginx:1.28-alpine --format {{.Os}}/{{.Architecture}}") printf '%s\n' linux/amd64 ;;
+        "push --platform linux/amd64 $registry/$namespace/base-nginx:1.28-alpine") return 0 ;;
+        "buildx imagetools inspect $registry/$namespace/base-nginx:1.28-alpine --format {{json .Image}}") printf '%s\n' '{"os":"linux","architecture":"amd64"}' ;;
+        "buildx imagetools inspect $registry/$namespace/base-nginx:1.28-alpine --format {{json .Manifest.Digest}}") printf '%s\n' '"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' ;;
+        *) fail "unexpected docker self-test call: $*" ;;
+      esac
+    }
+    copy_base copied_ref nginx:1.28-alpine base-nginx 1.28-alpine
+    [ "$copied_ref" = "$registry/$namespace/base-nginx:1.28-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ] || {
+      fail 'platform-qualified base copy did not produce the expected digest reference'
+    }
+  )
+  registry=$old_registry
+  namespace=$old_namespace
+  release_version=$old_release
+  echo 'PASS D1 image publish self-test'
+}
+
+case "$action" in
+  self-test)
+    run_self_test
+    exit 0
+    ;;
+  plan|publish) validate_coordinates ;;
+  *) usage ;;
+esac
+
+if [ "$action" = plan ]; then
+  print_plan
+  exit 0
+fi
+
+command -v docker >/dev/null 2>&1 || fail 'docker is required'
+command -v jq >/dev/null 2>&1 || fail 'jq is required'
+docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
+assert_build_contract
+
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-image-publish.XXXXXX")
+trap 'rm -rf -- "$work_dir"' EXIT HUP INT TERM
+
+copy_base postgres_ref "$source_postgres" base-postgres 18.6-alpine
+copy_base nginx_ref "$source_nginx" base-nginx 1.28-alpine
+copy_base golang_ref "$source_golang" base-golang 1.26.0-alpine
+copy_base alpine_ref "$source_alpine" base-alpine 3.22
+
+build_app identity_ref identity-access deployments/d1/docker/Dockerfile.identity \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app contract_ref contract-ledger deployments/d1/docker/Dockerfile.ledger \
+  --build-arg APP=contract-ledger --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app money_ref money-flow-ledger deployments/d1/docker/Dockerfile.ledger \
+  --build-arg APP=money-flow-ledger --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app people_ref people-groups deployments/d1/docker/Dockerfile.people \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app party_ref party-directory deployments/d1/docker/Dockerfile.party \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app project_ref project-workspace deployments/d1/docker/Dockerfile.project \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app evidence_ref evidence-service deployments/d1/docker/Dockerfile.evidence \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app business_engagement_ref business-engagement deployments/d1/docker/Dockerfile.business-engagement \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app billing_ref billing-invoice deployments/d1/docker/Dockerfile.billing \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app production_ref production-operations deployments/d1/docker/Dockerfile.production-operations \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app approval_audit_results_ref approval-audit-results deployments/d1/docker/Dockerfile.approval-audit-results \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app cost_outsourcing_ref cost-outsourcing deployments/d1/docker/Dockerfile.cost-outsourcing \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app bonus_distribution_ref bonus-distribution deployments/d1/docker/Dockerfile.bonus-distribution \
+  --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
+build_app workbench_ref unified-workbench deployments/d1/docker/Dockerfile.edge \
+  --build-arg APP=unified-workbench --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
+build_app gateway_ref gateway deployments/d1/docker/Dockerfile.edge \
+  --build-arg APP=gateway --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
+
+mkdir -p "$(dirname -- "$manifest_out")"
+umask 077
+cat >"$manifest_out" <<MANIFEST
+D1_IMAGE_MODE=pull
+D1_POSTGRES_IMAGE=$postgres_ref
+D1_IDENTITY_IMAGE=$identity_ref
+D1_CONTRACT_IMAGE=$contract_ref
+D1_MONEY_IMAGE=$money_ref
+D1_PEOPLE_IMAGE=$people_ref
+D1_PARTY_IMAGE=$party_ref
+D1_PROJECT_IMAGE=$project_ref
+D1_EVIDENCE_IMAGE=$evidence_ref
+D1_BUSINESS_ENGAGEMENT_IMAGE=$business_engagement_ref
+D1_BILLING_IMAGE=$billing_ref
+D1_PRODUCTION_IMAGE=$production_ref
+D1_APPROVAL_AUDIT_RESULTS_IMAGE=$approval_audit_results_ref
+D1_COST_OUTSOURCING_IMAGE=$cost_outsourcing_ref
+D1_BONUS_DISTRIBUTION_IMAGE=$bonus_distribution_ref
+D1_WORKBENCH_IMAGE=$workbench_ref
+D1_GATEWAY_IMAGE=$gateway_ref
+D1_NGINX_IMAGE=$nginx_ref
+MANIFEST
+chmod 0600 "$manifest_out"
+
+echo "published digest-pinned image manifest: $manifest_out"

@@ -1,0 +1,347 @@
+.contract-amendment-list {
+  width: 100%;
+  min-width: 0;
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.contract-amendment-list__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.contract-amendment-list__summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.contract-amendment-list__summary strong {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.contract-amendment-list__summary span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.contract-amendment-list__loading,
+.contract-amendment-list__empty {
+  padding: 28px 0 18px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.contract-amendment-list__stream {
+  border-top: 1px solid #e2e8f0;
+}
+
+.contract-amendment-list__item {
+  min-width: 0;
+  padding: 18px 0 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.contract-amendment-list__item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.contract-amendment-list__identity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.contract-amendment-list__index {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.contract-amendment-list__identity-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.contract-amendment-list__identity-copy > strong {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.contract-amendment-list__identity-copy > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.contract-amendment-list__header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.contract-amendment-list__change-type {
+  margin-right: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.contract-amendment-list__change-type[data-tone='revision'] {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.contract-amendment-list__change-type[data-tone='neutral'] {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.contract-amendment-list__amounts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 15px 0 14px 41px;
+  background: #e2e8f0;
+  border: 1px solid #e2e8f0;
+}
+
+.contract-amendment-list__amounts > div {
+  min-width: 0;
+  padding: 12px 14px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.contract-amendment-list__amounts span,
+.contract-amendment-list__fee-grid span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.contract-amendment-list__amounts strong {
+  overflow-wrap: anywhere;
+  font-size: 17px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.contract-amendment-list__amounts strong[data-sign='positive'] {
+  color: #047857;
+}
+
+.contract-amendment-list__amounts strong[data-sign='negative'] {
+  color: #b42318;
+}
+
+.contract-amendment-list__fee-breakdown,
+.contract-amendment-list__description,
+.contract-amendment-list__files {
+  margin-left: 41px;
+}
+
+.contract-amendment-list__section-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.contract-amendment-list__fee-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.contract-amendment-list__fee-grid > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.contract-amendment-list__fee-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: #334155;
+}
+
+.contract-amendment-list__description {
+  margin-top: 14px;
+}
+
+.contract-amendment-list__description p {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.contract-amendment-list__files {
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.contract-amendment-list__files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.contract-amendment-list__files-header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.contract-amendment-list__files-header > span {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.contract-amendment-list__no-file {
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.contract-amendment-list__file-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.contract-amendment-list__file {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.contract-amendment-list__file:first-child {
+  border-top: 0;
+}
+
+.contract-amendment-list__file:hover {
+  background: linear-gradient(90deg, rgba(239, 246, 255, 0.72), transparent 80%);
+}
+
+.contract-amendment-list__file-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.contract-amendment-list__file-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contract-amendment-list__file-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #1e293b;
+}
+
+.contract-amendment-list__file-copy span {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.contract-amendment-list__file-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+@media (max-width: 640px) {
+  .contract-amendment-list__toolbar,
+  .contract-amendment-list__item-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contract-amendment-list__header-actions {
+    justify-content: flex-start;
+    padding-left: 41px;
+  }
+
+  .contract-amendment-list__amounts,
+  .contract-amendment-list__fee-breakdown,
+  .contract-amendment-list__description,
+  .contract-amendment-list__files {
+    margin-left: 0;
+  }
+
+  .contract-amendment-list__amounts,
+  .contract-amendment-list__fee-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contract-amendment-list__file {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .contract-amendment-list__file-actions {
+    width: 100%;
+    justify-content: flex-end;
+    padding-left: 40px;
+  }
+}
+

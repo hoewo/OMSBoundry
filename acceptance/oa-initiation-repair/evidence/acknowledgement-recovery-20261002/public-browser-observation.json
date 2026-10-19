@@ -1,0 +1,19 @@
+{
+  "release": "v0.1.0-oa.20261002.5",
+  "native_mac_chrome": true,
+  "public_url": "https://oatest.antuinfo.cn/workbench/",
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "actions": [
+    "普通刷新公网立项列表成功，用户测试项目101仍待补全，未代提交",
+    "旧 view=initiation 已激活 C 链接正常转同一项目 basic 详情，完成抽屉不可见",
+    "点击返回项目列表，搜索条件 OA-VERIFY-20261002-C 保留",
+    "原生 Enter 编号搜索返回唯一 C；点击打开仍同一 ID",
+    "普通刷新详情，编号、2026-10-02、设计/咨询、概况、两类负责人保持"
+  ],
+  "business_submit_clicks": 0,
+  "production_tab_still_disabled": true,
+  "unknown_acknowledgement_public_fault_injection": false,
+  "unknown_acknowledgement_synthetic_proof_only": true,
+  "full_initiation_accepted": false,
+  "full_oa_accepted": false
+}

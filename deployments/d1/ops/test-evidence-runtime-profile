@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+check="$script_dir/check-evidence-runtime-profile"
+env -u STORAGE_PROVIDER -u PRIMARY_STORAGE_PROVIDER sh "$check" local
+STORAGE_PROVIDER=local sh "$check" local
+STORAGE_PROVIDER=aliyun-oss sh "$check" aliyun-oss
+STORAGE_PROVIDER=hybrid PRIMARY_STORAGE_PROVIDER=local sh "$check" hybrid local
+STORAGE_PROVIDER=hybrid PRIMARY_STORAGE_PROVIDER=aliyun-oss sh "$check" hybrid aliyun-oss
+if STORAGE_PROVIDER=local sh "$check" hybrid aliyun-oss 2>/dev/null; then exit 1; fi
+if STORAGE_PROVIDER=aliyun-oss sh "$check" local 2>/dev/null; then exit 1; fi
+if STORAGE_PROVIDER=hybrid PRIMARY_STORAGE_PROVIDER=local sh "$check" hybrid aliyun-oss 2>/dev/null; then exit 1; fi
+if STORAGE_PROVIDER=hybrid PRIMARY_STORAGE_PROVIDER= sh "$check" hybrid local 2>/dev/null; then exit 1; fi
+if STORAGE_PROVIDER=unknown sh "$check" unknown 2>/dev/null; then exit 1; fi
+echo 'PASS runtime profile: five matching configurations, stale mode/Primary and invalid mode rejected'

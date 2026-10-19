@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "tests": 307,
+  "failed": 0,
+  "skipped": 0,
+  "frontend": 125,
+  "embedded_runtime": 182,
+  "public_ui_accepted": false
+}

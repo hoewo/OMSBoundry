@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "empty_databases": 13,
+  "three_file_trees_equal": true,
+  "old_facts_sequences_equal": true,
+  "cost2to3": true,
+  "migration_rerun_zero_changes": true,
+  "standalone_cycles": 2,
+  "full_suite_runtime_restore": false
+}

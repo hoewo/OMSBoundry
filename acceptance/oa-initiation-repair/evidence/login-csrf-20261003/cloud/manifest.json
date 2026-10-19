@@ -1,0 +1,13 @@
+{
+  "version": "v0.1.0-oa.20261003.2",
+  "official_release": false,
+  "closure": ["unified-workbench"],
+  "schema_change": false,
+  "source_archive_sha256": "08fb690dafbdd6fa10f905e13748235263d3d8fd7b1ad4c938df9b13e789c515",
+  "applications": {
+    "unified-workbench": {
+      "server": "4dac08e2bc6a3f47f11e58d94e7013f38b38050122de783cdb8214a0fecad141",
+      "Dockerfile": "140bda54f94fcd8963a669d6ac046e4447a4edb93c94e4a69ee8d3051abd6a32"
+    }
+  }
+}

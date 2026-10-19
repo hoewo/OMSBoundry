@@ -1,0 +1,78 @@
+# Money Flow 应付建议接收投影
+metadata:
+  path: "tech/_shared/models/PayableSuggestionIntake.yaml"
+  domain: "money-flow-ledger"
+  entity_name: "PayableSuggestionIntake"
+  storage: "PostgreSQL"
+  owner: "Money Flow Ledger"
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+
+type: object
+additionalProperties: false
+description: "Money 独立接收和决定 C6 应付建议的当前投影；只有 accepted 状态拥有由 Money 创建的 Obligation 引用。"
+required: [tenant_id, suggestion_id, request_digest, source, project_id, ledger_owner, counterparty, amount_minor, currency, due_on, purpose, status, revision, submitted_by, created_at, updated_at]
+properties:
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  suggestion_id: {type: string, format: uuid, readOnly: true}
+  request_digest: {type: string, pattern: "^sha256:[0-9a-f]{64}$", readOnly: true}
+  source: {$ref: "#/$defs/source_snapshot"}
+  project_id: {type: string, format: uuid, readOnly: true}
+  ledger_owner: {$ref: "#/$defs/resolved_party"}
+  counterparty: {$ref: "#/$defs/resolved_party"}
+  amount_minor: {type: integer, minimum: 1, readOnly: true}
+  currency: {type: string, pattern: "^[A-Z]{3}$", readOnly: true}
+  due_on: {type: string, format: date, readOnly: true}
+  purpose: {type: string, minLength: 1, maxLength: 1000, readOnly: true}
+  status: {type: string, enum: [pending, accepted, rejected, withdrawn], readOnly: true}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  obligation: {oneOf: [{$ref: "#/$defs/obligation_ref"}, {type: "null"}], readOnly: true}
+  decision_reason: {type: string, maxLength: 1000, readOnly: true}
+  submitted_by: {type: object, readOnly: true}
+  decided_by: {type: [object, "null"], readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  updated_at: {type: string, format: date-time, readOnly: true}
+$defs:
+  source_snapshot:
+    type: object
+    additionalProperties: false
+    required: [application, resource_type, resource_id, revision, digest]
+    properties:
+      application: {type: string, const: cost-outsourcing}
+      resource_type: {type: string, enum: [cost_entry, outsourcing_engagement]}
+      resource_id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+      digest: {type: string, pattern: "^sha256:[0-9a-f]{64}$"}
+  resolved_party:
+    type: object
+    additionalProperties: false
+    required: [directory_id, directory_revision, local_party_id, kind, legal_name]
+    properties:
+      directory_id: {type: string, format: uuid}
+      directory_revision: {type: integer, minimum: 1}
+      local_party_id: {type: string, format: uuid}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+  obligation_ref:
+    type: object
+    additionalProperties: false
+    required: [id, revision]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+
+state_machine:
+  initial: pending
+  transitions:
+    - {from: pending, to: accepted, trigger: independent_acceptance}
+    - {from: pending, to: rejected, trigger: independent_rejection}
+    - {from: pending, to: withdrawn, trigger: source_withdrawal}
+validation:
+  - "accepted 必须引用 Money 自身拥有的 payable、open Obligation revision 1。"
+  - "rejected 和 withdrawn 必须保持 obligation 为 null。"
+  - "相同建议摘要重放返回同一 intake；同一建议 ID 的不同摘要冲突。"
+  - "Directory Party 必须经 Money 来源自有转换账解析为两个不同的本地账簿 Party。"
+indexes:
+  - {name: payable_suggestion_intakes_pk, columns: [tenant_id, suggestion_id], unique: true}
+  - {name: payable_suggestion_intake_commands_unique, columns: [tenant_id, command_id], unique: true}

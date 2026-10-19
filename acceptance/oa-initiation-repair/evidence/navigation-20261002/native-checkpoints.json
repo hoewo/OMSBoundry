@@ -1,0 +1,342 @@
+{
+  "date": "2026-10-02",
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "fixture_origin": "Created once through the real public Chrome UI; not prepared by the readback script.",
+  "baseline_captured_before_fixture_creation": true,
+  "frozen_existing_project_tables": {
+    "project_assignments": "27:9e2ecd7b3a98046b42fbd969ae2ec7ac",
+    "project_commands": "79:8d39ee68830caa498bccdb38d5462bea",
+    "project_completion_confirmations": "0:d41d8cd98f00b204e9800998ecf8427e",
+    "project_history_events": "79:71cb58d579a733127e3ba1237f7d5c97",
+    "project_package_conversions": "0:d41d8cd98f00b204e9800998ecf8427e",
+    "project_resource_links": "2:ac0351ed62e3b4ea299a89bb991ea575",
+    "projects": "24:36a9580f6a8f8966116aaffefb1154d2",
+    "schema_migrations": "10:2f9864a8eb721fd0bf49d0812b9a3c3c"
+  },
+  "frozen_user_project_facts_sha256": "cc4ac3a427c03ba5c9b29c7585f8e1a50b166b753fba923cb7799844ea094b7e",
+  "frozen_grants_digest": "160:2c84c86c92abbae95769f43ef25dea42",
+  "other_business_databases_unchanged": 11,
+  "other_business_database_facts": {
+    "evidence_service": {
+      "evidence_audit_entries": "23:4eb07de2838d81272b2e267b900be3c8",
+      "file_versions": "10:76cd14052caf8909ae859769769dd665",
+      "files": "9:537b6a86ecc9203387e8520913329ed4",
+      "idempotency_commands": "20:e38a517d0d3a7e1fa9766510a0d20bae",
+      "schema_migrations": "2:ab8b788edbdd992bd83d856301d2b757",
+      "upload_sessions": "10:b057619f25f45b3fb2b4a8fd62b367a1"
+    },
+    "people_groups": {
+      "business_commands": "38:20bfd1ca08cfc3fd048bce6738b2ba5d",
+      "definition_revisions": "9:e11078ca005a5917696d3bf302707924",
+      "definitions": "9:a12630df17022809e7657880df035d26",
+      "group_capability_assignments": "3:1d6693e9356de8f851ddd2133bbae4c2",
+      "group_capability_revisions": "3:64eb4031e9d2208ae29059ea6abd332e",
+      "group_revisions": "9:77beedc516396ea09906f07dc5775c3f",
+      "groups": "3:b4e5df25128a93613036397a39dd0ae6",
+      "membership_revisions": "3:279c902c5286424a6eac08ab8f247cfc",
+      "memberships": "3:b1f64bce33a5ada7966b9127b0532b87",
+      "people_groups_audit_entries": "38:a2e9f3bb4ba23bae046a494970836072",
+      "person_revisions": "17:79ff9ce805aa83c92d0fa20aee3ea41a",
+      "persons": "17:b3023b0df8ca9486d03ff99271fb1ee9",
+      "roster_snapshots": "3:809846ddb0e4e3f632351c3373a947fd",
+      "schema_migrations": "1:63569b6ea4fc9c9919dc98df4d101630"
+    },
+    "party_directory": {
+      "parties": "2:514995a458851b68b8ca32b7617355a9",
+      "party_audit_events": "2:ab43c0ccdbd023b6a4476a557726bc25",
+      "party_commands": "2:a0bb524d7023b189443b0f950d7887a0",
+      "party_revisions": "2:a36cdc3b32a1a66aa25db182afae98bc",
+      "schema_migrations": "1:babf8efb56063528bf523618c91098e5"
+    },
+    "contract_ledger": {
+      "app_metadata": "1:a27a161869ff20568458aa23ac2fa62e",
+      "audit_entries": "3:4528bb60f8b7e55daf8be0797ba9c7da",
+      "contract_activation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_audit_entries": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_change_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_closure_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_closures": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_correction_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_change_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_party_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_documents": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_instruments": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_relation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_relations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_restore_operations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_revision_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlement_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlement_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_termination_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contracts": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_sessions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_user_iam_subject_links": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_users": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "parties": "3:a46cd7c0a01219cff715d691cb8f2e98",
+      "party_migration_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "18:fb3dcc72a0d79b54d98bfb6aef8bfc94"
+    },
+    "money_flow": {
+      "allocation_apply_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocation_reversal_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocation_reversals": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "app_metadata": "1:569a745c236c2c7c77ecd52a237cc04b",
+      "audit_entries": "6:2ffa23e7b94948a1c3fd16258899e3ea",
+      "cash_transaction_create_commands": "1:0686efbe440fd9a776d553e5da92bc9d",
+      "cash_transaction_reversal_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cash_transaction_reversals": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cash_transactions": "1:0adde6c4e176c15aae1ed2580a4acee2",
+      "internal_transfer_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "internal_transfers": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_sessions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_user_iam_subject_links": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_users": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_amount_adjustment_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_amount_adjustments": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_cash_expectation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_cash_expectations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_closure_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_closures": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_confirmation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_remission_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_remissions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "parties": "5:c5499acf276f6fe995de2e4246a11656",
+      "party_create_commands": "5:aa72efdf9fb167278904aff62c60daf8",
+      "party_migration_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "party_runtime_transitions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_party_source_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_intake_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_intakes": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_set_confirm_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_set_items": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_sets": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "22:029d75b4240078ad89fa17e3092d4d28",
+      "sequence:party_runtime_transitions_sequence_seq": "1:false"
+    },
+    "business_engagement": {
+      "business_engagement_commands": "23:b20b600294bcf89c18122f4af1b4268c",
+      "business_engagement_history_events": "23:6647f86089e8ada0ecba080bb913e306",
+      "business_engagement_materials": "6:9ff8260e58da7a5ce038261b3f1a0a99",
+      "business_engagements": "5:9d6506acb908b46fb768fdd86f95ee31",
+      "schema_migrations": "1:58461a427de2e08f42921d66ca493a0f"
+    },
+    "billing_invoice": {
+      "invoice_registration_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registration_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registration_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registrations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "1:8016b9becd004e971e98ee13ac5ee73f"
+    },
+    "design_operations": {
+      "design_commands": "6:32554c712de04a596fc5708358bff771",
+      "design_deliverables": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "design_history_events": "6:1b71e2c6a870e4279a74166c66be4f7f",
+      "design_stages": "12:8233246c7d04363fe390ad904677b4bb",
+      "design_work_items": "3:b835590f1183b3b6c17b2616e3cfea2f",
+      "schema_migrations": "2:fd9095399e188677e0d0f79bca6d34b7"
+    },
+    "approval_audit_results": {
+      "approval_audit_result_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_result_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_result_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_results": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "1:1b5a09f9ff7c8a3047de7f019f018439"
+    },
+    "cost_outsourcing": {
+      "cost_entries": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_entry_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_outsourcing_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_outsourcing_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_assessment_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_engagement_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_engagements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "2:c26548c28856ae49fbb2c2158a8fe5a3"
+    },
+    "bonus_distribution": {
+      "bonus_allocation_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_allocations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_distribution_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_distribution_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_payable_suggestion_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_payable_suggestions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_pool_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_pools": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "2:80b898b7a69dedd5fe144caf4b22496f"
+    }
+  },
+  "container_ids": {
+    "POSTGRES": "9384ddcf5d0f78c39bb3c52b90235df401035cd3b749df48fa5749f39811e826",
+    "IDENTITY": "486a01d64c6b52f1a06e5c5a54503c2e960898bef9fdc80def3298dd67b12d44",
+    "CONTRACT": "96039993f21d3309588e4a90042a9ef9ed93efec80585096948c899bc63caed2",
+    "MONEY": "710916daeee3bc6947d2b987ac999b67801bf771e828f2c4348f848766dd4334",
+    "PEOPLE": "a3ec06a96d450f8ebb693bf65706ee325a39b9180de24c3fd9993d08b62404ce",
+    "PARTY": "5e106d4c61fb2767563cbbd142b5bc06eeab3d2f6db264d270677e4565a197d5",
+    "PROJECT": "39ea2ffb28b92937978274a72887b06e81f2d7567d82043c09f0b6fdef32204e",
+    "EVIDENCE": "5534975ecde49125fb0078b8fd6a28d85f55f9fbb52e79843c6c77a71c5c60d0",
+    "BUSINESS_ENGAGEMENT": "2b3127dd0db84b4905b95dde748745a1791a8aad297953007ffb5145ef311695",
+    "BILLING": "ed6790f06147f00224304f3872f4cd4261afb3201769fd8d06ca45442ca3e664",
+    "PRODUCTION": "ac4644228330bd930b60308cbe440672f5744261d07dd449b9801277a6dd9df5",
+    "APPROVAL_AUDIT_RESULTS": "bf4d9a418ceb868e1c26b6928c978e24e7f8e25e0c06da13c826191436a09757",
+    "COST_OUTSOURCING": "692fff49c0d9ebec6f47c6f5b16329af4451b1e272e324d3235e96d901f6b1a6",
+    "BONUS_DISTRIBUTION": "fb08187d6883d63bb834993a6abd94b11e624e502efe85fccdd396db0984af9d",
+    "WORKBENCH": "1e7463041fb9104f698f9f36ae0d442dbd04aa0e66d83baf9a7ac77e6c811ee3",
+    "GATEWAY": "ab197b5532c6925686e044d3fbcbaa19c3ae87e621418b201ac53ee9233f2ff5",
+    "NGINX": "b684f5bb18b0de4463d64f3b1c771ef3e8594753b77f0aa0d6403bbfb142f140"
+  },
+  "runtime_sha256": "24f15d3af276c8cd7561cde0020c52f6a105d9b74ae02361fb1c0e7f099d5bcb",
+  "workbench_only_verified_release": "v0.1.0-oa.20261002.3",
+  "readback_business_api_writes": 0,
+  "readback_grant_writes": 0,
+  "checkpoints": {
+    "blank-number": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/blank-number.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "draft",
+      "revision": 1,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 1,
+      "receipt_count": null,
+      "all_existing_rows_preserved": true
+    },
+    "blank-types": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/blank-types.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "draft",
+      "revision": 1,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 1,
+      "receipt_count": null,
+      "all_existing_rows_preserved": true
+    },
+    "cancelled": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/cancelled.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "completed": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/completed.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "edited": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/edited.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 4,
+      "all_existing_rows_preserved": true
+    },
+    "invalid-edit": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/invalid-edit.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "no-op": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/no-op.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 5,
+      "all_existing_rows_preserved": true
+    },
+    "paused-readonly": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/paused-readonly.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 6,
+      "all_existing_rows_preserved": true,
+      "scope": "Frozen-data boundary check only; not completion of the remaining browser journey."
+    },
+    "production-clear-attempt1": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/production-clear-attempt1.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "browser_operation_passed": false,
+      "reason": "Owners were not cleared; revision and business history unchanged. Selection value was not separately confirmed before save; cause unresolved, further click blocked by Mac lock.",
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 6,
+      "all_existing_rows_preserved": true
+    }
+  },
+  "assertions": {
+    "cancel_and_invalid_edit_same_facts_and_receipts": true,
+    "no_op_same_facts_plus_one_receipt": true,
+    "original_user_and_all_existing_project_rows_unchanged": true,
+    "other_11_business_databases_unchanged": true,
+    "grants_unchanged": true
+  },
+  "continuous_journey_finished": false,
+  "pending_browser_operations": [
+    "Confirm a blank production-owner selection before save, clear and read back history.",
+    "Clear business owner, restore both owners explicitly and read back historical assignments.",
+    "Search formal number, refresh and browser Back/Forward through the same project."
+  ],
+  "full_oa_accepted": false
+}

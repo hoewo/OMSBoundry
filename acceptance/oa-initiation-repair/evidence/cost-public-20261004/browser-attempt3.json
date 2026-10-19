@@ -1,0 +1,209 @@
+{
+  "passed": true,
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "project_number": "OA-VERIFY-20261002-C",
+  "public_real_owners": true,
+  "production_iam": true,
+  "administrator_only": true,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "80b688c9-cf9e-4be6-8031-45231cfbd5be"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "aaab0951-8c91-4dfe-bc10-2f49eda57fad"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/upload-sessions"
+    },
+    {
+      "method": "PUT",
+      "path": "/evidence/v1/local-uploads/e69026f6-20b7-441a-9924-0b3dba0158d4"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/upload-sessions/e69026f6-20b7-441a-9924-0b3dba0158d4/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "05844910-0d57-44bc-a1fd-f192146292a9"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/files/00d82436-4c2c-4026-a6ce-03b417cba80f/versions/1/access-grants"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/files/00d82436-4c2c-4026-a6ce-03b417cba80f/versions/1/access-grants"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/47621d3e-9729-43a8-9833-b72b5671b21d/withdrawal",
+      "command_id": "0d8aa5ef-8e74-4f5f-9993-fc1a9d52d3c8",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "command_id": "c61bee2d-bafc-4232-b283-b1995371341a",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "05844910-0d57-44bc-a1fd-f192146292a9"
+    },
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/47621d3e-9729-43a8-9833-b72b5671b21d/withdrawal",
+      "command_id": "0d8aa5ef-8e74-4f5f-9993-fc1a9d52d3c8",
+      "expected_revision": 1
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "same-project-original-business-cost-native-save",
+      "passed": true
+    },
+    {
+      "name": "append-correction-real-lost-reply-original-command-history",
+      "passed": true
+    },
+    {
+      "name": "same-project-production-zero-cost-side-isolation",
+      "passed": true
+    },
+    {
+      "name": "real-evidence-preview-byte-exact-no-reupload",
+      "passed": true
+    },
+    {
+      "name": "native-withdrawal-lost-reply-retains-amount-file-history",
+      "passed": true
+    },
+    {
+      "name": "file-create-original-intent-replay-after-harness-recovery",
+      "passed": true
+    },
+    {
+      "name": "withdrawal-original-intent-replay-after-harness-recovery",
+      "passed": true
+    },
+    {
+      "name": "reload-zero-business-write-unchanged-project-native-records",
+      "passed": true
+    }
+  ],
+  "page_errors": [],
+  "native_records": [
+    {
+      "id": "47621d3e-9729-43a8-9833-b72b5671b21d",
+      "scope": "business",
+      "revision": 2,
+      "state": "withdrawn",
+      "amount_minor": "102",
+      "evidence": [
+        {
+          "file_id": "00d82436-4c2c-4026-a6ce-03b417cba80f",
+          "version": 1,
+          "slot": "invoice",
+          "digest": "sha256:f556d82ad2490f9f5ba36b7f50b0a523d219d04e62779fdedca65d4b3a18eae4",
+          "display_name": "公网成本-BwFxe2-发票.png"
+        }
+      ]
+    },
+    {
+      "id": "eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c",
+      "scope": "business",
+      "revision": 2,
+      "state": "recorded",
+      "amount_minor": "103",
+      "evidence": []
+    },
+    {
+      "id": "78256d67-fa6c-4298-8376-7238acbd83f3",
+      "scope": "production",
+      "revision": 1,
+      "state": "recorded",
+      "amount_minor": "0",
+      "evidence": []
+    }
+  ],
+  "project_revision_before": 15,
+  "business_id": "eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c",
+  "current_fault": {
+    "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/47621d3e-9729-43a8-9833-b72b5671b21d/withdrawal",
+    "committed": true
+  },
+  "http_failures": [
+    {
+      "status": 503,
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+      "message": "验收：业务已提交，但浏览器未收到回执"
+    },
+    {
+      "status": 503,
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "message": "验收：业务已提交，但浏览器未收到回执"
+    },
+    {
+      "status": 503,
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/47621d3e-9729-43a8-9833-b72b5671b21d/withdrawal",
+      "message": "验收：业务已提交，但浏览器未收到回执"
+    }
+  ],
+  "production_id": "78256d67-fa6c-4298-8376-7238acbd83f3",
+  "file_cost_id": "47621d3e-9729-43a8-9833-b72b5671b21d",
+  "evidence_ref": {
+    "file_id": "00d82436-4c2c-4026-a6ce-03b417cba80f",
+    "version": 1,
+    "slot": "invoice",
+    "digest": "sha256:f556d82ad2490f9f5ba36b7f50b0a523d219d04e62779fdedca65d4b3a18eae4",
+    "display_name": "公网成本-BwFxe2-发票.png"
+  },
+  "project_revision_after": 15
+}

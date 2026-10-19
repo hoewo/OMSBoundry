@@ -1,0 +1,31 @@
+# 查询已开票登记 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-list.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/invoice-registrations", summary: "稳定查询当前登记", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.read"}
+request:
+  query_params:
+    - {name: project_id, type: string, format: uuid, required: false}
+    - {name: party_id, type: string, format: uuid, required: false}
+    - {name: status, type: string, enum: [recorded, registration_invalidated], required: false}
+    - {name: issued_from, type: string, format: date, required: false}
+    - {name: issued_to, type: string, format: date, required: false}
+    - {name: cursor, type: string, required: false}
+    - {name: limit, type: integer, minimum: 1, maximum: 100, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items, allowed_actions]
+      properties:
+        items: {type: array, items: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+        next_cursor: {type: [string, "null"]}
+        allowed_actions: {type: array, uniqueItems: true, items: {type: string}}
+        effective_amount_minor: {type: [integer, "null"], minimum: 0, description: "仅有 billing-invoice.amount.read 时返回；无权不是零。"}
+        currency: {type: [string, "null"], pattern: "^[A-Z]{3}$"}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+business_logic:
+  flow: ["按 Credential scope 和查询条件稳定分页。", "每个 item 的金额字段由 amount.read 独立收敛；无权时 amount_visible=false 且 amount_minor/currency 为 null。", "只汇总 recorded 最新 revision。"]

@@ -1,0 +1,810 @@
+{
+  "date": "2026-10-02",
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "fixture_origin": "Created once through the real public Chrome UI; not prepared by the readback script.",
+  "baseline_captured_before_fixture_creation": true,
+  "frozen_existing_project_tables": {
+    "project_assignments": "27:9e2ecd7b3a98046b42fbd969ae2ec7ac",
+    "project_commands": "79:8d39ee68830caa498bccdb38d5462bea",
+    "project_completion_confirmations": "0:d41d8cd98f00b204e9800998ecf8427e",
+    "project_history_events": "79:71cb58d579a733127e3ba1237f7d5c97",
+    "project_package_conversions": "0:d41d8cd98f00b204e9800998ecf8427e",
+    "project_resource_links": "2:ac0351ed62e3b4ea299a89bb991ea575",
+    "projects": "24:36a9580f6a8f8966116aaffefb1154d2",
+    "schema_migrations": "10:2f9864a8eb721fd0bf49d0812b9a3c3c"
+  },
+  "frozen_user_project_facts_sha256": "cc4ac3a427c03ba5c9b29c7585f8e1a50b166b753fba923cb7799844ea094b7e",
+  "frozen_grants_digest": "160:2c84c86c92abbae95769f43ef25dea42",
+  "other_business_databases_unchanged": 11,
+  "other_business_database_facts": {
+    "evidence_service": {
+      "evidence_audit_entries": "23:4eb07de2838d81272b2e267b900be3c8",
+      "file_versions": "10:76cd14052caf8909ae859769769dd665",
+      "files": "9:537b6a86ecc9203387e8520913329ed4",
+      "idempotency_commands": "20:e38a517d0d3a7e1fa9766510a0d20bae",
+      "schema_migrations": "2:ab8b788edbdd992bd83d856301d2b757",
+      "upload_sessions": "10:b057619f25f45b3fb2b4a8fd62b367a1"
+    },
+    "people_groups": {
+      "business_commands": "38:20bfd1ca08cfc3fd048bce6738b2ba5d",
+      "definition_revisions": "9:e11078ca005a5917696d3bf302707924",
+      "definitions": "9:a12630df17022809e7657880df035d26",
+      "group_capability_assignments": "3:1d6693e9356de8f851ddd2133bbae4c2",
+      "group_capability_revisions": "3:64eb4031e9d2208ae29059ea6abd332e",
+      "group_revisions": "9:77beedc516396ea09906f07dc5775c3f",
+      "groups": "3:b4e5df25128a93613036397a39dd0ae6",
+      "membership_revisions": "3:279c902c5286424a6eac08ab8f247cfc",
+      "memberships": "3:b1f64bce33a5ada7966b9127b0532b87",
+      "people_groups_audit_entries": "38:a2e9f3bb4ba23bae046a494970836072",
+      "person_revisions": "17:79ff9ce805aa83c92d0fa20aee3ea41a",
+      "persons": "17:b3023b0df8ca9486d03ff99271fb1ee9",
+      "roster_snapshots": "3:809846ddb0e4e3f632351c3373a947fd",
+      "schema_migrations": "1:63569b6ea4fc9c9919dc98df4d101630"
+    },
+    "party_directory": {
+      "parties": "2:514995a458851b68b8ca32b7617355a9",
+      "party_audit_events": "2:ab43c0ccdbd023b6a4476a557726bc25",
+      "party_commands": "2:a0bb524d7023b189443b0f950d7887a0",
+      "party_revisions": "2:a36cdc3b32a1a66aa25db182afae98bc",
+      "schema_migrations": "1:babf8efb56063528bf523618c91098e5"
+    },
+    "contract_ledger": {
+      "app_metadata": "1:a27a161869ff20568458aa23ac2fa62e",
+      "audit_entries": "3:4528bb60f8b7e55daf8be0797ba9c7da",
+      "contract_activation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_audit_entries": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_change_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_closure_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_closures": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_correction_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_change_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_draft_party_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_documents": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_evidence_versions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_instruments": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_relation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_relations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_restore_operations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_revision_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlement_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlement_parties": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_settlements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contract_termination_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "contracts": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_sessions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_user_iam_subject_links": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_users": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "parties": "3:a46cd7c0a01219cff715d691cb8f2e98",
+      "party_migration_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "18:fb3dcc72a0d79b54d98bfb6aef8bfc94"
+    },
+    "money_flow": {
+      "allocation_apply_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocation_reversal_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocation_reversals": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "allocations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "app_metadata": "1:569a745c236c2c7c77ecd52a237cc04b",
+      "audit_entries": "6:2ffa23e7b94948a1c3fd16258899e3ea",
+      "cash_transaction_create_commands": "1:0686efbe440fd9a776d553e5da92bc9d",
+      "cash_transaction_reversal_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cash_transaction_reversals": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cash_transactions": "1:0adde6c4e176c15aae1ed2580a4acee2",
+      "internal_transfer_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "internal_transfers": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_sessions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_user_iam_subject_links": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "local_users": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_amount_adjustment_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_amount_adjustments": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_cash_expectation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_cash_expectations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_closure_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_closures": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_confirmation_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_create_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_remission_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_remissions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligation_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "obligations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "parties": "5:c5499acf276f6fe995de2e4246a11656",
+      "party_create_commands": "5:aa72efdf9fb167278904aff62c60daf8",
+      "party_migration_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "party_runtime_transitions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_party_source_mappings": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_intake_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_intakes": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_set_confirm_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_set_items": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "receipt_sets": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "22:029d75b4240078ad89fa17e3092d4d28",
+      "sequence:party_runtime_transitions_sequence_seq": "1:false"
+    },
+    "business_engagement": {
+      "business_engagement_commands": "23:b20b600294bcf89c18122f4af1b4268c",
+      "business_engagement_history_events": "23:6647f86089e8ada0ecba080bb913e306",
+      "business_engagement_materials": "6:9ff8260e58da7a5ce038261b3f1a0a99",
+      "business_engagements": "5:9d6506acb908b46fb768fdd86f95ee31",
+      "schema_migrations": "1:58461a427de2e08f42921d66ca493a0f"
+    },
+    "billing_invoice": {
+      "invoice_registration_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registration_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registration_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "invoice_registrations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "1:8016b9becd004e971e98ee13ac5ee73f"
+    },
+    "design_operations": {
+      "design_commands": "6:32554c712de04a596fc5708358bff771",
+      "design_deliverables": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "design_history_events": "6:1b71e2c6a870e4279a74166c66be4f7f",
+      "design_stages": "12:8233246c7d04363fe390ad904677b4bb",
+      "design_work_items": "3:b835590f1183b3b6c17b2616e3cfea2f",
+      "schema_migrations": "2:fd9095399e188677e0d0f79bca6d34b7"
+    },
+    "approval_audit_results": {
+      "approval_audit_result_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_result_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_result_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "approval_audit_results": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "1:1b5a09f9ff7c8a3047de7f019f018439"
+    },
+    "cost_outsourcing": {
+      "cost_entries": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_entry_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_outsourcing_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "cost_outsourcing_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_assessment_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_engagement_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "outsourcing_engagements": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestion_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "payable_suggestions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "2:c26548c28856ae49fbb2c2158a8fe5a3"
+    },
+    "bonus_distribution": {
+      "bonus_allocation_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_allocations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_distribution_audit_events": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_distribution_commands": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_payable_suggestion_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_payable_suggestions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_pool_revisions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "bonus_pools": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "schema_migrations": "2:80b898b7a69dedd5fe144caf4b22496f"
+    }
+  },
+  "container_ids": {
+    "POSTGRES": "9384ddcf5d0f78c39bb3c52b90235df401035cd3b749df48fa5749f39811e826",
+    "IDENTITY": "486a01d64c6b52f1a06e5c5a54503c2e960898bef9fdc80def3298dd67b12d44",
+    "CONTRACT": "96039993f21d3309588e4a90042a9ef9ed93efec80585096948c899bc63caed2",
+    "MONEY": "710916daeee3bc6947d2b987ac999b67801bf771e828f2c4348f848766dd4334",
+    "PEOPLE": "a3ec06a96d450f8ebb693bf65706ee325a39b9180de24c3fd9993d08b62404ce",
+    "PARTY": "5e106d4c61fb2767563cbbd142b5bc06eeab3d2f6db264d270677e4565a197d5",
+    "PROJECT": "39ea2ffb28b92937978274a72887b06e81f2d7567d82043c09f0b6fdef32204e",
+    "EVIDENCE": "5534975ecde49125fb0078b8fd6a28d85f55f9fbb52e79843c6c77a71c5c60d0",
+    "BUSINESS_ENGAGEMENT": "2b3127dd0db84b4905b95dde748745a1791a8aad297953007ffb5145ef311695",
+    "BILLING": "ed6790f06147f00224304f3872f4cd4261afb3201769fd8d06ca45442ca3e664",
+    "PRODUCTION": "ac4644228330bd930b60308cbe440672f5744261d07dd449b9801277a6dd9df5",
+    "APPROVAL_AUDIT_RESULTS": "bf4d9a418ceb868e1c26b6928c978e24e7f8e25e0c06da13c826191436a09757",
+    "COST_OUTSOURCING": "692fff49c0d9ebec6f47c6f5b16329af4451b1e272e324d3235e96d901f6b1a6",
+    "BONUS_DISTRIBUTION": "fb08187d6883d63bb834993a6abd94b11e624e502efe85fccdd396db0984af9d",
+    "WORKBENCH": "dcd922e01f4a0420c6d60661d7fd2097f29fbcc8038a757afa0750776815f3b5",
+    "GATEWAY": "ab197b5532c6925686e044d3fbcbaa19c3ae87e621418b201ac53ee9233f2ff5",
+    "NGINX": "b684f5bb18b0de4463d64f3b1c771ef3e8594753b77f0aa0d6403bbfb142f140"
+  },
+  "runtime_sha256": "67000acd9195c07010251f31ec2cf8d66533b7d9fa8ab47d0ae698a39db8add9",
+  "workbench_only_verified_release": "v0.1.0-oa.20261002.4",
+  "readback_business_api_writes": 0,
+  "readback_grant_writes": 0,
+  "checkpoints": {
+    "blank-number": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/blank-number.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "draft",
+      "revision": 1,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 1,
+      "receipt_count": null,
+      "all_existing_rows_preserved": true
+    },
+    "blank-types": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/blank-types.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "draft",
+      "revision": 1,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 1,
+      "receipt_count": null,
+      "all_existing_rows_preserved": true
+    },
+    "cancelled": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/cancelled.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "completed": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/completed.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "edited": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/edited.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 4,
+      "all_existing_rows_preserved": true
+    },
+    "invalid-edit": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/invalid-edit.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 3,
+      "assignment_count": 1,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 3,
+      "receipt_count": 3,
+      "all_existing_rows_preserved": true
+    },
+    "no-op": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/no-op.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 5,
+      "all_existing_rows_preserved": true
+    },
+    "paused-readonly": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/paused-readonly.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 6,
+      "all_existing_rows_preserved": true,
+      "scope": "Frozen-data boundary check only; not completion of the remaining browser journey."
+    },
+    "production-clear-attempt1": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/production-clear-attempt1.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "browser_operation_passed": false,
+      "reason": "Owners were not cleared; revision and business history unchanged. Selection value was not separately confirmed before save; cause unresolved, further click blocked by Mac lock.",
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 6,
+      "all_existing_rows_preserved": true
+    },
+    "production-clear-attempt2-csrf": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/production-clear-attempt2-csrf.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "phase_assertions_passed": false,
+      "passed": false,
+      "project_status": "active",
+      "revision": 4,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 4,
+      "receipt_count": 6,
+      "all_existing_rows_preserved": true
+    },
+    "production-clear": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/production-clear.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "phase_assertions_passed": true,
+      "passed": true,
+      "project_status": "active",
+      "revision": 5,
+      "assignment_count": 2,
+      "current_owner_roles": [
+        "business_owner"
+      ],
+      "history_count": 5,
+      "receipt_count": 7,
+      "all_existing_rows_preserved": true
+    },
+    "business-clear": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/business-clear.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "phase_assertions_passed": true,
+      "passed": true,
+      "project_status": "active",
+      "revision": 6,
+      "assignment_count": 2,
+      "current_owner_roles": [],
+      "history_count": 6,
+      "receipt_count": 8,
+      "all_existing_rows_preserved": true
+    },
+    "owners-restored": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/owners-restored.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "phase_assertions_passed": true,
+      "passed": true,
+      "project_status": "active",
+      "revision": 7,
+      "assignment_count": 4,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 7,
+      "receipt_count": 9,
+      "all_existing_rows_preserved": true
+    },
+    "final": {
+      "remote_observation": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002b/continuous-browser/final.json",
+      "readback_and_frozen_data_checks_passed": true,
+      "phase_assertions_passed": true,
+      "passed": true,
+      "project_status": "active",
+      "revision": 7,
+      "assignment_count": 4,
+      "current_owner_roles": [
+        "business_owner",
+        "production_owner"
+      ],
+      "history_count": 7,
+      "receipt_count": 9,
+      "all_existing_rows_preserved": true
+    }
+  },
+  "assertions": {
+    "cancel_and_invalid_edit_same_facts_and_receipts": true,
+    "no_op_same_facts_plus_one_receipt": true,
+    "original_user_and_all_existing_project_rows_unchanged": true,
+    "other_11_business_databases_unchanged": true,
+    "grants_unchanged": true,
+    "exact_runtime_and_image_of_release_4": true,
+    "continuous_journey_assertions_passed": true,
+    "one_activation": true,
+    "old_assignment_snapshots_preserved": true,
+    "final_same_facts_and_receipts_as_restoration": true,
+    "clear_attempt2_failed_before_business_write": true
+  },
+  "continuous_journey_finished": true,
+  "pending_browser_operations": [
+    "Full rate/client/qualification fields and candidate-person semantics.",
+    "Role/revocation/concurrency/partial-success matrix.",
+    "Public package and original OA live comparison.",
+    "Remaining business/production/files/statistics operations."
+  ],
+  "full_oa_accepted": false,
+  "previous_batch_evidence": "../navigation-20261002/native-checkpoints.json",
+  "validated_slice": "Existing administrator / one ordinary virtual Project / core initiation and basic-info flow, not full I01-I04.",
+  "full_initiation_accepted": false,
+  "final_native_project": {
+    "id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+    "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+    "project_number": "OA-VERIFY-20261002-C",
+    "node_type": "project",
+    "sort_order": 0,
+    "name": "OA 连续操作复测 20261002C（验收夹具）",
+    "summary": "公网编辑复测：基本资料与生产负责人一次保存。",
+    "planned_start_date": "2026-10-02T00:00:00Z",
+    "project_type_keys": [
+      "design",
+      "consultation"
+    ],
+    "status": "active",
+    "revision": 7,
+    "created_by": "12e800ac-00bf-4516-8748-b45c5623493a",
+    "created_at": "2026-10-02T07:51:12.316588Z",
+    "updated_at": "2026-10-02T09:48:42.162448Z"
+  },
+  "final_assignments": [
+    {
+      "id": "ed437a15-51ca-48d7-953f-716b8ee7ae31",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "subject_kind": "person",
+      "subject_id": "c8e3d6aa-f797-4847-b766-4a2d4cb9a78e",
+      "source_revision": 1,
+      "display_snapshot": "D1 Person 20260926T114917Z-fec1815e",
+      "role_key": "business_owner",
+      "effective_from": "2026-10-02T07:51:12.316588Z",
+      "ended_at": "2026-10-02T09:34:00.885827Z",
+      "end_reason": "修改项目基本信息",
+      "created_project_revision": 1,
+      "ended_project_revision": 6,
+      "created_at": "2026-10-02T07:51:12.316588Z"
+    },
+    {
+      "id": "abfc5bd4-7b09-4633-bbc9-483db5c466fd",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "subject_kind": "person",
+      "subject_id": "ce9e936b-6ede-42af-9f70-b448ac1f4a8c",
+      "source_revision": 1,
+      "display_snapshot": "D1 Person 20260927T070458Z-758e9889",
+      "role_key": "production_owner",
+      "effective_from": "2026-10-02T08:09:46.080071Z",
+      "ended_at": "2026-10-02T09:30:29.745318Z",
+      "end_reason": "修改项目基本信息",
+      "created_project_revision": 4,
+      "ended_project_revision": 5,
+      "created_at": "2026-10-02T08:09:46.080071Z"
+    },
+    {
+      "id": "7e647206-9958-4b47-a772-053557bfd888",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "subject_kind": "person",
+      "subject_id": "ce9e936b-6ede-42af-9f70-b448ac1f4a8c",
+      "source_revision": 1,
+      "display_snapshot": "D1 Person 20260927T070458Z-758e9889",
+      "role_key": "production_owner",
+      "effective_from": "2026-10-02T09:48:42.162448Z",
+      "created_project_revision": 7,
+      "created_at": "2026-10-02T09:48:42.162448Z"
+    },
+    {
+      "id": "b5c6b822-fb29-4c27-bb60-d87772165ca7",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "subject_kind": "person",
+      "subject_id": "c8e3d6aa-f797-4847-b766-4a2d4cb9a78e",
+      "source_revision": 1,
+      "display_snapshot": "D1 Person 20260926T114917Z-fec1815e",
+      "role_key": "business_owner",
+      "effective_from": "2026-10-02T09:48:42.162448Z",
+      "created_project_revision": 7,
+      "created_at": "2026-10-02T09:48:42.162448Z"
+    }
+  ],
+  "final_history": [
+    {
+      "id": "5bbc1ede-9ef2-4050-b5f8-a9130872113d",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 7,
+      "event_sequence": 1,
+      "event_type": "project_details_replaced",
+      "command_id": "8480774a-02b9-4122-a915-e9b769e53832",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T09:48:42.162448Z",
+      "payload": {
+        "client_party": null,
+        "correction_reason": "修改项目基本信息",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "owner_changes": [
+          {
+            "changed": true,
+            "current": {
+              "created_at": "2026-10-02T09:48:42.162448052Z",
+              "created_project_revision": 7,
+              "display_snapshot": "D1 Person 20260926T114917Z-fec1815e",
+              "effective_from": "2026-10-02T09:48:42.162448052Z",
+              "id": "b5c6b822-fb29-4c27-bb60-d87772165ca7",
+              "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+              "role_key": "business_owner",
+              "source_revision": 1,
+              "subject_id": "c8e3d6aa-f797-4847-b766-4a2d4cb9a78e",
+              "subject_kind": "person",
+              "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968"
+            },
+            "role_key": "business_owner"
+          },
+          {
+            "changed": true,
+            "current": {
+              "created_at": "2026-10-02T09:48:42.162448052Z",
+              "created_project_revision": 7,
+              "display_snapshot": "D1 Person 20260927T070458Z-758e9889",
+              "effective_from": "2026-10-02T09:48:42.162448052Z",
+              "id": "7e647206-9958-4b47-a772-053557bfd888",
+              "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+              "role_key": "production_owner",
+              "source_revision": 1,
+              "subject_id": "ce9e936b-6ede-42af-9f70-b448ac1f4a8c",
+              "subject_kind": "person",
+              "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968"
+            },
+            "role_key": "production_owner"
+          }
+        ],
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": "2026-10-02T00:00:00Z",
+        "previous_revision": 6,
+        "project_number": "OA-VERIFY-20261002-C",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "schema_version": "project-basic-info-change-v1",
+        "sort_order": 0,
+        "status": "active",
+        "summary": "公网编辑复测：基本资料与生产负责人一次保存。"
+      }
+    },
+    {
+      "id": "4de608fd-d9ba-47ee-9406-72114cae5263",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 6,
+      "event_sequence": 1,
+      "event_type": "project_details_replaced",
+      "command_id": "381c1d5f-a1d7-4d97-9668-9eeff47ded60",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T09:34:00.885827Z",
+      "payload": {
+        "client_party": null,
+        "correction_reason": "修改项目基本信息",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "owner_changes": [
+          {
+            "changed": true,
+            "previous": {
+              "created_at": "2026-10-02T07:51:12.316588Z",
+              "created_project_revision": 1,
+              "display_snapshot": "D1 Person 20260926T114917Z-fec1815e",
+              "effective_from": "2026-10-02T07:51:12.316588Z",
+              "end_reason": "修改项目基本信息",
+              "ended_at": "2026-10-02T09:34:00.885827718Z",
+              "ended_project_revision": 6,
+              "id": "ed437a15-51ca-48d7-953f-716b8ee7ae31",
+              "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+              "role_key": "business_owner",
+              "source_revision": 1,
+              "subject_id": "c8e3d6aa-f797-4847-b766-4a2d4cb9a78e",
+              "subject_kind": "person",
+              "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968"
+            },
+            "role_key": "business_owner"
+          }
+        ],
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": "2026-10-02T00:00:00Z",
+        "previous_revision": 5,
+        "project_number": "OA-VERIFY-20261002-C",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "schema_version": "project-basic-info-change-v1",
+        "sort_order": 0,
+        "status": "active",
+        "summary": "公网编辑复测：基本资料与生产负责人一次保存。"
+      }
+    },
+    {
+      "id": "5500808f-8957-484b-b8f6-b0c789cf4fd6",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 5,
+      "event_sequence": 1,
+      "event_type": "project_details_replaced",
+      "command_id": "5f83891e-c3bf-47ad-b177-88f48fe9e525",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T09:30:29.745318Z",
+      "payload": {
+        "client_party": null,
+        "correction_reason": "修改项目基本信息",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "owner_changes": [
+          {
+            "changed": true,
+            "previous": {
+              "created_at": "2026-10-02T08:09:46.080071Z",
+              "created_project_revision": 4,
+              "display_snapshot": "D1 Person 20260927T070458Z-758e9889",
+              "effective_from": "2026-10-02T08:09:46.080071Z",
+              "end_reason": "修改项目基本信息",
+              "ended_at": "2026-10-02T09:30:29.745318267Z",
+              "ended_project_revision": 5,
+              "id": "abfc5bd4-7b09-4633-bbc9-483db5c466fd",
+              "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+              "role_key": "production_owner",
+              "source_revision": 1,
+              "subject_id": "ce9e936b-6ede-42af-9f70-b448ac1f4a8c",
+              "subject_kind": "person",
+              "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968"
+            },
+            "role_key": "production_owner"
+          }
+        ],
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": "2026-10-02T00:00:00Z",
+        "previous_revision": 4,
+        "project_number": "OA-VERIFY-20261002-C",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "schema_version": "project-basic-info-change-v1",
+        "sort_order": 0,
+        "status": "active",
+        "summary": "公网编辑复测：基本资料与生产负责人一次保存。"
+      }
+    },
+    {
+      "id": "c9fe6235-e103-46fc-961a-a041909413e0",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 4,
+      "event_sequence": 1,
+      "event_type": "project_details_replaced",
+      "command_id": "0ab0f8bc-a427-48b9-9fbe-2c0f8d456530",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T08:09:46.080071Z",
+      "payload": {
+        "client_party": null,
+        "correction_reason": "修改项目基本信息",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "owner_changes": [
+          {
+            "changed": true,
+            "current": {
+              "created_at": "2026-10-02T08:09:46.080071519Z",
+              "created_project_revision": 4,
+              "display_snapshot": "D1 Person 20260927T070458Z-758e9889",
+              "effective_from": "2026-10-02T08:09:46.080071519Z",
+              "id": "abfc5bd4-7b09-4633-bbc9-483db5c466fd",
+              "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+              "role_key": "production_owner",
+              "source_revision": 1,
+              "subject_id": "ce9e936b-6ede-42af-9f70-b448ac1f4a8c",
+              "subject_kind": "person",
+              "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968"
+            },
+            "role_key": "production_owner"
+          }
+        ],
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": "2026-10-02T00:00:00Z",
+        "previous_revision": 3,
+        "project_number": "OA-VERIFY-20261002-C",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "schema_version": "project-basic-info-change-v1",
+        "sort_order": 0,
+        "status": "active",
+        "summary": "公网编辑复测：基本资料与生产负责人一次保存。"
+      }
+    },
+    {
+      "id": "406d8f06-1c8f-4ff0-a458-e72dff73e495",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 3,
+      "event_sequence": 1,
+      "event_type": "project_activated",
+      "command_id": "f1ae91fc-26c5-4f7b-9ebd-90e6b492703a",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T08:07:05.662849Z",
+      "payload": {
+        "initiation_profile": "business-owner-v1",
+        "missing": []
+      }
+    },
+    {
+      "id": "f7166e6c-33c0-4b47-9685-f26fa9793170",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 2,
+      "event_sequence": 1,
+      "event_type": "project_details_replaced",
+      "command_id": "f43bdf06-7c25-4258-a09c-19b41ca208cf",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T08:07:05.581962Z",
+      "payload": {
+        "client_party": null,
+        "correction_reason": "补齐项目立项资料",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "owner_changes": [],
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": null,
+        "previous_revision": 1,
+        "project_number": "OA-VERIFY-20261002-C",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "schema_version": "project-initiation-info-change-v1",
+        "sort_order": 0,
+        "status": "draft",
+        "summary": "虚拟验收资料：检查立项、编辑、取消与刷新，不关联真实业务。"
+      }
+    },
+    {
+      "id": "91cf246a-d156-4d55-b15a-f4b67c9810f1",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "project_revision": 1,
+      "event_sequence": 1,
+      "event_type": "project_created",
+      "command_id": "57c29f9e-4bd2-4326-9cb0-0d974c755bf4",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T07:51:12.316588Z",
+      "payload": {
+        "client_party": null,
+        "initial_business_owner": {
+          "assignment_id": "ed437a15-51ca-48d7-953f-716b8ee7ae31",
+          "display_snapshot": "D1 Person 20260926T114917Z-fec1815e",
+          "effective_from": "2026-10-02T07:51:12.316588838Z",
+          "end_reason": null,
+          "ended_at": null,
+          "role_key": "business_owner",
+          "source_revision": 1,
+          "subject_id": "c8e3d6aa-f797-4847-b766-4a2d4cb9a78e",
+          "subject_kind": "person"
+        },
+        "initiation_profile": "business-owner-v1",
+        "name": "OA 连续操作复测 20261002C（验收夹具）",
+        "node_type": "project",
+        "parent_project_id": null,
+        "planned_end_date": null,
+        "planned_start_date": null,
+        "project_number": "",
+        "project_type_keys": [],
+        "sort_order": 0,
+        "status": "draft",
+        "summary": ""
+      }
+    }
+  ]
+}

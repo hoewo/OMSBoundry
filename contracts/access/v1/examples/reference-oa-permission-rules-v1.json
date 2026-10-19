@@ -1,0 +1,120 @@
+{
+  "schema_version": "1",
+  "ruleset_id": "reference-oa-permission-rules",
+  "ruleset_version": "1.0.0",
+  "source": "road-design-oa-system permission catalog",
+  "authorization_layers": [
+    {
+      "id": "identity_governance",
+      "owner": "identity-access",
+      "description": "账号、登录、会话和权限治理；身份超级管理员默认不取得 OA 业务权限。"
+    },
+    {
+      "id": "oa_site_position",
+      "owner": "customer-overlay",
+      "description": "OA 站点职位模板；OA 管理员在这一层拥有全部 OA 规则权限。"
+    },
+    {
+      "id": "project_role_and_temporary_grant",
+      "owner": "project-workspace-and-policy-provider",
+      "description": "项目角色和临时授权只在精确 Project／Resource 范围内生效。"
+    },
+    {
+      "id": "native_application_authorization",
+      "owner": "iam-and-target-applications",
+      "description": "规则解析为各小系统的版本化原生 Capability；IAM 签发有界 Credential，目标应用按 allowed_actions、资源、状态和 revision 最终授权。"
+    }
+  ],
+  "groups": [
+    {"key": "project.base", "name": "项目 / 基础"},
+    {"key": "project.business", "name": "项目 / 经营"},
+    {"key": "project.production", "name": "项目 / 生产"},
+    {"key": "finance", "name": "财务"},
+    {"key": "office", "name": "办公"},
+    {"key": "user.permission", "name": "人员与权限"},
+    {"key": "system", "name": "系统功能"}
+  ],
+  "items": [
+    {"key": "project.base.view", "group_key": "project.base", "name": "查看项目基础信息"},
+    {"key": "project.base.create", "group_key": "project.base", "name": "创建项目"},
+    {"key": "project.base.child.create", "group_key": "project.base", "name": "向项目包添加子项目"},
+    {"key": "project.base.update", "group_key": "project.base", "name": "修改项目基础信息"},
+    {"key": "project.base.delete", "group_key": "project.base", "name": "删除项目"},
+    {"key": "project.base.business_manager.assign", "group_key": "project.base", "name": "设置项目经营负责人"},
+    {"key": "project.base.production_manager.assign", "group_key": "project.base", "name": "设置项目生产负责人"},
+
+    {"key": "project.business.info.view", "group_key": "project.business", "name": "查看经营信息"},
+    {"key": "project.business.info.update", "group_key": "project.business", "name": "修改经营信息"},
+    {"key": "project.business.member.assign", "group_key": "project.business", "name": "设置经营人员"},
+    {"key": "project.business.file.view", "group_key": "project.business", "name": "查看经营文件"},
+    {"key": "project.business.file.upload", "group_key": "project.business", "name": "上传经营文件"},
+    {"key": "project.business.file.download", "group_key": "project.business", "name": "下载经营文件"},
+    {"key": "project.business.file.delete", "group_key": "project.business", "name": "删除经营文件"},
+    {"key": "project.business.bonus.view", "group_key": "project.business", "name": "查看经营奖金"},
+    {"key": "project.business.bonus.allocate", "group_key": "project.business", "name": "分配经营奖金"},
+    {"key": "project.business.cost.view", "group_key": "project.business", "name": "查看经营成本"},
+    {"key": "project.business.cost.update", "group_key": "project.business", "name": "修改经营成本"},
+
+    {"key": "project.production.info.view", "group_key": "project.production", "name": "查看生产信息"},
+    {"key": "project.production.info.update", "group_key": "project.production", "name": "修改生产信息"},
+    {"key": "project.production.member.assign", "group_key": "project.production", "name": "设置生产人员"},
+    {"key": "project.production.discipline.assign", "group_key": "project.production", "name": "设置专业分工"},
+    {"key": "project.production.file.view", "group_key": "project.production", "name": "查看生产技术文件"},
+    {"key": "project.production.file.upload", "group_key": "project.production", "name": "上传生产技术文件"},
+    {"key": "project.production.file.download", "group_key": "project.production", "name": "下载生产技术文件"},
+    {"key": "project.production.file.delete", "group_key": "project.production", "name": "删除生产技术文件"},
+    {"key": "project.production.bonus.view", "group_key": "project.production", "name": "查看生产奖金"},
+    {"key": "project.production.bonus.allocate", "group_key": "project.production", "name": "分配生产奖金"},
+    {"key": "project.production.cost.view", "group_key": "project.production", "name": "查看生产成本"},
+    {"key": "project.production.cost.update", "group_key": "project.production", "name": "修改生产成本"},
+
+    {"key": "finance.invoice.view", "group_key": "finance", "name": "查看发票"},
+    {"key": "finance.invoice.upload", "group_key": "finance", "name": "上传发票"},
+    {"key": "finance.invoice.update", "group_key": "finance", "name": "修改发票"},
+    {"key": "finance.payment.view", "group_key": "finance", "name": "查看支付记录"},
+    {"key": "finance.payment.update", "group_key": "finance", "name": "修改支付记录"},
+    {"key": "finance.company_revenue.view", "group_key": "finance", "name": "查看公司收入统计"},
+    {"key": "finance.data.update", "group_key": "finance", "name": "维护财务口径数据"},
+
+    {"key": "office.cost.view", "group_key": "office", "name": "查看办公成本"},
+    {"key": "office.cost.update", "group_key": "office", "name": "修改办公成本"},
+    {"key": "office.guideline.create", "group_key": "office", "name": "编制公司管理纲要"},
+    {"key": "office.guideline.view", "group_key": "office", "name": "查看公司管理纲要"},
+    {"key": "office.guideline.update", "group_key": "office", "name": "修改公司管理纲要"},
+
+    {"key": "user.directory.view", "group_key": "user.permission", "name": "查看人员目录"},
+    {"key": "user.directory.update", "group_key": "user.permission", "name": "维护人员资料", "risk": "high"},
+    {"key": "user.position.assign", "group_key": "user.permission", "name": "分配职位模板", "risk": "high"},
+    {"key": "user.permission.adjust", "group_key": "user.permission", "name": "调整人员权限", "risk": "high"},
+    {"key": "project.permission.adjust", "group_key": "user.permission", "name": "设置项目临时权限", "risk": "high"},
+    {"key": "permission.template.maintain", "group_key": "user.permission", "name": "维护权限模板", "risk": "high"},
+
+    {"key": "feedback.use", "group_key": "system", "name": "使用产品反馈"}
+  ],
+  "templates": {
+    "admin": {"name": "OA 管理员默认模板", "scope": "tenant", "all_permissions": true},
+    "general": {"name": "总经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.child.create", "project.business.info.view", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.info.view", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view", "finance.invoice.view", "finance.payment.view", "finance.company_revenue.view", "office.cost.view", "office.guideline.view"]},
+    "business": {"name": "经营经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.create", "project.base.child.create", "project.base.delete", "project.base.business_manager.assign", "project.base.production_manager.assign", "project.business.info.view", "project.business.member.assign", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.member.assign"]},
+    "production": {"name": "生产经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.child.create", "project.base.production_manager.assign", "project.production.info.view", "project.production.member.assign", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view"]},
+    "finance": {"name": "财务默认模板", "scope": "tenant", "keys": ["feedback.use", "finance.invoice.view", "finance.invoice.upload", "finance.invoice.update", "finance.payment.view", "finance.payment.update", "finance.company_revenue.view", "finance.data.update", "project.business.cost.view", "project.business.cost.update", "project.production.cost.view", "project.production.cost.update"]},
+    "office": {"name": "办公室主任默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "office.cost.view", "office.guideline.create", "office.guideline.view", "office.guideline.update"]},
+    "member": {"name": "普通职员默认模板", "scope": "tenant", "keys": []},
+    "business-owner": {"name": "项目经营负责人模板", "scope": "project", "keys": ["project.base.view", "project.base.child.create", "project.base.update", "project.business.info.view", "project.business.info.update", "project.business.member.assign", "project.business.file.view", "project.business.file.upload", "project.business.file.download", "project.business.file.delete", "project.business.bonus.view", "project.business.bonus.allocate"]},
+    "production-owner": {"name": "项目生产负责人模板", "scope": "project", "keys": ["project.base.view", "project.base.child.create", "project.production.info.view", "project.production.info.update", "project.production.member.assign", "project.production.discipline.assign", "project.production.file.view", "project.production.file.upload", "project.production.file.download", "project.production.file.delete", "project.production.bonus.view", "project.production.bonus.allocate", "project.production.cost.view", "project.production.cost.update"]},
+    "business-personnel": {"name": "经营参与人模板", "scope": "project", "keys": ["project.base.view", "project.business.info.view", "project.business.info.update", "project.business.file.view", "project.business.file.upload", "project.business.file.download", "project.business.file.delete"]},
+    "production-personnel": {"name": "生产人员通用模板", "scope": "project", "keys": ["project.base.view", "project.production.info.view", "project.production.info.update", "project.production.file.view", "project.production.file.upload", "project.production.file.download", "project.production.file.delete"]},
+    "designer": {"name": "专业设计人模板", "scope": "project", "inherits": "production-personnel"},
+    "participant": {"name": "专业参与人模板", "scope": "project", "inherits": "production-personnel"},
+    "reviewer": {"name": "专业复核人模板", "scope": "project", "inherits": "production-personnel"},
+    "auditor": {"name": "专业审核人模板", "scope": "project", "inherits": "production-personnel"},
+    "approver": {"name": "审定人模板", "scope": "project", "inherits": "production-personnel"},
+    "estimator": {"name": "概算人模板", "scope": "project", "inherits": "production-personnel"}
+  },
+  "native_resolution": {
+    "identity_super_admin": {"business_actions": []},
+    "oa_business_admin": {
+      "profile": "reference-oa-administrator-v1",
+      "rule": "expand every action from every enabled application's exact versioned Capability Manifest as an explicit tenant grant; wildcards are forbidden"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# DesignDeliverable 数据模型
+metadata:
+  path: "tech/_shared/models/DesignDeliverable.yaml"
+  domain: "design-operations"
+  entity_name: "DesignDeliverable"
+  storage: "PostgreSQL"
+  owner: "Design Operations"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+type: object
+additionalProperties: false
+required: [id, tenant_id, work_item_id, stage_id, requirement_key, evidence_file_id, evidence_version, evidence_source_revision, linked_work_item_revision, linked_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, minLength: 1, maxLength: 128, readOnly: true}
+  work_item_id: {type: string, format: uuid, readOnly: true}
+  stage_id: {type: string, format: uuid, readOnly: true}
+  requirement_key: {type: string, const: primary-output}
+  evidence_file_id: {type: string, format: uuid}
+  evidence_version: {type: integer, minimum: 1}
+  evidence_source_revision: {type: integer, minimum: 1}
+  display_snapshot: {type: string, maxLength: 255, description: "非权威文件显示名。"}
+  linked_work_item_revision: {type: integer, minimum: 1, readOnly: true}
+  linked_at: {type: string, format: date-time, readOnly: true}
+  superseded_at: {type: [string, "null"], format: date-time, readOnly: true}
+  superseded_work_item_revision: {type: [integer, "null"], minimum: 1, readOnly: true}
+indexes:
+  - {name: uq_design_active_deliverable_slot, columns: [tenant_id, stage_id, requirement_key], unique: true, where: "superseded_at IS NULL"}
+  - {name: ix_design_deliverable_evidence_ref, columns: [tenant_id, evidence_file_id, evidence_version]}

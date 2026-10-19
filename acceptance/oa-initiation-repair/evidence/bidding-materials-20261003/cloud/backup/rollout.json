@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "schema": 10,
+  "changed_containers": [
+    "business-engagement",
+    "unified-workbench"
+  ],
+  "other_container_ids_unchanged": 15,
+  "project_facts_preserved": true,
+  "project_reference_config_only": false,
+  "be_schema": "000002_material_collections.sql",
+  "be_existing_facts_preserved": true,
+  "rollback_requires_original_database_and_image": true,
+  "d1_check": true,
+  "official_release": false
+}

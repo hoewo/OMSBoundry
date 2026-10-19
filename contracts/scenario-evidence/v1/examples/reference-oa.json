@@ -1,0 +1,174 @@
+{
+  "schema_version": "customer-scenario-evidence/v1",
+  "scenario_id": "reference-oa-stage-one",
+  "title": "阶段一参考 OA 高保真业务组合",
+  "source_kind": "reference_product",
+  "claim_scope": "reference_baseline",
+  "assessment_status": "passed",
+  "problem": {
+    "statement": "验证六个独立小系统能否在不复制参考 OA 单体和不污染稳定内核的前提下重组出项目立项、经营合同与回款、设计生产交付和资料追溯。",
+    "observable_outcomes": [
+      "J1 至 J4 在六应用和六个独立数据库上完成并可幂等重放",
+      "人员、合同、义务、资金、文件、设计和项目历史保留各自所有权与纠错语义",
+      "五个来源逐项不可用时 Project 自有事实继续可读且仅对应实时引用降级"
+    ],
+    "out_of_scope": [
+      "真实客户验收和跨客户产品边界结论",
+      "管理费、完整开票、奖金工资、项目包和通用审批",
+      "Nginx、Gateway、中心 IAM、公司 Ubuntu 和公网入口"
+    ]
+  },
+  "source_evidence": {
+    "evidence_refs": [
+      "docs/specs/assembly/oa-reference-capability-journey-audit.md",
+      "docs/specs/assembly/product-boundary-validation.md#8",
+      "arckit/spec/assembly/reference-oa-demo.md"
+    ],
+    "customer_confirmation_refs": []
+  },
+  "facts": [
+    {
+      "id": "project-fact",
+      "owner": "project-workspace",
+      "meaning": "项目身份、立项状态、项目分工快照和外部资源引用。",
+      "states": ["draft", "active", "cancelled"],
+      "correction": "项目资料通过 revision 更新；分工和资源引用显式建立或解除；取消形成历史而不删除来源事实。",
+      "evidence_refs": ["arckit/spec/project-workspace/project-initiation.md"]
+    },
+    {
+      "id": "people-fact",
+      "owner": "people-groups",
+      "meaning": "人员、组织、成员关系、组内角色、能力画像和不可变名册快照。",
+      "states": ["active", "ended", "archived"],
+      "correction": "人员与成员关系使用 revision、换角和结束任职表达，历史 Assignment 保留原始来源 revision。",
+      "evidence_refs": ["docs/m8-people-groups-action-plan.md"]
+    },
+    {
+      "id": "contract-fact",
+      "owner": "contract-ledger",
+      "meaning": "合同、签约主体、版本、结算和操作性关闭。",
+      "states": ["draft", "active", "closed"],
+      "correction": "通过新 revision、结算或关闭事实演进，不静默覆盖旧版本。",
+      "evidence_refs": ["docs/foundation.md"]
+    },
+    {
+      "id": "money-fact",
+      "owner": "money-flow-ledger",
+      "meaning": "已确认义务、实际收付款、核销和余额。",
+      "states": ["draft", "confirmed", "closed"],
+      "correction": "使用调整、减免、反向和重新核销保留完整历史。",
+      "evidence_refs": ["docs/foundation.md"]
+    },
+    {
+      "id": "evidence-fact",
+      "owner": "evidence-service",
+      "meaning": "文件、版本、完整性、上传会话和受控访问。",
+      "states": ["pending", "completed", "cleaned"],
+      "correction": "新增 File Version 或清理无效会话，不覆盖已经完成的版本。",
+      "evidence_refs": ["docs/specs/evidence/m10-002-evidence-service.md"]
+    },
+    {
+      "id": "design-fact",
+      "owner": "design-operations",
+      "meaning": "design-v1 工作项、固定阶段、适用性、负责人和 Evidence 成果引用。",
+      "states": ["active", "completed", "cancelled"],
+      "correction": "通过阶段重开、成果替换和追加历史表达返工与纠错。",
+      "evidence_refs": ["arckit/spec/design-operations/design-production-delivery.md"]
+    }
+  ],
+  "applications": {
+    "enabled": [
+      "contract-ledger",
+      "money-flow-ledger",
+      "people-groups",
+      "evidence-service",
+      "project-workspace",
+      "design-operations"
+    ],
+    "disabled": ["gateway", "identity-access", "unified-workbench"]
+  },
+  "differences": [
+    {
+      "id": "design-organization-definitions",
+      "requirement": "设计组需要设计人员、设计负责人和设计交付能力，并保留人员任职变化。",
+      "layer": "configuration",
+      "disposition": "implemented",
+      "rationale": "差异只定义稳定 key 和显示术语，不改变 Person、Group、Membership 或 IAM Subject 的事实含义。",
+      "fact_refs": ["people-fact", "project-fact"],
+      "delivery_artifacts": ["people-groups definitions", "project assignment snapshots"],
+      "evidence_refs": ["docs/specs/assembly/product-boundary-validation.md#8"]
+    },
+    {
+      "id": "design-production-lifecycle",
+      "requirement": "设计生产需要阶段跳过、恢复、返工和成果替换。",
+      "layer": "typed_extension",
+      "disposition": "implemented",
+      "rationale": "该差异有自己的工作项、状态、责任人和纠错生命周期，因此由独立 Design Operations 拥有。",
+      "fact_refs": ["design-fact", "project-fact", "evidence-fact"],
+      "delivery_artifacts": ["design-operations design-v1"],
+      "evidence_refs": ["arckit/spec/design-operations/design-production-delivery.md"]
+    },
+    {
+      "id": "six-application-composition",
+      "requirement": "同一项目需要串联人员、合同、义务、资金、文件和设计结果。",
+      "layer": "customer_assembly",
+      "disposition": "implemented",
+      "rationale": "组合只选择应用和公开引用旅程，不复制来源状态或共享业务数据库。",
+      "fact_refs": ["project-fact", "people-fact", "contract-fact", "money-fact", "evidence-fact", "design-fact"],
+      "delivery_artifacts": ["deployments/local-oa", "acceptance/reference-oa-demo"],
+      "evidence_refs": ["arckit/tech/assembly/local-reference-oa-composition.md"]
+    },
+    {
+      "id": "manual-obligation-confirmation",
+      "requirement": "合同或结算依据需要形成 Money Flow 义务。",
+      "layer": "customer_assembly",
+      "disposition": "implemented",
+      "rationale": "参考规则与现有 OMS 规则冲突，当前由责任人显式确认来源快照后调用 Money Flow 公开命令，不建立自动连接器。",
+      "fact_refs": ["contract-fact", "money-fact"],
+      "delivery_artifacts": ["reference OA J2 operator journey"],
+      "evidence_refs": ["docs/specs/assembly/product-boundary-validation.md#8"]
+    },
+    {
+      "id": "design-reference-compatible-id",
+      "requirement": "通用 Project Resource Link 需要读取 Design 引用的统一 id。",
+      "layer": "stable_core",
+      "disposition": "implemented",
+      "rationale": "加法字段适用于全部消费者并保留 work_item_id，不包含客户名称、岗位或流程条件。",
+      "fact_refs": ["design-fact", "project-fact"],
+      "delivery_artifacts": ["design reference-read v1 additive field"],
+      "evidence_refs": ["arckit/tech/_shared/contracts/design-reference-get.yaml"]
+    },
+    {
+      "id": "unsupported-oa-capability-cluster",
+      "requirement": "管理费、完整开票、奖金工资、项目包和通用审批需要稳定业务证据后才能实现。",
+      "layer": "customer_specific",
+      "disposition": "needs_business_evidence",
+      "rationale": "当前只有参考功能名称，没有跨客户稳定的输入、责任、状态和纠错规则。",
+      "fact_refs": [],
+      "delivery_artifacts": [],
+      "evidence_refs": ["docs/specs/assembly/product-boundary-validation.md#8"]
+    }
+  ],
+  "connectors": [],
+  "boundary_signals": {
+    "customer_core_branches": 0,
+    "customer_databases": 0,
+    "shared_business_tables": 0,
+    "customer_business_migrations": 0,
+    "cross_app_internal_reads": 0,
+    "onsite_core_patches": 0,
+    "hidden_mandatory_dependencies": 0
+  },
+  "acceptance_evidence": [
+    "Level A six independent demos: 6/6 passed",
+    "Level B high-fidelity J1-J4 immediate replay: stable IDs and revisions passed",
+    "Contract, Money, People, Evidence and Design source failure isolation: 5/5 passed",
+    "v0.1.0-demo.5 Linux/amd64 source-free clean-room reproduction passed"
+  ],
+  "limitations": [
+    "This is a reference-product baseline, not a real customer acceptance.",
+    "No cross-customer product-boundary conclusion is established.",
+    "No executed real policy example has been validated.",
+    "Full Nginx, Gateway, central IAM, company Ubuntu and public ingress remain separate gates."
+  ]
+}

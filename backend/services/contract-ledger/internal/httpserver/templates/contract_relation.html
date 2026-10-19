@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>建立合同关系 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/contracts/{{.Source.ID}}">返回来源合同</a>
+    <h1>建立合同关系</h1>
+    <p>关系是独立、不可变的有向事实，不会修改任一合同的条款、金额或状态。</p>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts" aria-current="page">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销</button></form>
+  </header>
+
+  <main>
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="relation-source-title">
+      <h2 id="relation-source-title">来源合同</h2>
+      <p><strong>{{.Source.NumberNamespace}} / {{.Source.ContractNumber}}</strong> · {{.Source.Title}} · revision {{.Source.CurrentRevision}} · {{.Source.Status}}</p>
+    </section>
+
+    <section aria-labelledby="relation-target-search-title">
+      <h2 id="relation-target-search-title">1. 查找目标合同</h2>
+      <form method="get" action="{{.BasePath}}/contracts/{{.Source.ID}}/relations/new">
+        <label for="relation_target_q">关键词</label>
+        <input id="relation_target_q" name="q" value="{{.SearchForm.Keyword}}" maxlength="100" placeholder="命名空间、合同编号或标题">
+
+        <label for="relation_target_status">状态</label>
+        <select id="relation_target_status" name="status">
+          <option value="active" {{if eq .SearchForm.Status "active"}}selected{{end}}>已激活</option>
+          <option value="terminated" {{if eq .SearchForm.Status "terminated"}}selected{{end}}>已终止</option>
+          <option value="closed" {{if eq .SearchForm.Status "closed"}}selected{{end}}>已关闭</option>
+        </select>
+
+        <label for="relation_target_currency">币种</label>
+        <input id="relation_target_currency" name="currency" value="{{.SearchForm.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" placeholder="例如 CNY">
+
+        <button type="submit">查询目标合同</button>
+      </form>
+
+      {{if .Targets}}
+      <table>
+        <thead><tr><th>编号</th><th>标题</th><th>金额</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody>
+          {{range .Targets}}
+          <tr>
+            <td>{{.NumberNamespace}} / {{.ContractNumber}}</td>
+            <td>{{.Title}}</td>
+            <td>{{if .TotalAmount}}{{.TotalAmount}} {{.Currency}}{{else}}待确定（{{.Currency}}）{{end}}</td>
+            <td>{{if eq .Status "active"}}已激活{{else if eq .Status "terminated"}}已终止{{else if eq .Status "closed"}}已关闭{{else}}{{.Status}}{{end}} r{{.CurrentRevision}}</td>
+            <td><a href="{{$.BasePath}}/contracts/{{$.Source.ID}}/relations/new?target_id={{.ID}}">选择为目标</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>没有符合条件、可以作为目标的正式合同。</p>
+      {{end}}
+      {{if .NextURL}}<p><a href="{{.NextURL}}">下一页</a></p>{{end}}
+    </section>
+
+    {{if .Target}}
+    <section aria-labelledby="relation-confirm-title">
+      <h2 id="relation-confirm-title">2. 确认关系方向</h2>
+      <p>来源：<strong>{{.Source.NumberNamespace}} / {{.Source.ContractNumber}} · {{.Source.Title}}</strong>（revision {{.Source.CurrentRevision}}）</p>
+      <p>目标：<strong>{{.Target.NumberNamespace}} / {{.Target.ContractNumber}} · {{.Target.Title}}</strong>（revision {{.Target.CurrentRevision}}）</p>
+
+      {{if .RelationReady}}
+      <form method="post" action="{{.BasePath}}/contracts/{{.Source.ID}}/relations">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+        <input type="hidden" name="target_contract_id" value="{{.Form.TargetContractID}}">
+        <input type="hidden" name="expected_source_revision" value="{{.Form.ExpectedSourceRevision}}">
+        <input type="hidden" name="expected_target_revision" value="{{.Form.ExpectedTargetRevision}}">
+
+        <label for="relation_type">关系类型与方向</label>
+        <select id="relation_type" name="relation_type" required>
+          <option value="funding_source_for" {{if eq .Form.RelationType "funding_source_for"}}selected{{end}}>来源合同是目标合同的资金来源／上游依据</option>
+          <option value="entrustment_basis_for" {{if eq .Form.RelationType "entrustment_basis_for"}}selected{{end}}>来源合同是目标合同的委托／上游依据</option>
+          <option value="subcontract_of" {{if eq .Form.RelationType "subcontract_of"}}selected{{end}}>来源合同是目标合同的分包合同</option>
+          <option value="specific_under_framework" {{if eq .Form.RelationType "specific_under_framework"}}selected{{end}}>来源合同是目标框架合同下的具体合同</option>
+          <option value="supersedes" {{if eq .Form.RelationType "supersedes"}}selected{{end}}>来源合同替代目标合同</option>
+          <option value="references" {{if eq .Form.RelationType "references"}}selected{{end}}>来源合同引用目标合同</option>
+        </select>
+
+        <label for="relation_effective_on">关系生效日期（可选）</label>
+        <input id="relation_effective_on" name="effective_on" type="date" value="{{.Form.EffectiveOn}}">
+
+        <label for="relation_note">关系说明（可选）</label>
+        <textarea id="relation_note" name="note" maxlength="500">{{.Form.Note}}</textarea>
+
+        <p>提交后关系不可直接修改或删除；如方向或类型有误，必须通过后续受控纠错事实处理。</p>
+        <button type="submit">确认建立不可变关系</button>
+      </form>
+      {{else}}
+      <p role="alert">所选合同不能按当前方向建立关系，请重新选择另一份正式合同。</p>
+      {{end}}
+    </section>
+    {{end}}
+  </main>
+</body>
+</html>

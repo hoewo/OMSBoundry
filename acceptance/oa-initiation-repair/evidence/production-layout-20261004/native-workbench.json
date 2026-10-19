@@ -1,0 +1,180 @@
+{
+  "passed": true,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": false,
+  "identity_template": false,
+  "native_iam_project_people": true,
+  "native_gateway": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "7df15d8a63a0ac31a308401631aaedba38cbb2f73ba5d1334c4d9e88ed41c357",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "real-iam-scope-amount-revoke-candidates-and-people-failure-zero-bonus-write",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-business-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-production-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-reload-retains-two-sides-without-write",
+      "passed": true
+    },
+    {
+      "name": "normal-withdraw-modal-click-retains-record-and-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "native-cold-empty-target-pg18-restore-identical-head-history-command-audit",
+      "passed": true
+    },
+    {
+      "name": "restored-native-pending-replay-one-batch-not-duplicate",
+      "passed": true
+    },
+    {
+      "name": "restored-independent-server-continues-write-and-refresh",
+      "passed": true
+    },
+    {
+      "name": "real-iam-revocation-visible-current-and-history-redaction-no-write",
+      "passed": true
+    },
+    {
+      "name": "original-production-tabs-overview-no-hidden-bonus-read",
+      "passed": true
+    },
+    {
+      "name": "original-production-keyboard-and-deep-reload-no-write",
+      "passed": true
+    },
+    {
+      "name": "actual-workbench-form-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "actual-workbench-normal-register-exact-amount-withdraw-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "original-production-history-back-forward-selected-only-read",
+      "passed": true
+    },
+    {
+      "name": "actual-workbench-gateway-mounted-both-tabs-refresh-zero-extra-write",
+      "passed": true
+    }
+  ],
+  "native_preflight": {
+    "legacy_scope_denied": true,
+    "side_scope_denied": true,
+    "native_candidate_roles": true,
+    "formal_amount_revoke_hides_record": true,
+    "real_people_outage_zero_source_write": true,
+    "native_gateway_legacy_pool_compatible": true,
+    "gateway_cannot_widen_scope_or_accept_forged_headers": true,
+    "record_does_not_imply_read_admission": true
+  },
+  "backup_sha256": "4af59864f21961f499b56d21770e822a925d653c41e38fb2b6017363f1be39cd",
+  "native_facts": {
+    "heads": 7,
+    "revisions": 9,
+    "commands": 7,
+    "audits": 9,
+    "pools": 0,
+    "suggestions": 0,
+    "digest": "6284734bdde43875592892a701461d22"
+  },
+  "native_afterflight": {
+    "native_current_and_history_five_amount_fields_absent": true,
+    "revoked_amount_record_denied": true
+  },
+  "native_workbench": {
+    "mounted_original_components": true,
+    "original_production_tabs": true,
+    "hidden_bonus_zero_read": true,
+    "keyboard_deep_link_back_forward": true,
+    "both_scoped_entry_forms": true,
+    "cancel_refresh_zero_business_write": true,
+    "normal_record_and_withdraw": true,
+    "native_post_attempt_count": 2
+  },
+  "component_port_post_attempt_count": 6,
+  "post_attempt_count": 8,
+  "page_errors": [],
+  "source_digest": {
+    "project": "261fdcf2e7a16bca348f2823d5786afcefed32c8275af312bb95749f1030ac82",
+    "people": "0fc1e5a99dafbc5269decf93deb8e377a5f97d60e6385619ceffc0cc4e4767ad",
+    "contract_count": "0"
+  },
+  "workload_exchanges": [
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    }
+  ],
+  "native_sources_unchanged_and_stopped": true
+}

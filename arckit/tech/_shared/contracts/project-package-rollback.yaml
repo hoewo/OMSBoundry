@@ -1,0 +1,59 @@
+# 撤销 Project Package 转换 API 契约
+# 路径: arckit/tech/_shared/contracts/project-package-rollback.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-package-rollback.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-26"
+  updated: "2026-09-26"
+
+endpoint:
+  method: POST
+  path: "/api/v1/projects/{project_id}/package-conversions/{conversion_id}/rollback"
+  summary: "在安全条件满足时撤销 Project Package 转换"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.hierarchy.manage"
+  scope_kind: "tenant"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+    - {name: conversion_id, type: string, format: uuid, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_project_revision, expected_package_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_project_revision: {type: integer, minimum: 1}
+      expected_package_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [conversion, project, package]
+      properties:
+        conversion: {$ref: "../models/ProjectPackageConversion.yaml"}
+        project: {$ref: "../models/Project.yaml"}
+        package: {$ref: "../models/Project.yaml"}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: PROJECT_HIERARCHY_CONFLICT, retryable: false}
+    - {status: 409, code: PACKAGE_ROLLBACK_UNSAFE, retryable: false}
+
+business_logic:
+  flow:
+    - "锁定 active conversion、原 Project 与 Package，并复验双 revision。"
+    - "attach_existing 恢复转换前位置；wrap_as_package 仅在外层包未继续使用时允许。"
+    - "安全 wrap 撤销将外层 Package 标为 cancelled，不物理删除。"
+    - "不安全时整笔事务拒绝，不级联删除或移动任何外部事实。"
+  side_effects: ["仅写 Project Workspace 数据库"]

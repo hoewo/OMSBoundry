@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "check": "original_ui_source_snapshot_digests",
+  "copied_files": 44,
+  "source_writes": 0,
+  "adapted_ui_equivalence": false,
+  "public_ui_verified": false
+}

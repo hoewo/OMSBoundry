@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "real_iam_login": true,
+  "credentials_exported": false,
+  "scenarios": [],
+  "business_writes": [],
+  "page_errors": [],
+  "background_reads_checked": false,
+  "post_login_business_scripts_checked": false,
+  "failure": {
+    "type": "TimeoutError",
+    "completed_scenarios": 0
+  }
+}

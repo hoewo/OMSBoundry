@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>资金分配 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations" aria-current="page">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>资金分配与余额</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>每次只把一笔实际资金分配给一条义务。方向、双方主体和币种必须一致；余额由不可变分配事实计算。</p>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="apply-allocation-heading">
+      <h2 id="apply-allocation-heading">新增单笔分配</h2>
+      {{if .CanApply}}
+      {{if can .Principal "allocation.manage"}}<form method="post" action="{{basePath}}/allocations">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+
+        <label for="cash_transaction_id">实际收付款</label>
+        <select id="cash_transaction_id" name="cash_transaction_id" required>
+          <option value="">请选择</option>
+          {{range .CashTransactions}}
+          <option value="{{.ID}}" {{if eq $.Form.CashTransactionID .ID}}selected{{end}}>{{.Description}} · {{.Type.Label}} · 未分配 {{.UnallocatedAmount}} {{.Currency}} · {{.LedgerOwner.LegalName}} / {{.Counterparty.LegalName}}</option>
+          {{end}}
+        </select>
+
+        <fieldset>
+          <legend>open 义务</legend>
+          {{range .Obligations}}
+          <label>
+            <input type="radio" name="obligation_selection" value="{{.Value}}" {{if eq $.Form.ObligationSelection .Value}}checked{{end}} required>
+            {{.Obligation.Title}} · {{.Obligation.Direction.Label}} · 剩余 {{.Obligation.OutstandingAmount}} {{.Obligation.Currency}} · revision {{.Obligation.CurrentRevision}} · {{.Obligation.LedgerOwner.LegalName}} / {{.Obligation.Counterparty.LegalName}}
+          </label>
+          {{end}}
+        </fieldset>
+
+        <label for="amount">本次分配金额</label>
+        <input id="amount" name="amount" value="{{.Form.Amount}}" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?" required>
+
+        <label for="manual_source_reference">人工分配依据</label>
+        <input id="manual_source_reference" name="manual_source_reference" value="{{.Form.ManualSourceReference}}" maxlength="200" required>
+
+        <button type="submit">确认分配</button>
+      </form>{{end}}
+      {{else}}
+      <p role="status">至少需要一笔仍有未分配金额的实际资金，以及一条仍有剩余金额的 open 义务。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="allocation-list-heading">
+      <h2 id="allocation-list-heading">已生效分配</h2>
+      {{if .Allocations}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">义务</th>
+            <th scope="col">实际资金</th>
+            <th scope="col">本方／往来方</th>
+            <th scope="col">金额</th>
+            <th scope="col">分配依据</th>
+            <th scope="col">状态</th>
+            <th scope="col">生效时间</th>
+            <th scope="col">反向核销</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Allocations}}
+          <tr>
+            <td><a href="{{basePath}}/obligations/{{.ObligationID}}">{{.ObligationTitle}}</a>（revision {{.ObligationRevision}}）· <a href="{{basePath}}/allocations/{{.ID}}">查看 Allocation</a></td>
+            <td><a href="{{basePath}}/cash-transactions/{{.CashTransactionID}}">{{.CashDescription}}</a></td>
+            <td>{{.LedgerOwnerLegalName}} / {{.CounterpartyLegalName}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.ManualSourceReference}}</td>
+            <td>{{.Status}}</td>
+            <td>{{.AppliedAt}}</td>
+            <td>{{if .Reversal}}{{.Reversal.Reason}} · {{.Reversal.ReversedBy.DisplayName}} · {{.Reversal.ReversedAt}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未形成资金分配。</p>
+      {{end}}
+    </section>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,123 @@
+# 技术索引
+
+✅ 已采用 | 🔬 调研中 | 📋 调研完成 | ❌ 已废弃 | ⚪ 待定
+
+<!-- 直接写文件名/目录名（不用链接语法），每级一句总结，文档后标注行数；依赖关系在 _map/RELATIONS.md -->
+<!-- _shared/models/、_shared/contracts/ 与各领域方案/模型/契约均在此列出 -->
+<!-- 示例:
+- user-management/ 用户管理：认证方案、权限模型。✅
+  - auth-solution.md 认证方案：JWT、Refresh Token。✅ (420行)
+- _shared/models/ 数据模型
+  - User.yaml 用户实体。✅ (85行)
+- _shared/contracts/ API契约
+  - auth-login.yaml 登录接口。✅ (120行)
+-->
+
+- delivery/ 交付与环境提升：D1 不可变制品、双环境隔离和目标验收。✅
+  - d1-environment-promotion.md D1 环境提升：pull-only 发布包、跨 Registry 摘要提升、应用选择集升级、独立秘密与恢复。✅ (137行)
+- assembly/ 本地业务组合：场景化角色、显式依赖和独立数据所有者组成可重复参考 OA 旅程。✅
+  - local-reference-oa-composition.md 本地参考 OA 组合：最小结果组合、独立数据库、模板鉴权、高保真 J1～J4、可裁剪子集、五来源隔离和 Ubuntu 无源码迁移边界。✅ (114行)
+  - scenario-evidence-validation.md 客户场景证据校验：版本化 JSON 契约、跨字段失败关闭、final-ready OA、evidence-ready OMS 和真实客户草稿入口。✅ (101行)
+  - customer-overlay-research.md 稳定 Base 与客户覆盖层：加法式装配、升级边界、OA 首轮验证结构和跨客户反证门槛。🔬 (133行)
+  - oa-authorization-validation.md OA 权限架构验证：多角色／多资源实验、可信边缘限流客户端键、D1 动作与 Resource Grant、Project Assignment Policy、C1～C5 当前矩阵及 C1～C8 最终授权。🔬 (270行)
+  - c3-commercial-summary.md C3 只读组合：Project Resource Link、并行精确来源读取、独立人类金额 Capability、IAM 工作负载凭证、局部降级和本地 D1 证据。✅ (51行)
+  - c8-read-projection-boundary.md C8 只读投影：Project／Workbench 无状态装配、来源自有 Metric／WorkItem 投影、Evidence metadata／download 分权及物化门槛。📋 (99行)
+- business-engagement/ 经营承接：合同形成前的适用性、方式、材料业务引用和历史独立所有者。✅
+  - decision.md Business Engagement 决策：独立应用边界、数据端口、最小状态、权限、组合与反证条件。✅ (124行)
+- billing-invoice/ 开票登记：独立拥有已开票登记、精确金额、来源快照、Evidence 引用和不可变历史；工作区、Workbench 与 C3 只读组合实现已进入 D1 验收。🟡
+  - solution.md Billing / Invoice 技术方案：独立模型、API、目标端最终授权、浏览器工作区、精确工作负载交换／引用门禁、C3 组合和交付门槛。🟡 (247行)
+- design-operations/ 设计生产与交付：独立服务、固定类型、引用校验和阶段回退。✅
+  - solution.md Design Operations 技术方案与 Production 兼容演进基线。✅ (122行)
+- production-operations/ 多类型生产交付：Design 兼容演进为单一 Production 数据所有者，并以不可变类型定义增加生产类型。🔬
+  - decision.md Production Operations 多类型边界：兼容数据演进、canonical API／Capability、Project 边界和反通用工作流门禁。🔬 (116行)
+- approval-audit-results/ 批复审计结果：独立拥有外部结果、精确金额、来源快照、Evidence 引用和不可变纠错。✅
+  - decision.md C5 技术边界：领域核心／真库、受保护 HTTP／IAM、精确来源、人类工作区、Project C5 检查点、正式装配恢复与真实跨进程旅程已验证。✅ (115行)
+- cost-outsourcing/ 成本与外协：C6 独立核心、双聚合、PostgreSQL 18、受保护 HTTP／IAM、多 namespace Capability、精确引用、人类工作区、独立进程、正式 D1／恢复、Contract Party 运行时及 C6→Money 应付建议旅程已实现。✅
+  - decision.md C6 技术边界：两个领域聚合共享仅技术 receipt／audit；精确 adapter 读取外部事实，应付建议携带来源 revision／digest，由 Money 独立接受或拒绝并最终拥有 Obligation，双方以显式同步恢复部分失败。✅ (98行)
+- bonus-distribution/ 奖金计算与分配：C7 独立领域／真库、正式 IAM、真实来源、人类工作区、正式 D1、未选缺席与联合恢复已实现；Money 建议和单类型最小组合仍待完成。✅
+  - decision.md C7 技术边界：经营／生产共享严格奖金生命周期，精确端口、正式 IAM、正式 D1、联合恢复、未选缺席和恢复后继续写入已验证。✅ (140行)
+- project-workspace/ 项目工作区：J1 独立服务、事务、鉴权、引用验证、C3 只读组合和失败恢复。✅
+  - solution.md Project Workspace 技术方案：独立数据所有权、类型中立立项、两级 Package、动态动作、Party 客户选择、经营链路与 C5 完成检查只读组合。✅ (160行)
+- party-directory/ 主体目录：独立当前档案所有权、场景化组合角色和业务快照边界。✅
+  - decision.md Party Directory 架构决策：可作为所选主要产品或其他领域应用的显式依赖，消费应用保留角色和不可变快照。✅ (67行)
+  - solution.md Party Directory 技术方案：独立数据库、不可变 revision、IAM、管理页、精确引用、D1 故障恢复，以及 Contract／Money 预检、来源自有映射、含引用数据切换／回滚和 Contract-linked C6 恢复实证。✅ (187行)
+- _shared/models/ 数据模型
+  - DesignWorkItem.yaml 设计生产工作项当前投影。✅ (32行)
+  - DesignStage.yaml 固定阶段当前投影。✅ (33行)
+  - DesignDeliverable.yaml Evidence 成果追加引用。✅ (30行)
+  - DesignHistoryEvent.yaml 不可变设计生产历史。✅ (31行)
+  - Project.yaml Project／Package 当前投影与两级父子关系。✅ (127行)
+  - ProjectPackageConversion.yaml Project 归包／外包转换及安全撤销审计。✅ (52行)
+  - ProjectAssignment.yaml 项目内 Person／Group 分工。✅ (104行)
+  - ProjectResourceLink.yaml 外部业务资源关联。✅ (98行)
+  - ProjectHistoryEvent.yaml 不可变项目历史。✅ (95行)
+  - Party.yaml Party Directory 当前主体投影与动态允许动作。✅ (41行)
+  - PartyRevision.yaml 主体登记、更正和状态变化的不可变完整快照。✅ (36行)
+  - InvoiceRegistration.yaml 已开票登记内部完整当前投影、精确金额和 Party／来源快照。🟡 (72行)
+  - InvoiceRegistrationRevision.yaml 登记、纠正、Evidence 变化和登记无效的不可变完整快照。🟡 (34行)
+  - InvoiceRegistrationView.yaml 服务端按金额权限收敛的当前登记 API 视图。🟡 (46行)
+  - InvoiceRegistrationRevisionView.yaml 服务端按金额权限收敛的不可变历史 API 视图。🟡 (27行)
+  - ProjectCompletionAssessment.yaml Project 版本化完成规则的即时只读解释和 drift。✅ (40行)
+  - ProjectCompletionConfirmation.yaml Project 显式确认时冻结的不可变来源检查点。✅ (42行)
+  - PayableSuggestion.yaml C6 拥有的应付建议当前投影、精确来源快照、目标同步状态与版本不变量。✅ (86行)
+  - PayableSuggestionIntake.yaml Money 拥有的建议受理、独立决策、Obligation 引用和不可变 revision。✅ (78行)
+- _shared/contracts/ API 契约
+  - approval-audit-results-api.yaml 批复审计结果受保护 API：登记、详情、历史、纠正、撤回、字段脱敏和失败关闭。✅ (181行)
+  - approval-audit-project-results-reference.yaml Project 消费的批复／审计最小当前引用集合。✅ (39行)
+  - project-completion-assessment-get.yaml Project C5 Completion Profile 纯读取评估。✅ (21行)
+  - project-completion-confirm.yaml Project C5 检查点显式确认与精确来源冻结。✅ (27行)
+  - contract-reference-get.yaml 向受信工作负载提供精确合同引用、类别、当前金额与稳定摘要。✅ (32行)
+  - contract-settlement-reference-get.yaml 向受信工作负载提供不可变结算、父合同、类别与金额摘要。✅ (33行)
+  - customer-role-capability-overlay.yaml 客户站点角色到目标应用稳定 Capability 的版本化覆盖层契约。✅ (27行)
+  - service-credential-exchange.yaml 工作负载身份向 IAM 交换请求绑定、一次性、精确资源短期能力凭证。✅ (31行)
+  - design-work-item-create.yaml 创建 design-v1 工作项。✅ (25行)
+  - design-work-item-list.yaml 查询凭证范围内的设计工作项当前投影。✅ (28行)
+  - design-owner-set.yaml 设置生产负责人引用。✅ (26行)
+  - design-stage-applicability.yaml 设置或恢复阶段适用性。✅ (24行)
+  - design-deliverable-put.yaml 登记或替换阶段成果引用。✅ (28行)
+  - design-stage-complete.yaml 完成当前阶段。✅ (23行)
+  - design-stage-reopen.yaml 显式重开完成阶段。✅ (22行)
+  - design-work-item-cancel.yaml 取消设计工作项。✅ (20行)
+  - design-work-item-get.yaml 读取设计工作项。✅ (22行)
+  - design-history-list.yaml 读取不可变设计历史。✅ (23行)
+  - design-reference-get.yaml 向 Project 提供统一 `id` 与兼容 `work_item_id` 的最小设计引用。✅ (28行)
+  - evidence-file-version-reference-get.yaml 向 Design 提供最小 Evidence File Version 引用。✅ (32行)
+  - evidence-file-list.yaml 查询租户内已校验的不可变文件版本。✅ (40行)
+  - money-obligation-reference-get.yaml 向受信工作负载提供精确义务、核销／汇付余额和稳定摘要。✅ (36行)
+  - money-transaction-reference-get.yaml 向受信工作负载提供精确实际收付款、核销余额和稳定摘要。✅ (35行)
+  - project-create.yaml 创建项目草稿。✅ (57行)
+  - project-list.yaml 查询租户内最近更新的 Project 当前投影与列表允许动作。✅ (34行)
+  - project-update.yaml 替换项目基础资料。✅ (60行)
+  - project-assignment-put.yaml 建立或结束 Assignment。✅ (65行)
+  - project-assignment-policy-fact-get.yaml 向可信 IAM／Policy Provider 提供带 revision、有效时点和 Person／Group 引用的 Assignment 事实。✅ (34行)
+  - project-assignment-reference-get.yaml 向类型化业务应用提供含 Person 来源 revision 的精确 Assignment 引用。✅ (33行)
+  - people-person-policy-fact-get.yaml 向可信 IAM／Policy Provider 提供 Person revision、状态与 IAM Subject 映射。✅ (27行)
+  - party-create.yaml 登记主体 revision 1。✅ (24行)
+  - party-list.yaml 按名称、登记标识、类型和状态稳定查询主体，并返回列表级允许动作。✅ (30行)
+  - party-get.yaml 读取主体当前投影与允许动作。✅ (14行)
+  - party-update.yaml 以期望 revision 更正主体资料。✅ (29行)
+  - party-status-change.yaml 停用或重新启用主体。✅ (25行)
+  - party-history-list.yaml 读取主体不可变 revision 历史。✅ (24行)
+  - party-reference-get.yaml 向消费应用提供精确主体当前投影。✅ (31行)
+  - invoice-registration-create.yaml 创建已开票登记 revision 1。🟡 (45行)
+  - invoice-registration-list.yaml 查询当前登记和有权限的有效金额汇总。🟡 (31行)
+  - invoice-registration-get.yaml 读取登记详情与动态允许动作。🟡 (15行)
+  - invoice-registration-correct.yaml 以期望 revision 纠正登记资料。🟡 (38行)
+  - invoice-registration-invalidate.yaml 标记系统登记无效而不冒充现实票据作废。🟡 (24行)
+  - invoice-registration-evidence.yaml 替换票据 Evidence 引用集合。🟡 (37行)
+  - invoice-registration-history-list.yaml 读取不可变登记 revision 历史。🟡 (24行)
+  - invoice-registration-reference-get.yaml 向只读组合层提供精确 Billing 摘要。🟡 (31行)
+  - project-resource-link-put.yaml 建立或解除 Resource Link。✅ (65行)
+  - project-commercial-summary-get.yaml 按 Project 并行读取 Contract、Money 和 Billing 类型化只读分段。✅ (53行)
+  - project-initiation-complete.yaml 校验并完成立项。✅ (57行)
+  - project-reference-get.yaml 向受信工作负载提供精确 Project 引用、稳定摘要与活动资源链接。✅ (43行)
+  - project-cancel.yaml 取消项目。✅ (47行)
+  - project-get.yaml 获取 Project／Package、父子节点、active 转换、外部引用和状态允许动作。✅ (89行)
+  - project-package-create.yaml 创建可暂不编号的顶层 Project Package。✅ (52行)
+  - project-package-convert.yaml 把既有 Project 归入 Package 或创建外包 Package。✅ (60行)
+  - project-package-rollback.yaml 在无后续冲突时安全撤销 Package 转换。✅ (59行)
+  - project-history-list.yaml 查询不可变项目历史。✅ (51行)
+  - payable-suggestion-api.yaml C6 建议建立／同步／撤回与 Money 受理／接受／拒绝／撤回的版本化跨应用契约。✅ (168行)
+  - bonus-distribution-api.yaml C7 奖池／分配受保护入口、动态动作、金额脱敏与确定性错误契约。✅ (24行)
+  - people-person-reference-get.yaml 向受信工作负载提供精确 Person 当前引用。✅ (27行)
+  - money-receipt-set-reference-get.yaml 向 Bonus Distribution 提供已确认 Transaction／Allocation 回款集合。✅ (45行)

@@ -1,0 +1,16 @@
+.git
+.data
+.runtime
+**/.runtime
+**/.env
+**/.env.*
+!**/.env.example
+dist
+coverage
+node_modules
+**/node_modules
+.npm-cache
+**/.npm-cache
+**/.DS_Store
+**/*.log
+**/tmp

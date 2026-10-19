@@ -1,0 +1,104 @@
+{
+  "passed": true,
+  "native_project": true,
+  "formal_iam": true,
+  "real_people_http": true,
+  "postgresql_18": true,
+  "original_component": true,
+  "main_deployed": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "suite_restore_accepted": false,
+  "asset_sha256": "9d31ffe252cdb087698cb6cf60c825c7009886aba43493ed0962cf8452711fe0",
+  "scenarios": [
+    {
+      "name": "three-independent-processes-native-setup-explicit-profile-no-fake-members",
+      "passed": true
+    },
+    {
+      "name": "formal-old-read-denied-exact-project-scope-client-headers-cannot-override-actor",
+      "passed": true
+    },
+    {
+      "name": "original-empty-and-open-cancel-native-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-multi-design-and-same-person-multi-role-native-save",
+      "passed": true
+    },
+    {
+      "name": "separate-global-reviewers-native-save-reload-no-write",
+      "passed": true
+    },
+    {
+      "name": "same-person-different-professions-are-distinct-native-identities",
+      "passed": true
+    },
+    {
+      "name": "normal-change-discipline-conflict-keeps-form-zero-write-explicit-group-end",
+      "passed": true
+    },
+    {
+      "name": "actual-People-revision-mismatch-rejected-with-zero-project-write",
+      "passed": true
+    },
+    {
+      "name": "commit-reply-lost-reload-explicit-original-command-retry-one-commit",
+      "passed": true
+    },
+    {
+      "name": "formal-applicability-command-and-original-disabled-participant-preserve",
+      "passed": true
+    },
+    {
+      "name": "original-unchanged-save-records-one-receipt-no-extra-fact-history-or-revision",
+      "passed": true
+    },
+    {
+      "name": "native-group-end-preserves-hidden-person-NA-off-restores-same-id-explicit-end-history",
+      "passed": true
+    },
+    {
+      "name": "original-nested-catalogue-native-owner-save-parent-cancel-no-personnel-write",
+      "passed": true
+    },
+    {
+      "name": "actual-People-process-outage-zero-write-same-command-recovery",
+      "passed": true
+    },
+    {
+      "name": "formal-IAM-revoke-native-write-denied-original-actions-hidden-no-write",
+      "passed": true
+    },
+    {
+      "name": "browser-forged-client-actor-headers-never-enter-native-personnel-or-catalogue-audit",
+      "passed": true
+    },
+    {
+      "name": "actual-profile-off-restart-native-route-absent-legacy-base-read-and-facts-preserved",
+      "passed": true
+    },
+    {
+      "name": "actual-profile-on-restart-same-personnel-identities-revisions-history-and-receipts",
+      "passed": true
+    }
+  ],
+  "final_stats": {
+    "facts": 14,
+    "active": 1,
+    "ended": 13,
+    "events": 11,
+    "commands": 16,
+    "base_assignments": 0,
+    "profiles": 1,
+    "discipline_versions": 3
+  },
+  "final_project_revision": 12,
+  "people_facts_unchanged": true,
+  "base_assignment_facts_unchanged": true,
+  "request_bound_native_workload_exchange": true,
+  "native_browser_posts": 11,
+  "original_unknown_retry_command_equal": true,
+  "page_errors": []
+}

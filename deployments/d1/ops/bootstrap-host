@@ -1,0 +1,377 @@
+#!/bin/sh
+set -eu
+
+action=${1:-}
+deploy_user=${D1_HOST_USER:-${SUDO_USER:-$(id -un)}}
+swap_mib=${D1_HOST_SWAP_MIB:-2048}
+apt_upgrade=${D1_HOST_APT_UPGRADE:-yes}
+confirm_ssh_key=${D1_CONFIRM_SSH_KEY_LOGIN:-no}
+acr_mirror=${D1_ACR_MIRROR:-}
+docker_config=/etc/docker/daemon.json
+ssh_config=/etc/ssh/sshd_config.d/99-omsbizfoundry.conf
+sysctl_config=/etc/sysctl.d/99-omsbizfoundry.conf
+deploy_dir=/opt/omsbizfoundry
+backup_dir=/var/backups/omsbizfoundry
+
+usage() {
+  cat >&2 <<USAGE
+usage: $0 plan|apply|check|self-test
+
+Environment:
+  D1_ACR_MIRROR=https://ACCOUNT.mirror.aliyuncs.com
+  D1_CONFIRM_SSH_KEY_LOGIN=yes   required by apply before SSH hardening
+  D1_HOST_USER=ecs-user          defaults to the invoking non-root user
+  D1_HOST_SWAP_MIB=2048          minimum supported value is 1024
+  D1_HOST_APT_UPGRADE=yes|no     defaults to yes
+
+The script configures only the Ubuntu host. It does not create ECS, security
+groups, DNS, certificates, ACR repositories, application secrets, or .env.
+USAGE
+  exit 2
+}
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+validate_yes_no() {
+  value=$1
+  label=$2
+  case "$value" in yes|no) ;; *) fail "$label must be yes or no" ;; esac
+}
+
+normalize_mirror() {
+  value=$1
+  [ -n "$value" ] || return 0
+  normalized=${value%/}
+  printf '%s\n' "$normalized" | grep -Eq '^https://[a-z0-9-]+\.mirror\.aliyuncs\.com$' || {
+    fail "D1_ACR_MIRROR must be an account-specific https://*.mirror.aliyuncs.com URL"
+  }
+  printf '%s' "$normalized"
+}
+
+validate_inputs() {
+  validate_yes_no "$apt_upgrade" D1_HOST_APT_UPGRADE
+  validate_yes_no "$confirm_ssh_key" D1_CONFIRM_SSH_KEY_LOGIN
+  case "$swap_mib" in ''|*[!0-9]*) fail "D1_HOST_SWAP_MIB must be an integer" ;; esac
+  [ "$swap_mib" -ge 1024 ] || fail "D1_HOST_SWAP_MIB must be at least 1024"
+  acr_mirror=$(normalize_mirror "$acr_mirror")
+}
+
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
+require_supported_os() {
+  [ -r /etc/os-release ] || fail "/etc/os-release is unavailable"
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  [ "${ID:-}" = ubuntu ] && [ "${VERSION_ID:-}" = 22.04 ] || {
+    fail "supported host is Ubuntu 22.04; found ${ID:-unknown} ${VERSION_ID:-unknown}"
+  }
+  machine=$(uname -m)
+  case "$machine" in x86_64|aarch64) ;; *) fail "unsupported host architecture: $machine" ;; esac
+  command -v getent >/dev/null 2>&1 || fail "getent is required on the target host"
+  getent passwd "$deploy_user" >/dev/null 2>&1 || fail "host user does not exist: $deploy_user"
+}
+
+render_docker_config() {
+  source_file=$1
+  mirror=$2
+  jq --arg mirror "$mirror" '
+    . + {
+      "log-driver": "json-file",
+      "log-opts": ((.["log-opts"] // {}) + {
+        "max-size": "10m",
+        "max-file": "3"
+      }),
+      "live-restore": true
+    }
+    | if $mirror == "" then . else .["registry-mirrors"] = [$mirror] end
+  ' "$source_file"
+}
+
+render_fstab() {
+  source_file=$1
+  awk '
+    $1 == "/swapfile" {
+      if (!seen) print "/swapfile none swap sw 0 0"
+      seen = 1
+      next
+    }
+    { print }
+    END { if (!seen) print "/swapfile none swap sw 0 0" }
+  ' "$source_file"
+}
+
+install_if_changed() {
+  source_file=$1
+  target_file=$2
+  mode=$3
+  if as_root test -f "$target_file" && as_root cmp -s "$source_file" "$target_file"; then
+    return 1
+  fi
+  as_root install -o root -g root -m "$mode" "$source_file" "$target_file"
+  return 0
+}
+
+print_plan() {
+  cat <<PLAN
+OMSBizFoundry D1 host bootstrap plan
+  supported OS: Ubuntu 22.04 (x86_64 or aarch64)
+  host user: $deploy_user
+  apt upgrade: $apt_upgrade
+  packages: ca-certificates curl git jq openssl rsync unzip docker.io docker-compose-v2
+  Docker: json-file 10m x 3, live-restore=true
+  ACR mirror: ${acr_mirror:-preserve existing configuration}
+  swap: ${swap_mib} MiB, vm.swappiness=10
+  SSH: disable password, keyboard-interactive, and root login
+  deploy directory: $deploy_dir (0750)
+  backup staging directory: $backup_dir (0700; same-disk staging only)
+
+Cloud-side prerequisites remain manual or CLI-controlled: ECS creation/image,
+SSH key binding, security groups, DNS, certificate, ACR repositories, and all
+application credentials.
+PLAN
+}
+
+run_self_test() {
+  command -v jq >/dev/null 2>&1 || fail "self-test requires jq"
+  test_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-host-test.XXXXXX")
+  trap 'rm -rf -- "$test_dir"' EXIT HUP INT TERM
+
+  cat >"$test_dir/daemon-input.json" <<'JSON'
+{
+  "debug": false,
+  "log-opts": {"labels": "service"}
+}
+JSON
+  render_docker_config "$test_dir/daemon-input.json" 'https://example123.mirror.aliyuncs.com' >"$test_dir/daemon-first.json"
+  render_docker_config "$test_dir/daemon-first.json" 'https://example123.mirror.aliyuncs.com' >"$test_dir/daemon-second.json"
+  cmp -s "$test_dir/daemon-first.json" "$test_dir/daemon-second.json" || fail "Docker rendering is not idempotent"
+  jq -e '
+    .debug == false
+    and .["log-driver"] == "json-file"
+    and .["log-opts"].labels == "service"
+    and .["log-opts"]["max-size"] == "10m"
+    and .["log-opts"]["max-file"] == "3"
+    and .["live-restore"] == true
+    and .["registry-mirrors"] == ["https://example123.mirror.aliyuncs.com"]
+  ' "$test_dir/daemon-first.json" >/dev/null || fail "Docker rendering lost required or pre-existing values"
+
+  cat >"$test_dir/fstab-input" <<'FSTAB'
+UUID=example / ext4 defaults 0 1
+/swapfile swap swap defaults 0 0
+/swapfile none swap sw 0 0
+FSTAB
+  render_fstab "$test_dir/fstab-input" >"$test_dir/fstab-first"
+  render_fstab "$test_dir/fstab-first" >"$test_dir/fstab-second"
+  cmp -s "$test_dir/fstab-first" "$test_dir/fstab-second" || fail "fstab rendering is not idempotent"
+  [ "$(awk '$1 == "/swapfile" {count++} END {print count + 0}' "$test_dir/fstab-first")" -eq 1 ] || {
+    fail "fstab rendering did not reduce /swapfile to one entry"
+  }
+
+  normalized=$(normalize_mirror 'https://example123.mirror.aliyuncs.com/')
+  [ "$normalized" = 'https://example123.mirror.aliyuncs.com' ] || fail "mirror normalization failed"
+  echo "PASS host bootstrap self-test"
+}
+
+apply_baseline() {
+  require_supported_os
+  as_root true || fail "passwordless sudo is required"
+  [ "$confirm_ssh_key" = yes ] || {
+    fail "apply requires D1_CONFIRM_SSH_KEY_LOGIN=yes after a second SSH key session has been verified"
+  }
+
+  user_home=$(getent passwd "$deploy_user" | awk -F: '{print $6}')
+  [ -n "$user_home" ] && [ -s "$user_home/.ssh/authorized_keys" ] || {
+    fail "no authorized_keys found for $deploy_user; refusing SSH hardening"
+  }
+
+  as_root env DEBIAN_FRONTEND=noninteractive apt-get update
+  if [ "$apt_upgrade" = yes ]; then
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get -y upgrade
+  fi
+  as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    ca-certificates curl git jq openssl rsync unzip docker.io docker-compose-v2
+
+  as_root systemctl enable docker
+  as_root usermod -aG docker "$deploy_user"
+
+  work_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-host.XXXXXX")
+  trap 'rm -rf -- "$work_dir"' EXIT HUP INT TERM
+
+  if as_root test -f "$docker_config"; then
+    as_root cat "$docker_config" >"$work_dir/daemon-current.json"
+  else
+    printf '%s\n' '{}' >"$work_dir/daemon-current.json"
+  fi
+  jq -e 'type == "object"' "$work_dir/daemon-current.json" >/dev/null || fail "$docker_config must contain a JSON object"
+  render_docker_config "$work_dir/daemon-current.json" "$acr_mirror" >"$work_dir/daemon-next.json"
+  as_root dockerd --validate --config-file "$work_dir/daemon-next.json"
+  docker_changed=no
+  if install_if_changed "$work_dir/daemon-next.json" "$docker_config" 0644; then
+    docker_changed=yes
+  fi
+  if [ "$docker_changed" = yes ]; then
+    as_root systemctl restart docker
+  else
+    as_root systemctl start docker
+  fi
+
+  swap_bytes=$((swap_mib * 1024 * 1024))
+  if as_root test -e /swapfile; then
+    existing_swap_bytes=$(as_root stat -c %s /swapfile)
+    [ "$existing_swap_bytes" -ge "$swap_bytes" ] || fail "existing /swapfile is smaller than ${swap_mib} MiB"
+  else
+    as_root fallocate -l "${swap_mib}M" /swapfile
+    as_root chmod 600 /swapfile
+    as_root mkswap /swapfile >/dev/null
+  fi
+  if ! as_root swapon --show=NAME --noheadings | awk '$1 == "/swapfile" {found=1} END {exit !found}'; then
+    as_root swapon /swapfile
+  fi
+  as_root cat /etc/fstab >"$work_dir/fstab-current"
+  render_fstab "$work_dir/fstab-current" >"$work_dir/fstab-next"
+  install_if_changed "$work_dir/fstab-next" /etc/fstab 0644 || true
+
+  printf '%s\n' 'vm.swappiness=10' >"$work_dir/sysctl.conf"
+  install_if_changed "$work_dir/sysctl.conf" "$sysctl_config" 0644 || true
+  as_root sysctl -q -p "$sysctl_config"
+
+  as_root install -d -o "$deploy_user" -g "$deploy_user" -m 0750 "$deploy_dir"
+  as_root install -d -o "$deploy_user" -g "$deploy_user" -m 0700 "$backup_dir"
+
+  cat >"$work_dir/sshd.conf" <<'SSHD'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+SSHD
+  ssh_changed=no
+  if install_if_changed "$work_dir/sshd.conf" "$ssh_config" 0644; then
+    ssh_changed=yes
+  fi
+  as_root sshd -t
+  if [ "$ssh_changed" = yes ]; then
+    as_root systemctl reload ssh
+  fi
+
+  echo "host baseline applied; reconnect SSH once so docker group membership is refreshed"
+  if as_root test -f /var/run/reboot-required; then
+    echo "reboot required by package updates; schedule a controlled reboot before D1 deployment"
+  fi
+}
+
+check_pass() {
+  echo "PASS $1"
+}
+
+check_fail() {
+  echo "FAIL $1" >&2
+  failures=$((failures + 1))
+}
+
+check_command() {
+  description=$1
+  shift
+  if "$@" >/dev/null 2>&1; then check_pass "$description"; else check_fail "$description"; fi
+}
+
+check_baseline() {
+  failures=0
+  require_supported_os
+  check_command 'passwordless sudo' as_root true
+  check_command 'Docker service active' as_root systemctl is-active --quiet docker
+  check_command 'Docker service enabled' as_root systemctl is-enabled --quiet docker
+  check_command 'Docker client/server available' as_root docker version
+  check_command 'Docker Compose v2 available' as_root docker compose version
+  if id -nG "$deploy_user" | tr ' ' '\n' | grep -qx docker; then
+    check_pass "$deploy_user belongs to docker group"
+  else
+    check_fail "$deploy_user belongs to docker group"
+  fi
+
+  if as_root jq -e '
+    .["log-driver"] == "json-file"
+    and .["log-opts"]["max-size"] == "10m"
+    and .["log-opts"]["max-file"] == "3"
+    and .["live-restore"] == true
+  ' "$docker_config" >/dev/null 2>&1; then
+    check_pass 'Docker logging and live-restore baseline'
+  else
+    check_fail 'Docker logging and live-restore baseline'
+  fi
+  if [ -n "$acr_mirror" ]; then
+    if as_root jq -e --arg mirror "$acr_mirror" '.["registry-mirrors"] == [$mirror]' "$docker_config" >/dev/null 2>&1; then
+      check_pass 'configured ACR mirror matches requested address'
+    else
+      check_fail 'configured ACR mirror matches requested address'
+    fi
+  fi
+
+  swap_bytes=$((swap_mib * 1024 * 1024))
+  if as_root test -f /swapfile && [ "$(as_root stat -c %s /swapfile)" -ge "$swap_bytes" ]; then
+    check_pass "/swapfile is at least ${swap_mib} MiB"
+  else
+    check_fail "/swapfile is at least ${swap_mib} MiB"
+  fi
+  if as_root swapon --show=NAME --noheadings | awk '$1 == "/swapfile" {found=1} END {exit !found}'; then
+    check_pass '/swapfile is active'
+  else
+    check_fail '/swapfile is active'
+  fi
+  if [ "$(as_root awk '$1 == "/swapfile" {count++} END {print count + 0}' /etc/fstab)" -eq 1 ]; then
+    check_pass '/etc/fstab has exactly one /swapfile entry'
+  else
+    check_fail '/etc/fstab has exactly one /swapfile entry'
+  fi
+  if [ "$(as_root sysctl -n vm.swappiness)" = 10 ]; then check_pass 'vm.swappiness=10'; else check_fail 'vm.swappiness=10'; fi
+
+  ssh_effective=$(as_root sshd -T)
+  for ssh_setting in 'passwordauthentication no' 'kbdinteractiveauthentication no' 'permitrootlogin no'; do
+    if printf '%s\n' "$ssh_effective" | grep -qx "$ssh_setting"; then
+      check_pass "SSH $ssh_setting"
+    else
+      check_fail "SSH $ssh_setting"
+    fi
+  done
+
+  if [ "$(as_root stat -c '%U:%G %a' "$deploy_dir" 2>/dev/null || true)" = "$deploy_user:$deploy_user 750" ]; then
+    check_pass "$deploy_dir ownership and mode"
+  else
+    check_fail "$deploy_dir ownership and mode"
+  fi
+  if [ "$(as_root stat -c '%U:%G %a' "$backup_dir" 2>/dev/null || true)" = "$deploy_user:$deploy_user 700" ]; then
+    check_pass "$backup_dir ownership and mode"
+  else
+    check_fail "$backup_dir ownership and mode"
+  fi
+
+  [ "$failures" -eq 0 ] || fail "$failures host baseline check(s) failed"
+  echo 'host baseline check complete'
+}
+
+case "$action" in
+  plan)
+    validate_inputs
+    print_plan
+    ;;
+  apply)
+    validate_inputs
+    apply_baseline
+    check_baseline
+    ;;
+  check)
+    validate_inputs
+    check_baseline
+    ;;
+  self-test)
+    run_self_test
+    ;;
+  *) usage ;;
+esac

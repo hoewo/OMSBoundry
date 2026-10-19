@@ -1,0 +1,24 @@
+# Design Stage 适用性 API 契约
+metadata: {path: "tech/_shared/contracts/design-stage-applicability.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/stages/{stage_key}/applicability", summary: "设置不适用或恢复适用", auth_required: true, audience: "design-operations", capability: "design-work-item.stage.manage"}
+request:
+  path_params:
+    - {name: work_item_id, type: string, format: uuid, required: true}
+    - {name: stage_key, type: string, enum: [scheme, preliminary-design, construction-drawing, construction-support], required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, operation, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      operation: {type: string, enum: [set-not-applicable, restore-applicability]}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignWorkItem.yaml"}}
+  errors:
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 422, code: STAGE_NOT_SKIPPABLE, retryable: false}
+    - {status: 422, code: STAGE_STATE_INVALID, retryable: false}
+business_logic:
+  flow: ["只有 design-v1 允许的 ready Stage 可设不适用。", "恢复会显式回退该 Stage 及后续完成投影，保留历史和成果引用。"]

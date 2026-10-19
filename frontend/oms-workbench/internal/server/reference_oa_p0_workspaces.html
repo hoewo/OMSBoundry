@@ -1,0 +1,93 @@
+{{define "referenceP0Workspaces"}}
+<!-- These two templates mirror the reference OA Statistics and FileManagement workspaces. -->
+<template data-page-template="files-reference">
+  <div class="management-section-tabs management-section-tabs--compact">
+    <div class="management-section-tabs__copy">
+      <span class="management-section-tabs__eyebrow">当前工作区</span>
+      <div class="management-section-tabs__heading">
+        <span class="management-section-tabs__icon">□</span>
+        <div class="management-section-tabs__heading-copy"><h2>项目资料管理</h2><p>按项目查询、下载与核对资料</p></div>
+      </div>
+    </div>
+    <span class="reference-demo-label">界面验证数据</span>
+  </div>
+  <main class="file-management-page" data-file-workspace>
+    <div class="file-management-page__project-table ant-table-wrapper">
+      <table class="ant-table">
+        <thead class="ant-table-thead"><tr><th>项目名称</th><th>更新时间</th><th class="reference-align-right">资料</th></tr></thead>
+        <tbody class="ant-table-tbody">
+          <tr class="file-management-page__project-row file-management-page__project-row--even" tabindex="0" role="button" aria-expanded="false" data-file-project="jh-2026-018">
+            <td><div class="file-management-page__project-name"><span class="file-management-page__project-icon">▣</span><span class="file-management-page__project-copy"><strong>京哈高速改造工程</strong><small>3 份可下载资料 · 点击整行查看</small></span></div></td>
+            <td>2026-09-29 16:40</td>
+            <td class="reference-align-right"><button class="ant-btn file-management-page__expand-button" type="button" data-file-toggle="jh-2026-018"><span>查看 3 份</span><span class="file-management-page__expand-icon">›</span></button></td>
+          </tr>
+          <tr class="ant-table-expanded-row" hidden data-file-detail="jh-2026-018"><td colspan="3">
+            <div class="file-management-page__file-group"><div class="file-management-page__file-list" role="list">
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>施工图设计说明.pdf</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-29 16:40</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">3 次下载</span><span class="file-management-page__download-people">李晨、周宁</span></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>设计合同扫描件.pdf</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-21 10:18</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">6 次下载</span><button class="ant-btn ant-btn-link" type="button" data-download-people="contract-file">♙ 4 人</button></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>项目立项材料.zip</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-18 14:05</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">2 次下载</span><span class="file-management-page__download-people">王可</span></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+            </div></div>
+          </td></tr>
+          <tr class="file-management-page__project-row file-management-page__project-row--odd" tabindex="0" role="button" aria-expanded="false" data-file-project="s207-2026-006">
+            <td><div class="file-management-page__project-name"><span class="file-management-page__project-icon">▣</span><span class="file-management-page__project-copy"><strong>S207省道改扩建工程</strong><small>4 份可下载资料 · 点击整行查看</small></span></div></td>
+            <td>2026-09-28 11:22</td>
+            <td class="reference-align-right"><button class="ant-btn file-management-page__expand-button" type="button" data-file-toggle="s207-2026-006"><span>查看 4 份</span><span class="file-management-page__expand-icon">›</span></button></td>
+          </tr>
+          <tr class="ant-table-expanded-row" hidden data-file-detail="s207-2026-006"><td colspan="3">
+            <div class="file-management-page__file-group"><div class="file-management-page__file-list" role="list">
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>项目投标文件.pdf</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-28 11:22</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">5 次下载</span><button class="ant-btn ant-btn-link" type="button" data-download-people="bid-file">♙ 5 人</button></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>现场踏勘记录.docx</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-26 15:06</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">2 次下载</span><span class="file-management-page__download-people">周宁、陈工</span></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>初步方案汇报.pptx</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-24 09:40</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">1 次下载</span><span class="file-management-page__download-people">王可</span></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+              <div class="file-management-page__file-row" role="listitem"><div class="file-management-page__file-name"><span>▧</span><span>甲方往来函.pdf</span></div><time class="file-management-page__file-time"><span>更新于</span>2026-09-20 17:32</time><div class="file-management-page__download-summary"><span class="file-management-page__download-count">0 次下载</span></div>{{range .Applications}}{{if eq .ID "evidence-service"}}<form method="post" action="/gateway/authorize/{{.ID}}"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button class="ant-btn file-management-page__download-button" type="submit">⇩ 下载</button></form>{{end}}{{end}}</div>
+            </div></div>
+          </td></tr>
+          <tr class="file-management-page__project-row file-management-page__project-row--even file-management-page__project-row--empty">
+            <td><div class="file-management-page__project-name"><span class="file-management-page__project-icon">□</span><span class="file-management-page__project-copy"><strong>临河新区市政道路勘察设计</strong><small>暂无可下载资料</small></span></div></td><td>2026-09-17 09:05</td><td class="reference-align-right"><button class="ant-btn file-management-page__expand-button" type="button" disabled>暂无资料</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <div class="reference-modal-mask" hidden data-download-dialog="contract-file"><section class="reference-modal" role="dialog" aria-modal="true" aria-labelledby="contract-download-title"><header><h3 id="contract-download-title">下载人员</h3><button type="button" data-download-dialog-close aria-label="关闭">×</button></header><div class="file-management-page__people-list"><div><strong>李晨</strong><span>2 次 · 最近 2026-09-29 14:30</span></div><div><strong>周宁</strong><span>2 次 · 最近 2026-09-28 16:18</span></div><div><strong>王可</strong><span>1 次 · 最近 2026-09-26 10:07</span></div><div><strong>赵倩</strong><span>1 次 · 最近 2026-09-24 09:42</span></div></div></section></div>
+  <div class="reference-modal-mask" hidden data-download-dialog="bid-file"><section class="reference-modal" role="dialog" aria-modal="true" aria-labelledby="bid-download-title"><header><h3 id="bid-download-title">下载人员</h3><button type="button" data-download-dialog-close aria-label="关闭">×</button></header><div class="file-management-page__people-list"><div><strong>王可</strong><span>1 次 · 最近 2026-09-29 09:18</span></div><div><strong>李晨</strong><span>1 次 · 最近 2026-09-28 17:11</span></div><div><strong>周宁</strong><span>1 次 · 最近 2026-09-28 13:50</span></div><div><strong>陈工</strong><span>1 次 · 最近 2026-09-27 15:36</span></div><div><strong>赵倩</strong><span>1 次 · 最近 2026-09-26 10:04</span></div></div></section></div>
+</template>
+
+<template data-page-template="statistics-reference">
+  <div class="management-section-tabs management-section-tabs--compact">
+    <div class="management-section-tabs__copy"><span class="management-section-tabs__eyebrow">当前工作区</span><div class="management-section-tabs__heading"><span class="management-section-tabs__icon">▥</span><div class="management-section-tabs__heading-copy"><h2>项目统计信息</h2><p>项目台账与各类统计视图</p></div></div></div>
+    <span class="reference-demo-label">{{if .DemoPreview}}界面预览{{else}}来源只读{{end}}</span>
+  </div>
+  <main class="statistics-page" data-statistics-workspace>
+    <div role="status">正在加载统计工作台…</div>
+    <noscript>统计工作台需要 JavaScript；此处不展示演示金额。</noscript>
+    <template data-statistics-legacy-fixture>
+    <div class="statistics-page__tabs" role="tablist" aria-label="统计类型">
+      <button class="statistics-page__tab statistics-page__tab--active" type="button" role="tab" aria-selected="true" data-statistics-tab="ledger">项目台账</button>
+      <button class="statistics-page__tab" type="button" role="tab" aria-selected="false" data-statistics-tab="company">公司统计</button>
+      <button class="statistics-page__tab" type="button" role="tab" aria-selected="false" data-statistics-tab="attendance">人事考勤统计</button>
+      <button class="statistics-page__tab" type="button" role="tab" aria-selected="false" data-statistics-tab="payroll">薪酬统计</button>
+      <button class="statistics-page__tab" type="button" role="tab" aria-selected="false" data-statistics-tab="personnel-bonus">人员奖金统计</button>
+    </div>
+    <section class="statistics-page__pane is-active" role="tabpanel" data-statistics-pane="ledger">
+      <div class="statistics-page__summary"><div><span>在管项目</span><strong>12</strong><small>项</small></div><div><span>设计进行中</span><strong>7</strong><small>项</small></div><div><span>本年度已归档</span><strong>5</strong><small>项</small></div></div>
+      <div class="statistics-page__ledger"><table class="data-table"><thead><tr><th>项目名称</th><th>当前阶段</th><th>合同金额</th><th>累计开票</th><th>累计收款</th></tr></thead><tbody><tr><td><strong>京哈高速改造工程</strong><br><small>JH-2026-018</small></td><td><span class="ant-tag">施工图设计</span></td><td>¥ 8,600,000</td><td>¥ 5,160,000</td><td>¥ 3,612,000</td></tr><tr><td><strong>S207省道改扩建工程</strong><br><small>S207-2026-006</small></td><td><span class="ant-tag">经营承接</span></td><td>待确认</td><td>—</td><td>—</td></tr><tr><td><strong>临河新区市政道路勘察设计</strong><br><small>LH-2025-031</small></td><td><span class="ant-tag">施工配合</span></td><td>¥ 4,200,000</td><td>¥ 4,200,000</td><td>¥ 4,200,000</td></tr></tbody></table></div>
+      <section class="statistics-page__metrics" id="companyMetrics" data-tenant-id="{{.TenantID}}" data-csrf-token="{{.CSRFToken}}"><div class="section-head"><div><h2>经营与资金概览</h2><p>按事实来源分区显示，不跨来源合计</p></div><span class="tag">实时</span></div>{{range .MetricSources}}<article class="metric-source" data-source-application="{{.ID}}" data-route-prefix="{{.RoutePrefix}}" data-projection-path="{{.MetricProjection.Path}}"><div class="metric-source-head"><strong>{{appTitle .ID}}</strong><span class="tag source-status">正在连接</span></div><div class="metric-items"><div class="muted">正在读取该来源的经营指标…</div></div></article>{{else}}<p class="muted">当前组合没有选装经营指标来源。</p>{{end}}</section>
+    </section>
+    <section class="statistics-page__pane" role="tabpanel" hidden data-statistics-pane="company">
+      <div class="company-revenue-statistics"><div class="company-revenue-statistics__summary"><article><span>合同总额</span><strong>¥ 2,460 万</strong><small>已确认合同</small></article><article><span>累计开票</span><strong>¥ 1,586 万</strong><small>开票率 64.5%</small></article><article><span>累计收款</span><strong>¥ 1,318 万</strong><small>回款率 53.6%</small></article><article><span>应收未结</span><strong>¥ 268 万</strong><small>按资金台账事实</small></article></div><div class="company-revenue-statistics__grid"><section class="company-revenue-statistics__card"><header><div><h3>年度经营趋势</h3><p>合同、开票和收款按年度对比</p></div><span class="ant-tag">2026</span></header><div class="reference-bar-chart" aria-label="年度经营趋势"><div><span>合同</span><i style="--bar-size:88%"></i><strong>2,460 万</strong></div><div><span>开票</span><i style="--bar-size:64%"></i><strong>1,586 万</strong></div><div><span>收款</span><i style="--bar-size:54%"></i><strong>1,318 万</strong></div></div></section><section class="company-revenue-statistics__card"><header><div><h3>项目状态分布</h3><p>按当前生产阶段统计</p></div></header><div class="reference-distribution"><div><span style="--dot:#0f766e"></span><strong>设计生产</strong><em>7 项</em></div><div><span style="--dot:#2563eb"></span><strong>经营承接</strong><em>3 项</em></div><div><span style="--dot:#94a3b8"></span><strong>归档完成</strong><em>5 项</em></div></div></section></div><div class="statistics-page__revenue-entry"><div><strong>公司收入管理</strong><span>查看分层收支矩阵与项目收入台账</span></div><button class="ant-btn ant-btn-primary" type="button" data-view-target="company-revenue">进入公司收入管理</button></div></div>
+    </section>
+    <section class="statistics-page__pane" role="tabpanel" hidden data-statistics-pane="attendance"><div class="statistics-page__empty"><div class="reference-empty"><span>□</span><strong>暂无人事考勤统计数据</strong><small>当前参考 OA 仅保留统计入口，尚无可展示记录。</small></div></div></section>
+    <section class="statistics-page__pane" role="tabpanel" hidden data-statistics-pane="payroll"><div class="statistics-page__empty"><div class="reference-empty"><span>□</span><strong>暂无薪酬统计数据</strong><small>当前参考 OA 仅保留统计入口，尚无可展示记录。</small></div></div></section>
+    <section class="statistics-page__pane" role="tabpanel" hidden data-statistics-pane="personnel-bonus">
+      <div class="statistics-page__bonus-table"><table class="ant-table"><thead><tr><th>人员</th><th>奖金合计</th><th>相关项目</th></tr></thead><tbody>
+        <tr class="statistics-page__bonus-row" tabindex="0" role="button" aria-expanded="false" data-bonus-row="lichen"><td><div class="statistics-page__bonus-person"><strong>李晨</strong><small>点击查看项目明细</small></div></td><td><strong class="statistics-page__bonus-total">¥ 186,000</strong></td><td><span class="statistics-page__bonus-project-count">3 个 <span class="statistics-page__bonus-expand-icon">›</span></span></td></tr>
+        <tr class="ant-table-expanded-row" hidden data-bonus-detail="lichen"><td colspan="3"><div class="statistics-page__bonus-projects"><div><span>京哈高速改造工程</span><strong>¥ 96,000</strong></div><div><span>S207省道改扩建工程</span><strong>¥ 54,000</strong></div><div><span>临河新区市政道路勘察设计</span><strong>¥ 36,000</strong></div></div></td></tr>
+        <tr class="statistics-page__bonus-row" tabindex="0" role="button" aria-expanded="false" data-bonus-row="zhouning"><td><div class="statistics-page__bonus-person"><strong>周宁</strong><small>点击查看项目明细</small></div></td><td><strong class="statistics-page__bonus-total">¥ 152,000</strong></td><td><span class="statistics-page__bonus-project-count">2 个 <span class="statistics-page__bonus-expand-icon">›</span></span></td></tr>
+        <tr class="ant-table-expanded-row" hidden data-bonus-detail="zhouning"><td colspan="3"><div class="statistics-page__bonus-projects"><div><span>京哈高速改造工程</span><strong>¥ 104,000</strong></div><div><span>S207省道改扩建工程</span><strong>¥ 48,000</strong></div></div></td></tr>
+        <tr class="statistics-page__bonus-row" tabindex="0" role="button" aria-expanded="false" data-bonus-row="wangke"><td><div class="statistics-page__bonus-person"><strong>王可</strong></div></td><td><strong class="statistics-page__bonus-total">¥ 42,000</strong></td><td><span class="statistics-page__bonus-project-count">0 个</span></td></tr>
+      </tbody></table></div>
+    </section>
+    </template>
+  </main>
+</template>
+{{end}}

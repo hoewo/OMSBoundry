@@ -1,0 +1,325 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-c7-live.XXXXXX")
+container="oms-c7-live-pg18-$$"
+evidence_dir=${C7_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c7-live-source-evidence"}
+service_pids=''
+
+# A failed rerun must not leave prior artifacts looking like current evidence.
+rm -rf "$evidence_dir"
+mkdir -p "$evidence_dir"
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in processes.tsv http-evidence.tsv money-migration.json workspace.html workspace.js unauthenticated.json receipt-set.json business-draft.json business-published.json production-draft.json production-published.json business-dependency-failure.json business-replacement.json business-supersession.json production-withdrawn.json business-history.json replacement-history.json production-history.json pool-list.json source-facts.tsv bonus-facts.tsv result.md iam.log project.log people.log contract.log contract_recovery.log money.log bonus.log; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command in go docker curl jq openssl; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+build() { (cd "$repo_dir" && go build -o "$runtime/$1" "$2"); }
+build identity-access ./backend/platform/identity-access/cmd/server
+build project-workspace ./backend/services/project-workspace/cmd/server
+build people-groups ./backend/services/people-groups/cmd/server
+build contract-ledger ./backend/services/contract-ledger/cmd/server
+build money-flow-ledger ./backend/services/money-flow-ledger/cmd/server
+build money-flow-ops ./backend/services/money-flow-ledger/cmd/ops
+build bonus-distribution ./backend/services/bonus-distribution/cmd/server
+build workload-keyctl ./packages/workload-identity/cmd/workload-keyctl
+
+tenant_id=11111111-1111-4111-8111-111111111111
+actor_id=22222222-2222-4222-8222-222222222222
+project_id=c7000000-0000-4000-8000-000000000001
+business_person_id=c7000000-0000-4000-8000-000000000010
+production_person_id=c7000000-0000-4000-8000-000000000011
+business_assignment_id=c7000000-0000-4000-8000-000000000020
+production_assignment_id=c7000000-0000-4000-8000-000000000021
+contract_id=c7000000-0000-4000-8000-000000000030
+settlement_id=c7000000-0000-4000-8000-000000000033
+allocation_id=c7000000-0000-4000-8000-000000000044
+bonus_workload_subject=c7000000-0000-4000-8000-000000000070
+issuer=https://iam.c7.test
+
+WORKLOAD_ID=bonus-distribution WORKLOAD_SUBJECT_ID="$bonus_workload_subject" \
+WORKLOAD_KEY_FILE="$runtime/bonus-workload-private.json" WORKLOAD_PUBLIC_KEY_FILE="$runtime/bonus-workload-public.json" \
+  "$runtime/workload-keyctl" init
+
+jq -n --arg public "$runtime/bonus-workload-public.json" --arg subject "$bonus_workload_subject" '{
+  schema_version:"1", identities:[{
+    id:"bonus-distribution", subject_id:$subject, display_name:"Bonus Distribution",
+    public_keys_path:$public,
+    permissions:[
+      {audience:"project-workspace",action:"project-workspace.read",resource_types:["project"]},
+      {audience:"people-groups",action:"people-groups.person.reference.read",resource_types:["person"]},
+      {audience:"contract-ledger",action:"contract-ledger.reference.read",resource_types:["settlement"]},
+      {audience:"money-flow-ledger",action:"money-flow-ledger.receipt-set.reference.read",resource_types:["receipt_set"]}
+    ]
+  }]
+}' >"$runtime/workload-policy.json"
+
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55468:5432 postgres:18.6 >/dev/null
+for attempt in $(seq 1 60); do
+  # The official image briefly exposes an initialization-only Unix socket.
+  # Probe TCP so the fixture waits for the final server instead of racing its restart.
+  docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { echo 'PostgreSQL did not become ready' >&2; exit 1; }
+  sleep 1
+done
+for database in identity project people contract money bonus; do
+  docker exec "$container" createdb -U postgres "$database"
+done
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/money?sslmode=disable' "$runtime/money-flow-ops" migrate >"$runtime/money-migration.json"
+jq -e '.service == "money-flow-ledger" and .after.state == "current" and .after.server_ready == true' "$runtime/money-migration.json" >/dev/null
+
+start() {
+  name=$1; shift
+  "$@" >"$runtime/$name.log" 2>&1 &
+  pid=$!
+  service_pids="$service_pids $pid"
+  eval "${name}_pid=$pid"
+}
+wait_http() {
+  url=$1
+  for attempt in $(seq 1 90); do
+    curl --silent --fail "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 90 ] || { echo "$url did not become ready" >&2; exit 1; }
+    sleep 1
+  done
+}
+
+manifest_paths="$repo_dir/contracts/access/v1/examples/project-workspace-capabilities.json,$repo_dir/contracts/access/v1/examples/people-groups-capabilities.json,$repo_dir/contracts/access/v1/examples/contract-ledger-capabilities.json,$repo_dir/contracts/access/v1/examples/money-flow-ledger-capabilities.json,$repo_dir/contracts/access/v1/examples/bonus-distribution-capabilities.json"
+start iam env HTTP_ADDR=127.0.0.1:19200 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/identity?sslmode=disable' \
+  MIGRATION_MODE=auto SESSION_COOKIE_SECURE=false TENANT_ID="$tenant_id" TENANT_NAME='C7 独立组合' \
+  PUBLIC_ISSUER="$issuer" SIGNING_KEY_FILE="$runtime/iam-signing.json" \
+  BOOTSTRAP_ADMIN_USERNAME=admin BOOTSTRAP_ADMIN_DISPLAY_NAME='C7 验收管理员' BOOTSTRAP_ADMIN_PASSWORD='C7AcceptancePassword_2026' \
+  CAPABILITY_MANIFEST_PATHS="$manifest_paths" WORKLOAD_IDENTITY_POLICY_PATH="$runtime/workload-policy.json" \
+  "$runtime/identity-access"
+wait_http http://127.0.0.1:19200/health/ready
+curl --silent --fail http://127.0.0.1:19200/api/v1/.well-known/jwks.json >"$runtime/iam-public.json"
+
+start project env HTTP_ADDR=127.0.0.1:19201 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/project?sslmode=disable' \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  "$runtime/project-workspace"
+wait_http http://127.0.0.1:19201/health/ready
+start people env HTTP_ADDR=127.0.0.1:19202 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/people?sslmode=disable' \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  "$runtime/people-groups"
+wait_http http://127.0.0.1:19202/health/ready
+mkdir -p "$runtime/contract-evidence"
+start contract env HTTP_ADDR=127.0.0.1:19203 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/contract?sslmode=disable' \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  EVIDENCE_STORAGE_DIR="$runtime/contract-evidence" \
+  "$runtime/contract-ledger"
+wait_http http://127.0.0.1:19203/health/ready
+start money env HTTP_ADDR=127.0.0.1:19204 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/money?sslmode=disable' \
+  MIGRATION_MODE=verify IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  "$runtime/money-flow-ledger"
+wait_http http://127.0.0.1:19204/health/ready
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d people <<SQL
+INSERT INTO persons(id,tenant_id,reference_code,display_name,status,revision,created_at,updated_at) VALUES
+  ('$business_person_id','$tenant_id','C7-BUSINESS','经营奖金参与人','active',1,now(),now()),
+  ('$production_person_id','$tenant_id','C7-PRODUCTION','生产奖金参与人','active',1,now(),now());
+SQL
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d project <<SQL
+INSERT INTO projects(id,tenant_id,project_number,project_number_normalized,name,summary,project_type_keys,status,revision,created_by,created_at,updated_at)
+VALUES('$project_id','$tenant_id','C7-001','c7-001','C7 奖金验证项目','真实来源独立进程组合',ARRAY['design'],'active',1,'$actor_id',now(),now());
+INSERT INTO project_assignments(id,tenant_id,project_id,subject_kind,subject_id,source_revision,display_snapshot,role_key,effective_from,created_project_revision,created_at) VALUES
+  ('$business_assignment_id','$tenant_id','$project_id','person','$business_person_id',1,'经营奖金参与人','business_owner',now(),1,now()),
+  ('$production_assignment_id','$tenant_id','$project_id','person','$production_person_id',1,'生产奖金参与人','production_owner',now(),1,now());
+INSERT INTO project_resource_links(id,tenant_id,project_id,target_service,resource_type,resource_id,source_revision,relation_key,note,created_project_revision,linked_at)
+VALUES('c7000000-0000-4000-8000-000000000060','$tenant_id','$project_id','contract-ledger','settlement','$settlement_id',1,'business-settlement','C7 经营奖金来源',1,now());
+SQL
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d contract <<SQL
+BEGIN;
+INSERT INTO contracts(id,command_id,number_namespace,contract_number,title,category,currency,total_amount,signed_on,effective_on,status,draft_version,current_revision,created_at,updated_at)
+VALUES('$contract_id','c7000000-0000-4000-8000-000000000031','C7','C7-CONTRACT-001','C7 设计合同','design','CNY',1065.00,'2026-09-01','2026-09-01','active',1,1,now(),now());
+INSERT INTO contract_activation_commands(command_id,contract_id,expected_draft_version,actor_kind,actor_id,resulting_revision,occurred_at)
+VALUES('c7000000-0000-4000-8000-000000000031','$contract_id',1,'iam_subject','$actor_id',1,now());
+INSERT INTO contract_instruments(id,contract_id,instrument_type,instrument_number,title,change_summary,signed_on,effective_on,effective_order,amount_effect,amount_value,source_command_id,resulting_revision,actor_kind,actor_id,actor_display_name,recorded_at)
+VALUES('c7000000-0000-4000-8000-000000000032','$contract_id','original_contract','C7-CONTRACT-001','C7 设计合同','原合同激活','2026-09-01','2026-09-01',1,'original',1065.00,'c7000000-0000-4000-8000-000000000031',1,'iam_subject','$actor_id','C7 验收管理员',now());
+INSERT INTO contract_revisions(contract_id,revision,activation_command_id,source_draft_version,source_instrument_id,number_namespace,contract_number,title,category,currency,total_amount,signed_on,effective_on,actor_kind,actor_id,recorded_at)
+VALUES('$contract_id',1,'c7000000-0000-4000-8000-000000000031',1,'c7000000-0000-4000-8000-000000000032','C7','C7-CONTRACT-001','C7 设计合同','design','CNY',1065.00,'2026-09-01','2026-09-01','iam_subject','$actor_id',now());
+INSERT INTO contract_settlements(id,contract_id,source_revision,settlement_sequence,settlement_kind,statement_number,title,total_amount,currency,confirmed_on,basis,actor_kind,actor_id,actor_display_name,recorded_at)
+VALUES('$settlement_id','$contract_id',1,1,'progress','C7-SETTLEMENT-001','C7 客户确认结算',1065.00,'CNY','2026-09-28','客户确认成果','iam_subject','$actor_id','C7 验收管理员',now());
+COMMIT;
+SQL
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d money <<SQL
+BEGIN;
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at) VALUES
+ ('c7000000-0000-4000-8000-000000000040','organization','C7 设计单位',1,now(),now()),
+ ('c7000000-0000-4000-8000-000000000041','organization','C7 建设单位',1,now(),now());
+INSERT INTO obligations(id,direction,title,ledger_owner_party_id,creditor_party_id,creditor_party_revision,creditor_kind,creditor_legal_name,debtor_party_id,debtor_party_revision,debtor_kind,debtor_legal_name,original_amount,currency,due_on,source_kind,manual_source_reference,status,draft_version,created_at,updated_at)
+VALUES('c7000000-0000-4000-8000-000000000042','receivable','C7 设计费应收','c7000000-0000-4000-8000-000000000040','c7000000-0000-4000-8000-000000000040',1,'organization','C7 设计单位','c7000000-0000-4000-8000-000000000041',1,'organization','C7 建设单位',1065.00,'CNY','2026-10-31','manual','C7 合同结算','draft',1,now(),now());
+INSERT INTO obligation_revisions(obligation_id,revision,direction,title,ledger_owner_party_id,creditor_party_id,creditor_party_revision,creditor_kind,creditor_legal_name,debtor_party_id,debtor_party_revision,debtor_kind,debtor_legal_name,effective_amount,currency,due_on,source_kind,manual_source_reference,source_draft_version,recorded_by_actor_kind,recorded_by_actor_id,recorded_by_actor_display_name,recorded_at,revision_kind,source_revision)
+VALUES('c7000000-0000-4000-8000-000000000042',1,'receivable','C7 设计费应收','c7000000-0000-4000-8000-000000000040','c7000000-0000-4000-8000-000000000040',1,'organization','C7 设计单位','c7000000-0000-4000-8000-000000000041',1,'organization','C7 建设单位',1065.00,'CNY','2026-10-31','manual','C7 合同结算',1,'iam_subject','$actor_id','C7 验收管理员',now(),'confirmation',NULL);
+INSERT INTO obligation_confirmation_commands(command_id,obligation_id,expected_draft_version,resulting_revision,payload_hash,actor_kind,actor_id,actor_display_name,confirmed_at)
+VALUES('c7000000-0000-4000-8000-000000000046','c7000000-0000-4000-8000-000000000042',1,1,decode(repeat('ab',32),'hex'),'iam_subject','$actor_id','C7 验收管理员',now());
+UPDATE obligations SET status='open',current_revision=1,updated_at=now() WHERE id='c7000000-0000-4000-8000-000000000042';
+INSERT INTO cash_transactions(id,type,description,ledger_owner_party_id,payer_party_id,payer_party_revision,payer_kind,payer_legal_name,payee_party_id,payee_party_revision,payee_kind,payee_legal_name,amount,currency,occurred_on,account_reference,source_kind,manual_source_reference,recorded_by_actor_kind,recorded_by_actor_id,recorded_by_actor_display_name,recorded_at)
+VALUES('c7000000-0000-4000-8000-000000000043','receipt','C7 客户回款','c7000000-0000-4000-8000-000000000040','c7000000-0000-4000-8000-000000000041',1,'organization','C7 建设单位','c7000000-0000-4000-8000-000000000040',1,'organization','C7 设计单位',1065.00,'CNY','2026-09-28','C7-CNY-001','manual','C7 银行回单','iam_subject','$actor_id','C7 验收管理员',now());
+INSERT INTO allocations(id,cash_transaction_id,obligation_id,obligation_revision,amount,currency,source_kind,manual_source_reference,applied_by_actor_kind,applied_by_actor_id,applied_by_actor_display_name,applied_at)
+VALUES('$allocation_id','c7000000-0000-4000-8000-000000000043','c7000000-0000-4000-8000-000000000042',1,1065.00,'CNY','manual','C7 核销确认','iam_subject','$actor_id','C7 验收管理员',now());
+COMMIT;
+SQL
+
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+request() {
+  method=$1; url=$2; token=$3; payload=$4; output=$5; expected=$6
+  if [ -n "$payload" ]; then
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data "$payload" "$url")
+  else
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" "$url")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { cat "$output" >&2; echo "expected HTTP $expected, got $actual" >&2; exit 1; }
+}
+
+admin_cookies="$runtime/admin.cookies"
+csrf=$(curl --silent --fail --cookie-jar "$admin_cookies" http://127.0.0.1:19200/api/v1/csrf | jq -er .csrf_token)
+curl --silent --fail --cookie "$admin_cookies" --cookie-jar "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data '{"username":"admin","password":"C7AcceptancePassword_2026"}' http://127.0.0.1:19200/api/v1/login >/dev/null
+admin_subject=$(curl --silent --fail --cookie "$admin_cookies" http://127.0.0.1:19200/api/v1/session | jq -er .principal.subject_id)
+grant() {
+  audience=$1; action=$2; scope_json=${3:-}
+  if [ -n "$scope_json" ]; then
+    payload=$(jq -cn --arg subject "$admin_subject" --arg audience "$audience" --arg action "$action" --argjson scope "$scope_json" '{subject_id:$subject,audience:$audience,action:$action,scope:$scope}')
+  else
+    payload=$(jq -cn --arg subject "$admin_subject" --arg audience "$audience" --arg action "$action" '{subject_id:$subject,audience:$audience,action:$action}')
+  fi
+  curl --silent --fail --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" http://127.0.0.1:19200/api/v1/admin/grants >/dev/null
+}
+grant money-flow-ledger money-flow-ledger.receipt-set.confirm
+project_scope=$(jq -cn --arg project "$project_id" '{kind:"resources",resources:[{type:"project",id:$project}]}')
+for action in bonus-pool.business.calculate bonus-pool.business.publish bonus-pool.business.supersede bonus-pool.business.withdraw bonus-pool.production.calculate bonus-pool.production.publish bonus-pool.production.supersede bonus-pool.production.withdraw bonus-pool.read bonus-pool.history.read bonus-allocation.manage bonus-allocation.read bonus-allocation.amount.read; do
+  grant bonus-distribution "$action" "$project_scope"
+done
+credential() {
+  audience=$1; scope_json=${2:-}
+  if [ -n "$scope_json" ]; then payload=$(jq -cn --arg audience "$audience" --argjson scope "$scope_json" '{audience:$audience,scope:$scope}'); else payload=$(jq -cn --arg audience "$audience" '{audience:$audience}'); fi
+  curl --silent --fail --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" http://127.0.0.1:19200/api/v1/credentials | jq -er .token
+}
+money_token=$(credential money-flow-ledger)
+receipt_payload=$(jq -cn --arg command c7000000-0000-4000-8000-000000000045 --arg project "$project_id" --arg allocation "$allocation_id" '{command_id:$command,project_id:$project,allocation_ids:[$allocation]}')
+request POST http://127.0.0.1:19204/api/v1/receipt-sets "$money_token" "$receipt_payload" "$runtime/receipt-set.json" 201
+receipt_set_id=$(jq -er '.receipt_set.id' "$runtime/receipt-set.json")
+jq -e '.receipt_set.revision == 1 and .receipt_set.currency == "CNY" and .receipt_set.total_amount_minor == 106500 and (.receipt_set.items|length) == 1 and .receipt_set.items[0].transaction_revision == 1 and .receipt_set.items[0].allocation_revision == 1' "$runtime/receipt-set.json" >/dev/null
+
+start bonus env HTTP_ADDR=127.0.0.1:19205 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/bonus?sslmode=disable' \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  IAM_SERVICE_CREDENTIAL_URL=http://127.0.0.1:19200/api/v1/service-credentials WORKLOAD_ID=bonus-distribution WORKLOAD_SUBJECT_ID="$bonus_workload_subject" WORKLOAD_KEY_FILE="$runtime/bonus-workload-private.json" \
+  REFERENCE_TIMEOUT=10s \
+  PROJECT_BASE_URL=http://127.0.0.1:19201 PEOPLE_BASE_URL=http://127.0.0.1:19202 CONTRACT_BASE_URL=http://127.0.0.1:19203 MONEY_BASE_URL=http://127.0.0.1:19204 \
+  "$runtime/bonus-distribution"
+wait_http http://127.0.0.1:19205/health/ready
+bonus_token=$(credential bonus-distribution "$project_scope")
+
+curl --silent --fail http://127.0.0.1:19205/ >"$runtime/workspace.html"
+grep -q '奖金分配' "$runtime/workspace.html"
+grep -q 'assets/bonus-distribution.js' "$runtime/workspace.html"
+curl --silent --fail http://127.0.0.1:19205/assets/bonus-distribution.js >"$runtime/workspace.js"
+grep -q 'allowed_actions' "$runtime/workspace.js"
+grep -q 'supersession' "$runtime/workspace.js"
+grep -q '本次没有产生部分奖池' "$runtime/workspace.js"
+unauthenticated_status=$(curl --silent --show-error --output "$runtime/unauthenticated.json" --write-out '%{http_code}' "http://127.0.0.1:19205/api/v1/bonus-pools?project_id=$project_id")
+printf '%s\t%s\t%s\n' "GET bonus-pools without credential" 401 "$unauthenticated_status" >>"$runtime/http-evidence.tsv"
+[ "$unauthenticated_status" = 401 ]
+jq -e '.error.code == "UNAUTHENTICATED"' "$runtime/unauthenticated.json" >/dev/null
+
+business_payload=$(jq -cn --arg command c7000000-0000-4000-8000-000000000050 --arg project "$project_id" --arg settlement "$settlement_id" --arg person "$business_person_id" --arg assignment "$business_assignment_id" '{command_id:$command,project:{id:$project,revision:1},source:{settlement_id:$settlement,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:1},assignment:{id:$assignment,revision:1},ratio_basis_points:10000,reason:"经营参与"}]}')
+request POST http://127.0.0.1:19205/api/v1/bonus-pools/business-drafts "$bonus_token" "$business_payload" "$runtime/business-draft.json" 201
+business_pool=$(jq -er .id "$runtime/business-draft.json")
+jq -e '.bonus_type == "business" and .state == "draft" and .amount_minor == 10000 and .source.id == "'$settlement_id'" and .allocations[0].person.id == "'$business_person_id'"' "$runtime/business-draft.json" >/dev/null
+business_publish=$(jq -cn '{command_id:"c7000000-0000-4000-8000-000000000051",expected_revision:1,reason:"C7 经营奖金确认"}')
+request POST "http://127.0.0.1:19205/api/v1/bonus-pools/$business_pool/publication" "$bonus_token" "$business_publish" "$runtime/business-published.json" 200
+jq -e '.state == "published" and .revision == 2' "$runtime/business-published.json" >/dev/null
+
+production_payload=$(jq -cn --arg command c7000000-0000-4000-8000-000000000052 --arg project "$project_id" --arg receipt "$receipt_set_id" --arg person "$production_person_id" --arg assignment "$production_assignment_id" '{command_id:$command,project:{id:$project,revision:1},source:{receipt_set_id:$receipt,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:1},assignment:{id:$assignment,revision:1},ratio_basis_points:10000,reason:"生产参与"}]}')
+request POST http://127.0.0.1:19205/api/v1/bonus-pools/production-drafts "$bonus_token" "$production_payload" "$runtime/production-draft.json" 201
+production_pool=$(jq -er .id "$runtime/production-draft.json")
+jq -e '.bonus_type == "production" and .state == "draft" and .amount_minor == 10000 and .source.id == "'$receipt_set_id'" and .source.items[0].transaction_revision == 1 and .allocations[0].person.id == "'$production_person_id'"' "$runtime/production-draft.json" >/dev/null
+production_publish=$(jq -cn '{command_id:"c7000000-0000-4000-8000-000000000053",expected_revision:1,reason:"C7 生产奖金确认"}')
+request POST "http://127.0.0.1:19205/api/v1/bonus-pools/$production_pool/publication" "$bonus_token" "$production_publish" "$runtime/production-published.json" 200
+jq -e '.state == "published" and .revision == 2' "$runtime/production-published.json" >/dev/null
+
+# A human correction starts as a new draft. First prove a source outage yields no partial facts.
+replacement_payload=$(jq -cn --arg command c7000000-0000-4000-8000-000000000054 --arg project "$project_id" --arg settlement "$settlement_id" --arg person "$business_person_id" --arg assignment "$business_assignment_id" '{command_id:$command,project:{id:$project,revision:1},source:{settlement_id:$settlement,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:1},assignment:{id:$assignment,revision:1},ratio_basis_points:10000,reason:"经营参与纠错"}]}')
+kill "$contract_pid"
+wait "$contract_pid" >/dev/null 2>&1 || true
+request POST http://127.0.0.1:19205/api/v1/bonus-pools/business-drafts "$bonus_token" "$replacement_payload" "$runtime/business-dependency-failure.json" 503
+jq -e '.error.code == "REFERENCE_SERVICE_UNAVAILABLE" and .error.retryable == true' "$runtime/business-dependency-failure.json" >/dev/null
+[ "$(docker exec "$container" psql -U postgres -d bonus -At -c 'SELECT count(*) FROM bonus_pools')" = 2 ]
+
+start contract_recovery env HTTP_ADDR=127.0.0.1:19203 DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55468/contract?sslmode=disable' \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  EVIDENCE_STORAGE_DIR="$runtime/contract-evidence" \
+  "$runtime/contract-ledger"
+wait_http http://127.0.0.1:19203/health/ready
+request POST http://127.0.0.1:19205/api/v1/bonus-pools/business-drafts "$bonus_token" "$replacement_payload" "$runtime/business-replacement.json" 201
+replacement_pool=$(jq -er .id "$runtime/business-replacement.json")
+jq -e '.state == "draft" and .revision == 1 and .amount_minor == 10000 and .allocations[0].reason == "经营参与纠错"' "$runtime/business-replacement.json" >/dev/null
+
+supersession_payload=$(jq -cn --arg published "$business_pool" --arg replacement "$replacement_pool" '{command_id:"c7000000-0000-4000-8000-000000000055",published_pool_id:$published,expected_published_revision:2,replacement_pool_id:$replacement,expected_replacement_revision:1,reason:"C7 人工纠错验证"}')
+request POST http://127.0.0.1:19205/api/v1/bonus-pools/supersession "$bonus_token" "$supersession_payload" "$runtime/business-supersession.json" 200
+jq -e --arg old "$business_pool" --arg replacement "$replacement_pool" '.superseded.id == $old and .superseded.state == "superseded" and .superseded.revision == 3 and .superseded.superseded_by.pool_id == $replacement and .published.id == $replacement and .published.state == "published" and .published.revision == 2 and .published.supersedes.pool_id == $old' "$runtime/business-supersession.json" >/dev/null
+
+withdraw_payload=$(jq -cn '{command_id:"c7000000-0000-4000-8000-000000000056",expected_revision:2,reason:"C7 生产奖金撤回验证"}')
+request POST "http://127.0.0.1:19205/api/v1/bonus-pools/$production_pool/withdrawal" "$bonus_token" "$withdraw_payload" "$runtime/production-withdrawn.json" 200
+jq -e '.state == "withdrawn" and .revision == 3' "$runtime/production-withdrawn.json" >/dev/null
+
+request GET "http://127.0.0.1:19205/api/v1/bonus-pools/$business_pool/history" "$bonus_token" '' "$runtime/business-history.json" 200
+request GET "http://127.0.0.1:19205/api/v1/bonus-pools/$replacement_pool/history" "$bonus_token" '' "$runtime/replacement-history.json" 200
+request GET "http://127.0.0.1:19205/api/v1/bonus-pools/$production_pool/history" "$bonus_token" '' "$runtime/production-history.json" 200
+jq -e '(.items|length) == 3 and .items[-1].event_kind == "superseded"' "$runtime/business-history.json" >/dev/null
+jq -e '(.items|length) == 2 and .items[-1].event_kind == "published"' "$runtime/replacement-history.json" >/dev/null
+jq -e '(.items|length) == 3 and .items[-1].event_kind == "withdrawn"' "$runtime/production-history.json" >/dev/null
+request GET "http://127.0.0.1:19205/api/v1/bonus-pools?project_id=$project_id" "$bonus_token" '' "$runtime/pool-list.json" 200
+jq -e '(.items|length) == 3 and ([.items[].state]|sort) == ["published","superseded","withdrawn"] and (.allowed_actions|index("bonus-pool.business.calculate")) != null and (.allowed_actions|index("bonus-pool.production.calculate")) != null' "$runtime/pool-list.json" >/dev/null
+
+docker exec "$container" psql -U postgres -d bonus -AtF '|' -c "SELECT count(*),count(*) FILTER (WHERE state='published'),count(*) FILTER (WHERE state='superseded'),count(*) FILTER (WHERE state='withdrawn'),count(DISTINCT bonus_type),count(DISTINCT project_id) FROM bonus_pools" >"$runtime/bonus-facts.tsv"
+grep -Eq '^3\|1\|1\|1\|2\|1$' "$runtime/bonus-facts.tsv"
+docker exec "$container" psql -U postgres -d people -AtF '|' -c 'SELECT count(*) FROM persons' >"$runtime/source-facts.tsv"
+docker exec "$container" psql -U postgres -d project -AtF '|' -c "SELECT count(*) FROM projects" >>"$runtime/source-facts.tsv"
+docker exec "$container" psql -U postgres -d contract -AtF '|' -c 'SELECT count(*) FROM contract_settlements' >>"$runtime/source-facts.tsv"
+docker exec "$container" psql -U postgres -d money -AtF '|' -c 'SELECT count(*) FROM receipt_sets' >>"$runtime/source-facts.tsv"
+[ "$(tr '\n' ' ' <"$runtime/source-facts.tsv")" = '2 1 1 1 ' ]
+
+printf 'service\tpid\tport\tdatabase\n' >"$runtime/processes.tsv"
+printf 'identity-access\t%s\t19200\tidentity\nproject-workspace\t%s\t19201\tproject\npeople-groups\t%s\t19202\tpeople\ncontract-ledger\t%s\t19203\tcontract\nmoney-flow-ledger\t%s\t19204\tmoney\nbonus-distribution\t%s\t19205\tbonus\npostgresql\tdocker:%s\t55468\tsix independent databases\n' "$iam_pid" "$project_pid" "$people_pid" "$contract_recovery_pid" "$money_pid" "$bonus_pid" "$container" >>"$runtime/processes.tsv"
+
+printf '%s\n' \
+  '# C7 真实来源独立进程组合结果' '' \
+  '- 真实 IAM、Project、People、Contract、Money 与 Bonus 作为六个进程启动，并各自使用独立数据库。' \
+  '- Bonus 通过 IAM 工作负载交换获得单 action、精确 resource 凭证；没有静态来源令牌。' \
+  '- 人类工作台根页面、同源脚本和 Gateway 相对路径策略已装入；无凭证读取真实 API 返回 401。' \
+  '- 经营奖金从真实 Settlement／Person／Assignment 建立并发布；生产奖金从真实 Receipt Set／Person／Assignment 建立并发布。' \
+  '- 两个 1065.00 CNY 来源按 reference-oa-bonus-v1 计算为 100.00 CNY，金额使用整数最小单位。' \
+  '- Contract 停机时替代草稿返回可恢复 503 且奖池仍为 2 条；恢复后同一业务输入建立一次替代草稿。' \
+  '- 经营旧奖池与新草稿完成原子 supersession，双向关系和三段历史可读；生产奖池显式撤回并保留三段历史。' \
+  '- 本轮不包含正式 D1、联合备份恢复或 Money 应付建议。' >"$runtime/result.md"
+cat "$runtime/result.md"
+
+if [ "${C7_HOLD_AFTER_ASSERTIONS:-false}" = true ]; then
+  # The token stays inside the disposable runtime and is never copied into evidence.
+  printf '%s' "$bonus_token" >"$runtime/browser-token"
+  printf 'C7_BROWSER_URL=http://127.0.0.1:19205/?project_id=%s\n' "$project_id"
+  printf 'C7_BROWSER_TOKEN_FILE=%s/browser-token\n' "$runtime"
+  while :; do sleep 5; done
+fi

@@ -1,0 +1,61 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "run_id": "35jPS3",
+  "public_real_owners": true,
+  "administrator_only": true,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts",
+      "command_id": "bea18308-360b-4b82-8510-67e331c403ec"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "5916fd71-fc12-4279-bbf4-9bbc43e0543d",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "45a562d4-5c65-4458-897b-728b621bdf10",
+      "expected_revision": 14
+    }
+  ],
+  "scenarios": [],
+  "page_errors": [],
+  "native_records": [],
+  "project_revision_before": 14,
+  "existing_resource_ids": [
+    "bbccf086-b1e9-45dc-a71f-eb8207bf95c7"
+  ],
+  "http_failures": [
+    {
+      "status": 400,
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "code": "invalid_request",
+      "message": "invalid resource link"
+    }
+  ],
+  "failure": {
+    "stage": "contracts",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /^(继续原合同操作|修复无效关联并续办)$/ }) to be hidden\u001b[22m\n\u001b[2m    9 × locator resolved to visible <button disabled type=\"button\" class=\"ant-btn css-ac2jek ant-btn-primary ant-btn-color-primary ant-btn-variant-solid\">…</button>\u001b[22m\n\u001b[2m    53 × locator resolved to visible <button type=\"button\" class=\"ant-btn css-ac2jek ant-btn-primary ant-btn-color-primary ant-btn-variant-solid\">…</button>\u001b[22m\n"
+  }
+}

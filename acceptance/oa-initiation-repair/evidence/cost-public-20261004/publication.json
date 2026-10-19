@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "official_release": false,
+  "images": {
+    "cost-outsourcing": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/cost-outsourcing@sha256:5eba528b58d38ba52d732b6d471a270427459ae8fb7822f2414719c607914762",
+      "image_id": "sha256:5eba528b58d38ba52d732b6d471a270427459ae8fb7822f2414719c607914762",
+      "binary_sha256": {
+        "server": "928f5bbaac4914b45e5423a2fb00acc527bb07d8de5b92306d5e54c960155d49",
+        "ops": "3f3eed5625b53b2f696627c307276fdc017ebfac93747596851ff8371676f555",
+        "workload-keyctl": "7a1322f5155e395042a4bc7b954f9c375b2dbe367f3128f8f9e2c1d454bfee2e"
+      }
+    },
+    "unified-workbench": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:403a57cd4010b0076f4e4466338b4bf7f280638bd2ad5eccdbea2bd6965c52ae",
+      "image_id": "sha256:403a57cd4010b0076f4e4466338b4bf7f280638bd2ad5eccdbea2bd6965c52ae",
+      "binary_sha256": {
+        "server": "ac728e91ed8907bd74ba701e17ee4be2256edf5eb55b5a1f4298e08edda459b5"
+      }
+    }
+  },
+  "main_unchanged": true
+}

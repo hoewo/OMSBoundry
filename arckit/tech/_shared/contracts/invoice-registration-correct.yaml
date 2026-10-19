@@ -1,0 +1,38 @@
+# 纠正已开票登记 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-correct.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/invoice-registrations/{invoice_registration_id}/corrections", summary: "以 Expected Revision 纠正登记资料", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.correct"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason, patch]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+      patch:
+        type: object
+        additionalProperties: false
+        minProperties: 1
+        properties:
+          issued_on: {type: string, format: date}
+          amount_minor: {type: integer, minimum: 1}
+          currency: {type: string, pattern: "^[A-Z]{3}$"}
+          issuer_party_ref: {type: object}
+          recipient_party_ref: {type: object}
+          source_refs: {type: array, minItems: 1}
+          note: {type: string, maxLength: 2000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 409, code: REGISTRATION_INVALIDATED, retryable: false}
+    - {status: 422, code: NO_EFFECTIVE_CHANGE, retryable: false}
+    - {status: 422, code: REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["幂等预检。", "验证被修改的精确外部引用。", "锁定当前投影并校验 revision。", "原子追加 details_corrected revision。"]

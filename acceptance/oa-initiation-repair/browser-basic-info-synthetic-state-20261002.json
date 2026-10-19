@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-02",
+  "synthetic_ui_only": true,
+  "formal_iam_gateway_pg_or_public_chain": false,
+  "default_probe": {
+    "duration_seconds": 258.42,
+    "counts": {"basic_info_change": 4, "update": 0, "profile_correction": 0, "production_assignment": 0, "dispatch": 0, "complete": 0},
+    "ordinary_revision_changes": [3, 4, 4, 5],
+    "package_revision_changes": [3, 4],
+    "core_and_two_owners_one_save_then_refresh": true,
+    "production_clear_refresh": true,
+    "empty_name_zero_write": true,
+    "package_number_empty_and_children_preserved": true,
+    "no_op_does_not_increase_revision": true
+  },
+  "restricted_role_probes": [
+    {"role": "production-only", "duration_seconds": 46.30, "commands": 1, "core_and_business_disabled": true, "production_save_and_refresh": true},
+    {"role": "business-only", "duration_seconds": 47.90, "commands": 1, "core_and_production_disabled": true, "business_save": true},
+    {"role": "profile-only", "duration_seconds": 63.64, "commands": 1, "both_owners_disabled": true, "core_save_and_refresh": true}
+  ],
+  "role_fixture_initial_failure": "active detail hardcoded all allowed_actions; zero writes, ended after 51.02 seconds; fixture corrected before restricted-role results",
+  "final_current_only_detail_probe": {
+    "duration_seconds": 71.73,
+    "commands": 2,
+    "revision": 5,
+    "changed_owners_current_after_refresh": true,
+    "cleared_owner_not_replaced_by_old_history": true,
+    "fixture_sha256": "5bdb329688cfb80fb297901f401a3b307e6b492a0c4b5cad34986db2dd9b0214"
+  },
+  "viewport": {"width": 1280, "height": 720},
+  "save_geometry": {"before_scroll_y": 799.375, "after_actual_mouse_scroll_y": 666.375, "after_scroll_center_hit": true},
+  "console_errors": 0,
+  "screenshots_inspected_in_tool": true,
+  "archived_screenshot_file": false,
+  "probe_stopped_agent_tabs_closed": true,
+  "source_sha256": {
+    "reference_oa_initiation_runtime.js": "b0b8341db221bdd2d2d0578f063559826f669e5e8020cc8b914b64bafe2335d1",
+    "reference_oa_real_projects.html": "86a549391c3b2aae2b010c459ffc9e5612e60709cca419e742c554c0b7f4c7fa",
+    "reference_oa_workspace.css": "7b3b5439eceb20b8368d7bed4a422c7356b31eda3a2f5df3a4d1449afaa9d6fc"
+  },
+  "candidate_people_role_filter_parity": false,
+  "main_deployed": false,
+  "p02_complete": false
+}

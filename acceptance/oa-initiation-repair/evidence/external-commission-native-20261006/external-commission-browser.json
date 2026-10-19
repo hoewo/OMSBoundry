@@ -1,0 +1,476 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-06T08:29:18.760Z",
+  "passed": true,
+  "private_native": true,
+  "public_main_changed": false,
+  "full_oa_accepted": false,
+  "local_docker_started": false,
+  "scenarios": [
+    {
+      "name": "original-summary-list-empty-state-and-create-action",
+      "passed": true
+    },
+    {
+      "name": "create-freezes-party-contact-contract-evidence-exact-amount-and-replays-one-command",
+      "passed": true
+    },
+    {
+      "name": "contract-attachment-preview-downloads-real-evidence-bytes",
+      "passed": true
+    },
+    {
+      "name": "assessment-and-contact-correction-append-owner-revisions",
+      "passed": true
+    },
+    {
+      "name": "cost-suggestion-money-independent-decision-and-explicit-sync",
+      "passed": true
+    },
+    {
+      "name": "history-visible-and-second-engagement-withdrawal-append-only",
+      "passed": true
+    },
+    {
+      "name": "tab-cache-explicit-one-read-and-source-owner-digests-unchanged",
+      "passed": true
+    },
+    {
+      "name": "eight-owner-empty-target-restore-keeps-cost-money-history-and-evidence",
+      "passed": true
+    },
+    {
+      "name": "formal-iam-write-revocation-keeps-read-history-and-zero-write",
+      "passed": true
+    },
+    {
+      "name": "external-commission-boundary-stable-original-ui-zero-page-errors",
+      "passed": true
+    }
+  ],
+  "infrastructure": {
+    "profile": "external-commission",
+    "pg": "oa-external-commission-pg-21a6b615d0",
+    "edge": "oa-external-commission-edge-21a6b615d0",
+    "remote": "/tmp/oa-external-commission-suite-21a6b615d0",
+    "local_docker": false,
+    "main_changed": false,
+    "actual_container_identities": [
+      {
+        "id": "e8ecf718b150801c3e1e36f1d9e4f7820338857e7229ea80630e6e060c6505a0",
+        "image": "sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66"
+      },
+      {
+        "id": "ebc9085b16b481544d2bfcfba2dc1fc5766c56b880b7a12a8eb924d02c04d432",
+        "image": "sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3"
+      }
+    ],
+    "nginx_sha256": "c8c4b80d788d9dfb27f1dbf33e961fdb09852076bfc97e36fb4bb0931fdfe4a3"
+  },
+  "tenant_id": "0274bdc3-5b99-493d-acc0-10488a0765bd",
+  "project_id": "79ad1160-f915-4b2e-a6f8-5d99560c31f7",
+  "contract_id": "0b4adbb4-ef1f-4405-b840-30ad9bbde8cd",
+  "provider_party_id": "2aa362b7-c126-417d-bc79-5250f955399f",
+  "ledger_owner_party_id": "2bbafe13-56da-4e58-bdca-31040c0e86e3",
+  "restore": {
+    "mode": "private-native-eight-owner-empty-databases-and-copied-evidence-bytes",
+    "main_changed": false,
+    "source_databases": {
+      "identity-access": "results_21a6b615d0_identity_access",
+      "people-groups": "results_21a6b615d0_people_groups",
+      "party-directory": "results_21a6b615d0_party_directory",
+      "project-workspace": "results_21a6b615d0_project_workspace",
+      "evidence-service": "results_21a6b615d0_evidence_service",
+      "contract-ledger": "results_21a6b615d0_contract_ledger",
+      "money-flow-ledger": "results_21a6b615d0_money_flow_ledger",
+      "cost-outsourcing": "results_21a6b615d0_cost_outsourcing"
+    },
+    "target_databases": {
+      "identity-access": "results_21a6b615d0_identity_access_restored",
+      "people-groups": "results_21a6b615d0_people_groups_restored",
+      "party-directory": "results_21a6b615d0_party_directory_restored",
+      "project-workspace": "results_21a6b615d0_project_workspace_restored",
+      "evidence-service": "results_21a6b615d0_evidence_service_restored",
+      "contract-ledger": "results_21a6b615d0_contract_ledger_restored",
+      "money-flow-ledger": "results_21a6b615d0_money_flow_ledger_restored",
+      "cost-outsourcing": "results_21a6b615d0_cost_outsourcing_restored"
+    },
+    "before": {
+      "identity-access": "58303f4705b512365aaaa50bec686b9532004d898fc2f5c741ac20d5a8598d24",
+      "people-groups": "cbaf4dbc3542654a879e772c62288d8b0d4db58557f661b7d64ead1a631fb936",
+      "party-directory": "674b1244604d5344f8f6de3fb14d32d43f41706671fb44f91eb3283b6f52be56",
+      "project-workspace": "d065150eddcf1f14ae5a7e3a6c905971c5b3b358a2239f62441c26319f61ca45",
+      "evidence-service": "20d9e611ac3537460153a97ebb548b2325fec35fb09186f947d5658b13243307",
+      "contract-ledger": "f109c10c05f0f9235437357828ab7b2274d08aab7b4c5c48ee3bd3b446272315",
+      "money-flow-ledger": "8a425de92ee43a121053bb81728567bbadd737f91fb867f4d7234069cdc2efa0",
+      "cost-outsourcing": "64f7271353c324370297db67a1f0d813ee7fcdf74c6a76990f9f8c0dddcd5d38"
+    },
+    "after": {
+      "identity-access": "58303f4705b512365aaaa50bec686b9532004d898fc2f5c741ac20d5a8598d24",
+      "people-groups": "cbaf4dbc3542654a879e772c62288d8b0d4db58557f661b7d64ead1a631fb936",
+      "party-directory": "674b1244604d5344f8f6de3fb14d32d43f41706671fb44f91eb3283b6f52be56",
+      "project-workspace": "d065150eddcf1f14ae5a7e3a6c905971c5b3b358a2239f62441c26319f61ca45",
+      "evidence-service": "20d9e611ac3537460153a97ebb548b2325fec35fb09186f947d5658b13243307",
+      "contract-ledger": "f109c10c05f0f9235437357828ab7b2274d08aab7b4c5c48ee3bd3b446272315",
+      "money-flow-ledger": "8a425de92ee43a121053bb81728567bbadd737f91fb867f4d7234069cdc2efa0",
+      "cost-outsourcing": "64f7271353c324370297db67a1f0d813ee7fcdf74c6a76990f9f8c0dddcd5d38"
+    },
+    "archive_sha256": {
+      "identity-access": "4d15f3c5ace87e545062c68cc490d342ccf77f6e91f6ccd29d82fa7b66c823bb",
+      "people-groups": "4f718dfddde86f0b9393490d09570e6bf149e2546c15f35c00d5b91acc61ad32",
+      "party-directory": "81886c74e33adf77fc9a4c6b4559d12376a07990e62e77b5cbda325bfe16b187",
+      "project-workspace": "2155c4faf9e2a018458bf55cfd0e0e1f999e98c452f0b84277c9361e4100d7e4",
+      "evidence-service": "7caf2a3ee3067aed110f920f27e6e109e412fcbc6c58a40962a88ed1cc1f6122",
+      "contract-ledger": "8e93ae58593915e05001f7982a34db8f03a15ec1964fb517aa1c1b6e56423923",
+      "money-flow-ledger": "8449bc4305eb0d73a46d8878703300144393fe278e58c8fef739d3c58e6b6357",
+      "cost-outsourcing": "c7aeeb49b69179f730c5b978dc6bcc459ff562edac248854998a00335dbb9e35"
+    },
+    "evidence_before": [
+      {
+        "path": "tenants/0274bdc3-5b99-493d-acc0-10488a0765bd/files/2e098c8d-d9f5-4d18-88f3-5fc81e4eff7a/versions/1/ebb779d4-0baf-4b31-92ae-2935587b37bf",
+        "sha256": "6fad1bf2ee4e65af71356c8031a62e604d4325b734b015288b84b6c468cae6e7"
+      }
+    ],
+    "evidence_after": [
+      {
+        "path": "tenants/0274bdc3-5b99-493d-acc0-10488a0765bd/files/2e098c8d-d9f5-4d18-88f3-5fc81e4eff7a/versions/1/ebb779d4-0baf-4b31-92ae-2935587b37bf",
+        "sha256": "6fad1bf2ee4e65af71356c8031a62e604d4325b734b015288b84b6c468cae6e7"
+      }
+    ],
+    "signing_key_identity_preserved": true
+  },
+  "page_errors": [],
+  "commands": [
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements",
+      "command_id": "c9682a9c-2259-477c-8c47-bb61238f7ea8",
+      "kind": "create"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements",
+      "command_id": "c9682a9c-2259-477c-8c47-bb61238f7ea8",
+      "kind": "create"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements/31c8a0d7-01d1-4543-b2fc-9dd86e379015/assessments",
+      "command_id": "ec5a3da2-d86b-439f-83e2-e9e9cf5415ba",
+      "kind": "assess"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements/31c8a0d7-01d1-4543-b2fc-9dd86e379015/corrections",
+      "command_id": "0c556930-cba4-4bf2-8bf6-6f052c7726e8",
+      "expected_revision": 1,
+      "kind": "correct"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/payable-suggestions",
+      "command_id": "28c368b0-78ac-4142-9c52-60fb27a41f8a",
+      "kind": "suggest"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/payable-suggestions/31c6f54e-26ba-4b7e-9592-3ae5c97521f2/synchronization",
+      "command_id": "5f7f565b-fd1d-4a4e-98cc-64a9bd622bf4",
+      "expected_revision": 2,
+      "kind": "suggest"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements",
+      "command_id": "8153bbcf-27ba-4c37-840e-3cce9dd9a8a7",
+      "kind": "create"
+    },
+    {
+      "path": "/cost-outsourcing/api/v1/outsourcing-engagements/7266f46f-6ba3-475d-8ee3-3193bf97b54f/withdrawal",
+      "command_id": "f9748240-3df7-433a-bb17-28de72607c57",
+      "expected_revision": 1,
+      "kind": "withdraw"
+    }
+  ],
+  "browser_reads": [
+    "/project/",
+    "/project/api/v1/projects/79ad1160-f915-4b2e-a6f8-5d99560c31f7",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/party/api/v1/parties",
+    "/evidence/",
+    "/evidence/v1/references/files/2e098c8d-d9f5-4d18-88f3-5fc81e4eff7a/versions/1",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/evidence/v1/local-files/2e098c8d-d9f5-4d18-88f3-5fc81e4eff7a/versions/1",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/party/",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/outsourcing-engagements/31c8a0d7-01d1-4543-b2fc-9dd86e379015/history",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/party/api/v1/parties",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/project/",
+    "/project/api/v1/projects/79ad1160-f915-4b2e-a6f8-5d99560c31f7",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/cost-outsourcing/api/v1/payable-suggestions",
+    "/party/",
+    "/party/api/v1/parties",
+    "/project/",
+    "/project/api/v1/projects/79ad1160-f915-4b2e-a6f8-5d99560c31f7",
+    "/cost-outsourcing/api/v1/outsourcing-engagements",
+    "/cost-outsourcing/api/v1/outsourcing-engagement-assessments",
+    "/cost-outsourcing/api/v1/payable-suggestions"
+  ],
+  "final_counts": {
+    "events": 8,
+    "commands": 8,
+    "revisions": 4,
+    "assessments": 1,
+    "engagements": 2,
+    "suggestions": 1,
+    "suggestion_revisions": 3
+  },
+  "money_counts": {
+    "intakes": 1,
+    "obligations": 1,
+    "intake_revisions": 2,
+    "obligation_revisions": 1
+  },
+  "workload_exchanges": [
+    {
+      "audience": "people-groups",
+      "action": "people-groups.view",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "ea5d3287-7e90-4836-9ab0-bee00a61811f"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 332
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2bbafe13-56da-4e58-bdca-31040c0e86e3"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 291
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2aa362b7-c126-417d-bc79-5250f955399f"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 245
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2bbafe13-56da-4e58-bdca-31040c0e86e3"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 295
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2aa362b7-c126-417d-bc79-5250f955399f"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 244
+    },
+    {
+      "audience": "contract-ledger",
+      "action": "contract-ledger.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "contract",
+            "id": "0b4adbb4-ef1f-4405-b840-30ad9bbde8cd"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 236
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "79ad1160-f915-4b2e-a6f8-5d99560c31f7"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 424
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2aa362b7-c126-417d-bc79-5250f955399f"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 235
+    },
+    {
+      "audience": "contract-ledger",
+      "action": "contract-ledger.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "contract",
+            "id": "0b4adbb4-ef1f-4405-b840-30ad9bbde8cd"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 241
+    },
+    {
+      "audience": "evidence-service",
+      "action": "evidence-service.metadata.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "file",
+            "id": "2e098c8d-d9f5-4d18-88f3-5fc81e4eff7a"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 237
+    },
+    {
+      "audience": "party-directory",
+      "action": "party-directory.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "party",
+            "id": "2bbafe13-56da-4e58-bdca-31040c0e86e3"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 285
+    },
+    {
+      "audience": "money-flow-ledger",
+      "action": "money-flow-ledger.payable-suggestion.submit",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "payable_suggestion",
+            "id": "31c6f54e-26ba-4b7e-9592-3ae5c97521f2"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 236
+    },
+    {
+      "audience": "money-flow-ledger",
+      "action": "money-flow-ledger.payable-suggestion.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "payable_suggestion",
+            "id": "31c6f54e-26ba-4b7e-9592-3ae5c97521f2"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 241
+    },
+    {
+      "audience": "contract-ledger",
+      "action": "contract-ledger.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "contract",
+            "id": "0b4adbb4-ef1f-4405-b840-30ad9bbde8cd"
+          }
+        ]
+      },
+      "status": 200,
+      "duration_ms": 389
+    }
+  ],
+  "asset_sha256": "9a5ee144447cf57a606261d0c87413f212bed0f3c2d0dac7aac4f8c1bb250341",
+  "fixture_stopped": true,
+  "finished_at": "2026-10-06T08:34:14.604Z"
+}

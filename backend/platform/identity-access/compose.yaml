@@ -1,0 +1,21 @@
+name: omsbizfoundry-identity-access
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: identity_access
+      POSTGRES_USER: identity_access
+      POSTGRES_PASSWORD: identity_access_dev
+    ports:
+      - "55434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity_access -d identity_access"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - identity-access-db:/var/lib/postgresql
+
+volumes:
+  identity-access-db:

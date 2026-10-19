@@ -1,0 +1,16 @@
+{
+  "version": "v0.1.0-oa.20261003.6",
+  "official_release": false,
+  "source_kind": "saved dirty-worktree visible-source read repair",
+  "source_archive_sha256": "f029e37996590c8697f74d0cccddf348336a2751adeecbe709ebdf3ab882b69b",
+  "schema_change": false,
+  "closure": [
+    "unified-workbench"
+  ],
+  "applications": {
+    "unified-workbench": {
+      "server": "ccdc52246dc6c6a5a319a8da6353938ccae186e12bb4a970ccd46557a106421b"
+    }
+  },
+  "full_oa_accepted": false
+}

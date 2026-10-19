@@ -1,0 +1,58 @@
+{
+  "passed": true,
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "real_iam_login": true,
+  "credentials_exported": false,
+  "scenarios": [
+    {
+      "name": "fresh",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 1,
+      "csrf_gets": 0
+    },
+    {
+      "name": "expired-cookie",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 1,
+      "csrf_gets": 1
+    },
+    {
+      "name": "other-tab-rotation",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 1,
+      "csrf_gets": 0
+    },
+    {
+      "name": "renewal-unavailable-retry",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 1,
+      "csrf_gets": 2
+    },
+    {
+      "name": "race-rejection-manual-retry",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 2,
+      "csrf_gets": 0
+    }
+  ],
+  "business_writes": [],
+  "page_errors": [],
+  "background_reads_checked": false,
+  "post_login_business_scripts_checked": false,
+  "server_stale_csrf_still_rejected": true,
+  "renewal_outage": {
+    "injected": true,
+    "inputs_preserved": true,
+    "login_posts_before_manual_retry": 0
+  },
+  "race_rejection": {
+    "injected": true,
+    "inputs_preserved": true,
+    "automatic_retry": false
+  }
+}

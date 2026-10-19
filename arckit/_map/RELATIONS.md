@@ -1,0 +1,79 @@
+# Arckit 关系映射
+
+- `docs/decisions.md#BF-033` → `spec/assembly/demo-validation-2.md`：先分别证明六个小系统可演示，再以同一应用组合高保真参考 OA，并用实际变更检验定制化边界。
+- `docs/decisions.md#BF-035` → `spec/assembly/demo-experience-baseline.md`：独立 Demo 的基础可用入口、任务导航、状态反馈和恢复是业务验证条件，不属于可延期的品牌美化。
+- `spec/assembly/demo-experience-baseline.md` → `interaction/demo-overview/`、`interaction/records-list/`、`interaction/record-workspace/`：产品体验要求投影为首页、列表和记录工作区三类页面策略与线框状态。
+- `visual/_library/brief.md` → `visual/_library/design-tokens.yaml`、`visual/_library/component-catalog.yaml`：克制的业务工作台策略投影为统一 Token 和组件视觉规格。
+- `interaction/demo-overview/`、`interaction/records-list/`、`interaction/record-workspace/` → `visual/_library/`：六应用页面共享视觉层级和反馈规则，但保留各自领域术语与事实边界。
+- `docs/decisions.md#BF-034` → `spec/assembly/customer-scenario-evidence.md`：参考产品、真实客户和假设探针使用可区分、可校验的场景证据身份与结论边界。
+- `spec/assembly/customer-scenario-evidence.md` → `tech/assembly/scenario-evidence-validation.md`：产品证据门槛由版本化 JSON 契约、跨字段验证器和正负例实现。
+- `tech/assembly/scenario-evidence-validation.md` → `contracts/scenario-evidence/v1`、`acceptance/scenario-evidence`：契约、参考样例、模板和 CLI 共同形成失败关闭的证据入口。
+- `contracts/scenario-evidence/v1/examples/reference-oa.json`、`reference-oms.json` → `docs/reports/reference-product-comparison-oa-oms.md`：两个参考产品以不同就绪度形成稳定共性、六层变化和未知项的人工对照，不生成跨客户结论。
+- `spec/assembly/demo-validation-2.md` → `spec/assembly/reference-oa-demo.md`：现有 J1～J4 是 Level B 回归起点，不代替六个 Level A 独立 Demo 或后续高保真扩展。
+- `spec/assembly/demo-validation-2.md` → `spec/project-workspace/project-initiation.md`、`spec/design-operations/design-production-delivery.md`：Project 和 Design 的独立 Demo 使用公开 reference-read 契约桩隔离真实相邻应用，不改变其事实所有权。
+- `docs/specs/assembly/deployment-profiles.md` → `tech/delivery/d1-environment-promotion.md`：D1 部署档通过不可变制品提升到独立目标环境。
+- `docs/decisions.md#BF-024` → `tech/delivery/d1-environment-promotion.md`：保持单节点 Compose、唯一 Nginx 公网入口和独立数据边界。
+- `docs/decisions.md#BF-027` → `tech/delivery/d1-environment-promotion.md`：运行镜像使用固定平台与不可变摘要。
+- `docs/decisions.md#BF-028` → `tech/delivery/d1-environment-promotion.md`：个人试验田与公司环境独立持有云资源、秘密、数据和验收证据。
+- `docs/decisions.md#BF-031` → `spec/assembly/reference-oa-demo.md`：本地 Demo 先验证 J1-J4 业务组合，再复用同一业务发布物验证完整入口链。
+- `spec/assembly/reference-oa-demo.md` → `tech/assembly/local-reference-oa-composition.md`：J1～J4 由六个独立应用／数据库、公开接口验收驱动器和故障隔离脚本实现。
+- `tech/assembly/local-reference-oa-composition.md` → `deployments/local-oa`、`acceptance/reference-oa-demo`：本地组合拓扑、鉴权、幂等旅程和部分不可用验收落到可执行工件。
+- `spec/assembly/reference-oa-demo.md` → `tech/delivery/d1-environment-promotion.md`：通过的本地业务发布物可以迁移到独立 Ubuntu 目标环境，不在目标机重写业务模型。
+- `spec/assembly/reference-oa-demo.md` → `spec/project-workspace/project-initiation.md`：J1 由薄 Project Workspace 提供稳定项目身份、责任和历史。
+- `spec/project-workspace/project-initiation.md` → `tech/project-workspace/solution.md`：J1 由独立 Go 服务、独立 PostgreSQL 和版本化 IAM／HTTP 边界实现。
+- `spec/project-workspace/project-initiation.md` → `tech/_shared/models/Project.yaml`、`ProjectAssignment.yaml`、`ProjectResourceLink.yaml`、`ProjectHistoryEvent.yaml`：产品事实映射为四类 Project 自有模型。
+- `spec/project-workspace/project-initiation.md` → `tech/_shared/contracts/project-*.yaml`：创建、列表、修改、分工、关联、立项、取消、读取和历史使用稳定 v1 API。
+- `tech/project-workspace/solution.md` → `contracts/access/v1`：本地模板与正式 IAM 使用同形 Capability Credential，Project 始终作最终授权。
+- `docs/decisions.md#BF-040` → `tech/assembly/oa-authorization-validation.md`、`tech/_shared/contracts/service-credential-exchange.yaml`：服务间访问以可轮换工作负载身份交换请求绑定、一次性、精确资源短期凭证，不使用长期静态 Bearer Token。
+- `tech/_shared/contracts/service-credential-exchange.yaml` → `backend/platform/identity-access`、`backend/services/project-workspace`、`backend/services/people-groups`：IAM 验证工作负载和签发凭证，Project 动态获取，People 按精确 Resource Scope 最终授权。
+- `docs/decisions.md#BF-041` → `spec/assembly/full-reference-oa-validation.md`、`tech/assembly/oa-authorization-validation.md`、`tech/_shared/contracts/customer-role-capability-overlay.yaml`：客户站点角色只在版本化 Overlay 映射为目标稳定 Capability，资源级项目角色继续由版本化事实和策略产生精确 Scope。
+- `tech/_shared/contracts/customer-role-capability-overlay.yaml` → `contracts/access/v1/customer-role-capability-overlay.schema.json`、`contracts/access/v1/examples/reference-oa-c1-role-overlay.json`：稳定契约由严格 Schema、参考 OA C1 样例和 Access Contract 负例守卫。
+- `tech/project-workspace/solution.md` → `backend/services/project-workspace`：J1 由独立 Go module、PostgreSQL migration、HTTP 服务、Docker、备份恢复与 Linux release 实现。
+- `spec/assembly/reference-oa-demo.md` → `spec/design-operations/design-production-delivery.md`：J3 由独立 Design Operations 承接设计阶段、负责人和成果交付。
+- `spec/design-operations/design-production-delivery.md` → `tech/design-operations/solution.md`：J3 使用独立 Go 服务、独立 PostgreSQL、固定 `design-v1` 定义和失败关闭引用校验。
+- `docs/decisions.md#BF-056` → `spec/production-operations/multi-type-production.md`、`tech/production-operations/decision.md`：C4 采用单一 Production 数据所有者、代码拥有的版本化类型定义和兼容演进；拒绝按类型复制服务或建立任意工作流平台。
+- `spec/production-operations/multi-type-production.md` → `spec/design-operations/design-production-delivery.md`：既有 Design 是 `design-v1` 兼容基线；`consultation-v1` 作为第二形状验证同内核、多类型独立事实和未选类型真实缺席。
+- `tech/production-operations/decision.md` → `backend/services/design-operations`：第一实现从现有单一事实源 additive 演进，不双写第二套表；旧 API／Capability 只代理 `design-v1`。
+- `spec/production-operations/multi-type-production.md` → `interaction/production-workspace/`：类型化工作项、阶段成果、服务端 `allowed_actions`、重新授权和权限变化恢复投影为正式 Production 页面。
+- `interaction/production-workspace/` → `backend/services/design-operations/internal/httpserver`：页面只消费 Production API，经 Workbench／Gateway／IAM 换证并由目标应用最终授权。
+- `spec/design-operations/design-production-delivery.md` → `tech/_shared/models/DesignWorkItem.yaml`、`DesignStage.yaml`、`DesignDeliverable.yaml`、`DesignHistoryEvent.yaml`：产品事实映射为四类 Design Operations 自有模型。
+- `spec/design-operations/design-production-delivery.md` → `tech/_shared/contracts/design-*.yaml`：工作项列表、负责人、适用性、成果、推进、回退、取消、读取和历史使用稳定 v1 API。
+- `tech/design-operations/solution.md` → `spec/project-workspace/project-initiation.md`：Design 只通过 Project／Assignment reference-read 使用项目身份与生产负责人，不复制 Project 事实。
+- `tech/design-operations/solution.md` → `backend/services/evidence-service`：Design 只通过 Evidence reference-read 校验 File ID／Version，不拥有文件字节和访问凭据。
+- `tech/design-operations/solution.md` → `tech/_shared/contracts/project-reference-get.yaml`、`project-assignment-reference-get.yaml`、`evidence-file-version-reference-get.yaml`：跨应用读取只交换稳定 ID、tenant、revision、类型和状态。
+- `spec/assembly/demo-experience-baseline.md` → `tech/_shared/contracts/project-list.yaml`、`design-work-item-list.yaml`、`evidence-file-list.yaml`：业务列表页通过各应用自有的受保护读取契约恢复记录入口，不共享数据库或存储实现细节。
+- `tech/design-operations/solution.md` → `backend/services/design-operations`：J3 由独立 Go module、PostgreSQL migration、HTTP 服务、Docker、备份恢复和 Linux release 实现。
+- `docs/decisions.md#BF-036` → `tech/party-directory/decision.md`：Party 是可单独使用或作为显式依赖交付的领域应用，独立拥有当前档案，消费应用保存角色和不可变快照。
+- `docs/decisions.md#BF-036` → `spec/party-directory/party-lifecycle.md`、`tech/party-directory/solution.md`：Party 第一版固定登记、查询、更正、状态、历史、精确引用、IAM、故障和迁移边界。
+- `spec/party-directory/party-lifecycle.md` → `tech/_shared/models/Party.yaml`、`PartyRevision.yaml`、`tech/_shared/contracts/party-*.yaml`：主体当前投影与不可变 revision 通过版本化管理和精确引用 API 实现。
+- `tech/party-directory/solution.md` → `contracts/access/v1/examples/party-directory-capabilities.json`：人类管理与消费应用引用分别使用 Party Directory 原生 Capability。
+- `docs/decisions.md#BF-046` → `interaction/party-directory/`、`interaction/project-workspace/`：Party 管理页按目标动作投影，Project 客户选择把用户候选发现与服务端 workload 精确复验分离。
+- `docs/decisions.md#BF-047` → `spec/party-directory/party-lifecycle.md`、`tech/party-directory/solution.md`、`backend/services/contract-ledger/internal/partymigration`、`backend/services/money-flow-ledger/internal/partymigration`：两个台账先生成确定性只读迁移清单，拒绝自动合并和自动切换。
+- `docs/decisions.md#BF-048` → `spec/party-directory/party-lifecycle.md`、`tech/party-directory/solution.md`、`backend/services/contract-ledger/internal/partymigration`、`backend/services/money-flow-ledger/internal/partymigration`：人工决定由来源应用以不可变、幂等映射保存，目标必须经精确工作负载凭证验证，映射本身不授权运行时切换。
+- `interaction/party-directory/` → `backend/services/party-directory/internal/httpserver`、`deployments/d1/ops/render-suite-manifest`：管理页经 Workbench／Gateway／IAM 使用公开 Party API，不拥有第二份主体事实。
+- `interaction/project-workspace/` → `backend/services/project-workspace/internal/httpserver`、`tech/_shared/contracts/party-list.yaml`、`party-reference-get.yaml`：浏览器只提交 Party ID／revision，Project 服务端复验后冻结本业务快照。
+- `docs/decisions.md#BF-037` → `tech/assembly/local-reference-oa-composition.md`：应用在客户组合中的主要／依赖角色可以变化，最小组合仍保持显式依赖、数据所有权和版本化契约。
+- `tech/party-directory/decision.md` → `backend/services/contract-ledger/internal/party`、`backend/services/money-flow-ledger/internal/party`：现有两个稳定本地目录是抽取证据和未来迁移来源；独立 Party 核心与 Project D1 消费链已经实现，但这不表示两个台账已经完成迁移。
+- `docs/decisions.md#BF-038` → `tech/assembly/customer-overlay-research.md`：稳定 Base 加 Customer Overlay 是已接受的验证方向，但跨客户升级能力仍须由第二客户和 OA 完全体增量证伪。
+- `spec/assembly/reference-oa-demo.md` → `spec/assembly/full-reference-oa-validation.md`：已通过的 J1～J4 是 OA 完全体验证的回归底座，不代表经营承接、开票、成本外委、奖金和多生产类型已经实现。
+- `spec/assembly/full-reference-oa-validation.md` → `tech/assembly/customer-overlay-research.md`：OA 完全体新增能力必须按 Base、策略、类型化扩展、连接器、客户装配或专项唯一归属，不用客户核心分支填补缺口。
+- `docs/decisions.md#BF-039` → `spec/assembly/full-reference-oa-validation.md`、`docs/oa-full-scope-validation-plan.md`：OA 完整体成为下一阶段主线，并以至少一个真实 Ubuntu 环境和最终架构可行性报告结束阶段。
+- `docs/oa-full-scope-validation-plan.md` → `docs/templates/oa-full-scope-architecture-validation-report.md`：计划中的业务、边界、定制、体验和环境证据投影为固定结论结构。
+- `docs/decisions.md#BF-042` → `spec/business-engagement/engagement-lifecycle.md`、`tech/business-engagement/decision.md`：C2 经营承接是独立目标应用；Project 只持引用／投影，Contract／Money 独立确认建议，Evidence 保持文件技术所有权。
+- `spec/business-engagement/engagement-lifecycle.md` → `tech/_shared/models/BusinessEngagement*.yaml`、`tech/_shared/contracts/business-engagement-*.yaml`：第一条 C2 后端闭环使用稳定 v1 当前投影、创建、读取、适用性、方式、材料、取消和历史契约。
+- `tech/business-engagement/decision.md` → `backend/services/business-engagement`、`contracts/access/v1/examples/business-engagement-capabilities.json`：独立 PostgreSQL 内核、细粒度 Capability、IAM audience／scope 和目标应用最终授权共同实现已接受边界。
+- `spec/business-engagement/engagement-lifecycle.md` → `interaction/engagement-workspace/`：经营承接的阶段、材料、历史、`allowed_actions` 与权限变化恢复投影为可验证的人类工作区。
+- `interaction/engagement-workspace/` → `backend/services/business-engagement/internal/httpserver`、`deployments/d1/ops/render-suite-manifest`：页面只消费目标应用公开 API，并经 Workbench／Gateway／IAM 正式入口换证和刷新。
+- `interaction/cost-outsourcing-workspace/` → `backend/services/cost-outsourcing/internal/httpserver`：页面只消费 C6 公开 API，以服务端 `allowed_actions` 收敛金额、Evidence、纠正、撤回和评估动作；Project／Party／Contract／Evidence 仍由各自应用拥有。
+- `visual/_library/` → `interaction/cost-outsourcing-workspace/`：C6 复用已接受的运营工作台层级、单冷色动作提示、短反馈与无卡片堆叠基线，不新增视觉体系。
+- `spec/bonus-distribution/bonus-lifecycle.md` → `interaction/bonus-distribution-workspace/`：C7 的真实来源、固定策略、动态动作、金额脱敏、追加式替代／撤回和失败恢复投影为人类可操作工作台。
+- `interaction/bonus-distribution-workspace/` → `backend/services/bonus-distribution/internal/httpserver`：页面只消费 C7 公开 API，以 collection／pool `allowed_actions` 收敛两类草稿、发布、替代、撤回和历史；Project、Contract、Money 与 People 继续拥有来源事实。
+- `tech/bonus-distribution/decision.md` → `acceptance/c7-live-source-composition/`：六进程六数据库验收同时证明页面资源、无凭证拒绝、正常发布、Contract 停机零写入、恢复、原子 supersession、撤回与历史关系。
+- `docs/decisions.md#BF-055` → `spec/assembly/c3-commercial-summary.md`、`tech/assembly/c3-commercial-summary.md`：C3 经营链路由 Project 自有 Resource Link 驱动响应期只读组合，不复制 Contract、Money 或 Billing 事实。
+- `tech/assembly/c3-commercial-summary.md` → `tech/_shared/contracts/project-commercial-summary-get.yaml`、`backend/services/project-workspace`：Project 并行交换单 action、单精确资源工作负载凭证，逐段复验来源状态并保持局部降级。
+- `spec/assembly/c3-commercial-summary.md` → `interaction/project-workspace/`、`docs/reports/oa-c3-commercial-summary-d1-experiment-20260927.md`：独立人类金额 Capability、来源下钻、三角色、撤权／停用、故障恢复和性能门槛形成当前本地 D1 证据。
+- `spec/assembly/c8-material-statistics-personal-work.md` → `interaction/project-workspace/`：Project 资料以独立页签投影 direct Evidence Link，metadata 读取与 Evidence 下载授权分离，来源变化、局部不可用和撤权均有明确恢复状态。
+- `interaction/project-workspace/` → `backend/services/project-workspace/internal/httpserver`、`backend/services/evidence-service/internal/httpserver`：Project 页面建立 Link、组合元数据并按 `allowed_actions` 收敛；可用资料通过统一入口切换到 Evidence 的独立下载授权链，Project 不获得 download 能力。
+- `docs/decisions.md#BF-058` → `spec/approval-audit-results/result-registration.md`、`tech/approval-audit-results/decision.md`：C5 使用独立 Results 应用保存批复／审计结果、精确金额、来源快照和不可变纠错；Project 只通过版本化 Completion Profile 评估完成条件。
+- `spec/approval-audit-results/result-registration.md` → `spec/assembly/full-reference-oa-validation.md`：C5 把批复默认 Contract／Settlement 来源、审计默认批复来源和 Project 完成只读评估装入完整 OA 旅程，但在 C6／C7 完成前不冒充整个 Project 已完成。
+- `tech/approval-audit-results/decision.md` → `tech/_shared/contracts/service-credential-exchange.yaml`、`backend/services/project-workspace`、`backend/services/evidence-service`：Results 以独立工作负载身份读取精确来源，Project 只消费最小结果投影，Evidence 继续拥有文件字节。

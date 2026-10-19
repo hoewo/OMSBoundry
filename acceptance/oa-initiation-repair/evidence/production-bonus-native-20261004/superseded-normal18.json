@@ -1,0 +1,713 @@
+{
+  "passed": true,
+  "formal_iam": true,
+  "real_people_project_bonus": true,
+  "postgresql_18": true,
+  "main_deployed": false,
+  "normal_workbench_accepted": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "suite_restore_accepted": false,
+  "asset_sha256": "16dea574887d3f26dfd26054d5c35a782d383569428c7102bfaa8326208ec4b7",
+  "scenarios": [
+    {
+      "name": "five-native-apps-api-only-source-setup-active-project-formal-exact-grants",
+      "passed": true
+    },
+    {
+      "name": "original-professional-and-bonus-surfaces-visible-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-drawers-save-six-native-roles-and-same-person-second-profession",
+      "passed": true
+    },
+    {
+      "name": "distinct-typed-project-reference-seven-active-snapshots-read-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-same-person-two-professions-half-up-native-atomic-batch-zero-source-writes",
+      "passed": true
+    },
+    {
+      "name": "reload-native-source-qualified-labels-and-exact-amounts",
+      "passed": true
+    },
+    {
+      "name": "original-active-participant-still-bonus-candidate-under-not-applicable-no-source-end",
+      "passed": true
+    },
+    {
+      "name": "cold-pg18-empty-target-restores-frozen-profession-and-original-pending-replay-once",
+      "passed": true
+    },
+    {
+      "name": "ended-reference-rejects-new-registration-existing-bonus-frozen-label-remains",
+      "passed": true
+    },
+    {
+      "name": "restored-native-withdrawal-two-revisions-original-history-ui-no-source-rewrite",
+      "passed": true
+    },
+    {
+      "name": "formal-revocation-redacts-professional-amounts-original-ui-no-write",
+      "passed": true
+    },
+    {
+      "name": "typed-native-workload-action-exact-scope-old-pools-money-people-unchanged",
+      "passed": true
+    },
+    {
+      "name": "normal-nginx-gateway-workbench-overview-zero-hidden-D01-B12-read-write",
+      "passed": true
+    },
+    {
+      "name": "normal-original-personnel-drawer-native-atomic-save-exact-project-catalogue-separation",
+      "passed": true
+    },
+    {
+      "name": "normal-original-bonus-form-after-personnel-save-fresh-project-reference-exact-money",
+      "passed": true
+    },
+    {
+      "name": "normal-deep-link-reload-retains-original-profession-and-zero-new-command",
+      "passed": true
+    },
+    {
+      "name": "normal-original-withdrawal-dialog-real-click-two-revisions-no-owner-cross-write",
+      "passed": true
+    },
+    {
+      "name": "normal-fresh-IAM-readonly-profession-visible-exact-scope-zero-write",
+      "passed": true
+    }
+  ],
+  "backup_sha256": "37fb20306044c4792b90ac8a0a19e46b659b322a21c80a3148450d58946beb23",
+  "assembly": {
+    "passed": true,
+    "nginx": true,
+    "gateway": true,
+    "normal_workbench": true,
+    "normal_asset_sha256": "656db53ce21396d341519bf90632fc07fb2102a54b3f5780b33b42380a5f4f5a",
+    "nginx_config_sha256": "c11f5bdabf50b6d2b2774b577a5c6474c8850f46cf7e59287f867253332cba14",
+    "scoped_entry_requests": [
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": "project",
+        "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+      },
+      {
+        "type": null,
+        "id": null
+      }
+    ],
+    "native_writes": [
+      {
+        "path": "/project/api/v1/projects/72e22d08-6ee7-4de0-b08e-c28d42509751/reference-oa/production-personnel",
+        "body": {
+          "profile": "reference-oa-production-personnel-v1",
+          "expected_project_revision": 10,
+          "operation": "replace_discipline",
+          "target_discipline": {
+            "id": "601672e9-24c8-446b-9faf-9e98da0d9b98",
+            "revision": 1
+          },
+          "changes": [
+            {
+              "role": "designer",
+              "operation": "replace",
+              "people": [
+                {
+                  "id": "486049fa-00f7-42fd-8caa-d1c80849410d",
+                  "revision": 1
+                }
+              ]
+            },
+            {
+              "role": "participant",
+              "operation": "preserve"
+            },
+            {
+              "role": "reviewer",
+              "operation": "replace",
+              "people": [
+                {
+                  "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+                  "revision": 1
+                }
+              ]
+            },
+            {
+              "role": "auditor",
+              "operation": "replace",
+              "people": []
+            }
+          ],
+          "command_id": "7f06b806-05ae-4a78-96a6-15e716de3fe1"
+        }
+      },
+      {
+        "path": "/bonus/api/v1/reference-oa/bonus-allocations",
+        "body": {
+          "command_id": "e5a4c071-3378-4260-b646-ea1f4b311c80",
+          "project_ref": {
+            "id": "72e22d08-6ee7-4de0-b08e-c28d42509751",
+            "revision": 11
+          },
+          "scope": "production",
+          "base_amount_minor": "404",
+          "occurred_on": "2026-10-04",
+          "description": "同一工作台专业奖金连续登记",
+          "items": [
+            {
+              "person_ref": {
+                "id": "486049fa-00f7-42fd-8caa-d1c80849410d",
+                "revision": 1
+              },
+              "assignment_ref": {
+                "id": "448ed2f7-2559-4dd7-8ded-c03851894fa0",
+                "revision": 11
+              },
+              "assignment_source": "reference-oa-production-personnel-v1",
+              "method": "ratio",
+              "ratio_basis_points": 2500,
+              "fixed_amount_minor": "0"
+            }
+          ]
+        }
+      },
+      {
+        "path": "/bonus/api/v1/reference-oa/bonus-allocations/f6630762-c374-4632-9c72-bf8a0135be5b/withdrawal",
+        "body": {
+          "command_id": "432d900e-de50-434a-8838-308f10d9b129",
+          "expected_revision": 1,
+          "reason": "正式工作台原操作撤回留史"
+        }
+      }
+    ]
+  },
+  "native_facts": {
+    "heads": 4,
+    "revisions": 6,
+    "commands": 5,
+    "audits": 6,
+    "pools": 0,
+    "suggestions": 0
+  },
+  "project_facts": {
+    "facts": 9,
+    "active": 6,
+    "ended": 3,
+    "events": 7,
+    "commands": 13,
+    "base_assignments": 2,
+    "profiles": 1,
+    "discipline_versions": 2
+  },
+  "exchanges": [
+    {
+      "audience": "people-groups",
+      "action": "people-groups.view",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.view",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "599e4b85-2730-446b-890f-1502826830a5"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.view",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "486049fa-00f7-42fd-8caa-d1c80849410d"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "599e4b85-2730-446b-890f-1502826830a5"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.reference-oa-personnel.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "486049fa-00f7-42fd-8caa-d1c80849410d"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.reference-oa-personnel.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "72e22d08-6ee7-4de0-b08e-c28d42509751"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "599e4b85-2730-446b-890f-1502826830a5"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "486049fa-00f7-42fd-8caa-d1c80849410d"
+          }
+        ]
+      }
+    }
+  ],
+  "client_posts": [
+    {
+      "app": "project",
+      "path": "/api/v1/projects/72e22d08-6ee7-4de0-b08e-c28d42509751/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 5,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "601672e9-24c8-446b-9faf-9e98da0d9b98",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "486049fa-00f7-42fd-8caa-d1c80849410d",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "599e4b85-2730-446b-890f-1502826830a5",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "2bdc55d3-6b1b-490d-8591-172444f72400"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/72e22d08-6ee7-4de0-b08e-c28d42509751/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 6,
+        "operation": "replace_reviewers",
+        "changes": [
+          {
+            "role": "approver",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "estimator",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "599e4b85-2730-446b-890f-1502826830a5",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "7e36f4b7-ebc2-47e8-86df-61696ae2a0a1"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/72e22d08-6ee7-4de0-b08e-c28d42509751/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 7,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "27196cbd-3589-4381-8e67-868adc9e120e",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": []
+          }
+        ],
+        "command_id": "28c91236-2a80-4531-9913-417b779ddb9d"
+      },
+      "status": 200
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "06a5381d-dcec-43ff-aa1f-7281ed31f6e2",
+        "project_ref": {
+          "id": "72e22d08-6ee7-4de0-b08e-c28d42509751",
+          "revision": 8
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "同人不同专业奖金",
+        "items": [
+          {
+            "person_ref": {
+              "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "62b4ba6d-2f39-4691-82be-bac2b7ae85ce",
+              "revision": 6
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 5000,
+            "fixed_amount_minor": "0"
+          },
+          {
+            "person_ref": {
+              "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "d003bee3-4131-4e59-93c6-aec6e3261bc2",
+              "revision": 8
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 5000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "e7814093-29d2-4fcd-bd53-ff4eb36e55be",
+        "project_ref": {
+          "id": "72e22d08-6ee7-4de0-b08e-c28d42509751",
+          "revision": 9
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "专业奖金丢回复恢复",
+        "items": [
+          {
+            "person_ref": {
+              "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "d25643ec-0db2-451a-8f34-fbc4a1d8a371",
+              "revision": 7
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 1000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "e7814093-29d2-4fcd-bd53-ff4eb36e55be",
+        "project_ref": {
+          "id": "72e22d08-6ee7-4de0-b08e-c28d42509751",
+          "revision": 9
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "专业奖金丢回复恢复",
+        "items": [
+          {
+            "person_ref": {
+              "id": "51f8e95b-b3ac-44fb-9320-134e9c7c2154",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "d25643ec-0db2-451a-8f34-fbc4a1d8a371",
+              "revision": 7
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 1000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations/3969dab3-5598-4077-b3a4-80af26693f06/withdrawal",
+      "body": {
+        "command_id": "0d84e404-0ff6-482c-862f-443bd4a9c188",
+        "expected_revision": 1,
+        "reason": "已结束分工，撤回奖金留史"
+      },
+      "status": 200
+    }
+  ],
+  "page_errors": []
+}

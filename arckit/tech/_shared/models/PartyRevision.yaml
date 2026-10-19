@@ -1,0 +1,36 @@
+# Party Directory 不可变主体 revision
+metadata:
+  path: "tech/_shared/models/PartyRevision.yaml"
+  domain: "party-directory"
+  entity_name: "PartyRevision"
+  storage: "PostgreSQL"
+  owner: "Party Directory"
+  version: "1.0"
+  created: "2026-09-27"
+  updated: "2026-09-27"
+
+type: object
+additionalProperties: false
+description: "每次主体登记、资料更正或状态变化形成的完整不可变档案快照。"
+required: [party_id, tenant_id, revision, event_kind, command_id, kind, legal_name, status, actor_ref, occurred_at]
+properties:
+  party_id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  event_kind: {type: string, enum: [created, profile_updated, status_changed], readOnly: true}
+  command_id: {type: string, format: uuid, readOnly: true}
+  kind: {type: string, enum: [organization, individual], readOnly: true}
+  legal_name: {type: string, minLength: 1, maxLength: 200, readOnly: true}
+  registration_identifier: {type: [string, "null"], minLength: 1, maxLength: 100, readOnly: true}
+  status: {type: string, enum: [active, inactive], readOnly: true}
+  reason: {type: string, maxLength: 1000, readOnly: true}
+  actor_ref: {type: string, minLength: 1, maxLength: 256, readOnly: true}
+  occurred_at: {type: string, format: date-time, readOnly: true}
+
+indexes:
+  - {name: party_revisions_pk, columns: [tenant_id, party_id, revision], unique: true}
+  - {name: party_revisions_command_idx, columns: [tenant_id, command_id], unique: true}
+
+validation:
+  immutable: true
+  revision_sequence: "revision 1 is created; each later revision equals the previous revision + 1"

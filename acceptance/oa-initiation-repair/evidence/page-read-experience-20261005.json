@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "observed_at": "2026-10-05",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "project_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "workbench_image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:0dd14307b36810e2e3c692287eb75286734845ef06978b5ac371567bf0c38755",
+  "browser": {
+    "passed": true,
+    "total_requests_including_login_and_deep_link": 60,
+    "cached_payment_return_requests": 0,
+    "explicit_payment_refresh_requests": [
+      "POST /gateway/authorize/project-workspace",
+      "GET /project/",
+      "GET /money/api/v1/cash-workspace",
+      "GET /project/api/v1/projects/3b4c44d3-7b33-4a29-add3-3f6211ca893e"
+    ],
+    "cached_business_primary_return_requests": 0,
+    "rate_limited_responses": 0,
+    "business_write_requests": 0,
+    "page_errors": 0
+  },
+  "tests": {
+    "frontend_node": "158/158 passed",
+    "server_node": "226/226 passed",
+    "typescript_check": "passed",
+    "vite_build": "passed",
+    "workbench_go": "passed"
+  },
+  "deployment": {
+    "healthy_containers": "17/17",
+    "running_containers": "17/17",
+    "other_container_ids_changed": 0,
+    "database_changes": 0,
+    "iam_grant_changes": 0,
+    "schema_changes": 0,
+    "gateway_changes": 0
+  },
+  "limits": [
+    "This evidence validates page-read experience and request behavior, not completion of all OA workflows.",
+    "The cache is process-local browser page memory and does not own or persist business facts.",
+    "A project change, account reload or explicit refresh invalidates or bypasses the bounded read projection."
+  ]
+}

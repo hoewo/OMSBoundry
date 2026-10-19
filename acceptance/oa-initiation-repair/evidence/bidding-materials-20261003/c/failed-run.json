@@ -1,0 +1,13 @@
+{
+  "passed": false,
+  "application": "business-engagement",
+  "checks": [],
+  "main_unchanged": true,
+  "public_browser_or_full_oa": false,
+  "failed_group": "engagement",
+  "source_archive_sha256": "4ac86df0de4b4469db82f1f5205083ea65d00629b4ffbb30cc1fb76c7e2a8a44",
+  "failure": "Empty-target restore test found schema_migrations missing after pg_restore. The tooling URL used ConnConfig.ConnString(), which retained the initial postgres URL after Config.Database was changed by the test fixture.",
+  "passed_before_failure": ["material append/remove_one/legacy/history", "100-member concurrent bound"],
+  "not_run": ["database group", "HTTP group"],
+  "correction": "Build a URL for the verified live owned database; verify different source/target names and target emptiness. Preserve this failure; rerun in a new directory."
+}

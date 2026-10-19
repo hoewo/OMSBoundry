@@ -1,0 +1,94 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  echo "usage: verify-release-bundle BUNDLE CHECKSUM" >&2
+  exit 2
+fi
+archive=$1
+checksum=$2
+[ -f "$archive" ] || { echo "bundle does not exist: $archive" >&2; exit 2; }
+[ -f "$checksum" ] || { echo "checksum does not exist: $checksum" >&2; exit 2; }
+archive=$(CDPATH= cd -- "$(dirname -- "$archive")" && pwd)/$(basename -- "$archive")
+checksum=$(CDPATH= cd -- "$(dirname -- "$checksum")" && pwd)/$(basename -- "$checksum")
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-local-oa-clean.XXXXXX")
+project="omsbizfoundry-local-oa-clean-$$"
+root=''
+cleanup() {
+  if [ -n "$root" ] && [ -x "$root/deployments/local-oa/ops/local-oa" ] && [ -f "$root/deployments/local-oa/.env" ]; then
+    LOCAL_OA_COMPOSE_PROJECT="$project" "$root/deployments/local-oa/ops/local-oa" reset --confirm-destroy-data >/dev/null 2>&1 || true
+  fi
+  rm -rf "$test_root"
+}
+trap cleanup EXIT HUP INT TERM
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$checksum")")
+else
+  (cd "$(dirname "$archive")" && shasum -a 256 -c "$(basename "$checksum")")
+fi
+
+tar -xzf "$archive" -C "$test_root"
+root="$test_root/$(basename "$archive" .tar.gz)"
+runner="$root/deployments/local-oa/ops/local-oa"
+level_a_runner="$root/deployments/demos/ops/level-a"
+"$runner" verify-release
+"$runner" load-images
+
+export LOCAL_OA_COMPOSE_PROJECT="$project"
+export LOCAL_OA_DESIGN_AUDIT_PROJECT="$project-design-delivery-audit"
+export LOCAL_OA_COMMERCIAL_AUDIT_PROJECT="$project-commercial-ledger-audit"
+export CONTRACT_DEMO_COMPOSE_PROJECT="$project-level-a-contract"
+export MONEY_DEMO_COMPOSE_PROJECT="$project-level-a-money"
+export PEOPLE_DEMO_COMPOSE_PROJECT="$project-level-a-people"
+export EVIDENCE_DEMO_COMPOSE_PROJECT="$project-level-a-evidence"
+export PROJECT_DEMO_COMPOSE_PROJECT="$project-level-a-project"
+export DESIGN_DEMO_COMPOSE_PROJECT="$project-level-a-design"
+export CONTRACT_HOST_PORT=${LOCAL_OA_ACCEPTANCE_CONTRACT_PORT:-28081}
+export MONEY_HOST_PORT=${LOCAL_OA_ACCEPTANCE_MONEY_PORT:-28083}
+export PEOPLE_HOST_PORT=${LOCAL_OA_ACCEPTANCE_PEOPLE_PORT:-28084}
+export EVIDENCE_HOST_PORT=${LOCAL_OA_ACCEPTANCE_EVIDENCE_PORT:-28085}
+export PROJECT_HOST_PORT=${LOCAL_OA_ACCEPTANCE_PROJECT_PORT:-28086}
+export DESIGN_HOST_PORT=${LOCAL_OA_ACCEPTANCE_DESIGN_PORT:-28087}
+# The clean-room driver can run inside the target-platform application network
+# when the build host cannot execute the Linux release binary natively.
+export EVIDENCE_PUBLIC_BASE_URL=http://evidence-service:8085
+
+"$level_a_runner" audit --confirm-destroy-demo-data
+"$runner" init
+"$runner" config
+"$runner" composition-audit
+"$runner" composition-audit-commercial
+"$runner" up
+"$runner" demo
+"$runner" demo
+"$runner" failure-isolation
+"$runner" verify
+"$runner" status
+
+"$runner" reset --confirm-destroy-data
+for checked_project in \
+  "$project" \
+  "$LOCAL_OA_DESIGN_AUDIT_PROJECT" \
+  "$LOCAL_OA_COMMERCIAL_AUDIT_PROJECT" \
+  "$CONTRACT_DEMO_COMPOSE_PROJECT" \
+  "$MONEY_DEMO_COMPOSE_PROJECT" \
+  "$PEOPLE_DEMO_COMPOSE_PROJECT" \
+  "$EVIDENCE_DEMO_COMPOSE_PROJECT" \
+  "$PROJECT_DEMO_COMPOSE_PROJECT" \
+  "$DESIGN_DEMO_COMPOSE_PROJECT"; do
+  [ -z "$(docker ps --all --quiet --filter "label=com.docker.compose.project=$checked_project")" ] || {
+    echo "release acceptance left containers for Compose project: $checked_project" >&2
+    exit 1
+  }
+  [ -z "$(docker network ls --quiet --filter "label=com.docker.compose.project=$checked_project")" ] || {
+    echo "release acceptance left networks for Compose project: $checked_project" >&2
+    exit 1
+  }
+  [ -z "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$checked_project")" ] || {
+    echo "release acceptance left volumes for Compose project: $checked_project" >&2
+    exit 1
+  }
+done
+
+echo "PASS extracted local OA release: six portable Level A products, two subset assemblies, full J1-J4 replay, outage isolation, recovery and cleanup"

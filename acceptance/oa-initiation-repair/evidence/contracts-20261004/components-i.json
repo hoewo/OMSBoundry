@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    },
+    {
+      "name": "reopen-original-form-and-save-amendment-intention",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "3d830b25591aeb8936e4ec162e2b9f13ee4a849ff13d4723e445cff78ae8ace7",
+  "failure": {
+    "stage": "edit-amendment",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-modal:visible').getByRole('button', { name: /^保\\s*存$/ })\u001b[22m\n"
+  },
+  "business_command_count": 7,
+  "page_errors": []
+}

@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "application": "business-engagement",
+  "checks": [
+    {"group": "engagement", "passed": true, "tests": 17},
+    {"group": "database", "passed": true, "tests": 1},
+    {"group": "httpserver", "passed": true, "tests": 22}
+  ],
+  "main_unchanged": true,
+  "probe_stopped": true,
+  "public_browser_or_full_oa": false,
+  "uploaded_bundle_sha256": "47f6a9c0963e7aff186239cf562605b28dd43f038e9e7fbf372eb6767e684af1",
+  "engagement_test_sha256": "99012cba64151abd28354819ec96595ac6629d15784fc0735866588fca972445",
+  "receipt_source": "/opt/omsbizfoundry/acceptance/oa-bidding-validation-20261002d/results.json",
+  "scope": "Isolated PG18 owner databases with synthetic Project/Evidence references; real pg_dump/empty-target pg_restore and continue. Not real browser upload or Main migration."
+}

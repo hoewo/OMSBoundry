@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Transaction.Description}} · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/cash-transactions">← 返回收付款列表</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions" aria-current="page">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>{{.Transaction.Description}}</h1>
+    {{if .Created}}<p role="status">实际收付款已登记。</p>{{end}}
+    {{if .Reversed}}<p role="status">实际收付款已经完成冲销，当前有效金额和未分配金额已归零。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>这是人工登记的独立资金事实，不代表银行已核验；当前有效金额由 Cash Reversal 派生，已分配金额由 Allocation 与 Allocation Reversal 净额计算。</p>
+
+    <dl>
+      <dt>方向</dt><dd>{{.Transaction.Type.Label}}</dd>
+      <dt>状态</dt><dd>{{.Transaction.Status}}</dd>
+      <dt>原始金额</dt><dd>{{.Transaction.Amount}} {{.Transaction.Currency}}</dd>
+      <dt>当前有效金额</dt><dd>{{.Transaction.EffectiveAmount}} {{.Transaction.Currency}}</dd>
+      <dt>已分配金额</dt><dd>{{.Transaction.AllocatedAmount}} {{.Transaction.Currency}}</dd>
+      <dt>未分配金额</dt><dd>{{.Transaction.UnallocatedAmount}} {{.Transaction.Currency}}</dd>
+      <dt>资金发生日</dt><dd>{{.Transaction.OccurredOn}}</dd>
+      <dt>本方资金账户标签</dt><dd>{{.Transaction.AccountReference}}</dd>
+      <dt>来源类型</dt><dd>{{.Transaction.SourceKind}}</dd>
+      <dt>人工来源依据</dt><dd>{{.Transaction.ManualSourceReference}}</dd>
+      <dt>外部流水号</dt><dd>{{if .Transaction.ExternalTransactionReference}}{{.Transaction.ExternalTransactionReference}}{{else}}—{{end}}</dd>
+      <dt>登记人</dt><dd>{{.Transaction.RecordedBy.DisplayName}}（{{.Transaction.RecordedBy.Kind}} / {{.Transaction.RecordedBy.ID}}）</dd>
+      <dt>登记时间</dt><dd>{{.Transaction.RecordedAt}}</dd>
+    </dl>
+
+    {{if .Transaction.Reversal}}
+    <section aria-labelledby="cash-reversal-heading">
+      <h2 id="cash-reversal-heading">资金冲销事实</h2>
+      <dl>
+        <dt>Reversal ID</dt><dd>{{.Transaction.Reversal.ID}}</dd>
+        <dt>原方向</dt><dd>{{.Transaction.Reversal.TransactionType.Label}}</dd>
+        <dt>冲销金额</dt><dd>{{.Transaction.Reversal.Amount}} {{.Transaction.Reversal.Currency}}</dd>
+        <dt>原因</dt><dd>{{.Transaction.Reversal.Reason}}</dd>
+        <dt>操作人</dt><dd>{{.Transaction.Reversal.ReversedBy.DisplayName}}（{{.Transaction.Reversal.ReversedBy.Kind}} / {{.Transaction.Reversal.ReversedBy.ID}}）</dd>
+        <dt>冲销时间</dt><dd>{{.Transaction.Reversal.ReversedAt}}</dd>
+      </dl>
+    </section>
+    {{end}}
+
+    {{if .CanReverse}}
+    <section aria-labelledby="reverse-cash-heading">
+      <h2 id="reverse-cash-heading">完整冲销这条实际收付款</h2>
+      <p>该操作只用于原资金事实不应继续生效的纠错，会令当前有效金额和未分配金额归零。真实退款或反向付款应另记新的实际资金事实。</p>
+      {{if can .Principal "cash.reverse"}}<form method="post" action="{{basePath}}/cash-transactions/{{.Transaction.ID}}/reverse">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ReverseCommandID}}">
+        <p>
+          <label for="reason">冲销原因</label>
+          <input id="reason" name="reason" value="{{.ReversalReason}}" maxlength="200" required>
+        </p>
+        <button type="submit">确认完整冲销</button>
+      </form>{{end}}
+    </section>
+    {{else if .NeedsAllocationReversal}}
+    <section aria-labelledby="reverse-cash-blocked-heading">
+      <h2 id="reverse-cash-blocked-heading">暂不能冲销</h2>
+      <p role="status">该资金仍有 {{.Transaction.AllocatedAmount}} {{.Transaction.Currency}} 净分配额。请先在下方历史中进入每条 active Allocation 完成反向核销。</p>
+    </section>
+    {{end}}
+
+    <h2>登记时主体快照</h2>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">角色</th>
+          <th scope="col">是否本方</th>
+          <th scope="col">类型</th>
+          <th scope="col">法定名称或姓名</th>
+          <th scope="col">登记标识</th>
+          <th scope="col">Party revision</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>付款方 payer</td>
+          <td>{{if eq .Transaction.Payer.PartyID .Transaction.LedgerOwnerPartyID}}是{{else}}否{{end}}</td>
+          <td>{{.Transaction.Payer.Kind}}</td>
+          <td>{{.Transaction.Payer.LegalName}}</td>
+          <td>{{if .Transaction.Payer.RegistrationIdentifier}}{{.Transaction.Payer.RegistrationIdentifier}}{{else}}—{{end}}</td>
+          <td>{{.Transaction.Payer.PartyRevision}}</td>
+        </tr>
+        <tr>
+          <td>收款方 payee</td>
+          <td>{{if eq .Transaction.Payee.PartyID .Transaction.LedgerOwnerPartyID}}是{{else}}否{{end}}</td>
+          <td>{{.Transaction.Payee.Kind}}</td>
+          <td>{{.Transaction.Payee.LegalName}}</td>
+          <td>{{if .Transaction.Payee.RegistrationIdentifier}}{{.Transaction.Payee.RegistrationIdentifier}}{{else}}—{{end}}</td>
+          <td>{{.Transaction.Payee.PartyRevision}}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <section aria-labelledby="allocation-history-heading">
+      <h2 id="allocation-history-heading">资金分配历史</h2>
+      {{if .Allocations}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Allocation</th>
+            <th scope="col">状态</th>
+            <th scope="col">目标义务</th>
+            <th scope="col">分配金额</th>
+            <th scope="col">人工分配依据</th>
+            <th scope="col">操作人</th>
+            <th scope="col">生效时间</th>
+            <th scope="col">反向核销</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Allocations}}
+          <tr>
+            <td><a href="{{basePath}}/allocations/{{.ID}}">{{.ID}}</a></td>
+            <td>{{.Status}}</td>
+            <td><a href="{{basePath}}/obligations/{{.ObligationID}}">{{.ObligationTitle}}</a>（revision {{.ObligationRevision}}）</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.ManualSourceReference}}</td>
+            <td>{{.AppliedBy.DisplayName}}（{{.AppliedBy.Kind}} / {{.AppliedBy.ID}}）</td>
+            <td>{{.AppliedAt}}</td>
+            <td>{{if .Reversal}}{{.Reversal.Reason}} · {{.Reversal.ReversedBy.DisplayName}} · {{.Reversal.ReversedAt}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>该笔实际资金尚未形成任何分配。</p>
+      {{end}}
+    </section>
+
+    <p>Cash Transaction 与 Cash Reversal 都是不可编辑、不可删除的事实。冲销不会自动生成退款、反向付款或批量 Allocation Reversal。</p>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

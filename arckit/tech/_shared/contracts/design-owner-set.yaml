@@ -1,0 +1,26 @@
+# 设置 Design Work Item 负责人 API 契约
+metadata: {path: "tech/_shared/contracts/design-owner-set.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/owner", summary: "设置 Project production_owner Assignment 引用", auth_required: true, audience: "design-operations", capability: "design-work-item.owner.manage"}
+request:
+  path_params: [{name: work_item_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, assignment_id, assignment_source_revision]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      assignment_id: {type: string, format: uuid}
+      assignment_source_revision: {type: integer, minimum: 1}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignWorkItem.yaml"}}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: WORK_ITEM_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 422, code: OWNER_ASSIGNMENT_INVALID, retryable: false}
+    - {status: 503, code: PROJECT_REFERENCE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["验证 Assignment 属于同 Project／tenant、role=production_owner 且 active。", "追加 owner-set 事件；不复制 Person／Group。"]
+  state_transitions: ["draft -> in-progress", "in-progress -> in-progress"]

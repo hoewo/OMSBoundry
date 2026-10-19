@@ -1,0 +1,947 @@
+{
+  "passed": true,
+  "main_changed": false,
+  "public_tls_accepted": false,
+  "clean_host_release_accepted": false,
+  "full_suite_accepted": false,
+  "full_oa_accepted": false,
+  "selected_apps": [
+    "identity-access",
+    "contract-ledger",
+    "people-groups",
+    "project-workspace",
+    "evidence-service",
+    "bonus-distribution",
+    "unified-workbench",
+    "gateway"
+  ],
+  "scenarios": [
+    {
+      "name": "current-source-selected-images-build-and-real-IAM-contract-preflight",
+      "passed": true
+    },
+    {
+      "name": "fresh-selected-D1-own-databases-real-nginx-gateway-workbench-ready",
+      "passed": true
+    },
+    {
+      "name": "formal-native-API-only-fixtures-exact-project-grants-no-SQL-seed",
+      "passed": true
+    },
+    {
+      "name": "native-Evidence-file-id-version-and-real-local-bytes",
+      "passed": true
+    },
+    {
+      "name": "source-original-bonus-drawer-same-person-two-professions-atomic-native-write",
+      "passed": true
+    },
+    {
+      "name": "real-D1-selected-six-owner-backups-keys-bytes-checksums-live-profiles",
+      "passed": true
+    },
+    {
+      "name": "profile-mismatch-real-restore-rejected-before-source-volume-or-fact-mutation",
+      "passed": true
+    },
+    {
+      "name": "fresh-target-D1-six-databases-immutable-facts-and-exact-grants-restore",
+      "passed": true
+    },
+    {
+      "name": "old-session-rejected-new-login-same-native-subject-and-grants",
+      "passed": true
+    },
+    {
+      "name": "restored-original-command-identical-replay-zero-new-bonus-fact",
+      "passed": true
+    },
+    {
+      "name": "restored-native-Evidence-short-access-original-file-version-and-bytes",
+      "passed": true
+    },
+    {
+      "name": "restored-normal-workbench-original-profession-label-amount-reload-zero-write",
+      "passed": true
+    },
+    {
+      "name": "restored-original-withdraw-confirmation-two-immutable-revisions-visible",
+      "passed": true
+    },
+    {
+      "name": "restored-original-personnel-drawer-continues-native-append-no-People-write",
+      "passed": true
+    }
+  ],
+  "images": {
+    "identity-access": "sha256:7b10f98d7943ff8cbf12acc74330090e679b85f87b1dd6b801b9584caae0a3d2",
+    "contract-ledger": "sha256:5786e0a82538ec4a81ed36cac3d211fab1dbbe0f26323f7a1d419a879357e969",
+    "people-groups": "sha256:f4584c464c10862c5d84a6f75446ebc37fe96f7deb08e0abdbd16c5d4d539e67",
+    "project-workspace": "sha256:6569b8080d4d5d930ce2b1f3eeb4a1f804515ebb8ae4a7196784e404bd0f0232",
+    "evidence-service": "sha256:4cbd171abfb516d6f6dc44e16d19fe10a2a9668722ce4ac50ec8360c0802f5bf",
+    "bonus-distribution": "sha256:be7af60ed8e14dd70e1a3803e153128376b51721be92046bdc546a78d070b65b",
+    "unified-workbench": "sha256:bbdabf2abb1122bb2adb8637560c3a375c5129e01dc1573dd01e26ab3d4b3025",
+    "gateway": "sha256:d3805d2c8e726463ef39137d422fc43b16a717c7bb923d569bd623367eebcf0f"
+  },
+  "file": {
+    "id": "9ffc25ca-3bec-470f-b714-64cf93428968",
+    "version": 1,
+    "sha256": "fe23c72c523223f86ded13ef50a41b79810de3768a77aab77adcef4c2a218c52",
+    "size": 45
+  },
+  "backup": {
+    "id": "20261004T133156Z",
+    "artifacts": {
+      "bonus-distribution.dump": {
+        "sha256": "7ddf7dc41f151a133040de63dc97045a801dbc943741e80ffe05ec8edce15e1c",
+        "mode": 384
+      },
+      "checksums.sha256": {
+        "sha256": "0bfa1444a22dcab82a6e12ea6dd790d5fbefdc081689d0ae44ae805fba9b578f",
+        "mode": 384
+      },
+      "contract-ledger.zip": {
+        "sha256": "273c688eaa7239dd03590b99db9dec3046d447e2b1f8a25f792dc551ee36ee0f",
+        "mode": 384
+      },
+      "evidence-service.zip": {
+        "sha256": "b7abae64c12dcd7186d05918cdc117ba100b902c7b330fc3c8cbf70d89a6df3a",
+        "mode": 384
+      },
+      "identity-access.dump": {
+        "sha256": "e193ee9da7628a3067c0468ea9373b1707076100449c5470327f46f9711742da",
+        "mode": 384
+      },
+      "people-groups.dump": {
+        "sha256": "600d24918d55abd93f2fa8e7440828863a85555daf07ddcf0f5ba6c3708cdf26",
+        "mode": 384
+      },
+      "project-workspace.dump": {
+        "sha256": "9bc5370c060679283ce516eff538a1fecb9966c1f46ec18d009d5174386e7189",
+        "mode": 384
+      },
+      "signing-keys.json": {
+        "sha256": "02d653c5624dffa9953558a9b13bd9c28c3784f2f83f90c5d27549a7f62b17b0",
+        "mode": 384
+      },
+      "suite-selection.env": {
+        "sha256": "70291f0537347e1ac38dc472629e800f5d5606abd48a410a15692f503847d3a1",
+        "mode": 384
+      }
+    }
+  },
+  "before": {
+    "contract_ledger": {
+      "app_metadata": {
+        "sha256": "f1100abd571654933beef585a5c26184f8aad81a1e2a0dba3a3814c20e5811f6",
+        "rows": 1
+      },
+      "audit_entries": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_activation_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_audit_entries": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_change_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_closure_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_closures": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_correction_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_change_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_party_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_documents": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_versions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_instruments": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_relation_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_relations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_restore_operations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_revision_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlement_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlement_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlements": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_termination_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contracts": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_sessions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_user_iam_subject_links": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_users": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "party_migration_mappings": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "party_runtime_transitions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_amendment_confirmations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_contract_draft_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_contract_drafts": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_material_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_materials": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "schema_migrations": {
+        "sha256": "33b9d84f261e15b27ff6c1b2b614dade0364b1289c571c30f766cdd39fd2c5cd",
+        "rows": 22
+      }
+    },
+    "people_groups": {
+      "business_commands": {
+        "sha256": "ccfc4d4d8f6d3886d32e5b589035feb7ec4c46fa8a39ed2b4732621e12e1705f",
+        "rows": 3
+      },
+      "definition_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "definitions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_capability_assignments": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_capability_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "groups": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "membership_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "memberships": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "people_groups_audit_entries": {
+        "sha256": "d9819405a43908eeb52fb177c6d5b8c554dbfb063c20f47eb8e2d7d27826d5f3",
+        "rows": 3
+      },
+      "person_revisions": {
+        "sha256": "f8df593643060d07b304ffb99972279c34883b524fd39bd98307c12933b69c86",
+        "rows": 3
+      },
+      "persons": {
+        "sha256": "5b7a908210234ec86e1a9a610887246e1ba7ac7d605e195a96eadf0fd79233d8",
+        "rows": 3
+      },
+      "roster_snapshots": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "schema_migrations": {
+        "sha256": "ace7d26f7fe1b6a704fe22b3a3744f93d716cbfc15f7b07dffba8523dde9736e",
+        "rows": 1
+      }
+    },
+    "project_workspace": {
+      "project_assignments": {
+        "sha256": "615e46f3cd8dc422a5582a261d4c51f7aabbf2dba3eda9f5cd51a0af1dc52461",
+        "rows": 2
+      },
+      "project_commands": {
+        "sha256": "a98cf6257f27a31339b16108d6f8d610a678ca440934be96accbf10d2fad549c",
+        "rows": 9
+      },
+      "project_completion_confirmations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "project_history_events": {
+        "sha256": "e90667ecf1c8d0a72cee310b50cbad0ed8a77a1db3d4f751dd7bc260bfe2c899",
+        "rows": 4
+      },
+      "project_package_conversions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "project_resource_links": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "projects": {
+        "sha256": "c0a18a3ed0d2d067e3c1160f2c0e45918864261cfe5163d0e1bcd9a9360fb750",
+        "rows": 1
+      },
+      "reference_oa_production_assignments": {
+        "sha256": "ae64c71e4d229cfd10dc01f852c7e38c9133a825bf0c8f36a13b639e2fc6bec1",
+        "rows": 4
+      },
+      "reference_oa_production_discipline_heads": {
+        "sha256": "3514415e97a20bbf58b3aded437892a8b1b28e358cfd5478ce196f4e4e89fb2d",
+        "rows": 2
+      },
+      "reference_oa_production_discipline_versions": {
+        "sha256": "64b6078d852403261b279999999043b5d8be77650f4cc5e599cce27d1af05324",
+        "rows": 2
+      },
+      "reference_oa_production_events": {
+        "sha256": "0d075c4bfc5a521cd62b9fd8712a303ba280641807be7a48ead77c6047e69f49",
+        "rows": 3
+      },
+      "reference_oa_production_profiles": {
+        "sha256": "24ca5bc49ae5cfcda237254b75c7bfa250d6f0547f4c64b920fdd24ae7e8f00c",
+        "rows": 1
+      },
+      "schema_migrations": {
+        "sha256": "dc35df8633fc72f98198465db9093b91e8895e3e26150d2b3670acece127724a",
+        "rows": 12
+      }
+    },
+    "evidence_service": {
+      "evidence_audit_entries": {
+        "sha256": "f658b981577586ef527d81bc2742266c240b151757d9b05528de370cff9b12a5",
+        "rows": 2
+      },
+      "file_versions": {
+        "sha256": "078466137639b88306d3a02cb96bb03d43418aa26d6a323e9be034e285c57ecf",
+        "rows": 1
+      },
+      "files": {
+        "sha256": "a754d8e6f0ef31ae552548a11a8cd9cd930d9f1689fc2060fd41de890a6cce6f",
+        "rows": 1
+      },
+      "idempotency_commands": {
+        "sha256": "cdcf170cb745b66a200b31f3ec1cc4f84a013bfd93d308db85d61c4741454c6d",
+        "rows": 2
+      },
+      "schema_migrations": {
+        "sha256": "9d3bada4166b4370972180f6179ec46e750f9e4af8de274c9b3a367e9c630254",
+        "rows": 2
+      },
+      "upload_sessions": {
+        "sha256": "dbfa10806258877bfb57d01f66a7b13cd371df69c1e527d98d9224fb5f3c7e74",
+        "rows": 1
+      }
+    },
+    "bonus_distribution": {
+      "bonus_allocation_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_allocations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_distribution_audit_events": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_distribution_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_payable_suggestion_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_payable_suggestions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_pool_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_pools": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_bonus_allocations": {
+        "sha256": "7edc3b4bec3b472e9d4ba13fa6d6cfff03a4531f83973c260079ab3bb57393bf",
+        "rows": 2
+      },
+      "reference_oa_bonus_audit": {
+        "sha256": "c12f74d337ca3dc91b888e49c7e88d7fc38279decf7ff898ef148047c4d9eb7d",
+        "rows": 2
+      },
+      "reference_oa_bonus_commands": {
+        "sha256": "734865f9627805e697b04255b8fad426dcca14ac3912e6e9fb09ae53755625cb",
+        "rows": 1
+      },
+      "reference_oa_bonus_revisions": {
+        "sha256": "f1bac43c42ee5b7691af1b5f8d3c099f9c70b608fc4f50a52bda2e3edff9d7c0",
+        "rows": 2
+      },
+      "schema_migrations": {
+        "sha256": "303f5869b3c2d6a2bcb4cc572257cad2ccd4bc0968af00c04449bce93ac7d4b3",
+        "rows": 4
+      }
+    }
+  },
+  "restored": {
+    "contract_ledger": {
+      "app_metadata": {
+        "sha256": "f1100abd571654933beef585a5c26184f8aad81a1e2a0dba3a3814c20e5811f6",
+        "rows": 1
+      },
+      "audit_entries": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_activation_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_audit_entries": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_change_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_closure_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_closures": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_correction_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_change_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_draft_party_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_documents": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_evidence_versions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_instruments": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_relation_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_relations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_restore_operations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_revision_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlement_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlement_parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_settlements": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contract_termination_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "contracts": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_sessions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_user_iam_subject_links": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "local_users": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "parties": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "party_migration_mappings": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "party_runtime_transitions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_amendment_confirmations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_contract_draft_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_contract_drafts": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_material_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_materials": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "schema_migrations": {
+        "sha256": "33b9d84f261e15b27ff6c1b2b614dade0364b1289c571c30f766cdd39fd2c5cd",
+        "rows": 22
+      }
+    },
+    "people_groups": {
+      "business_commands": {
+        "sha256": "ccfc4d4d8f6d3886d32e5b589035feb7ec4c46fa8a39ed2b4732621e12e1705f",
+        "rows": 3
+      },
+      "definition_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "definitions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_capability_assignments": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_capability_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "group_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "groups": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "membership_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "memberships": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "people_groups_audit_entries": {
+        "sha256": "d9819405a43908eeb52fb177c6d5b8c554dbfb063c20f47eb8e2d7d27826d5f3",
+        "rows": 3
+      },
+      "person_revisions": {
+        "sha256": "f8df593643060d07b304ffb99972279c34883b524fd39bd98307c12933b69c86",
+        "rows": 3
+      },
+      "persons": {
+        "sha256": "5b7a908210234ec86e1a9a610887246e1ba7ac7d605e195a96eadf0fd79233d8",
+        "rows": 3
+      },
+      "roster_snapshots": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "schema_migrations": {
+        "sha256": "ace7d26f7fe1b6a704fe22b3a3744f93d716cbfc15f7b07dffba8523dde9736e",
+        "rows": 1
+      }
+    },
+    "project_workspace": {
+      "project_assignments": {
+        "sha256": "615e46f3cd8dc422a5582a261d4c51f7aabbf2dba3eda9f5cd51a0af1dc52461",
+        "rows": 2
+      },
+      "project_commands": {
+        "sha256": "a98cf6257f27a31339b16108d6f8d610a678ca440934be96accbf10d2fad549c",
+        "rows": 9
+      },
+      "project_completion_confirmations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "project_history_events": {
+        "sha256": "e90667ecf1c8d0a72cee310b50cbad0ed8a77a1db3d4f751dd7bc260bfe2c899",
+        "rows": 4
+      },
+      "project_package_conversions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "project_resource_links": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "projects": {
+        "sha256": "c0a18a3ed0d2d067e3c1160f2c0e45918864261cfe5163d0e1bcd9a9360fb750",
+        "rows": 1
+      },
+      "reference_oa_production_assignments": {
+        "sha256": "ae64c71e4d229cfd10dc01f852c7e38c9133a825bf0c8f36a13b639e2fc6bec1",
+        "rows": 4
+      },
+      "reference_oa_production_discipline_heads": {
+        "sha256": "3514415e97a20bbf58b3aded437892a8b1b28e358cfd5478ce196f4e4e89fb2d",
+        "rows": 2
+      },
+      "reference_oa_production_discipline_versions": {
+        "sha256": "64b6078d852403261b279999999043b5d8be77650f4cc5e599cce27d1af05324",
+        "rows": 2
+      },
+      "reference_oa_production_events": {
+        "sha256": "0d075c4bfc5a521cd62b9fd8712a303ba280641807be7a48ead77c6047e69f49",
+        "rows": 3
+      },
+      "reference_oa_production_profiles": {
+        "sha256": "24ca5bc49ae5cfcda237254b75c7bfa250d6f0547f4c64b920fdd24ae7e8f00c",
+        "rows": 1
+      },
+      "schema_migrations": {
+        "sha256": "dc35df8633fc72f98198465db9093b91e8895e3e26150d2b3670acece127724a",
+        "rows": 12
+      }
+    },
+    "evidence_service": {
+      "evidence_audit_entries": {
+        "sha256": "f658b981577586ef527d81bc2742266c240b151757d9b05528de370cff9b12a5",
+        "rows": 2
+      },
+      "file_versions": {
+        "sha256": "078466137639b88306d3a02cb96bb03d43418aa26d6a323e9be034e285c57ecf",
+        "rows": 1
+      },
+      "files": {
+        "sha256": "a754d8e6f0ef31ae552548a11a8cd9cd930d9f1689fc2060fd41de890a6cce6f",
+        "rows": 1
+      },
+      "idempotency_commands": {
+        "sha256": "cdcf170cb745b66a200b31f3ec1cc4f84a013bfd93d308db85d61c4741454c6d",
+        "rows": 2
+      },
+      "schema_migrations": {
+        "sha256": "9d3bada4166b4370972180f6179ec46e750f9e4af8de274c9b3a367e9c630254",
+        "rows": 2
+      },
+      "upload_sessions": {
+        "sha256": "dbfa10806258877bfb57d01f66a7b13cd371df69c1e527d98d9224fb5f3c7e74",
+        "rows": 1
+      }
+    },
+    "bonus_distribution": {
+      "bonus_allocation_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_allocations": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_distribution_audit_events": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_distribution_commands": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_payable_suggestion_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_payable_suggestions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_pool_revisions": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "bonus_pools": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "rows": 0
+      },
+      "reference_oa_bonus_allocations": {
+        "sha256": "7edc3b4bec3b472e9d4ba13fa6d6cfff03a4531f83973c260079ab3bb57393bf",
+        "rows": 2
+      },
+      "reference_oa_bonus_audit": {
+        "sha256": "c12f74d337ca3dc91b888e49c7e88d7fc38279decf7ff898ef148047c4d9eb7d",
+        "rows": 2
+      },
+      "reference_oa_bonus_commands": {
+        "sha256": "734865f9627805e697b04255b8fad426dcca14ac3912e6e9fb09ae53755625cb",
+        "rows": 1
+      },
+      "reference_oa_bonus_revisions": {
+        "sha256": "f1bac43c42ee5b7691af1b5f8d3c099f9c70b608fc4f50a52bda2e3edff9d7c0",
+        "rows": 2
+      },
+      "schema_migrations": {
+        "sha256": "303f5869b3c2d6a2bcb4cc572257cad2ccd4bc0968af00c04449bce93ac7d4b3",
+        "rows": 4
+      }
+    }
+  },
+  "page_errors": [],
+  "normal_asset_sha256": "8dfcbaf1f98bc3d828557d78715526bf8675a37409cc90f2b694c5eba0ec44ea",
+  "tenant_id": "aef27932-0743-4c7f-83bd-d5c4fc5185c3",
+  "project_id": "71665c3b-a189-4297-a349-ec76e4e2d386",
+  "subject_id": "0bdff425-0f6c-44e5-92de-5c05d948877d",
+  "command_id": "862886ae-3663-41c8-8b36-49f194b02ec3",
+  "final_bonus": {
+    "bonus_allocation_revisions": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_allocations": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_distribution_audit_events": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_distribution_commands": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_payable_suggestion_revisions": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_payable_suggestions": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_pool_revisions": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "bonus_pools": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "reference_oa_bonus_allocations": {
+      "sha256": "1fed160eddc807a5ae08009a49b7d46eda2efbdbff4de6fc27a36a103dacfced",
+      "rows": 2
+    },
+    "reference_oa_bonus_audit": {
+      "sha256": "e0f21718367bf43ac4054a6fde12793b5f35b314a2f9edf82cc6062be81e9257",
+      "rows": 3
+    },
+    "reference_oa_bonus_commands": {
+      "sha256": "1578af15d4ad6f6a442715a962b2ffdc0344314aa51d982ffdf4fbbf23f3105e",
+      "rows": 2
+    },
+    "reference_oa_bonus_revisions": {
+      "sha256": "83413c9fd46e071483a069d0464838498f485a7ca540b6303a918e31df3b64e4",
+      "rows": 3
+    },
+    "schema_migrations": {
+      "sha256": "303f5869b3c2d6a2bcb4cc572257cad2ccd4bc0968af00c04449bce93ac7d4b3",
+      "rows": 4
+    }
+  },
+  "final_project": {
+    "project_assignments": {
+      "sha256": "615e46f3cd8dc422a5582a261d4c51f7aabbf2dba3eda9f5cd51a0af1dc52461",
+      "rows": 2
+    },
+    "project_commands": {
+      "sha256": "dc64aee3d53e29c3de1213b54ab28d53020326d5aac84b9aa9345790077aa664",
+      "rows": 10
+    },
+    "project_completion_confirmations": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "project_history_events": {
+      "sha256": "e90667ecf1c8d0a72cee310b50cbad0ed8a77a1db3d4f751dd7bc260bfe2c899",
+      "rows": 4
+    },
+    "project_package_conversions": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "project_resource_links": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "rows": 0
+    },
+    "projects": {
+      "sha256": "e4f5da0cd977c4e469ae4eb03192549bf82d634c2f14dcde3b69f6189ca5b60f",
+      "rows": 1
+    },
+    "reference_oa_production_assignments": {
+      "sha256": "36612005ff797ceee3a2e26ef845675da253b6dc7e9583dc1ce59d17ab911919",
+      "rows": 5
+    },
+    "reference_oa_production_discipline_heads": {
+      "sha256": "3514415e97a20bbf58b3aded437892a8b1b28e358cfd5478ce196f4e4e89fb2d",
+      "rows": 2
+    },
+    "reference_oa_production_discipline_versions": {
+      "sha256": "64b6078d852403261b279999999043b5d8be77650f4cc5e599cce27d1af05324",
+      "rows": 2
+    },
+    "reference_oa_production_events": {
+      "sha256": "1b75cb1ee9acfdf9b24ec00eed25c26fcfe3a8531e1951e4eb84baaa0c622d9e",
+      "rows": 4
+    },
+    "reference_oa_production_profiles": {
+      "sha256": "24ca5bc49ae5cfcda237254b75c7bfa250d6f0547f4c64b920fdd24ae7e8f00c",
+      "rows": 1
+    },
+    "schema_migrations": {
+      "sha256": "dc35df8633fc72f98198465db9093b91e8895e3e26150d2b3670acece127724a",
+      "rows": 12
+    }
+  },
+  "cleanup": {
+    "runtime_stopped": true,
+    "remaining": {
+      "source": 0,
+      "target": 0
+    },
+    "private_volumes_and_backups_retained": true,
+    "projects": {
+      "source": "oa-professional-1987f87b-source",
+      "target": "oa-professional-1987f87b-restore"
+    }
+  }
+}

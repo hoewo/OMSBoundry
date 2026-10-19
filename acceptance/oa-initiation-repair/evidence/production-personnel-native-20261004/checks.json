@@ -1,0 +1,13 @@
+{
+  "node": {
+    "tests": 315,
+    "passed": 315,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typescript": true,
+  "project_vet": true,
+  "workbench_go": true,
+  "workbench_vet": true,
+  "main_deployed": false
+}

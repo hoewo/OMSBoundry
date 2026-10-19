@@ -1,0 +1,60 @@
+# Project Package 转换 API 契约
+# 路径: arckit/tech/_shared/contracts/project-package-convert.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-package-convert.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-26"
+  updated: "2026-09-26"
+
+endpoint:
+  method: POST
+  path: "/api/v1/projects/{project_id}/package-conversions"
+  summary: "把既有顶层 Project 附加到既有 Package，或创建外层 Package"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.hierarchy.manage"
+  scope_kind: "tenant"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, operation, expected_project_revision, sort_order]
+    properties:
+      command_id: {type: string, format: uuid}
+      operation: {type: string, enum: [attach_existing, wrap_as_package]}
+      expected_project_revision: {type: integer, minimum: 1}
+      target_package_id: {type: string, format: uuid}
+      expected_package_revision: {type: integer, minimum: 1}
+      sort_order: {type: integer, minimum: 0}
+      new_package: {$ref: "project-package-create.yaml#/request/body"}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [conversion, project, package]
+      properties:
+        conversion: {$ref: "../models/ProjectPackageConversion.yaml"}
+        project: {$ref: "../models/Project.yaml"}
+        package: {$ref: "../models/Project.yaml"}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: PROJECT_HIERARCHY_CONFLICT, retryable: false}
+
+business_logic:
+  flow:
+    - "只接受未取消、尚无 parent 的 node_type=project。"
+    - "attach_existing 要求目标是同租户、顶层、未取消 package；wrap_as_package 原子创建 package。"
+    - "更新双方 revision，写原 Project 与 Package 历史，并写不可变 conversion。"
+    - "保留原 Project ID、编号、Assignment、Resource Link 和外部业务引用，不复制目标事实。"
+  side_effects: ["仅写 Project Workspace 数据库"]

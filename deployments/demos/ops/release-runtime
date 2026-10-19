@@ -1,0 +1,127 @@
+#!/bin/sh
+
+# Shared source-free Level A runtime helpers. The caller must define:
+# repo_root, demo_dir, runtime_dir, compose(), and load_env().
+
+demo_release_marker="$repo_root/deployments/demos/.release-bundle"
+demo_release_bin_dir="$repo_root/bin"
+
+demo_is_release() {
+  [ -f "$demo_release_marker" ]
+}
+
+demo_marker_value() {
+  key=$1
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$demo_release_marker"
+}
+
+demo_append_release_env() {
+  name=$1
+  demo_is_release || return 0
+  postgres_image=$(demo_marker_value LEVEL_A_POSTGRES_IMAGE)
+  case "$name" in
+    contract-ledger)
+      printf 'CONTRACT_DEMO_POSTGRES_IMAGE=%s\nCONTRACT_DEMO_IMAGE=%s\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_CONTRACT_IMAGE)"
+      ;;
+    money-flow-ledger)
+      printf 'MONEY_DEMO_POSTGRES_IMAGE=%s\nMONEY_DEMO_IMAGE=%s\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_MONEY_IMAGE)"
+      ;;
+    people-groups)
+      printf 'PEOPLE_DEMO_POSTGRES_IMAGE=%s\nPEOPLE_DEMO_IMAGE=%s\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_PEOPLE_IMAGE)"
+      ;;
+    evidence-service)
+      printf 'EVIDENCE_DEMO_POSTGRES_IMAGE=%s\nEVIDENCE_DEMO_IMAGE=%s\nEVIDENCE_PUBLIC_BASE_URL=http://evidence-service:8085\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_EVIDENCE_IMAGE)"
+      ;;
+    project-workspace)
+      printf 'PROJECT_DEMO_POSTGRES_IMAGE=%s\nPROJECT_DEMO_IMAGE=%s\nPROJECT_DEMO_STUB_IMAGE=%s\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_PROJECT_IMAGE)" "$(demo_marker_value LEVEL_A_PROJECT_STUB_IMAGE)"
+      ;;
+    design-operations)
+      printf 'DESIGN_DEMO_POSTGRES_IMAGE=%s\nDESIGN_DEMO_IMAGE=%s\nDESIGN_DEMO_STUB_IMAGE=%s\n' \
+        "$postgres_image" "$(demo_marker_value LEVEL_A_DESIGN_IMAGE)" "$(demo_marker_value LEVEL_A_DESIGN_STUB_IMAGE)"
+      ;;
+    *)
+      echo "unknown Level A release demo: $name" >&2
+      return 1
+      ;;
+  esac
+}
+
+demo_check_release_images() {
+  demo_is_release || return 0
+  target=$(demo_marker_value target)
+  case "$target" in
+    linux/amd64|linux/arm64) ;;
+    *) echo "unsupported Level A release target: ${target:-missing}" >&2; return 1 ;;
+  esac
+  awk -F= '/^LEVEL_A_[A-Z_]+_IMAGE=/ {sub(/^[^=]*=/, ""); print}' "$demo_release_marker" | while IFS= read -r image; do
+    [ -n "$image" ] || continue
+    actual=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null) || {
+      echo "Level A release image is not loaded: $image" >&2
+      exit 1
+    }
+    [ "$actual" = "$target" ] || {
+      echo "Level A release image $image targets $actual, expected $target" >&2
+      exit 1
+    }
+  done
+}
+
+demo_up() {
+  if demo_is_release; then
+    demo_check_release_images
+    compose up --detach --wait --no-build --pull never
+  else
+    compose up --build --detach --wait
+  fi
+}
+
+demo_network_for_service() {
+  service=$1
+  container=$(compose ps -q "$service")
+  [ -n "$container" ] || { echo "Level A service is not running: $service" >&2; return 1; }
+  docker inspect --format '{{range $name, $config := .NetworkSettings.Networks}}{{println $name}}{{end}}' "$container" | while IFS= read -r network; do
+    [ -n "$network" ] || continue
+    label=$(docker network inspect --format '{{index .Labels "com.docker.compose.network"}}' "$network" 2>/dev/null || true)
+    if [ "$label" = demo ]; then
+      printf '%s\n' "$network"
+      exit 0
+    fi
+  done
+}
+
+demo_run_release_binary() {
+  binary_name=$1
+  runner_image=$2
+  service=$3
+  binary="$demo_release_bin_dir/$binary_name"
+  [ -x "$binary" ] || { echo "Level A release driver is missing: $binary" >&2; return 1; }
+  target=$(demo_marker_value target)
+  network=$(demo_network_for_service "$service")
+  [ -n "$network" ] || { echo "Level A Demo network is unavailable for: $service" >&2; return 1; }
+  mkdir -p "$runtime_dir"
+  state_name=$(basename "${DEMO_STATE_PATH:-state.json}")
+  docker run --rm \
+    --platform "$target" \
+    --network "$network" \
+    --user 0 \
+    --volume "$binary:/runner:ro" \
+    --volume "$runtime_dir:/state" \
+    --env DEMO_TEMPLATE_ACCESS_TOKEN \
+    --env DEMO_REFERENCE_ACCESS_TOKEN \
+    --env DEMO_ADMIN_USERNAME \
+    --env DEMO_ADMIN_PASSWORD \
+    --env DEMO_CONTRACT_URL=http://contract-ledger:8081 \
+    --env DEMO_MONEY_URL=http://money-flow-ledger:8083 \
+    --env DEMO_PEOPLE_URL=http://people-groups:8084 \
+    --env DEMO_EVIDENCE_URL=http://evidence-service:8085 \
+    --env DEMO_PROJECT_URL=http://project-workspace:8086 \
+    --env DEMO_DESIGN_URL=http://design-operations:8087 \
+    --env DEMO_STATE_PATH="/state/$state_name" \
+    --entrypoint /runner \
+    "$runner_image"
+}

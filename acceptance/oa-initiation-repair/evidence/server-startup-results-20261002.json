@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "main_unchanged": true,
+  "full_suite_or_business_journey": false,
+  "schema": 10,
+  "actual_server_startup": true,
+  "restart_facts_unchanged": true,
+  "anonymous_native_routes_denied": 2,
+  "server_sha256": "95822bbdfa9182c43a957b368fc368d545dba700b7eb54f0a1a4ef66f0817aca",
+  "private_owned_database": "oa_initiation_startup_20261002d",
+  "max_total_cpu": 0.4,
+  "max_total_memory_mib": 352,
+  "source_root": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002d"
+}

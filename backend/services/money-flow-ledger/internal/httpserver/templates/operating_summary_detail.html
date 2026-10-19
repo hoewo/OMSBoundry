@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Details.Metric.Label}}下钻 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/operating-summary">← 返回当前经营汇总</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary" aria-current="page">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>{{.Details.Metric.Label}}下钻</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <dl>
+      <dt>本方账簿主体</dt><dd>{{.Details.LedgerOwnerLegalName}}（{{.Details.LedgerOwnerPartyID}}）</dd>
+      <dt>币种</dt><dd>{{.Details.Currency}}</dd>
+      <dt>贡献事实数</dt><dd>{{.Details.FactCount}}</dd>
+      <dt>精确合计</dt><dd>{{.Details.TotalAmount}} {{.Details.Currency}}</dd>
+      <dt>生成时间</dt><dd>{{.Details.GeneratedAt}}</dd>
+    </dl>
+
+    {{if .Details.IsObligation}}
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">义务</th>
+          <th scope="col">方向</th>
+          <th scope="col">往来方</th>
+          <th scope="col">到期日</th>
+          <th scope="col">Revision</th>
+          <th scope="col">当前有效金额</th>
+          <th scope="col">净核销</th>
+          <th scope="col">减免</th>
+          <th scope="col">本项贡献</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Details.ObligationFacts}}
+        <tr>
+          <td><a href="{{basePath}}/obligations/{{.ID}}">{{.Title}}</a><br><small>{{.ID}}</small></td>
+          <td>{{.DirectionLabel}}</td>
+          <td>{{.CounterpartyLegalName}}</td>
+          <td>{{.DueOn}}</td>
+          <td>{{.CurrentRevision}}</td>
+          <td>{{.EffectiveAmount}} {{.Currency}}</td>
+          <td>{{.NetAllocatedAmount}} {{.Currency}}</td>
+          <td>{{.RemittedAmount}} {{.Currency}}</td>
+          <td>{{.ContributionAmount}} {{.Currency}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">实际资金</th>
+          <th scope="col">方向</th>
+          <th scope="col">往来方</th>
+          <th scope="col">发生日</th>
+          <th scope="col">账户标签</th>
+          <th scope="col">原始金额</th>
+          <th scope="col">当前有效金额</th>
+          <th scope="col">净核销</th>
+          <th scope="col">未分配</th>
+          <th scope="col">本项贡献</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Details.CashFacts}}
+        <tr>
+          <td><a href="{{basePath}}/cash-transactions/{{.ID}}">{{.Description}}</a><br><small>{{.ID}}</small></td>
+          <td>{{.TypeLabel}}</td>
+          <td>{{.CounterpartyLegalName}}</td>
+          <td>{{.OccurredOn}}</td>
+          <td>{{.AccountReference}}</td>
+          <td>{{.OriginalAmount}} {{.Currency}}</td>
+          <td>{{.EffectiveAmount}} {{.Currency}}</td>
+          <td>{{.NetAllocatedAmount}} {{.Currency}}</td>
+          <td>{{.UnallocatedAmount}} {{.Currency}}</td>
+          <td>{{.ContributionAmount}} {{.Currency}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+
+    <p>本页只列出对所选 current 指标有正贡献的事实；合计由以上同一批事实精确求和。</p>
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

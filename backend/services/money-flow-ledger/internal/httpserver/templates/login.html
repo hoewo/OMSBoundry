@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <h1>登录 Money Flow Ledger</h1>
+    <p>使用本系统自己的本地账号登录。</p>
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    <form method="post" action="{{basePath}}/login">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <label for="username">用户名</label>
+      <input id="username" name="username" value="{{.Username}}" autocomplete="username" maxlength="64" required autofocus>
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" maxlength="72" required>
+      <button type="submit">登录</button>
+    </form>
+  </main>
+</body>
+</html>

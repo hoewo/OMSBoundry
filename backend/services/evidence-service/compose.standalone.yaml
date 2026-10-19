@@ -1,0 +1,48 @@
+name: omsbizfoundry-evidence-service
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evidence_service
+      POSTGRES_PASSWORD: ${EVIDENCE_DB_PASSWORD:?set EVIDENCE_DB_PASSWORD in .env}
+      POSTGRES_DB: evidence_service
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evidence_service -d evidence_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - evidence-postgres:/var/lib/postgresql
+
+  evidence:
+    build:
+      context: .
+      args:
+        VERSION: ${EVIDENCE_VERSION:-dev}
+        COMMIT: ${EVIDENCE_COMMIT:-unknown}
+        BUILT_AT: ${EVIDENCE_BUILT_AT:-unknown}
+    restart: unless-stopped
+    env_file:
+      - ${EVIDENCE_ENV_FILE:-.env}
+    environment:
+      HTTP_ADDR: :8085
+      DATABASE_URL: postgres://evidence_service:${EVIDENCE_DB_PASSWORD}@postgres:5432/evidence_service?sslmode=disable
+      LOCAL_STORAGE_ROOT: /var/lib/evidence/objects
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8085/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:${EVIDENCE_PORT:-8085}:8085"
+    volumes:
+      - evidence-objects:/var/lib/evidence
+
+volumes:
+  evidence-postgres:
+  evidence-objects:

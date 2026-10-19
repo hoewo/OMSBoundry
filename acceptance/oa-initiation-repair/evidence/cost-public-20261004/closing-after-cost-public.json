@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "main_healthy": 17,
+  "project_revision": 15,
+  "cost_records": 4,
+  "cost_revisions_commands_audits": 8,
+  "other_ten_business_databases_unchanged": true,
+  "old_generic_cost_facts_unchanged": true,
+  "old_evidence_facts_and_bytes_preserved": true,
+  "one_new_evidence_file_byte_exact": true,
+  "only_approved_cost_resource_grants_added": 14,
+  "tenant_grants_unchanged": true,
+  "user101_unchanged": true,
+  "restore20_and_private_probe_stopped": true,
+  "full_oa_accepted": false
+}

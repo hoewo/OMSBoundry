@@ -1,0 +1,62 @@
+{
+  "passed": true,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": true,
+  "identity_template": true,
+  "production_iam": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-business-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-production-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-reload-retains-two-sides-without-write",
+      "passed": true
+    },
+    {
+      "name": "normal-withdraw-modal-click-retains-record-and-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "native-cold-empty-target-pg18-restore-identical-head-history-command-audit",
+      "passed": true
+    },
+    {
+      "name": "restored-native-pending-replay-one-batch-not-duplicate",
+      "passed": true
+    },
+    {
+      "name": "restored-independent-server-continues-write-and-refresh",
+      "passed": true
+    }
+  ],
+  "backup_sha256": "6cd97f8ec8f8b3ddd4bdc0fd8095b9f7b7d3576411e6a1993c1b24c070d73ad5",
+  "native_facts": {
+    "heads": 6,
+    "revisions": 7,
+    "commands": 5,
+    "audits": 7,
+    "pools": 0,
+    "suggestions": 0,
+    "digest": "2c947f40b20acd087eb8ac0cad2f3db7"
+  },
+  "post_attempt_count": 6,
+  "page_errors": []
+}

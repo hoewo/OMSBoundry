@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: build-release VERSION [OUTPUT_DIRECTORY]" >&2
+  exit 2
+fi
+
+release_version=$1
+release_output=${2:-dist}
+if ! printf '%s' "$release_version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+  echo "VERSION must look like v1.2.3 or v1.2.3-rc.1" >&2
+  exit 2
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+app_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$app_dir/../.." && pwd)
+release_goos=${GOOS:-$(go env GOOS)}
+release_goarch=${GOARCH:-$(go env GOARCH)}
+release_provenance=$("$repo_dir/ops/resolve-release-provenance" "$repo_dir")
+release_commit=$(printf '%s\n' "$release_provenance" | sed -n '1p')
+release_built_at=$(printf '%s\n' "$release_provenance" | sed -n '2p')
+
+case "$release_goos" in
+  darwin|linux) ;;
+  *)
+    echo "unsupported release GOOS: $release_goos (expected darwin or linux)" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "$release_output"
+release_output=$(CDPATH= cd -- "$release_output" && pwd)
+bundle_name="contract-ledger_${release_version}_${release_goos}_${release_goarch}"
+archive_path="$release_output/$bundle_name.tar.gz"
+checksum_path="$archive_path.sha256"
+if [ -e "$archive_path" ] || [ -e "$checksum_path" ]; then
+  echo "release output already exists: $archive_path" >&2
+  exit 1
+fi
+
+umask 077
+release_stage=$(mktemp -d)
+release_archive_temp="$release_output/.$bundle_name.tar.gz.tmp.$$"
+release_checksum_temp="$release_output/.$bundle_name.tar.gz.sha256.tmp.$$"
+cleanup_release() {
+  rm -rf "$release_stage"
+  rm -f "$release_archive_temp" "$release_checksum_temp"
+}
+trap cleanup_release EXIT HUP INT TERM
+
+bundle_root="$release_stage/$bundle_name"
+mkdir -p "$bundle_root/bin" "$bundle_root/config" "$bundle_root/docs"
+release_ldflags="-s -w -X omsbizfoundry/contract-ledger/internal/buildinfo.Version=$release_version -X omsbizfoundry/contract-ledger/internal/buildinfo.Commit=$release_commit -X omsbizfoundry/contract-ledger/internal/buildinfo.BuiltAt=$release_built_at"
+
+(
+  cd "$app_dir"
+  CGO_ENABLED=0 GOOS="$release_goos" GOARCH="$release_goarch" GOWORK=off \
+    go build -trimpath -ldflags "$release_ldflags" -o "$bundle_root/bin/contract-ledger-server" ./cmd/server
+  CGO_ENABLED=0 GOOS="$release_goos" GOARCH="$release_goarch" GOWORK=off \
+    go build -trimpath -ldflags "$release_ldflags" -o "$bundle_root/bin/contract-ledger-ops" ./cmd/ops
+  CGO_ENABLED=0 GOOS="$release_goos" GOARCH="$release_goarch" GOWORK=off \
+    go build -trimpath -ldflags "$release_ldflags" -o "$bundle_root/bin/contract-ledger-backup" ./cmd/backup
+)
+
+cp "$app_dir/.env.example" "$bundle_root/config/contract-ledger.env.example"
+cp "$repo_dir/docs/operations/contract-ledger-install-upgrade.md" "$bundle_root/docs/INSTALL-UPGRADE.md"
+cp "$repo_dir/docs/operations/contract-ledger-backup-restore.md" "$bundle_root/docs/BACKUP-RESTORE.md"
+chmod 0755 "$bundle_root/bin/contract-ledger-server" "$bundle_root/bin/contract-ledger-ops" "$bundle_root/bin/contract-ledger-backup"
+chmod 0600 "$bundle_root/config/contract-ledger.env.example" "$bundle_root/docs/INSTALL-UPGRADE.md" "$bundle_root/docs/BACKUP-RESTORE.md"
+
+# macOS bsdtar otherwise serializes extended attributes as hidden AppleDouble
+# entries (._*), violating the fixed bundle contract. The variable is ignored by
+# tar implementations that do not use copyfile metadata.
+COPYFILE_DISABLE=1 tar -czf "$release_archive_temp" -C "$release_stage" "$bundle_name"
+chmod 0600 "$release_archive_temp"
+
+if command -v sha256sum >/dev/null 2>&1; then
+  release_digest=$(sha256sum "$release_archive_temp" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  release_digest=$(shasum -a 256 "$release_archive_temp" | awk '{print $1}')
+else
+  echo "sha256sum or shasum is required" >&2
+  exit 1
+fi
+printf '%s  %s\n' "$release_digest" "$(basename "$archive_path")" > "$release_checksum_temp"
+chmod 0600 "$release_checksum_temp"
+if ! ln "$release_archive_temp" "$archive_path"; then
+  echo "release output already exists: $archive_path" >&2
+  exit 1
+fi
+if ! ln "$release_checksum_temp" "$checksum_path"; then
+  rm -f "$archive_path"
+  echo "release checksum output already exists: $checksum_path" >&2
+  exit 1
+fi
+rm -f "$release_archive_temp" "$release_checksum_temp"
+
+printf '%s\n%s\n' "$archive_path" "$checksum_path"

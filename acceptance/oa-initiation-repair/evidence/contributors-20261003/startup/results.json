@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "main_unchanged": true,
+  "full_suite_or_business_journey": false,
+  "schema": 11,
+  "actual_server_startup": true,
+  "restart_facts_unchanged": true,
+  "anonymous_native_routes_denied": 10,
+  "server_sha256": "6aebbd93f484c4347c56f27cbc9c78a88fdb7b611a312af4ba149676a19cc62f",
+  "private_owned_database": "oa_initiation_startup_20261002x",
+  "max_total_cpu": 0.4,
+  "max_total_memory_mib": 352
+}

@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-089",
+  "synthetic": true,
+  "formal_iam_or_persistence_or_gateway": false,
+  "probe_environment": {
+    "OA_INITIATION_BROWSER_PROBE": "1",
+    "OA_DIRECTORY_BROWSER_PROBE": "1",
+    "OA_CLIENT_NAME_READ_FAIL": "1"
+  },
+  "fixture_sha256": "22635047f832db1b1bf92c2babfa776a642fe61b0df81b823c139052f703569d",
+  "duration_seconds": 88.12,
+  "observed_name_suggestion_http_status": 503,
+  "counts": {
+    "basic_info_change": 0,
+    "client_context_change": 1,
+    "client_context_read": 3,
+    "client_name_suggestions_read": 2,
+    "complete": 0,
+    "dispatch": 0,
+    "production_assignment": 0,
+    "profile_correction": 0,
+    "update": 0
+  },
+  "name_read_breakdown": {
+    "browser_input": 1,
+    "explicit_http_status_diagnostic": 1
+  },
+  "checks": {
+    "name_remains_manual_input": true,
+    "hint_hidden_after_503": true,
+    "tab_keeps_name_and_focuses_contact": true,
+    "zero_write_before_explicit_save": true,
+    "explicit_save_one_write": true,
+    "readback_and_refresh_same_project_business_tab": true,
+    "console_errors": 0
+  },
+  "saved_synthetic_context": {
+    "project_id": "33333333-3333-4333-8333-000000001001",
+    "name": "甲方",
+    "contact_name": "隔离故障测试联系人",
+    "contact_phone": "057112345678",
+    "recorded_project_revision": 4
+  },
+  "probe_passed": true,
+  "probe_stopped": true,
+  "temporary_tab_closed": true,
+  "screenshot_inspected_inline": true,
+  "screenshot_file_archived": false,
+  "latency_or_auth_revocation_browser_matrix_complete": false,
+  "main_deployed": false,
+  "full_oa_accepted": false
+}

@@ -1,0 +1,290 @@
+{
+  "passed": false,
+  "formal_iam": true,
+  "real_people_project_bonus": true,
+  "postgresql_18": true,
+  "main_deployed": false,
+  "normal_workbench_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "suite_restore_accepted": false,
+  "asset_sha256": "1060e178ee6d59ba3645cfc8114797e8a8233a223fc36254097d519425a37ccb",
+  "scenarios": [
+    {
+      "name": "five-native-apps-api-only-source-setup-active-project-formal-exact-grants",
+      "passed": true
+    },
+    {
+      "name": "original-professional-and-bonus-surfaces-visible-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-drawers-save-six-native-roles-and-same-person-second-profession",
+      "passed": true
+    },
+    {
+      "name": "distinct-typed-project-reference-seven-active-snapshots-read-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-same-person-two-professions-half-up-native-atomic-batch-zero-source-writes",
+      "passed": true
+    },
+    {
+      "name": "reload-native-source-qualified-labels-and-exact-amounts",
+      "passed": true
+    },
+    {
+      "name": "original-active-participant-still-bonus-candidate-under-not-applicable-no-source-end",
+      "passed": true
+    }
+  ],
+  "backup_sha256": "dfd66cdbc2d4aa3610d1546e4b49fc56cf6d890c189a46d55086a6a4b38aec36",
+  "stage": "cold-restore",
+  "error": "Expected values to be strictly equal:\n\n1 !== 2\n",
+  "page_errors": [],
+  "client_posts": [
+    {
+      "app": "project",
+      "path": "/api/v1/projects/5338e78e-69d9-49b9-975b-7a320a19a6a0/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 5,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "a4f99db8-5dd8-4e17-bd47-407d13e278f3",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "92f69cd0-7efa-44f4-b957-8f20546c7599",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "5174e867-8cbe-498d-b202-4d9759b11ed2",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "6dd78feb-77da-4ec0-af4f-79f534662056"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/5338e78e-69d9-49b9-975b-7a320a19a6a0/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 6,
+        "operation": "replace_reviewers",
+        "changes": [
+          {
+            "role": "approver",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "estimator",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "5174e867-8cbe-498d-b202-4d9759b11ed2",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "3fead3ff-f59f-49c2-9bb8-edb5c338db31"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/5338e78e-69d9-49b9-975b-7a320a19a6a0/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 7,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "14b7963e-c656-4053-92d9-0edb00138f53",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": []
+          }
+        ],
+        "command_id": "c47f4a37-80a7-47ee-9f2c-e2beef36a6c2"
+      },
+      "status": 200
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "5ff5b602-6c36-4cdb-b43a-08f6805f9095",
+        "project_ref": {
+          "id": "5338e78e-69d9-49b9-975b-7a320a19a6a0",
+          "revision": 8
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "同人不同专业奖金",
+        "items": [
+          {
+            "person_ref": {
+              "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "f58307b5-9a7d-416e-af60-98ba7610ae3d",
+              "revision": 6
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 5000,
+            "fixed_amount_minor": "0"
+          },
+          {
+            "person_ref": {
+              "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "338078dc-bb8b-4ee5-a315-269a7df6a8e9",
+              "revision": 8
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 5000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "301c80f4-b169-45c9-86a4-13635f3e221e",
+        "project_ref": {
+          "id": "5338e78e-69d9-49b9-975b-7a320a19a6a0",
+          "revision": 9
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "专业奖金丢回复恢复",
+        "items": [
+          {
+            "person_ref": {
+              "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "248f22ea-f17e-46f3-8925-728a56bca747",
+              "revision": 7
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 1000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    },
+    {
+      "app": "bonus",
+      "path": "/api/v1/reference-oa/bonus-allocations",
+      "body": {
+        "command_id": "301c80f4-b169-45c9-86a4-13635f3e221e",
+        "project_ref": {
+          "id": "5338e78e-69d9-49b9-975b-7a320a19a6a0",
+          "revision": 9
+        },
+        "scope": "production",
+        "base_amount_minor": "101",
+        "occurred_on": "2026-10-04",
+        "description": "专业奖金丢回复恢复",
+        "items": [
+          {
+            "person_ref": {
+              "id": "f7a88558-5d2f-4e4d-8532-74a995c4ba0b",
+              "revision": 1
+            },
+            "assignment_ref": {
+              "id": "248f22ea-f17e-46f3-8925-728a56bca747",
+              "revision": 7
+            },
+            "assignment_source": "reference-oa-production-personnel-v1",
+            "method": "ratio",
+            "ratio_basis_points": 1000,
+            "fixed_amount_minor": "0"
+          }
+        ]
+      },
+      "status": 201
+    }
+  ]
+}

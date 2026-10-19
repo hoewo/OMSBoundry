@@ -1,0 +1,183 @@
+{
+  "schema_version": "oa-public-slice-evidence-v1",
+  "date": "2026-10-02",
+  "scope": "Auth58 first OA clone slice, not complete OA acceptance",
+  "remote": {
+    "artifact_manifest": {
+      "version": "v0.1.0-oa.20261002.1",
+      "platform": "linux/amd64",
+      "official_release": false,
+      "commit": "unknown",
+      "source_archive_sha256": "93c1aecdd953f290a1e1a7d2c1a6d8b67dd24feca048e11ff0e72d658dffc3a7",
+      "applications": {
+        "project-workspace": {
+          "Dockerfile": "f47a13154828d9d0a1a1f6e61dcc0ef8c61e285eaaca5805fd138a92ba3a4908",
+          "ops": "77a289562b69c07f177f9748555aff52aadca3564a7c212a652e69c51076a96b",
+          "server": "8399c4ec08774b3f5e13277340e5345819cd789f04fe6301ae20e9595d1c9915",
+          "workload-keyctl": "665186c2b32c81773d7195b98b3d451a29f5263e1458edce123ad4b09c95eb56"
+        },
+        "unified-workbench": {
+          "Dockerfile": "67cfaf74008175c3884e0df4022f2a5914314ea8e9a89246583561d388620b5c",
+          "server": "2bb6e76f0d2667714e5fa118019847654b78d82d6a1cb29f12e7607912c825a8"
+        }
+      },
+      "contracts": {
+        "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+        "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb",
+        "reference-oa-c1-role-overlay-v1.3.json": "fccb7d48c6d648a209b5bca9bace13dd0ea2e0ee33080909a66bf48cc6595faf"
+      }
+    },
+    "publication": {
+      "passed": true,
+      "official_release": false,
+      "images": {
+        "project-workspace": {
+          "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/project-workspace@sha256:88d9549b575016a79e108bdeb5a501ee0f82e071cb7b030f0242451ccb491ac4",
+          "image_id": "sha256:88d9549b575016a79e108bdeb5a501ee0f82e071cb7b030f0242451ccb491ac4",
+          "binary_sha256": {
+            "server": "8399c4ec08774b3f5e13277340e5345819cd789f04fe6301ae20e9595d1c9915",
+            "ops": "77a289562b69c07f177f9748555aff52aadca3564a7c212a652e69c51076a96b",
+            "workload-keyctl": "665186c2b32c81773d7195b98b3d451a29f5263e1458edce123ad4b09c95eb56"
+          }
+        },
+        "unified-workbench": {
+          "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:6971dc78288ca9fc88c2a184fdb047738245df5d7ba4bae87b42337a8a65d16d",
+          "image_id": "sha256:6971dc78288ca9fc88c2a184fdb047738245df5d7ba4bae87b42337a8a65d16d",
+          "binary_sha256": {
+            "server": "2bb6e76f0d2667714e5fa118019847654b78d82d6a1cb29f12e7607912c825a8"
+          }
+        }
+      },
+      "main_unchanged": true
+    },
+    "preflight": {
+      "passed": true,
+      "iam8_new_catalog_and_policy_parser": true,
+      "project_schema_before": "000007_business_engagement_material_resource_links.sql",
+      "closure": [
+        "Project server/migration",
+        "Workbench",
+        "IAM catalog 0.6 and selected policy 1.2"
+      ],
+      "gateway_suite_manifest_unchanged": true,
+      "other_business_images_unchanged": true,
+      "official_release": false
+    },
+    "restore": {
+      "passed": true,
+      "empty_databases": 13,
+      "facts_and_sequences_equal": true,
+      "files_and_iam_key_bytes_equal": true,
+      "schema_7_to_10": true,
+      "existing_project_facts_unchanged": true,
+      "full_suite_restore_runtime": false
+    },
+    "rollout": {
+      "passed": true,
+      "schema": 10,
+      "changed_containers": [
+        "identity-access",
+        "project-workspace",
+        "unified-workbench"
+      ],
+      "other_14_container_ids_unchanged": true,
+      "project_facts_preserved": true,
+      "d1_check": true,
+      "official_release": false
+    },
+    "public_delivery": {
+      "passed": true,
+      "url": "https://oatest.antuinfo.cn/workbench/",
+      "public_nginx_gateway_iam_project": true,
+      "page_sha256": "f296aba31072de94424bc13e4f97fef90b96e7cd6d94001d868b124f59f116e7",
+      "runtime_sha256": "2db7d8fd2491bcb2a59ce13c625cb24750d7ebaeeba2e85bdd7fb1a909e1f6cb",
+      "directory_sha256": "03effc01f5f3d127598d0aa4fc09a2ddcd5e5c9fda8acab49f931743f14324d0",
+      "shell_sha256": "d50ec6a47348c88318d3f095e1993e3376a0b10548ee5e8ad453fca7d2fd1f10",
+      "existing_test_admin_only_new_grants_this_attempt": [],
+      "confirmed_native_admin_actions": [
+        "project-workspace.profile.correct",
+        "project-workspace.counterparty-context.read",
+        "project-workspace.counterparty-context.manage"
+      ],
+      "customer_role_overlay_1_3_not_applied_to_other_accounts": true,
+      "project_reads_zero_fact_change": true,
+      "browser_click_test": false
+    },
+    "fixture_readback": {
+      "passed": true,
+      "fixture_id": "b4283968-99d5-40c0-9d1f-3802d3d2c9fb",
+      "project_number": "OA-VERIFY-20261002-A",
+      "status": "active",
+      "revision": 5,
+      "activation_revision": 3,
+      "initiation_profile": "business-owner-v1",
+      "production_owner_created_after_activation": true,
+      "virtual_contact_readback": true,
+      "native_name_suggestion_contains_fixture": true,
+      "public_directory_contains_active_fixture": true,
+      "readback_project_zero_fact_change": true,
+      "other_11_database_facts_and_sequences_unchanged": [
+        "evidence_service",
+        "people_groups",
+        "party_directory",
+        "contract_ledger",
+        "money_flow",
+        "business_engagement",
+        "billing_invoice",
+        "design_operations",
+        "approval_audit_results",
+        "cost_outsourcing",
+        "bonus_distribution"
+      ],
+      "all_existing_project_table_rows_unchanged": {
+        "project_assignments": true,
+        "project_commands": true,
+        "project_completion_confirmations": true,
+        "project_history_events": true,
+        "project_package_conversions": true,
+        "project_resource_links": true,
+        "projects": true
+      },
+      "contact_response_sha256": "0cba765121c1eda62918a70901724aca8daea326d6b80ece56432df38c9f20d7",
+      "browser_click_observation_recorded_separately": true,
+      "full_oa_accepted": false
+    },
+    "offhost_export": {
+      "archive_sha256": "50767f466ae52c73bea32cd4634936eb0b9b94d69b7a7601f481671d664fbee5",
+      "bytes": 207644,
+      "local_receipt_pending": true
+    }
+  },
+  "local_backup_receipt": {
+    "verified": true,
+    "archive_sha256": "50767f466ae52c73bea32cd4634936eb0b9b94d69b7a7601f481671d664fbee5",
+    "path": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-public-backup-20261002.6Cq7Fz/oa-public-20261002a-backup.tar.gz",
+    "note": "Remote export metadata predates the verified local receipt; its pending flag is retained as historical evidence."
+  },
+  "browser_observation": {
+    "provider": "native Google Chrome through cua_repl",
+    "public_url": "https://oatest.antuinfo.cn/workbench/",
+    "fixture_id": "b4283968-99d5-40c0-9d1f-3802d3d2c9fb",
+    "performed": [
+      "default project management page",
+      "dispatch with name and business owner, no number",
+      "completion with formal number and design type, production owner empty",
+      "same OA detail, no native Project redirect",
+      "basic info saved with production owner added after activation",
+      "project-specific virtual counterparty contact saved",
+      "refresh retains same project business tab and contact values",
+      "history name ghost text observed, Tab accepts and advances to contact",
+      "cancel after name completion without submitting",
+      "return to project list and reopen same detail"
+    ],
+    "passed": true,
+    "limitations": [
+      "administrator healthy-control path only; no formal role/revocation browser matrix",
+      "screenshots inspected inline, no archived screenshot files",
+      "architecture lens reopening not tested: Mac locked after main journey",
+      "project package public browser path not tested",
+      "disabled business and production tabs remain incomplete"
+    ],
+    "full_oa_accepted": false
+  }
+}

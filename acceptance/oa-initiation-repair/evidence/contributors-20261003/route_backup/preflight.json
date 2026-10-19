@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "closure": [
+    "unified-workbench"
+  ],
+  "schema_change": false,
+  "iam_gateway_manifest_policy_unchanged": true,
+  "compose_override_sha256": "dcadb9620ab577bec9348ed62aaa229b89b3e75297480df95ce1de8b2ea6bd90",
+  "project_schema": "000011_commercial_contributors.sql",
+  "be_schema": "000002_material_collections.sql",
+  "official_release": false
+}

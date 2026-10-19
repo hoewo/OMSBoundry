@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "real_iam_login": true,
+  "credentials_exported": false,
+  "scenarios": [
+    {
+      "name": "fresh",
+      "passed": true,
+      "authenticated_page": true,
+      "login_posts": 1,
+      "csrf_gets": 0
+    }
+  ],
+  "business_writes": [],
+  "page_errors": [],
+  "background_reads_checked": true,
+  "post_login_business_scripts_checked": true,
+  "native_project_directory_loaded": true
+}

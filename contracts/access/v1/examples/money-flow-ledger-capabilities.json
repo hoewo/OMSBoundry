@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "application_id": "money-flow-ledger",
+  "application_version": "0.1.0",
+  "audience": "money-flow-ledger",
+  "capabilities": [
+    { "id": "money-flow-ledger.view", "description": "查看主体、义务、资金、核销、预测、汇总和历史", "risk": "read", "resource_types": ["party", "obligation", "cash_transaction"] },
+    { "id": "money-flow-ledger.party.register", "description": "登记收支台账自己的账簿主体与往来主体", "risk": "write", "resource_types": ["party"] },
+    { "id": "money-flow-ledger.obligation.manage", "description": "建立、确认、调额、减免、关闭义务并维护现金预期", "risk": "write", "resource_types": ["obligation"] },
+    { "id": "money-flow-ledger.cash.record", "description": "登记实际收款或付款", "risk": "write", "resource_types": ["cash_transaction"] },
+    { "id": "money-flow-ledger.cash.reverse", "description": "受控冲销错误资金事实", "risk": "privileged", "resource_types": ["cash_transaction"] },
+    { "id": "money-flow-ledger.cash.evidence.manage", "description": "追加或移出实际收付款的 Evidence 文件引用，不删除文件字节", "risk": "write", "resource_types": ["cash_transaction"] },
+    { "id": "money-flow-ledger.allocation.manage", "description": "核销资金与义务并受控反向核销", "risk": "write", "resource_types": ["allocation", "obligation", "cash_transaction"] },
+    { "id": "money-flow-ledger.transfer.record", "description": "登记同一本方主体的内部账户转账", "risk": "write", "resource_types": ["internal_transfer"] },
+    { "id": "money-flow-ledger.export", "description": "导出本方主体可校验收支台账或精确资金记录，金额读取另验", "risk": "privileged", "resource_types": ["party", "cash_transaction"] },
+    { "id": "money-flow-ledger.statistics.read", "description": "读取来源自有、版本化的经营指标投影", "risk": "read", "resource_types": ["party"] },
+    { "id": "money-flow-ledger.amount.read", "description": "查看经营指标及原生实际资金工作面的精确金额；缺失时金额必须脱敏且不能盲写", "risk": "privileged", "resource_types": ["party", "cash_transaction"] },
+    { "id": "money-flow-ledger.reference.read", "description": "供受信工作负载读取精确义务或资金流水摘要", "risk": "privileged", "resource_types": ["obligation", "transaction"] },
+    { "id": "money-flow-ledger.receipt-set.confirm", "description": "由资金责任人确认同一项目的一组有效 CNY 回款分配", "risk": "privileged", "resource_types": ["receipt_set"] },
+    { "id": "money-flow-ledger.receipt-set.reference.read", "description": "供受信业务应用读取精确且不可变的回款集合", "risk": "privileged", "resource_types": ["receipt_set"] },
+    { "id": "money-flow-ledger.payable-suggestion.submit", "description": "供 Cost & Outsourcing 工作负载提交精确付款建议", "risk": "write", "resource_types": ["payable_suggestion"] },
+    { "id": "money-flow-ledger.payable-suggestion.read", "description": "读取精确付款建议 intake 与独立决定", "risk": "read", "resource_types": ["payable_suggestion"] },
+    { "id": "money-flow-ledger.payable-suggestion.withdraw", "description": "在 Money 尚未决定前撤回精确付款建议", "risk": "privileged", "resource_types": ["payable_suggestion"] },
+    { "id": "money-flow-ledger.payable-suggestion.decide", "description": "Money 独立接受或拒绝付款建议并在接受时拥有义务", "risk": "privileged", "resource_types": ["payable_suggestion", "obligation"] }
+  ]
+}

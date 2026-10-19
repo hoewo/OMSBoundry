@@ -1,0 +1,241 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+for command in curl jq openssl; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+if [ -n "${D1_PUBLIC_URL:-}" ]; then
+  base_url=$D1_PUBLIC_URL
+elif [ "$ingress_mode" = https ]; then
+  public_host=$(env_value D1_PUBLIC_HOST)
+  public_https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+  if [ "$public_https_port" = 443 ]; then base_url="https://$public_host"; else base_url="https://$public_host:$public_https_port"; fi
+else
+  base_url="http://$(env_value PUBLIC_BIND 127.0.0.1):$(env_value PUBLIC_PORT 18000)"
+fi
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$admin_password" ] || { echo "BOOTSTRAP_ADMIN_PASSWORD is required in $env_file" >&2; exit 2; }
+[ "$(env_value ENABLE_CONTRACT true)" = true ] || { echo "Contract Ledger must be enabled" >&2; exit 2; }
+[ "$(env_value ENABLE_MONEY true)" = true ] || { echo "Money Flow Ledger must be enabled for the adjacent-audience denial" >&2; exit 2; }
+
+expect_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+hidden_value() {
+  name="$1"
+  file="$2"
+  sed -n "s/.*name=\"$name\" value=\"\([^\"]*\)\".*/\1/p" "$file" | head -1
+}
+
+cookie_value() {
+  cookie_file="$1"
+  cookie_name="$2"
+  awk -F '\t' -v name="$cookie_name" '$6 == name {value=$7} END {print value}' "$cookie_file"
+}
+
+decode_jwt_payload() {
+  token="$1"
+  part=$(printf '%s' "$token" | cut -d. -f2)
+  case $((${#part} % 4)) in
+    0) padding='' ;;
+    2) padding='==' ;;
+    3) padding='=' ;;
+    *) echo "invalid JWT payload encoding" >&2; return 1 ;;
+  esac
+  printf '%s%s' "$part" "$padding" | tr '_-' '/+' | openssl base64 -d -A
+}
+
+fetch_csrf() {
+  cookie_file="$1"
+  curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf" | jq -er .csrf_token
+}
+
+login() {
+  cookie_file="$1"
+  csrf_token="$2"
+  username="$3"
+  password="$4"
+  output_file="$5"
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  expect_status 200 "$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth/api/v1/login")" "login $username"
+}
+
+admin_json() {
+  path="$1"
+  payload="$2"
+  output_file="$3"
+  expected="$4"
+  expect_status "$expected" "$(curl --silent --show-error --output "$output_file" --write-out '%{http_code}' \
+    --cookie "$admin_cookies" --cookie-jar "$admin_cookies" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth$path")" "$path"
+}
+
+grant() {
+  subject_id="$1"
+  action="$2"
+  payload=$(jq -cn --arg subject_id "$subject_id" --arg audience contract-ledger --arg action "$action" \
+    '{subject_id:$subject_id,audience:$audience,action:$action}')
+  admin_json /api/v1/admin/grants "$payload" /dev/null 204
+}
+
+authorize() {
+  cookie_file="$1"
+  csrf_token="$2"
+  application="$3"
+  expected="$4"
+  label="$5"
+  expect_status "$expected" "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" --data-urlencode "csrf_token=$csrf_token" \
+    "$base_url/gateway/authorize/$application")" "$label"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-authorization.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+jq -e --arg username "$admin_username" '.principal.username == $username and .principal.administrator == true' \
+  "$workspace/admin-login.json" >/dev/null
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+viewer_username="d1viewer-$stamp"
+registrar_username="d1registrar-$stamp"
+viewer_password="D1-viewer-$stamp!42"
+registrar_password="D1-registrar-$stamp!42"
+
+payload=$(jq -cn --arg username "$viewer_username" --arg display_name "D1 合同只读 $stamp" \
+  '{username:$username,display_name:$display_name}')
+admin_json /api/v1/admin/invitations "$payload" "$workspace/viewer-invitation.json" 201
+viewer_id=$(jq -er .subject.id "$workspace/viewer-invitation.json")
+viewer_token=$(jq -er .token "$workspace/viewer-invitation.json")
+
+payload=$(jq -cn --arg username "$registrar_username" --arg display_name "D1 主体登记 $stamp" \
+  '{username:$username,display_name:$display_name}')
+admin_json /api/v1/admin/invitations "$payload" "$workspace/registrar-invitation.json" 201
+registrar_id=$(jq -er .subject.id "$workspace/registrar-invitation.json")
+registrar_token=$(jq -er .token "$workspace/registrar-invitation.json")
+
+viewer_cookies="$workspace/viewer.cookies"
+viewer_csrf=$(fetch_csrf "$viewer_cookies")
+payload=$(jq -cn --arg token "$viewer_token" --arg password "$viewer_password" '{token:$token,password:$password}')
+expect_status 200 "$(curl --silent --show-error --output "$workspace/viewer-activation.json" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $viewer_csrf" --data "$payload" "$base_url/auth/api/v1/activate")" "activate viewer"
+login "$viewer_cookies" "$viewer_csrf" "$viewer_username" "$viewer_password" "$workspace/viewer-login.json"
+jq -e '.principal.administrator == false' "$workspace/viewer-login.json" >/dev/null
+
+registrar_cookies="$workspace/registrar.cookies"
+registrar_csrf=$(fetch_csrf "$registrar_cookies")
+payload=$(jq -cn --arg token "$registrar_token" --arg password "$registrar_password" '{token:$token,password:$password}')
+expect_status 200 "$(curl --silent --show-error --output "$workspace/registrar-activation.json" --write-out '%{http_code}' \
+  --cookie "$registrar_cookies" --cookie-jar "$registrar_cookies" -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $registrar_csrf" --data "$payload" "$base_url/auth/api/v1/activate")" "activate registrar"
+login "$registrar_cookies" "$registrar_csrf" "$registrar_username" "$registrar_password" "$workspace/registrar-login.json"
+jq -e '.principal.administrator == false' "$workspace/registrar-login.json" >/dev/null
+
+grant "$viewer_id" contract-ledger.view
+grant "$registrar_id" contract-ledger.view
+grant "$registrar_id" contract-ledger.party.register
+
+# Identity administration and business capabilities are intentionally separate.
+payload=$(jq -cn --arg subject_id "$viewer_id" --arg audience contract-ledger --arg action contract-ledger.party.register \
+  '{subject_id:$subject_id,audience:$audience,action:$action}')
+expect_status 403 "$(curl --silent --show-error --output "$workspace/non-admin-grant.json" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $viewer_csrf" --data "$payload" "$base_url/auth/api/v1/admin/grants")" \
+  "non-admin IAM grant"
+
+authorize "$viewer_cookies" "$viewer_csrf" contract-ledger 303 "authorize viewer for Contract"
+viewer_credential=$(cookie_value "$viewer_cookies" oms_cap_contract_ledger)
+[ -n "$viewer_credential" ] || { echo "viewer Contract capability cookie is missing" >&2; exit 1; }
+decode_jwt_payload "$viewer_credential" >"$workspace/viewer-claims.json"
+jq -e '
+  .ver == "1" and .aud == "contract-ledger" and
+  .scope.kind == "tenant" and (.scope.resources | length) == 0 and
+  (.actions | sort) == ["contract-ledger.view"] and
+  (.exp > .iat) and (.exp - .iat <= 300)
+' "$workspace/viewer-claims.json" >/dev/null
+authorize "$viewer_cookies" "$viewer_csrf" money-flow-ledger 403 "deny viewer for adjacent Money audience"
+expect_status 200 "$(curl --silent --show-error --output "$workspace/viewer-parties.html" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" "$base_url/contract/parties")" "viewer reads Contract parties"
+viewer_contract_csrf=$(hidden_value csrf_token "$workspace/viewer-parties.html")
+[ -n "$viewer_contract_csrf" ] || { echo "viewer Contract CSRF field is missing" >&2; exit 1; }
+viewer_denied_name="D1 denied party $stamp"
+expect_status 403 "$(curl --silent --show-error --output "$workspace/viewer-write.txt" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" --data-urlencode "csrf_token=$viewer_contract_csrf" \
+  --data-urlencode kind=organization --data-urlencode "legal_name=$viewer_denied_name" \
+  --data-urlencode "registration_identifier=D1-DENY-$stamp" "$base_url/contract/parties")" \
+  "viewer writes Contract party"
+
+authorize "$registrar_cookies" "$registrar_csrf" contract-ledger 303 "authorize registrar for Contract"
+registrar_credential=$(cookie_value "$registrar_cookies" oms_cap_contract_ledger)
+[ -n "$registrar_credential" ] || { echo "registrar Contract capability cookie is missing" >&2; exit 1; }
+decode_jwt_payload "$registrar_credential" >"$workspace/registrar-claims.json"
+jq -e '
+  .ver == "1" and .aud == "contract-ledger" and
+  .scope.kind == "tenant" and (.scope.resources | length) == 0 and
+  (.actions | sort) == ["contract-ledger.party.register", "contract-ledger.view"] and
+  (.exp > .iat) and (.exp - .iat <= 300)
+' "$workspace/registrar-claims.json" >/dev/null
+authorize "$registrar_cookies" "$registrar_csrf" money-flow-ledger 403 "deny registrar for adjacent Money audience"
+expect_status 200 "$(curl --silent --show-error --output "$workspace/registrar-parties.html" --write-out '%{http_code}' \
+  --cookie "$registrar_cookies" --cookie-jar "$registrar_cookies" "$base_url/contract/parties")" "registrar reads Contract parties"
+registrar_contract_csrf=$(hidden_value csrf_token "$workspace/registrar-parties.html")
+[ -n "$registrar_contract_csrf" ] || { echo "registrar Contract CSRF field is missing" >&2; exit 1; }
+registrar_party_name="D1 allowed party $stamp"
+expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --cookie "$registrar_cookies" --cookie-jar "$registrar_cookies" --data-urlencode "csrf_token=$registrar_contract_csrf" \
+  --data-urlencode kind=organization --data-urlencode "legal_name=$registrar_party_name" \
+  --data-urlencode "registration_identifier=D1-ALLOW-$stamp" "$base_url/contract/parties")" \
+  "registrar writes Contract party"
+curl --fail --silent --show-error --cookie "$registrar_cookies" "$base_url/contract/parties" >"$workspace/registrar-after.html"
+grep -Fq "$registrar_party_name" "$workspace/registrar-after.html" || { echo "registrar write was not visible" >&2; exit 1; }
+! grep -Fq "$viewer_denied_name" "$workspace/registrar-after.html" || { echo "denied viewer write changed Contract state" >&2; exit 1; }
+
+# Account disabling invalidates the Suite Session immediately. The already issued
+# single-audience credential remains usable only for its documented <=5 minute TTL.
+payload=$(jq -cn --arg subject_id "$viewer_id" --arg status disabled '{subject_id:$subject_id,status:$status}')
+admin_json /api/v1/admin/status "$payload" /dev/null 204
+expect_status 401 "$(curl --silent --show-error --output "$workspace/disabled-session.json" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" "$base_url/auth/api/v1/session")" \
+  "disabled viewer IAM session"
+expect_status 401 "$(curl --silent --show-error --output "$workspace/disabled-reauthorize.json" --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" --data-urlencode "csrf_token=$viewer_csrf" \
+  "$base_url/gateway/authorize/contract-ledger")" "disabled viewer obtains new credential"
+expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --cookie "$viewer_cookies" --cookie-jar "$viewer_cookies" "$base_url/contract/parties")" \
+  "previously issued viewer credential during residual TTL"
+
+printf '%s\n' \
+  "D1 least-action authorization acceptance passed:" \
+  "- Contract business capabilities did not imply IAM administration" \
+  "- issued credentials contained only the granted actions, one audience and tenant scope" \
+  "- viewer read succeeded and party registration was rejected without a write" \
+  "- registrar read and party registration succeeded" \
+  "- both subjects were rejected by the adjacent Money audience" \
+  "- account disable invalidated the IAM session and new issuance immediately" \
+  "- an already issued Contract credential remained valid only in its <=5 minute residual TTL" \
+  "Known boundary: IAM currently issues tenant scope only and has no per-grant revocation endpoint."

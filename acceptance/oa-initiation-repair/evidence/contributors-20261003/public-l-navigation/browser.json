@@ -1,0 +1,18 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "native_revision": 13,
+  "continued_from": "public-j-continuation",
+  "business_posts": 0,
+  "grant_writes": 0,
+  "scenarios": [],
+  "responses": [],
+  "page_errors": [],
+  "projection_requests": [],
+  "full_oa_accepted": false,
+  "failure": {
+    "type": "TimeoutError",
+    "phase": "login"
+  },
+  "test_session_logged_out": true
+}

@@ -1,0 +1,50 @@
+# Project 历史列表 API 契约
+# 路径: arckit/tech/_shared/contracts/project-history-list.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-history-list.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+endpoint:
+  method: GET
+  path: "/api/v1/projects/{project_id}/history"
+  summary: "按稳定顺序读取不可变 Project 历史"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.history.read"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  query_params:
+    - {name: cursor, type: string, required: false, maxLength: 512}
+    - {name: limit, type: integer, required: false, default: 50, minimum: 1, maximum: 100}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: {$ref: "../models/ProjectHistoryEvent.yaml"}
+        next_cursor: {type: [string, "null"]}
+  errors:
+    - {status: 400, code: INVALID_CURSOR, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+
+business_logic:
+  flow:
+    - "游标绑定 tenant、project_id 和固定排序。"
+    - "按 project_revision DESC、event_sequence DESC、id DESC 分页。"
+    - "每次请求重新授权；游标不是授权凭据。"
+  state_transitions: []
+  side_effects: []

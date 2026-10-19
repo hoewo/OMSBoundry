@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 22,
+  "schema18_to_22": true,
+  "legacy_fixture_only": true,
+  "actual_main_upgrade": false,
+  "tests": [
+    "TestReferenceOAUpgradeFrom18PreservesFactsAndRollsBackAtomically",
+    "TestIdentityAuditAndInstrumentMigrationsPreserveHistoricalFacts",
+    "TestExplicitSchemaGateAndAtomicPendingMigration",
+    "TestConcurrentExplicitMigrationsSerialize"
+  ],
+  "exit_code": 0,
+  "test_started": true,
+  "test_pass": true,
+  "test_skipped": false,
+  "binary_sha256": "413a991cdf781f1a4cbd753e883c5104441d39f2c40827956103c2d59fd642bb",
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

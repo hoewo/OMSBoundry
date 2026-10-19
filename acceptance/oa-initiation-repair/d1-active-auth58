@@ -1,0 +1,6 @@
+#!/bin/sh
+# This test deployment's explicit contract selection must accompany every D1 operation.
+set -eu
+export D1_ENV_FILE=/opt/omsbizfoundry/auth58-v0.1.0-test.20-full.https.env
+export D1_COMPOSE_OVERRIDE_FILE=/opt/omsbizfoundry/acceptance/oa-public-release-20261002a/compose.oa-public.json
+exec /opt/omsbizfoundry/releases/omsbizfoundry-d1_v0.1.0-test.20_linux_amd64/deployments/d1/ops/d1 "$@"

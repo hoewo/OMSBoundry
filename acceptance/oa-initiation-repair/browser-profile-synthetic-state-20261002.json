@@ -1,0 +1,108 @@
+{
+  "schema_version": "1",
+  "date": "2026-10-02",
+  "candidate": "BF-085 active Project profile correction",
+  "synthetic_ui_only": true,
+  "live_iam": false,
+  "postgres_persistence": false,
+  "public_entry": false,
+  "ui_assertions": {
+    "ordinary_invalid_empty_types_denied": true,
+    "ordinary_correction_same_project_after_reload": true,
+    "package_blank_number_correction_same_project_after_reload": true,
+    "production_owner_not_required": true,
+    "no_extra_reason_field": true,
+    "normal_click_without_force": true
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "drawer_height": 720,
+    "drawer_top": 0,
+    "portal_parent": "BODY",
+    "body_client_height": 662,
+    "body_scroll_height": 662,
+    "save_top": 639.375,
+    "save_bottom": 671.375,
+    "save_hit_test_first": "保存",
+    "mask_z_index": 100,
+    "reload_hidden": true
+  },
+  "runner": {
+    "test": "TestReferenceOAInitiationBrowserProbe",
+    "passed": true,
+    "duration_seconds": 344.67
+  },
+  "source_sha256": {
+    "runtime": "3ccfbea8e35fcd6e791b2a8f8b3316bf0ccc7777182d357c2ac77f3a1c7e30ec",
+    "workspace_css": "e2183029a40c3f1abf01de29282f6d6b9d98291f28bf64653358d3b412ffa4a2",
+    "project_template": "55277f20fd4b8ff540f6e19d544e63d74e630b33c497fd4970fc3914662babfe"
+  },
+  "state": {
+    "assignments": {
+      "33333333-3333-4333-8333-000000000001": [
+        {
+          "display_snapshot": "经营负责人（隔离测试）",
+          "role_key": "business_owner",
+          "source_revision": 2,
+          "subject_id": "55555555-5555-4555-8555-555555555555",
+          "subject_kind": "person"
+        }
+      ],
+      "33333333-3333-4333-8333-000000000002": [
+        {
+          "display_snapshot": "经营负责人（隔离测试）",
+          "role_key": "business_owner",
+          "source_revision": 2,
+          "subject_id": "55555555-5555-4555-8555-555555555555",
+          "subject_kind": "person"
+        }
+      ]
+    },
+    "counts": {
+      "complete": 2,
+      "dispatch": 2,
+      "production_assignment": 0,
+      "profile_correction": 2,
+      "update": 2
+    },
+    "projects": {
+      "33333333-3333-4333-8333-000000000001": {
+        "created_at": "2026-10-02T00:00:00Z",
+        "id": "33333333-3333-4333-8333-000000000001",
+        "name": "最终资料已保存",
+        "node_type": "project",
+        "planned_end_date": null,
+        "planned_start_date": "2026-10-02T00:00:00Z",
+        "project_number": "OA-P02-001",
+        "project_type_keys": [
+          "design",
+          "consultation"
+        ],
+        "revision": 4,
+        "status": "active",
+        "summary": "基本资料保存后仍保持同一项目，负责人后续单独设置。",
+        "tenant_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "33333333-3333-4333-8333-000000000002": {
+        "created_at": "2026-10-02T00:00:00Z",
+        "id": "33333333-3333-4333-8333-000000000002",
+        "name": "无编号项目包资料已保存",
+        "node_type": "package",
+        "planned_end_date": null,
+        "planned_start_date": null,
+        "project_number": "",
+        "project_type_keys": [
+          "mapping"
+        ],
+        "revision": 4,
+        "status": "active",
+        "summary": "",
+        "tenant_id": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    "synthetic_ui_only": true
+  },
+  "probe_stopped": true,
+  "created_tab_closed": true
+}

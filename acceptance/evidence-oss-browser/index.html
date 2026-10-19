@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Evidence OSS 浏览器验收</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">OMSBizFoundry · 外部验收</p>
+          <h1>Evidence OSS 浏览器链路</h1>
+          <p class="lede">验证临时 STS、multipart 直传、服务端完整性确认和短期受控读取。</p>
+        </div>
+        <div class="endpoint" aria-label="验收端点">
+          <span>Origin</span>
+          <strong>127.0.0.1:5173</strong>
+          <span>Control API</span>
+          <strong>/evidence</strong>
+        </div>
+      </header>
+
+      <section class="notice" aria-label="安全说明">
+        <strong>安全边界</strong>
+        <span>页面不接触 RAM 长期 AccessKey；本地代理只向 Evidence 控制面注入模板凭证，文件字节直接发送到私有 OSS。</span>
+      </section>
+
+      <div class="grid">
+        <section class="panel transfer-panel">
+          <div class="section-heading">
+            <div>
+              <p class="step">01 · 准备文件</p>
+              <h2>选择真实文件或生成验收样本</h2>
+            </div>
+            <span id="provider-badge" class="badge">等待会话</span>
+          </div>
+
+          <label class="dropzone" for="file-input">
+            <input id="file-input" type="file" />
+            <span class="drop-title">点击选择文件</span>
+            <span class="drop-help">文件只用于当前本地验收，不会进入仓库。</span>
+          </label>
+
+          <div class="sample-actions">
+            <button id="small-sample" class="button secondary" type="button">生成 1 MiB 样本</button>
+            <button id="large-sample" class="button secondary" type="button">生成 150 MiB multipart 样本</button>
+          </div>
+
+          <dl id="file-summary" class="summary muted">
+            <div><dt>文件</dt><dd>尚未选择</dd></div>
+            <div><dt>大小</dt><dd>—</dd></div>
+            <div><dt>类型</dt><dd>—</dd></div>
+          </dl>
+
+          <div class="context-fields">
+            <label>
+              <span>Owner reference（不透明）</span>
+              <input id="owner-ref" value="oss-browser-acceptance" maxlength="200" />
+            </label>
+            <label>
+              <span>Purpose（不透明）</span>
+              <input id="purpose" value="external-validation" maxlength="100" />
+            </label>
+          </div>
+
+          <div class="progress-block" aria-live="polite">
+            <div class="progress-copy">
+              <span id="phase">准备就绪</span>
+              <strong id="progress-value">0%</strong>
+            </div>
+            <div class="progress-track" aria-hidden="true"><div id="progress-bar"></div></div>
+            <p id="progress-detail">选择文件后即可开始。</p>
+          </div>
+
+          <div class="primary-actions">
+            <button id="upload" class="button primary" type="button" disabled>开始上传并确认</button>
+            <button id="cancel" class="button danger" type="button" disabled>取消</button>
+          </div>
+        </section>
+
+        <aside class="panel evidence-panel">
+          <div class="section-heading">
+            <div>
+              <p class="step">02 · 验收证据</p>
+              <h2>只展示非敏感结果</h2>
+            </div>
+          </div>
+
+          <ol id="timeline" class="timeline">
+            <li data-stage="session"><span></span><div><strong>上传会话</strong><p>尚未创建</p></div></li>
+            <li data-stage="upload"><span></span><div><strong>OSS 数据面</strong><p>尚未开始</p></div></li>
+            <li data-stage="complete"><span></span><div><strong>服务端确认</strong><p>尚未完成</p></div></li>
+            <li data-stage="access"><span></span><div><strong>受控读取</strong><p>等待可用版本</p></div></li>
+          </ol>
+
+          <dl id="result" class="result-list">
+            <div><dt>File ID</dt><dd>—</dd></div>
+            <div><dt>Version</dt><dd>—</dd></div>
+            <div><dt>SHA-256</dt><dd>—</dd></div>
+            <div><dt>服务端类型</dt><dd>—</dd></div>
+            <div><dt>Object Key</dt><dd>—</dd></div>
+          </dl>
+
+          <div class="access-actions">
+            <button id="preview" class="button secondary" type="button" disabled>预览</button>
+            <button id="download" class="button secondary" type="button" disabled>下载</button>
+          </div>
+
+          <div id="preview-region" class="preview-region" hidden>
+            <div class="preview-heading">
+              <strong>短期授权预览</strong>
+              <button id="close-preview" class="text-button" type="button">关闭</button>
+            </div>
+            <div id="preview-content"></div>
+          </div>
+
+          <div id="message" class="message" role="status">等待开始验收。</div>
+        </aside>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+

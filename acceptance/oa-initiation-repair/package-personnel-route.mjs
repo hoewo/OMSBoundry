@@ -1,0 +1,21 @@
+// Generated delivery artifacts for the bounded no-migration route repair.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {copyFileSync,readFileSync,writeFileSync,existsSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../../',import.meta.url)),out=process.argv[2];
+const refresh=process.env.OA_WORKBENCH_REPAIR==='personnel-refresh';
+const visibility=process.env.OA_WORKBENCH_REPAIR==='projection-visibility';
+const commercial=process.env.OA_WORKBENCH_REPAIR==='commercial-routes';
+const actions=process.env.OA_WORKBENCH_REPAIR==='commercial-actions';
+const links=process.env.OA_WORKBENCH_REPAIR==='commercial-links';
+assert((links?/^\/tmp\/oa-commercial-links\.[A-Za-z0-9]+$/:actions?/^\/tmp\/oa-commercial-actions\.[A-Za-z0-9]+$/:commercial?/^\/tmp\/oa-commercial-routes\.[A-Za-z0-9]+$/:visibility?/^\/tmp\/oa-projection-visibility\.[A-Za-z0-9]+$/:refresh?/^\/tmp\/oa-personnel-refresh\.[A-Za-z0-9]+$/:/^\/tmp\/oa-personnel-route\.[A-Za-z0-9]+$/).test(out));
+const artifacts=out+'/artifacts',archive=out+'/source.tar.gz';
+assert(!existsSync(archive)&&!existsSync(artifacts+'/manifest.json'));
+copyFileSync(fileURLToPath(new URL('contributors-workbench.Dockerfile',import.meta.url)),artifacts+'/unified-workbench/Dockerfile');
+execFileSync('tar',['-czf',archive,'--exclude=node_modules','--exclude=.npm-cache','--exclude=.runtime','--exclude=.env','--exclude=__pycache__','--exclude=dist','--exclude=bin','frontend/oms-workbench','packages/file-transfer-core','contracts/access/v1/examples/project-workspace-capabilities.json',...(links?['backend/services/project-workspace/internal/projects/model.go','deployments/d1/ops/render-suite-manifest']:[]),'acceptance/oa-initiation-repair/login-csrf-release-ecs.py','acceptance/oa-initiation-repair/contributors-workbench.Dockerfile','acceptance/oa-initiation-repair/package-personnel-route.mjs','go.work','go.work.sum'],{cwd:root});
+const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
+const manifest={version:links?'v0.1.0-oa.20261004.4':actions?'v0.1.0-oa.20261004.3':commercial?'v0.1.0-oa.20261004.2':visibility?'v0.1.0-oa.20261003.6':refresh?'v0.1.0-oa.20261003.5':'v0.1.0-oa.20261003.4',official_release:false,source_kind:links?'saved scoped Project relation contract and explicit rejected-link continuation repair':actions?'saved scoped dirty-worktree declared Project capability repair':commercial?'saved scoped dirty-worktree selected-native-route repair':visibility?'saved dirty-worktree visible-source read repair':refresh?'saved dirty-worktree personnel readback repair':'saved dirty-worktree route repair',source_archive_sha256:hash(archive),schema_change:false,closure:['unified-workbench'],applications:{'unified-workbench':{server:hash(artifacts+'/unified-workbench/server')}},full_oa_accepted:false};
+writeFileSync(artifacts+'/manifest.json',JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o600});
+console.log(JSON.stringify(manifest));

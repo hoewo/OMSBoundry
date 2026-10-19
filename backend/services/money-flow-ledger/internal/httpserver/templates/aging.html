@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>当前账龄 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging" aria-current="page">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>当前 Obligation 逾期与账龄</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>本页使用查询时的当前余额，只按所选日期重新判断到期与逾期。未来分类不是余额预测；历史余额重放尚未开放。</p>
+
+    <form method="get" action="{{basePath}}/aging">
+      <label for="as_of_date">账龄分类日</label>
+      <input id="as_of_date" name="as_of_date" type="date" value="{{.AsOfDate}}" required>
+      <button type="submit">重新分类</button>
+    </form>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    {{if not .Error}}
+    <p>分类日：{{.Report.AsOfDate}}；生成时间：{{.Report.GeneratedAt}}</p>
+
+    <section aria-labelledby="aging-summary-heading">
+      <h2 id="aging-summary-heading">按方向与币种汇总</h2>
+      {{if .Report.Summaries}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">方向</th>
+            <th scope="col">币种</th>
+            <th scope="col">义务数</th>
+            <th scope="col">当前剩余</th>
+            <th scope="col">逾期笔数</th>
+            <th scope="col">逾期金额</th>
+            <th scope="col">未到期</th>
+            <th scope="col">1–30 天</th>
+            <th scope="col">31–60 天</th>
+            <th scope="col">61–90 天</th>
+            <th scope="col">91+ 天</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Report.Summaries}}
+          <tr>
+            <td>{{.Direction.Label}}</td>
+            <td>{{.Currency}}</td>
+            <td>{{.ObligationCount}}</td>
+            <td>{{.OutstandingAmount}} {{.Currency}}</td>
+            <td>{{.OverdueCount}}</td>
+            <td>{{.OverdueAmount}} {{.Currency}}</td>
+            <td>{{.NotDueAmount}} {{.Currency}}</td>
+            <td>{{.Days1To30Amount}} {{.Currency}}</td>
+            <td>{{.Days31To60Amount}} {{.Currency}}</td>
+            <td>{{.Days61To90Amount}} {{.Currency}}</td>
+            <td>{{.Days91PlusAmount}} {{.Currency}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>当前没有状态为 open 且剩余金额大于 0 的义务。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="aging-detail-heading">
+      <h2 id="aging-detail-heading">可下钻明细</h2>
+      {{if .Report.Items}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">义务</th>
+            <th scope="col">方向</th>
+            <th scope="col">本方</th>
+            <th scope="col">往来方</th>
+            <th scope="col">到期日</th>
+            <th scope="col">账龄分段</th>
+            <th scope="col">逾期天数</th>
+            <th scope="col">当前剩余</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Report.Items}}
+          <tr>
+            <td><a href="{{basePath}}/obligations/{{.Obligation.ID}}">{{.Obligation.Title}}</a></td>
+            <td>{{.Obligation.Direction.Label}}</td>
+            <td>{{.Obligation.LedgerOwner.LegalName}}</td>
+            <td>{{.Obligation.Counterparty.LegalName}}</td>
+            <td>{{.Obligation.DueOn}}</td>
+            <td>{{.Bucket.Label}}</td>
+            <td>{{if .DaysPastDue}}{{.DaysPastDue}}{{else}}—{{end}}</td>
+            <td>{{.Obligation.OutstandingAmount}} {{.Obligation.Currency}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>没有可展示的账龄明细。</p>
+      {{end}}
+    </section>
+    {{end}}
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

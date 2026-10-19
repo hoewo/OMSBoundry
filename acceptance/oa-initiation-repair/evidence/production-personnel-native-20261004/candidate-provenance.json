@@ -1,0 +1,49 @@
+{
+  "files": [
+    {
+      "path": "backend/services/project-workspace/internal/database/migrations/000012_reference_oa_production_personnel.sql",
+      "sha256": "b93dfe148dc2c84ce62f6f1b708da82dd6a945b2fcd23c52cfeb6aecf98ef079"
+    },
+    {
+      "path": "contracts/access/v1/examples/project-workspace-capabilities.json",
+      "sha256": "8cfa3bd97b95acb5dae067b0bf19dceb53e5cfa84caba211fb6c49c8e941164b"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/projects/reference_oa_production_repository.go",
+      "sha256": "f1b1062599204930810a27d2bd2835e794780ad2ac5f478ca8b591a09f04cdaa"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/projects/reference_oa_discipline_repository.go",
+      "sha256": "176460ccd02d42655e8613859f25844b9d6f04811a82be70d33d352e4b898cde"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/projects/reference_oa_production_service.go",
+      "sha256": "6651f9be909970b04aafaeaee68e7e29aa35491bd92de73df9c24a39a0d19dd6"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/httpserver/reference_oa_production.go",
+      "sha256": "bdd17c76ede51c8a7e891f2a10bab4ca04232402cb3eaf21fab6e16d97a3d08d"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/production-personnel-native.mjs",
+      "sha256": "8942beec9f641188f41cc00c3b8cdb80c9905459a73a3e76bca26a20539ba7b1"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/production-personnel-native-ui.tsx",
+      "sha256": "c75305a115387a2e752f03bae30f017314cbd8e57a715a8e249e3054fa43f0d0"
+    },
+    {
+      "path": "acceptance/oa-initiation-repair/production-personnel-native-runtime.mjs",
+      "sha256": "4290e6b406f894bcbc08852dbb8d4890d191678df43a6d778946ec18ce114b3b"
+    },
+    {
+      "path": "acceptance/oa-initiation-repair/verify-production-personnel-native-browser.mjs",
+      "sha256": "794c64b03a52dff8b389d28f8017d97a66e2155eba1bb51f8481d2e78ce6aed3"
+    }
+  ],
+  "normal_bundle_sha256": "7df15d8a63a0ac31a308401631aaedba38cbb2f73ba5d1334c4d9e88ed41c357",
+  "normal_workbench_imported": false,
+  "main_deployed": false,
+  "backup_bytes_copied": false,
+  "credential_state_copied": false
+}

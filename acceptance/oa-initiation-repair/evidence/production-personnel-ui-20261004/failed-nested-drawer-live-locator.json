@@ -1,0 +1,51 @@
+{
+  "passed": false,
+  "ui_only": true,
+  "component_test_ports": true,
+  "native_project": false,
+  "production_iam": false,
+  "postgresql": false,
+  "native_business_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "698c82204bc00e3b67fbbaf3e71834212b7f9fd0301ee053e24b95dc6d32d7a6",
+  "scenarios": [
+    {
+      "name": "original-empty-layout-no-write-no-hidden-candidates",
+      "passed": true
+    },
+    {
+      "name": "original-600px-drawer-required-discipline-and-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-multi-design-same-person-multi-role-test-save",
+      "passed": true
+    },
+    {
+      "name": "original-edit-and-change-discipline-explicit-test-port",
+      "passed": true
+    },
+    {
+      "name": "original-separate-approver-estimator-and-dirty-cancel",
+      "passed": true
+    },
+    {
+      "name": "not-applicable-disabled-field-preserves-participant-intention",
+      "passed": true
+    },
+    {
+      "name": "candidate-failure-disabled-save-retry-cancel-zero-write",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "discipline-catalog",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').last() to be hidden\u001b[22m\n\u001b[2m    - locator resolved to visible <div tabindex=\"-1\" class=\"ant-drawer ant-drawer-right css-ac2jek ant-drawer-open\">…</div>\u001b[22m\n\u001b[2m    4 × locator resolved to visible <div tabindex=\"-1\" class=\"ant-drawer ant-drawer-right css-ac2jek\">…</div>\u001b[22m\n\u001b[2m    58 × locator resolved to visible <div tabindex=\"-1\" class=\"ant-drawer ant-drawer-right css-ac2jek ant-drawer-open\">…</div>\u001b[22m\n"
+  },
+  "test_port_commands": 5,
+  "test_port_member_rows": 16,
+  "test_port_ended_rows": 9,
+  "page_errors": []
+}

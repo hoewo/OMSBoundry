@@ -1,0 +1,17 @@
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.250.179.0/28
+  edge:
+    ipam:
+      config:
+        - subnet: 10.250.180.0/28
+  app:
+    ipam:
+      config:
+        - subnet: 10.250.181.0/24
+  data:
+    ipam:
+      config:
+        - subnet: 10.250.182.0/24

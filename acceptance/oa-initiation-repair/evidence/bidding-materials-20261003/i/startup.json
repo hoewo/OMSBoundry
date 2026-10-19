@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "main_unchanged": true,
+  "full_suite_or_business_journey": false,
+  "actual_server_startup": true,
+  "identity_provider": "iam",
+  "schema": "000002_material_collections.sql",
+  "anonymous_native_routes_denied": 7,
+  "restart_facts_unchanged": true,
+  "server_sha256": "cc3c4db93d7008bbc547900db0fd295c162672a6b10ff511bcf39205f6fbfbe4",
+  "private_owned_database": "oa_bidding_startup_20261002i",
+  "max_total_cpu": 0.4,
+  "max_total_memory_mib": 352,
+  "receipt_source": "/opt/omsbizfoundry/acceptance/oa-bidding-startup-20261002i/results.json",
+  "scope": "Independent candidate startup and anonymous denial only; not a logged-in browser journey or public upgrade."
+}

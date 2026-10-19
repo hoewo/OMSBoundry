@@ -1,0 +1,41 @@
+{
+  "observed_at_utc": "2026-10-02 17:05:29 UTC",
+  "scope": "Read-only closing check before the human-requested four-hour pause; not a new deployment or public browser acceptance.",
+  "ssh": {
+    "target": "ecs-user@47.98.156.166",
+    "existing_key_batch_mode": true,
+    "connected": true,
+    "security_group_changed_by_agent": false
+  },
+  "main": {
+    "public_release": "v0.1.0-oa.20261002.11",
+    "check_wrapper": "/opt/omsbizfoundry/acceptance/oa-public-release-20261002k/d1-active",
+    "check_exit_code": 0,
+    "business_engagement_schema": "000001_business_engagement.sql",
+    "evidence_schema_sequence": "000002",
+    "evidence_storage_provider": "local",
+    "running_containers": 17,
+    "healthy_containers": 17,
+    "source": "Actual d1-active check output, followed by docker ps and docker ps -a over existing-key SSH.",
+    "candidate_migration_deployed": false,
+    "candidate_workbench_deployed": false
+  },
+  "stopped_probes": [
+    "production_material_source_auth58_20261001a_pg",
+    "oa_bidding_validation_20261002d_engagement",
+    "oa_bidding_validation_20261002d_database",
+    "oa_bidding_validation_20261002d_httpserver",
+    "oa_bidding_validation_20261002e_engagement",
+    "oa_bidding_validation_20261002e_database",
+    "oa_bidding_validation_20261002e_httpserver",
+    "oa_bidding_startup_20261002i_server"
+  ],
+  "restore20_running_containers": 0,
+  "all_running_containers_belong_to_main": true,
+  "deleted_containers_or_data": false,
+  "candidate_automated_checks": {
+    "workbench_node_passed": 156,
+    "public_file_journey_passed": false
+  },
+  "boundary": "Health and schema/provider readback do not prove full OA equivalence, public attachment UI, OSS migration or full Suite recovered runtime."
+}

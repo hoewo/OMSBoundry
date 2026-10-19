@@ -1,0 +1,24 @@
+{
+  "passed": false,
+  "fixture_ports": true,
+  "production_browser": false,
+  "original_components": true,
+  "scenarios": [],
+  "page_errors": [],
+  "failure": {
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '添加参与人', exact: true })\u001b[22m\n"
+  },
+  "dom": "刷新当前人员\n经营参与人\n\n维护本项目经营参与人；人员账号、部门和公司岗位暂未由名册提供。\n\n添加参与人\n当前还没有经营参与人",
+  "buttons": [
+    "刷新当前人员",
+    "添加参与人"
+  ],
+  "adapter": {
+    "can": true,
+    "pending": false,
+    "actions": [
+      "project-workspace.assignment.commercial-contributor.manage"
+    ]
+  }
+}

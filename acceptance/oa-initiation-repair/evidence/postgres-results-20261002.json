@@ -1,0 +1,13 @@
+{
+  "scope": "isolated Project PostgreSQL 18 regression; not Main rollout or full OA",
+  "source_root": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002",
+  "a": {"passed": false, "checks": [], "main_unchanged": true, "public_browser_or_full_oa": false},
+  "b": {"passed": false, "checks": [{"group": "projects", "passed": true, "tests": 90}, {"group": "database", "passed": true, "tests": 3}], "main_unchanged": true, "public_browser_or_full_oa": false},
+  "c": {"passed": true, "checks": [{"group": "httpserver", "passed": true, "tests": 46}], "main_unchanged": true, "public_browser_or_full_oa": false},
+  "counting_rule": "tests is the number of --- PASS: log records, including subtests; not a top-level test count",
+  "latest_binary_sha256": {
+    "projects.test": "7b301ed170325ddf91d5ae64736841f21c33f6f12ab969fb9172017e5ee34bde",
+    "database.test": "104e352ffefe4add0c8a7a31f8be4fea2c3bc20b97a41952ef476f75b95e7e25",
+    "httpserver.test": "2187da21dbb59c9ff9be3618ae7ce5e490c9f77a873c9a2c95b2a0bfd7e6319b"
+  }
+}

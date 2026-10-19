@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本地用户 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/">Contract Ledger</a>
+    <h1>本地用户</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} <a href="{{.BasePath}}/admin/users" aria-current="page">本地用户</a> <a href="{{.BasePath}}/account/password">修改密码</a></nav>
+    <form method="post" action="{{.LogoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </header>
+  <main>
+    {{if .Message}}<p role="status">{{.Message}}</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    <section aria-labelledby="create-user-title">
+      <h2 id="create-user-title">创建用户</h2>
+      <form method="post" action="{{.BasePath}}/admin/users">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <label for="username">用户名</label>
+        <input id="username" name="username" value="{{.Form.Username}}" maxlength="64" required>
+        <label for="display_name">显示名称</label>
+        <input id="display_name" name="display_name" value="{{.Form.DisplayName}}" maxlength="100" required>
+        <label for="password">初始密码</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="72" required>
+        <label for="role">角色</label>
+        <select id="role" name="role" required>
+          <option value="viewer" {{if eq .Form.Role "viewer"}}selected{{end}}>只读者</option>
+          <option value="editor" {{if eq .Form.Role "editor"}}selected{{end}}>编辑者</option>
+          <option value="administrator" {{if eq .Form.Role "administrator"}}selected{{end}}>管理员</option>
+        </select>
+        <button type="submit">创建用户</button>
+      </form>
+    </section>
+    <section aria-labelledby="user-list-title">
+      <h2 id="user-list-title">用户列表</h2>
+      <table>
+        <thead><tr><th>用户名</th><th>显示名称</th><th>角色</th><th>状态</th><th>管理</th></tr></thead>
+        <tbody>
+          {{range .Users}}
+          <tr>
+            <td>{{.Username}}</td><td>{{.DisplayName}}</td><td>{{.Role}}</td><td>{{.Status}}</td>
+            <td>
+              <form method="post" action="{{$.BasePath}}/admin/users/{{.ID}}/role">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <select name="role" aria-label="{{.Username}} 的角色">
+                  <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>只读者</option>
+                  <option value="editor" {{if eq .Role "editor"}}selected{{end}}>编辑者</option>
+                  <option value="administrator" {{if eq .Role "administrator"}}selected{{end}}>管理员</option>
+                </select>
+                <button type="submit">更新角色</button>
+              </form>
+              <form method="post" action="{{$.BasePath}}/admin/users/{{.ID}}/status">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="status" value="{{if eq .Status "active"}}disabled{{else}}active{{end}}">
+                <button type="submit">{{if eq .Status "active"}}停用{{else}}启用{{end}}</button>
+              </form>
+              <form method="post" action="{{$.BasePath}}/admin/users/{{.ID}}/reset-password">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <label>新密码 <input name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
+                <button type="submit">重置密码</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

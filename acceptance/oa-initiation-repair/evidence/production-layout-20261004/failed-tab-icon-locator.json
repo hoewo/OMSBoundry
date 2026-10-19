@@ -1,0 +1,151 @@
+{
+  "passed": false,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": false,
+  "identity_template": false,
+  "native_iam_project_people": true,
+  "native_gateway": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "7d2d66f32eea72b263c8e53d8c4a97656069e7f3f5a82c4811a8ba84cb241e7a",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "real-iam-scope-amount-revoke-candidates-and-people-failure-zero-bonus-write",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-business-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-production-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-reload-retains-two-sides-without-write",
+      "passed": true
+    },
+    {
+      "name": "normal-withdraw-modal-click-retains-record-and-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "native-cold-empty-target-pg18-restore-identical-head-history-command-audit",
+      "passed": true
+    },
+    {
+      "name": "restored-native-pending-replay-one-batch-not-duplicate",
+      "passed": true
+    },
+    {
+      "name": "restored-independent-server-continues-write-and-refresh",
+      "passed": true
+    },
+    {
+      "name": "real-iam-revocation-visible-current-and-history-redaction-no-write",
+      "passed": true
+    }
+  ],
+  "native_preflight": {
+    "legacy_scope_denied": true,
+    "side_scope_denied": true,
+    "native_candidate_roles": true,
+    "formal_amount_revoke_hides_record": true,
+    "real_people_outage_zero_source_write": true,
+    "native_gateway_legacy_pool_compatible": true,
+    "gateway_cannot_widen_scope_or_accept_forged_headers": true,
+    "record_does_not_imply_read_admission": true
+  },
+  "backup_sha256": "d077fb148f51270bc3563b873bb1dac1cc4533df276f93247c3e4655e94d1825",
+  "native_facts": {
+    "heads": 6,
+    "revisions": 7,
+    "commands": 5,
+    "audits": 7,
+    "pools": 0,
+    "suggestions": 0,
+    "digest": "908fafbf4c63ac7e6ba44869bc5d73a2"
+  },
+  "native_afterflight": {
+    "native_current_and_history_five_amount_fields_absent": true,
+    "revoked_amount_record_denied": true
+  },
+  "failure": {
+    "stage": "native-workbench-mounted-ui",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-view=\"project-real-detail\"]').locator('[data-real-production-layout]').getByRole('tab', { name: '总览', exact: true }) to be visible\u001b[22m\n"
+  },
+  "component_port_post_attempt_count": 6,
+  "post_attempt_count": 6,
+  "page_errors": [],
+  "source_digest": {
+    "project": "3957fc9bf5dbc5f69dd2c8086135a514e417a4985ceba0f8de12486c84957626",
+    "people": "4e82088ca361095f94c6e74e501e9e66cff6d204bf87c06af954655d24485dbb",
+    "contract_count": "0"
+  },
+  "workload_exchanges": [
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    }
+  ],
+  "native_sources_unchanged_and_stopped": true
+}

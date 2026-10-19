@@ -1,0 +1,25 @@
+# Party 状态变化 API 契约
+metadata: {path: "tech/_shared/contracts/party-status-change.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/parties/{party_id}/status-changes", summary: "停用或重新启用主体", auth_required: true, audience: "party-directory", capability: "party-directory.status.manage"}
+request:
+  path_params: [{name: party_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, status, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      status: {type: string, enum: [active, inactive]}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/Party.yaml"}}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PARTY_NOT_FOUND, retryable: false}
+    - {status: 409, code: PARTY_REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 422, code: NO_EFFECTIVE_CHANGE, retryable: false}
+business_logic:
+  flow: ["校验 expected_revision 与目标状态。", "追加 status_changed revision。", "停用后仍允许读取和历史解释，但拒绝新业务引用。"]

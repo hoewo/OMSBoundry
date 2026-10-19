@@ -1,0 +1,28 @@
+{
+  "version": "v0.1.0-oa.20261002.8",
+  "platform": "linux/amd64",
+  "official_release": false,
+  "commit": "unknown",
+  "source_archive_sha256": "f1625bd396a123d9125ec856f009106264bd56f6eacdf2e0f016d4b8812824e8",
+  "applications": {
+    "business-engagement": {
+      "Dockerfile": "f47a13154828d9d0a1a1f6e61dcc0ef8c61e285eaaca5805fd138a92ba3a4908",
+      "ops": "72963819a8383e238de140ca125b3ea3e64a4dd3ab2a39aec2a32f8cc54839d7",
+      "server": "3eda06dbf6c2f2a7a4c68fe8f6bbd8e1ea99ac819b091aa7e7c2d1529de8e4ef",
+      "workload-keyctl": "603323fdf06f84802498b828ec466ef484d75f5663b59257df6c8c63af302357"
+    },
+    "unified-workbench": {
+      "Dockerfile": "67cfaf74008175c3884e0df4022f2a5914314ea8e9a89246583561d388620b5c",
+      "server": "967364d074ca5eb47ff0162f4756eaea2bdf4bba2360bdfe17ecb8860ee06261"
+    }
+  },
+  "contracts": {
+    "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+    "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb"
+  },
+  "assets": {
+    "reference-oa-initiation-runtime.js": "ddbdfa1fc5dc51652b18b03dff2c845e6458a6631f1f67d20340695a7d83434f",
+    "reference-oa-business-runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference-oa-bidding-runtime.js": "e2cd0c52a784750750e456d6e76b7918b36389b399793ef0dbbab488331c7ffe"
+  }
+}

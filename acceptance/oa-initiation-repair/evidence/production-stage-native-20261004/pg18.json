@@ -1,0 +1,57 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-04T15:29:01.085Z",
+  "scope": "isolated-production-pg18",
+  "local_docker_started": false,
+  "main_mutated": false,
+  "fixture": "oa-stage-native-9b9bfda342",
+  "fixture_limits": {
+    "memory_bytes": 268435456,
+    "cpu": 0.5,
+    "published_ports": 0
+  },
+  "binaries": {
+    "design": "21eb71edabe74d40e5c23f8b8d0034a6a787053201fff2bc3db54f59f7420039",
+    "database": "c028d7b0b0a96f847fec10d2391f90b0cfa61c74459d7fab4595475bfcb2f524",
+    "httpserver": "67c2b946c432e3fd8e49d3a1a0148426685a20dd32b9710508cf1cb07f6ae0c1"
+  },
+  "tests": [
+    {
+      "package": "database",
+      "pass_top_level": 1,
+      "pass_including_subtests": 1,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    {
+      "package": "design",
+      "pass_top_level": 26,
+      "pass_including_subtests": 69,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    {
+      "package": "httpserver",
+      "pass_top_level": 11,
+      "pass_including_subtests": 20,
+      "skipped": 2,
+      "exit_code": 0
+    }
+  ],
+  "errors": [],
+  "postgres_image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/base-postgres:18.6-alpine@sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66",
+  "fixture_identity": {
+    "id": "ed0ef657eabd41db3a18acce227afb11287a592ee0be749919b93f3d8e2c5fef",
+    "image": "sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66",
+    "labels": {
+      "oms.task": "oa-stage-material-validation"
+    },
+    "memory": 268435456,
+    "network": "none",
+    "ports": {}
+  },
+  "main_images_unchanged": true,
+  "fixture_stopped": true,
+  "finished_at": "2026-10-04T15:29:54.401Z",
+  "passed": true
+}

@@ -1,0 +1,17 @@
+.production-stage-edit__form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.production-stage-edit__form .ant-form-item {
+  margin-bottom: 0;
+}
+
+.production-stage-edit__score-help {
+  display: block;
+  margin-top: -10px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}

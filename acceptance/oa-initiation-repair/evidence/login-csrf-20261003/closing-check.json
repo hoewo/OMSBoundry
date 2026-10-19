@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "current_wrapper": "/opt/omsbizfoundry/acceptance/oa-login-csrf-20261003b/d1-active",
+  "post_browser_d1_check_exit_code": 0,
+  "healthy": 17,
+  "private_restore_pg_stopped": true,
+  "restore20_running": false,
+  "safe_export_json_count": 9,
+  "safe_export_hashes_equal": true,
+  "credentials_exported_to_repository": false,
+  "schema_change": false,
+  "full_oa_complete": false
+}

@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "iam_contracts_unchanged": true,
+  "project_schema_before": "000010_initial_dispatch_draft.sql",
+  "closure": [
+    "BE 000001 -> 000002 compatible material collections; old facts/commands preserved",
+    "Original OA React components + native Evidence/BE adapters",
+    "Browser-neutral SDK fetch receiver fix; no Evidence server or IAM change"
+  ],
+  "gateway_suite_manifest_unchanged": true,
+  "other_business_images_unchanged": true,
+  "business_schema_change": "000001 -> 000002",
+  "rollback_requires_original_database_and_image": true,
+  "official_release": false
+}

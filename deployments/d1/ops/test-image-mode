@@ -1,0 +1,159 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1="$script_dir/d1"
+test_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-image-mode.XXXXXX")
+trap 'rm -rf -- "$test_dir"' EXIT HUP INT TERM
+
+digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+registry=registry.example/omsbizfoundry
+
+write_env() {
+  mode=$1
+  contract_image=$2
+  cat >"$test_dir/d1.env" <<ENV
+SUITE_VERSION=test
+D1_IMAGE_MODE=$mode
+D1_POSTGRES_IMAGE=$registry/base-postgres@sha256:$digest
+D1_IDENTITY_IMAGE=$registry/identity-access@sha256:$digest
+D1_CONTRACT_IMAGE=$contract_image
+D1_MONEY_IMAGE=$registry/money-flow-ledger@sha256:$digest
+D1_PEOPLE_IMAGE=$registry/people-groups@sha256:$digest
+D1_PARTY_IMAGE=$registry/party-directory@sha256:$digest
+D1_PROJECT_IMAGE=$registry/project-workspace@sha256:$digest
+D1_EVIDENCE_IMAGE=$registry/evidence-service@sha256:$digest
+D1_BUSINESS_ENGAGEMENT_IMAGE=$registry/business-engagement@sha256:$digest
+D1_BILLING_IMAGE=$registry/billing-invoice@sha256:$digest
+D1_PRODUCTION_IMAGE=$registry/production-operations@sha256:$digest
+D1_APPROVAL_AUDIT_RESULTS_IMAGE=$registry/approval-audit-results@sha256:$digest
+D1_COST_OUTSOURCING_IMAGE=$registry/cost-outsourcing@sha256:$digest
+D1_BONUS_DISTRIBUTION_IMAGE=$registry/bonus-distribution@sha256:$digest
+D1_WORKBENCH_IMAGE=$registry/unified-workbench@sha256:$digest
+D1_GATEWAY_IMAGE=$registry/gateway@sha256:$digest
+D1_NGINX_IMAGE=$registry/base-nginx@sha256:$digest
+PUBLIC_BIND=127.0.0.1
+PUBLIC_PORT=18000
+COOKIE_SECURE=false
+PUBLIC_ISSUER=https://oms.example.test/auth
+TENANT_ID=22222222-2222-4222-8222-222222222222
+POSTGRES_SUPERUSER_PASSWORD=AdminPassword_123
+IDENTITY_DB_PASSWORD=IdentityPassword_123
+CONTRACT_DB_PASSWORD=ContractPassword_123
+MONEY_DB_PASSWORD=MoneyPassword_123
+PEOPLE_DB_PASSWORD=PeoplePassword_123
+PARTY_DB_PASSWORD=PartyPassword_123
+PROJECT_DB_PASSWORD=ProjectPassword_123
+EVIDENCE_DB_PASSWORD=EvidencePassword_123
+BUSINESS_ENGAGEMENT_DB_PASSWORD=BusinessEngagementPassword_123
+BILLING_DB_PASSWORD=BillingInvoicePassword_123
+PRODUCTION_DB_PASSWORD=ProductionPassword_123
+APPROVAL_AUDIT_RESULTS_DB_PASSWORD=ApprovalAuditResultsPassword_123
+COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123
+BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123
+BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
+ENABLE_CONTRACT=true
+ENABLE_MONEY=true
+ENABLE_PEOPLE=true
+ENABLE_PARTY=true
+ENABLE_PROJECT=true
+ENABLE_EVIDENCE=true
+ENABLE_BUSINESS_ENGAGEMENT=true
+ENABLE_BILLING=true
+ENABLE_PRODUCTION=true
+ENABLE_APPROVAL_AUDIT_RESULTS=true
+ENABLE_COST_OUTSOURCING=true
+ENABLE_BONUS_DISTRIBUTION=true
+PROJECT_PARTY_BASE_URL=http://party-directory:8090
+PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
+EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
+EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE
+ENV
+}
+
+write_env pull "$registry/contract-ledger@sha256:$digest"
+D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
+  "$d1" images >"$test_dir/images"
+
+for image in \
+  base-postgres identity-access contract-ledger money-flow-ledger people-groups party-directory project-workspace \
+  evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution unified-workbench gateway base-nginx; do
+  grep -qx "$registry/$image@sha256:$digest" "$test_dir/images" || {
+    echo "missing digest-pinned image in rendered pull mode: $image" >&2
+    exit 1
+  }
+done
+
+write_env pull "$registry/contract-ledger:test"
+if D1_ENV_FILE="$test_dir/d1.env" "$d1" images >"$test_dir/invalid.out" 2>"$test_dir/invalid.err"; then
+  echo 'tag-only pull mode reference was accepted' >&2
+  exit 1
+fi
+grep -q 'D1_CONTRACT_IMAGE must use an immutable' "$test_dir/invalid.err" || {
+  echo 'tag-only rejection did not explain the digest requirement' >&2
+  exit 1
+}
+
+write_env build "$registry/contract-ledger:test"
+D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
+  "$d1" images >"$test_dir/build-images"
+grep -qx 'omsbizfoundry/contract-ledger:test' "$test_dir/build-images" || {
+  echo 'build mode no longer renders the existing local image name' >&2
+  exit 1
+}
+
+mock_bin="$test_dir/mock-bin"
+mock_log="$test_dir/docker.log"
+mkdir -p "$mock_bin"
+cat >"$mock_bin/docker" <<'MOCK'
+#!/bin/sh
+set -eu
+if [ "${1:-}" = image ] && [ "${2:-}" = inspect ]; then
+  [ "${D1_DOCKER_MOCK_MISSING:-false}" != true ]
+  exit
+fi
+case " $* " in
+  *' config --images '*)
+    printf '%s\n' "$D1_DOCKER_MOCK_IMAGE_A" "$D1_DOCKER_MOCK_IMAGE_B"
+    ;;
+  *' pull --policy always '*)
+    printf '%s\n' pull >>"$D1_DOCKER_MOCK_LOG"
+    ;;
+  *)
+    echo "unexpected mocked Docker call: $*" >&2
+    exit 1
+    ;;
+esac
+MOCK
+chmod +x "$mock_bin/docker"
+
+write_env pull "$registry/contract-ledger@sha256:$digest"
+: >"$mock_log"
+PATH="$mock_bin:$PATH" \
+  D1_DOCKER_MOCK_LOG="$mock_log" \
+  D1_DOCKER_MOCK_IMAGE_A="$registry/base-postgres@sha256:$digest" \
+  D1_DOCKER_MOCK_IMAGE_B="$registry/base-nginx@sha256:$digest" \
+  D1_ENV_FILE="$test_dir/d1.env" \
+  "$d1" prepare-images >"$test_dir/cached.out"
+grep -q 'skipping Registry pull' "$test_dir/cached.out" || {
+  echo 'cached pull mode did not explain that Registry access was skipped' >&2
+  exit 1
+}
+[ ! -s "$mock_log" ] || {
+  echo 'cached pull mode contacted the Registry' >&2
+  exit 1
+}
+
+D1_DOCKER_MOCK_MISSING=true \
+  PATH="$mock_bin:$PATH" \
+  D1_DOCKER_MOCK_LOG="$mock_log" \
+  D1_DOCKER_MOCK_IMAGE_A="$registry/base-postgres@sha256:$digest" \
+  D1_DOCKER_MOCK_IMAGE_B="$registry/base-nginx@sha256:$digest" \
+  D1_ENV_FILE="$test_dir/d1.env" \
+  "$d1" prepare-images
+grep -qx pull "$mock_log" || {
+  echo 'missing digest image did not trigger a Registry pull' >&2
+  exit 1
+}
+
+echo 'PASS D1 image mode test'

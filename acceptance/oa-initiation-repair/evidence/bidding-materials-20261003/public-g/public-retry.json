@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "scope": "Real native owner commit + browser response loss + reload/replay; same G fixture",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "project_writes": 0,
+  "grant_writes": 0,
+  "physical_file_deletes": 0,
+  "full_oa_accepted": false,
+  "browser_errors": [],
+  "stages": [
+    "Retained public-f native revision 13 and five file references, including its deliberately lost reply"
+  ],
+  "error": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ null\n- {\n-   command_id: '5aa315e9-2589-49ef-9ac6-7c21c2fb8727',\n-   evidence_file_id: '5ec8883a-8d65-4f60-a208-2639362c6e63',\n-   evidence_source_revision: 1,\n-   evidence_version: 1,\n-   expected_revision: 13,\n-   operation: 'append',\n-   requirement_key: 'bid_document'\n- }\n"
+}

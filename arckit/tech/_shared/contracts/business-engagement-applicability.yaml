@@ -1,0 +1,18 @@
+# 设置 Business Engagement 适用性 API 契约
+metadata: {path: "tech/_shared/contracts/business-engagement-applicability.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/business-engagements/{engagement_id}/applicability", summary: "设置不适用或恢复适用", auth_required: true, audience: "business-engagement", capability: "business-engagement.applicability.manage"}
+request:
+  path_params: [{name: engagement_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, applicable, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      applicable: {type: boolean}
+      reason: {type: string, maxLength: 1000, note: "applicable=false 时必填；恢复适用时忽略空值"}
+responses:
+  success: {status: 200, schema: {$ref: "../models/BusinessEngagementDetails.yaml"}}
+  errors: [{status: 409, code: REVISION_CONFLICT, retryable: true}, {status: 409, code: ENGAGEMENT_STATE_CONFLICT, retryable: false}]
+business_logic: {flow: ["不适用保存明确原因并进入 not_applicable。", "恢复适用后按当前方式和有效材料重新计算 draft、collecting_evidence 或 ready。"]}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "1",
+  "suite_id": "omsbizfoundry-local",
+  "tenant_id": "22222222-2222-4222-8222-222222222222",
+  "applications": [
+    {
+      "id": "identity-access",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/auth",
+      "upstream": "http://127.0.0.1:18080",
+      "readiness_path": "/health/ready",
+      "audience": "identity-access"
+    },
+    {
+      "id": "unified-workbench",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": true,
+      "route_prefix": "/workbench",
+      "upstream": "http://127.0.0.1:18082",
+      "readiness_path": "/health/ready",
+      "audience": "unified-workbench"
+    },
+    {
+      "id": "contract-ledger",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/contract",
+      "upstream": "http://127.0.0.1:8081",
+      "readiness_path": "/health/ready",
+      "audience": "contract-ledger",
+      "entry_action": "contract-ledger.view",
+      "capability_manifest": "contracts/access/v1/examples/contract-ledger-capabilities.json"
+    },
+    {
+      "id": "money-flow-ledger",
+      "version": "0.1.0",
+      "enabled": true,
+      "required": false,
+      "route_prefix": "/money",
+      "upstream": "http://127.0.0.1:8083",
+      "readiness_path": "/health/ready",
+      "audience": "money-flow-ledger",
+      "entry_action": "money-flow-ledger.view",
+      "capability_manifest": "contracts/access/v1/examples/money-flow-ledger-capabilities.json",
+      "metric_projection": {
+        "schema_version": "1",
+        "path": "/api/v1/metrics/operating-summary",
+        "action": "money-flow-ledger.statistics.read"
+      }
+    }
+  ]
+}

@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Contract.Title}} · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/contracts">返回合同列表</a>
+    <h1>{{.Contract.Title}}</h1>
+    <p>{{.Contract.NumberNamespace}} / {{.Contract.ContractNumber}}</p>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts" aria-current="page">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销</button></form>
+  </header>
+
+  <main>
+    {{if .PartyAdded}}<p role="status">签约主体已添加。</p>{{end}}
+    {{if .PartyRemoved}}<p role="status">签约主体已移除。</p>{{end}}
+    {{if .Updated}}<p role="status">合同草稿已更新。</p>{{end}}
+    {{if .Cancelled}}<p role="status">合同草稿已取消。</p>{{end}}
+    {{if .Activated}}<p role="status">合同已激活并形成 revision 1。</p>{{end}}
+    {{if .Changed}}<p role="status">生效补充协议已登记并形成新的合同 revision。</p>{{end}}
+    {{if .Terminated}}<p role="status">生效终止文书已登记，合同已终止。</p>{{end}}
+    {{if .RelationLinked}}<p role="status">合同关系已建立。</p>{{end}}
+    {{if .SettlementRecorded}}<p role="status">结算事实已登记。</p>{{end}}
+    {{if .ContractClosed}}<p role="status">合同已完成操作性关闭。</p>{{end}}
+    {{if .Corrected}}<p role="status">合同核心字段已受控更正并形成新的 revision；生命周期状态未改变。</p>{{end}}
+    {{if .EvidenceUploaded}}<p role="status">合同证据文件已保存。</p>{{end}}
+    {{if .Restored}}<p role="status">单合同账簿已恢复。{{if .MissingEvidence}}其中 {{.MissingEvidence}} 个 Evidence 版本仅恢复校验元数据，文件内容待恢复。{{end}}</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="contract-summary-title">
+      <h2 id="contract-summary-title">合同摘要</h2>
+      <dl>
+        <dt>状态</dt><dd>{{if eq .Contract.Status "draft"}}草稿{{else if eq .Contract.Status "active"}}已激活{{else if eq .Contract.Status "terminated"}}已终止{{else if eq .Contract.Status "closed"}}已关闭{{else if eq .Contract.Status "cancelled"}}已取消{{else}}{{.Contract.Status}}{{end}}</dd>
+        <dt>草稿版本</dt><dd>{{.Contract.DraftVersion}}</dd>
+        {{if .Contract.CurrentRevision}}<dt>当前 revision</dt><dd>{{.Contract.CurrentRevision}}</dd>{{end}}
+        <dt>分类</dt><dd>{{if .Contract.Category}}{{.Contract.Category}}{{else}}—{{end}}</dd>
+        {{if .Contract.CurrentRevision}}
+        <dt>原始合同金额</dt><dd>{{if .OriginalRevision.TotalAmount}}{{.OriginalRevision.TotalAmount}} {{.OriginalRevision.Currency}}{{else}}待确定（{{.OriginalRevision.Currency}}）{{end}}</dd>
+        <dt>当前有效金额</dt><dd>{{if .Revision.TotalAmount}}{{.Revision.TotalAmount}} {{.Revision.Currency}}{{else}}待确定（{{.Revision.Currency}}）{{end}}</dd>
+        <dt>最新累计结算金额</dt><dd>{{if .LatestSettlement}}{{.LatestSettlement.Amount}} {{.LatestSettlement.Currency}}（{{.LatestSettlement.Kind.Label}}，sequence {{.LatestSettlement.Sequence}}）{{else}}尚未登记{{end}}</dd>
+        {{else}}
+        <dt>草稿拟定金额</dt><dd>{{if .Contract.TotalAmount}}{{.Contract.TotalAmount}} {{.Contract.Currency}}{{else}}待确定（{{.Contract.Currency}}）{{end}}</dd>
+        {{end}}
+        <dt>签署日期</dt><dd>{{if .Contract.SignedOn}}{{.Contract.SignedOn}}{{else}}—{{end}}</dd>
+        <dt>生效日期</dt><dd>{{if .Contract.EffectiveOn}}{{.Contract.EffectiveOn}}{{else}}—{{end}}</dd>
+      </dl>
+      {{if .Cancellation}}
+      <h3>取消事实</h3>
+      <dl>
+        <dt>取消时间</dt><dd>{{.Cancellation.CancelledAt.Format "2006-01-02 15:04:05Z07:00"}}</dd>
+        <dt>取消原因</dt><dd>{{.Cancellation.Reason}}</dd>
+      </dl>
+      {{end}}
+      {{if .Closure}}
+      <h3>操作性关闭事实</h3>
+      <dl>
+        <dt>关闭日期</dt><dd>{{.Closure.ClosedOn}}</dd>
+        <dt>关闭依据</dt><dd>{{.Closure.Reason}}</dd>
+        <dt>结算处置</dt><dd>{{.Closure.SettlementDisposition.Label}}</dd>
+        {{if .Closure.FinalSettlementID}}<dt>最终结算 ID</dt><dd>{{.Closure.FinalSettlementID}}</dd>{{end}}
+        <dt>来源</dt><dd>revision {{.Closure.SourceRevision}} / settlement sequence {{.Closure.SourceSettlementSequence}}</dd>
+        <dt>记录</dt><dd>{{.Closure.Actor.String}} / {{.Closure.RecordedAt.Format "2006-01-02 15:04:05Z07:00"}}</dd>
+      </dl>
+      {{end}}
+    </section>
+
+    {{if .CanExport}}
+    <section aria-labelledby="export-ledger-title">
+      <h2 id="export-ledger-title">导出可验证账簿</h2>
+      <p>下载本合同的当前投影、不可变历史、业务引用、Evidence 校验元数据和审计时间线。归档可用于严格的空业务库单合同恢复，但不包含 Evidence 文件内容，也不是 PostgreSQL 全库备份。</p>
+      <p><a href="{{.BasePath}}/contracts/{{.Contract.ID}}/export">下载 ZIP 账簿归档</a></p>
+    </section>
+    {{end}}
+
+    {{if .Contract.CurrentRevision}}
+    <section aria-labelledby="contract-relations-title">
+      <h2 id="contract-relations-title">合同关系</h2>
+      <p>关系是独立有向事实，显示的是建立关系时两端的 revision 快照。</p>
+      {{if .CanManageLifecycle}}<p><a href="{{.BasePath}}/contracts/{{.Contract.ID}}/relations/new">建立合同关系</a></p>{{end}}
+
+      <h3>本合同作为来源</h3>
+      {{if .OutgoingRelations}}
+      <table>
+        <thead><tr><th>类型</th><th>目标合同快照</th><th>两端 revision</th><th>生效日期</th><th>说明</th><th>记录</th></tr></thead>
+        <tbody>
+          {{range .OutgoingRelations}}
+          <tr>
+            <td>{{.Type.Label}}</td>
+            <td><a href="{{$.BasePath}}/contracts/{{.Target.ContractID}}">{{.Target.NumberNamespace}} / {{.Target.ContractNumber}} · {{.Target.Title}}</a></td>
+            <td>r{{.Source.Revision}} → r{{.Target.Revision}}</td>
+            <td>{{if .EffectiveOn}}{{.EffectiveOn}}{{else}}—{{end}}</td>
+            <td>{{if .Note}}{{.Note}}{{else}}—{{end}}</td>
+            <td>{{.Actor.String}}<br>{{.CreatedAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}<p>尚无出向关系。</p>{{end}}
+
+      <h3>本合同作为目标</h3>
+      {{if .IncomingRelations}}
+      <table>
+        <thead><tr><th>类型</th><th>来源合同快照</th><th>两端 revision</th><th>生效日期</th><th>说明</th><th>记录</th></tr></thead>
+        <tbody>
+          {{range .IncomingRelations}}
+          <tr>
+            <td>{{.Type.Label}}</td>
+            <td><a href="{{$.BasePath}}/contracts/{{.Source.ContractID}}">{{.Source.NumberNamespace}} / {{.Source.ContractNumber}} · {{.Source.Title}}</a></td>
+            <td>r{{.Source.Revision}} → r{{.Target.Revision}}</td>
+            <td>{{if .EffectiveOn}}{{.EffectiveOn}}{{else}}—{{end}}</td>
+            <td>{{if .Note}}{{.Note}}{{else}}—{{end}}</td>
+            <td>{{.Actor.String}}<br>{{.CreatedAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}<p>尚无入向关系。</p>{{end}}
+    </section>
+    {{end}}
+
+    {{if .Revision}}
+    <section aria-labelledby="revision-title">
+      <h2 id="revision-title">不可变 revision {{.Revision.Revision}}</h2>
+      <dl>
+        {{if .Revision.SourceDraftVersion}}<dt>来源草稿版本</dt><dd>{{.Revision.SourceDraftVersion}}</dd>{{end}}
+        <dt>来源 Instrument</dt><dd>{{.Revision.SourceInstrumentID}}</dd>
+        <dt>形成时间</dt><dd>{{.Revision.RecordedAt.Format "2006-01-02 15:04:05Z07:00"}}</dd>
+        <dt>形成操作者</dt><dd>{{.Revision.Actor.String}}</dd>
+        <dt>编号</dt><dd>{{.Revision.NumberNamespace}} / {{.Revision.ContractNumber}}</dd>
+        <dt>标题</dt><dd>{{.Revision.Title}}</dd>
+        <dt>分类</dt><dd>{{if .Revision.Category}}{{.Revision.Category}}{{else}}—{{end}}</dd>
+        <dt>金额</dt><dd>{{if .Revision.TotalAmount}}{{.Revision.TotalAmount}} {{.Revision.Currency}}{{else}}待确定（{{.Revision.Currency}}）{{end}}</dd>
+        <dt>签署日期</dt><dd>{{.Revision.SignedOn}}</dd>
+        <dt>生效日期</dt><dd>{{.Revision.EffectiveOn}}</dd>
+      </dl>
+    </section>
+
+    <section aria-labelledby="instrument-timeline-title">
+      <h2 id="instrument-timeline-title">合同文书时间线</h2>
+      <table>
+        <thead><tr><th>顺序</th><th>类型／编号</th><th>标题与说明</th><th>签署／生效</th><th>金额语义</th><th>结果 revision</th><th>操作者</th></tr></thead>
+        <tbody>
+          {{range .Instruments}}
+          <tr>
+            <td>{{.EffectiveOrder}}</td>
+            <td>{{if eq .InstrumentType "original_contract"}}原合同{{else if eq .InstrumentType "supplemental_agreement"}}补充协议{{else if eq .InstrumentType "termination_instrument"}}终止文书{{else if eq .InstrumentType "correction_instrument"}}更正文书{{else}}{{.InstrumentType}}{{end}} / {{.InstrumentNumber}}</td>
+            <td>{{.Title}}<br>{{.ChangeSummary}}</td>
+            <td>{{.SignedOn}} / {{.EffectiveOn}}</td>
+            <td>{{if eq .AmountEffect "original"}}原始金额{{else if eq .AmountEffect "adjustment"}}调整 {{.AmountValue}}{{else if eq .AmountEffect "restatement"}}重述为 {{.AmountValue}}{{else if eq .AmountEffect "corrected"}}{{if .AmountValue}}更正为 {{.AmountValue}}{{else}}更正为待确定{{end}}{{else}}不影响金额{{end}}</td>
+            <td>revision {{.ResultingRevision}}</td>
+            <td>{{.Actor.String}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="7">尚无合同文书。</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="revision-history-title">
+      <h2 id="revision-history-title">revision 历史</h2>
+      <table>
+        <thead><tr><th>Revision</th><th>标题／分类</th><th>有效金额</th><th>合同日期</th><th>来源 Instrument</th><th>形成时间</th></tr></thead>
+        <tbody>
+          {{range .Revisions}}
+          <tr>
+            <td>{{.Revision}}</td>
+            <td>{{.Title}}<br>{{if .Category}}{{.Category}}{{else}}—{{end}}</td>
+            <td>{{if .TotalAmount}}{{.TotalAmount}} {{.Currency}}{{else}}待确定（{{.Currency}}）{{end}}</td>
+            <td>{{.SignedOn}} / {{.EffectiveOn}}</td>
+            <td>{{.SourceInstrumentID}}</td>
+            <td>{{.RecordedAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="6">尚无正式 revision。</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="settlement-timeline-title">
+      <h2 id="settlement-timeline-title">结算事实时间线</h2>
+      <p>每笔金额都是截至该次确认的累计金额；阶段结算之间不求和，也不改写合同金额。</p>
+      <table>
+        <thead><tr><th>Sequence／类型</th><th>文书</th><th>累计结算金额</th><th>确认日期／依据</th><th>来源 revision</th><th>确认主体</th><th>记录</th></tr></thead>
+        <tbody>
+          {{range .Settlements}}
+          <tr>
+            <td>{{.Sequence}} / {{.Kind.Label}}</td>
+            <td>{{.StatementNumber}}<br>{{.Title}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.ConfirmedOn}}<br>{{.Basis}}</td>
+            <td>revision {{.SourceRevision}}</td>
+            <td>{{range .ConfirmingParties}}{{.LegalName}}（{{.Role}}，Party r{{.SourcePartyRevision}}）<br>{{end}}</td>
+            <td>{{.Actor.String}}<br>{{.RecordedAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="7">尚无结算事实。</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+
+    {{if .CanRecordSettlement}}
+    <section aria-labelledby="record-settlement-title">
+      <h2 id="record-settlement-title">登记结算事实</h2>
+      <p>金额填写截至本次确认的累计结算金额。登记最终结算后，本合同不再接受新结算。</p>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/settlements">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.SettlementForm.CommandID}}">
+        <input type="hidden" name="expected_revision" value="{{.SettlementForm.ExpectedContractRevision}}">
+        <input type="hidden" name="expected_settlement_sequence" value="{{.SettlementForm.ExpectedSettlementSequence}}">
+
+        <label for="settlement_kind">结算类型</label>
+        <select id="settlement_kind" name="settlement_kind" required>
+          <option value="progress" {{if eq .SettlementForm.Kind "progress"}}selected{{end}}>阶段结算</option>
+          <option value="final" {{if eq .SettlementForm.Kind "final"}}selected{{end}}>最终结算</option>
+        </select>
+
+        <label for="settlement_number">结算文书编号</label>
+        <input id="settlement_number" name="settlement_number" value="{{.SettlementForm.StatementNumber}}" maxlength="100" required>
+
+        <label for="settlement_title">结算标题</label>
+        <input id="settlement_title" name="settlement_title" value="{{.SettlementForm.Title}}" maxlength="200" required>
+
+        <label for="settlement_amount">累计结算金额（{{.Revision.Currency}}）</label>
+        <input id="settlement_amount" name="settlement_amount" value="{{.SettlementForm.Amount}}" inputmode="decimal" required>
+
+        <label for="settlement_confirmed_on">确认日期</label>
+        <input id="settlement_confirmed_on" name="settlement_confirmed_on" type="date" value="{{.SettlementForm.ConfirmedOn}}" required>
+
+        <label for="settlement_basis">结算依据或口径说明</label>
+        <textarea id="settlement_basis" name="settlement_basis" maxlength="1000" required>{{.SettlementForm.Basis}}</textarea>
+
+        <fieldset>
+          <legend>明确确认本次结算的主体（至少选择一个）</legend>
+          {{range .PartySnapshots}}
+          <label><input type="checkbox" name="confirming_party_position" value="{{.Position}}" {{if index $.SettlementForm.SelectedPartyPositions .Position}}checked{{end}}> {{.LegalName}}（{{.Role}}，Party r{{.SourcePartyRevision}}）</label><br>
+          {{end}}
+        </fieldset>
+
+        <button type="submit">登记下一条结算</button>
+      </form>
+    </section>
+    {{end}}
+
+    {{if .CanClose}}
+    <section aria-labelledby="close-contract-title">
+      <h2 id="close-contract-title">操作性关闭合同</h2>
+      <p>关闭表示本系统不再接受普通合同变更、终止或结算；它不自动证明法律终止、履约完成或财务清偿。</p>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/close">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ClosureForm.CommandID}}">
+        <input type="hidden" name="expected_revision" value="{{.ClosureForm.ExpectedContractRevision}}">
+        <input type="hidden" name="expected_settlement_sequence" value="{{.ClosureForm.ExpectedSettlementSequence}}">
+
+        {{if and .LatestSettlement (eq .LatestSettlement.Kind "final")}}
+        <input type="hidden" name="settlement_disposition" value="final_recorded">
+        <p>结算处置：引用 final Settlement sequence {{.LatestSettlement.Sequence}}（{{.LatestSettlement.StatementNumber}}，{{.LatestSettlement.Amount}} {{.LatestSettlement.Currency}}）。</p>
+        {{else}}
+        <p>{{if .LatestSettlement}}当前最新结算为 progress sequence {{.LatestSettlement.Sequence}}，尚无 final Settlement。{{else}}当前没有结算事实。{{end}}</p>
+        <label><input type="checkbox" name="settlement_disposition" value="not_required" {{if eq .ClosureForm.SettlementDisposition "not_required"}}checked{{end}} required> 我确认该合同无需再登记独立的最终结算事实</label>
+        {{end}}
+
+        <label for="closed_on">关闭日期</label>
+        <input id="closed_on" name="closed_on" type="date" value="{{.ClosureForm.ClosedOn}}" required>
+
+        <label for="closure_reason">关闭依据或原因</label>
+        <textarea id="closure_reason" name="closure_reason" maxlength="1000" required>{{.ClosureForm.Reason}}</textarea>
+
+        <button type="submit">确认操作性关闭</button>
+      </form>
+    </section>
+    {{end}}
+
+    <section aria-labelledby="snapshot-parties-title">
+      <h2 id="snapshot-parties-title">revision {{.Revision.Revision}} 签约主体快照</h2>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">顺序</th>
+            <th scope="col">主体</th>
+            <th scope="col">登记标识</th>
+            <th scope="col">来源 Party revision</th>
+            <th scope="col">合同角色</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .PartySnapshots}}
+          <tr>
+            <td>{{.Position}}</td>
+            <td>{{.LegalName}}</td>
+            <td>{{if .RegistrationIdentifier}}{{.RegistrationIdentifier}}{{else}}—{{end}}</td>
+            <td>{{.SourcePartyRevision}}</td>
+            <td>{{.Role}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+
+    {{else}}
+
+    {{if and .CanManageDraft (eq .Contract.Status "draft")}}
+    <section aria-labelledby="edit-contract-title">
+      <h2 id="edit-contract-title">编辑合同草稿</h2>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.EditForm.CommandID}}">
+        <input type="hidden" name="expected_draft_version" value="{{.EditForm.ExpectedDraftVersion}}">
+
+        <label for="edit_number_namespace">编号命名空间</label>
+        <input id="edit_number_namespace" name="number_namespace" value="{{.EditForm.NumberNamespace}}" maxlength="64" required>
+
+        <label for="edit_contract_number">合同编号</label>
+        <input id="edit_contract_number" name="contract_number" value="{{.EditForm.ContractNumber}}" maxlength="100" required>
+
+        <label for="edit_title">合同标题</label>
+        <input id="edit_title" name="title" value="{{.EditForm.Title}}" maxlength="200" required>
+
+        <label for="edit_category">通用分类（可选）</label>
+        <input id="edit_category" name="category" value="{{.EditForm.Category}}" maxlength="100">
+
+        <label for="edit_currency">币种</label>
+        <input id="edit_currency" name="currency" value="{{.EditForm.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+
+        <label for="edit_total_amount">合同总额（可暂不确定）</label>
+        <input id="edit_total_amount" name="total_amount" value="{{.EditForm.TotalAmount}}" inputmode="decimal">
+
+        <label for="edit_signed_on">签署日期（可选）</label>
+        <input id="edit_signed_on" name="signed_on" type="date" value="{{.EditForm.SignedOn}}">
+
+        <label for="edit_effective_on">生效日期（可选）</label>
+        <input id="edit_effective_on" name="effective_on" type="date" value="{{.EditForm.EffectiveOn}}">
+
+        <button type="submit">保存草稿修改</button>
+      </form>
+    </section>
+
+    {{end}}
+
+    <section aria-labelledby="draft-parties-title">
+      <h2 id="draft-parties-title">签约主体</h2>
+      <p>草稿显示主体目录的当前资料；合同激活时才冻结签约快照。</p>
+      {{if .DraftParties}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">主体</th>
+            <th scope="col">登记标识</th>
+            <th scope="col">Party revision</th>
+            <th scope="col">合同角色</th>
+            <th scope="col">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .DraftParties}}
+          <tr>
+            <td>{{.Party.PartyLegalName}}</td>
+            <td>{{if .Party.RegistrationIdentifier}}{{.Party.RegistrationIdentifier}}{{else}}—{{end}}</td>
+            <td>{{.Party.PartyRevision}}</td>
+            <td>{{.Party.Role}}</td>
+            <td>
+              {{if and $.CanManageDraft (eq $.Contract.Status "draft")}}
+              <form method="post" action="{{$.BasePath}}/contracts/{{$.Contract.ID}}/parties/{{.Party.ID}}/remove">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="command_id" value="{{.RemoveCommandID}}">
+                <input type="hidden" name="expected_draft_version" value="{{$.Contract.DraftVersion}}">
+                <button type="submit">移除</button>
+              </form>
+              {{else}}—{{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未添加签约主体。</p>
+      {{end}}
+    </section>
+    {{end}}
+
+    {{if and .CanManageLifecycle (eq .Contract.Status "active")}}
+    <section aria-labelledby="append-change-title">
+      <h2 id="append-change-title">登记生效补充协议</h2>
+      <p>本次必须是法律顺序中的下一份文书，将形成不可变 revision {{.ChangeForm.EffectiveOrder}}。同日多份文书请按已确认顺序逐份登记。</p>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/changes">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ChangeForm.CommandID}}">
+        <input type="hidden" name="expected_revision" value="{{.ChangeForm.ExpectedRevision}}">
+        <input type="hidden" name="effective_order" value="{{.ChangeForm.EffectiveOrder}}">
+
+        <label for="instrument_number">补充协议编号</label>
+        <input id="instrument_number" name="instrument_number" value="{{.ChangeForm.InstrumentNumber}}" maxlength="100" required>
+
+        <label for="instrument_title">补充协议标题</label>
+        <input id="instrument_title" name="instrument_title" value="{{.ChangeForm.Title}}" maxlength="200" required>
+
+        <label for="change_summary">变更说明</label>
+        <textarea id="change_summary" name="change_summary" maxlength="1000" required>{{.ChangeForm.ChangeSummary}}</textarea>
+
+        <label for="instrument_signed_on">签署日期</label>
+        <input id="instrument_signed_on" name="instrument_signed_on" type="date" value="{{.ChangeForm.SignedOn}}" required>
+
+        <label for="instrument_effective_on">生效日期</label>
+        <input id="instrument_effective_on" name="instrument_effective_on" type="date" value="{{.ChangeForm.EffectiveOn}}" required>
+
+        <label for="amount_effect">金额影响</label>
+        <select id="amount_effect" name="amount_effect" required>
+          <option value="unchanged" {{if eq .ChangeForm.AmountEffect "unchanged"}}selected{{end}}>不影响金额</option>
+          <option value="adjustment" {{if eq .ChangeForm.AmountEffect "adjustment"}}selected{{end}}>在当前金额上调整</option>
+          <option value="restatement" {{if eq .ChangeForm.AmountEffect "restatement"}}selected{{end}}>重述当前金额</option>
+        </select>
+
+        <label for="amount_value">金额值</label>
+        <input id="amount_value" name="amount_value" value="{{.ChangeForm.AmountValue}}" inputmode="decimal" placeholder="调整可填 -100.00；不影响金额时留空">
+
+        <button type="submit">登记并形成 revision {{.ChangeForm.EffectiveOrder}}</button>
+      </form>
+    </section>
+    {{end}}
+
+    {{if and .CanManageLifecycle (eq .Contract.Status "active")}}
+    <section aria-labelledby="terminate-contract-title">
+      <h2 id="terminate-contract-title">登记生效终止文书</h2>
+      <p>终止将形成不可变 revision {{.TerminationForm.EffectiveOrder}} 并把合同置为已终止。终止不等于结算，当前有效金额保持不变。</p>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/terminate">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.TerminationForm.CommandID}}">
+        <input type="hidden" name="expected_revision" value="{{.TerminationForm.ExpectedRevision}}">
+        <input type="hidden" name="effective_order" value="{{.TerminationForm.EffectiveOrder}}">
+
+        <label for="termination_instrument_number">终止文书编号</label>
+        <input id="termination_instrument_number" name="termination_instrument_number" value="{{.TerminationForm.InstrumentNumber}}" maxlength="100" required>
+
+        <label for="termination_instrument_title">终止文书标题</label>
+        <input id="termination_instrument_title" name="termination_instrument_title" value="{{.TerminationForm.Title}}" maxlength="200" required>
+
+        <label for="termination_reason">终止原因或依据</label>
+        <textarea id="termination_reason" name="termination_reason" maxlength="1000" required>{{.TerminationForm.TerminationReason}}</textarea>
+
+        <label for="termination_signed_on">签署或出具日期</label>
+        <input id="termination_signed_on" name="termination_signed_on" type="date" value="{{.TerminationForm.SignedOn}}" required>
+
+        <label for="termination_effective_on">终止生效日期</label>
+        <input id="termination_effective_on" name="termination_effective_on" type="date" value="{{.TerminationForm.EffectiveOn}}" required>
+
+        <button type="submit">登记终止并形成 revision {{.TerminationForm.EffectiveOrder}}</button>
+      </form>
+    </section>
+    {{end}}
+
+    {{if and .CanCorrect (or (eq .Contract.Status "active") (eq .Contract.Status "terminated") (eq .Contract.Status "closed"))}}
+    <section aria-labelledby="correct-contract-title">
+      <h2 id="correct-contract-title">受控更正当前 revision</h2>
+      <p>只用于修正已经确认的结构化录入错误，并形成不可变 revision {{.CorrectionForm.EffectiveOrder}}。真实商业条款变化应登记补充协议。</p>
+      <p>编号 {{.Revision.NumberNamespace}} / {{.Revision.ContractNumber}}、币种 {{.Revision.Currency}} 和下列签约主体快照固定不变；既有结算、关系、关闭和证据仍引用形成时的历史事实。</p>
+      <ul>{{range .PartySnapshots}}<li>{{.LegalName}}（{{.Role}}，Party r{{.SourcePartyRevision}}）</li>{{end}}</ul>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/corrections">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.CorrectionForm.CommandID}}">
+        <input type="hidden" name="expected_status" value="{{.CorrectionForm.ExpectedStatus}}">
+        <input type="hidden" name="expected_revision" value="{{.CorrectionForm.ExpectedRevision}}">
+        <input type="hidden" name="effective_order" value="{{.CorrectionForm.EffectiveOrder}}">
+
+        <label for="correction_instrument_number">更正文书编号</label>
+        <input id="correction_instrument_number" name="correction_instrument_number" value="{{.CorrectionForm.InstrumentNumber}}" maxlength="100" required>
+
+        <label for="correction_instrument_title">更正文书标题</label>
+        <input id="correction_instrument_title" name="correction_instrument_title" value="{{.CorrectionForm.InstrumentTitle}}" maxlength="200" required>
+
+        <label for="correction_reason">更正原因或依据</label>
+        <textarea id="correction_reason" name="correction_reason" maxlength="1000" required>{{.CorrectionForm.CorrectionReason}}</textarea>
+
+        <label for="correction_instrument_signed_on">文书签署或出具日期</label>
+        <input id="correction_instrument_signed_on" name="correction_instrument_signed_on" type="date" value="{{.CorrectionForm.InstrumentSignedOn}}" required>
+
+        <label for="correction_instrument_effective_on">文书生效或确认日期</label>
+        <input id="correction_instrument_effective_on" name="correction_instrument_effective_on" type="date" value="{{.CorrectionForm.InstrumentEffectiveOn}}" required>
+
+        <label for="corrected_title">更正后合同标题</label>
+        <input id="corrected_title" name="corrected_title" value="{{.CorrectionForm.CorrectedTitle}}" maxlength="200" required>
+
+        <label for="corrected_category">更正后通用分类（可空）</label>
+        <input id="corrected_category" name="corrected_category" value="{{.CorrectionForm.CorrectedCategory}}" maxlength="100">
+
+        <label for="corrected_total_amount">更正后当前有效金额（{{.Revision.Currency}}，可留空表示待确定）</label>
+        <input id="corrected_total_amount" name="corrected_total_amount" value="{{.CorrectionForm.CorrectedTotalAmount}}" inputmode="decimal">
+
+        <label for="corrected_signed_on">更正后合同签署日期</label>
+        <input id="corrected_signed_on" name="corrected_signed_on" type="date" value="{{.CorrectionForm.CorrectedSignedOn}}" required>
+
+        <label for="corrected_effective_on">更正后合同生效日期</label>
+        <input id="corrected_effective_on" name="corrected_effective_on" type="date" value="{{.CorrectionForm.CorrectedEffectiveOn}}" required>
+
+        <button type="submit">记录更正并形成 revision {{.CorrectionForm.EffectiveOrder}}</button>
+      </form>
+    </section>
+    {{end}}
+
+    {{if and .CanManageDraft (eq .Contract.Status "draft")}}
+    <section aria-labelledby="add-party-title">
+      <h2 id="add-party-title">添加签约主体</h2>
+      {{if .AvailableParties}}
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/parties">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.AddForm.CommandID}}">
+        <input type="hidden" name="expected_draft_version" value="{{.AddForm.ExpectedDraftVersion}}">
+
+        <label for="party_id">主体</label>
+        <select id="party_id" name="party_id" required>
+          <option value="">请选择主体</option>
+          {{range .AvailableParties}}
+          <option value="{{.ID}}" {{if eq $.AddForm.PartyID .ID}}selected{{end}}>{{.LegalName}}{{if .RegistrationIdentifier}}（{{.RegistrationIdentifier}}）{{end}}</option>
+          {{end}}
+        </select>
+
+        <label for="role">合同角色</label>
+        <input id="role" name="role" value="{{.AddForm.Role}}" maxlength="100" placeholder="例如：委托方、受托方" required>
+
+        <button type="submit">添加签约主体</button>
+      </form>
+      {{else}}
+      <p>主体目录为空，请先<a href="{{.BasePath}}/parties">登记主体</a>。</p>
+      {{end}}
+    </section>
+    {{end}}
+
+    {{if and .CanManageDraft (eq .Contract.Status "draft")}}
+    <section aria-labelledby="cancel-contract-title">
+      <h2 id="cancel-contract-title">取消合同草稿</h2>
+      <p>取消后仍可查询，但不能继续编辑、添加签约主体或激活。</p>
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/cancel">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.CancelForm.CommandID}}">
+        <input type="hidden" name="expected_draft_version" value="{{.CancelForm.ExpectedDraftVersion}}">
+
+        <label for="cancellation_reason">取消原因</label>
+        <textarea id="cancellation_reason" name="cancellation_reason" maxlength="500" required>{{.CancelForm.Reason}}</textarea>
+
+        <button type="submit">确认取消草稿</button>
+      </form>
+    </section>
+    {{end}}
+
+    {{if and .CanManageLifecycle (eq .Contract.Status "draft")}}
+    <section aria-labelledby="activate-contract-title">
+      <h2 id="activate-contract-title">激活合同</h2>
+      <p>激活会冻结条款与主体快照并形成不可变 revision 1。当前审计操作者：{{.ActivationActor.String}}</p>
+      {{if .ActivationIssues}}
+      <p>尚不能激活：</p>
+      <ul>{{range .ActivationIssues}}<li>{{.}}</li>{{end}}</ul>
+      {{else}}
+      <form method="post" action="{{.BasePath}}/contracts/{{.Contract.ID}}/activate">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ActivationForm.CommandID}}">
+        <input type="hidden" name="expected_draft_version" value="{{.ActivationForm.ExpectedDraftVersion}}">
+        <button type="submit">激活并形成 revision 1</button>
+      </form>
+      {{end}}
+    </section>
+    {{end}}
+
+    <section aria-labelledby="contract-evidence-title">
+      <h2 id="contract-evidence-title">文件证据</h2>
+      <p>文件只作为结构化合同事实的佐证；内容按 SHA-256 校验，下载不会在浏览器内联执行。单文件上限 {{.EvidenceMaxBytes}} 字节。</p>
+
+      {{range .EvidenceDocuments}}
+      <article>
+        <h3>{{.Document.Title}}</h3>
+        <dl>
+          <dt>用途／依据</dt><dd>{{.Document.Purpose}}</dd>
+          <dt>引用目标</dt><dd>{{.Document.TargetLabel}}</dd>
+          <dt>创建</dt><dd>{{.Document.Actor.String}} / {{.Document.CreatedAt.Format "2006-01-02 15:04:05Z07:00"}}</dd>
+        </dl>
+        <table>
+          <thead><tr><th>版本</th><th>原始文件名</th><th>内容信息</th><th>上传记录</th><th>下载</th></tr></thead>
+          <tbody>
+            {{range .Document.Versions}}
+            <tr>
+              <td>v{{.Version}}</td>
+              <td>{{.OriginalFilename}}</td>
+              <td>{{.SizeBytes}} 字节 / {{.DetectedMediaType}}<br>SHA-256: <code>{{.SHA256}}</code></td>
+              <td>{{.Actor.String}}<br>{{.RecordedAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+              <td>{{if .ContentAvailable}}<a href="{{$.BasePath}}/contracts/{{$.Contract.ID}}/evidence/{{.DocumentID}}/versions/{{.ID}}/download">下载</a>{{else}}文件内容待恢复{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{if $.CanManageEvidence}}
+        <form method="post" enctype="multipart/form-data" action="{{$.BasePath}}/contracts/{{$.Contract.ID}}/evidence/{{.Document.ID}}/versions">
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <input type="hidden" name="command_id" value="{{.VersionCommandID}}">
+          <input type="hidden" name="expected_latest_version" value="{{.Document.Latest}}">
+          <label>追加 v{{.Document.Latest}} 的下一版本
+            <input name="evidence_file" type="file" required>
+          </label>
+          <button type="submit">追加证据版本</button>
+        </form>
+        {{end}}
+      </article>
+      {{else}}
+      <p>尚无文件证据。</p>
+      {{end}}
+
+      {{if .CanManageEvidence}}
+      <h3>上传新证据文件</h3>
+      <form method="post" enctype="multipart/form-data" action="{{.BasePath}}/contracts/{{.Contract.ID}}/evidence">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.EvidenceForm.CommandID}}">
+
+        <label for="evidence_target">引用目标</label>
+        <select id="evidence_target" name="evidence_target" required>
+          {{range .EvidenceTargets}}
+          <option value="{{.Value}}" {{if eq $.EvidenceForm.Target .Value}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+
+        <label for="evidence_title">证据标题</label>
+        <input id="evidence_title" name="evidence_title" value="{{.EvidenceForm.Title}}" maxlength="200" required>
+
+        <label for="evidence_purpose">用途或依据说明</label>
+        <textarea id="evidence_purpose" name="evidence_purpose" maxlength="500" required>{{.EvidenceForm.Purpose}}</textarea>
+
+        <label for="evidence_file">文件</label>
+        <input id="evidence_file" name="evidence_file" type="file" required>
+
+        <button type="submit">上传并形成 Version 1</button>
+      </form>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="audit-title">
+      <h2 id="audit-title">写入审计</h2>
+      <table>
+        <thead><tr><th scope="col">事件</th><th scope="col">操作者</th><th scope="col">时间</th><th scope="col">结果</th></tr></thead>
+        <tbody>
+          {{range .AuditEntries}}
+          <tr>
+            <td>{{.EventType}}</td>
+            <td>{{.Actor.String}}</td>
+            <td>{{.OccurredAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+            <td>{{.Summary}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4">尚无审计记录。</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

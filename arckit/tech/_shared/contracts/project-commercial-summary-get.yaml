@@ -1,0 +1,53 @@
+# Project C3 经营链路只读组合 API 契约
+metadata: {path: "tech/_shared/contracts/project-commercial-summary-get.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/projects/{project_id}/commercial-summary", summary: "按 Project Resource Link 并行读取合同、义务／资金和开票来源分段", auth_required: true, audience: "project-workspace", capability: "project-workspace.commercial-summary.read"}
+request:
+  path_params: [{name: project_id, type: string, format: uuid, required: true}]
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [project_id, project_revision, observed_at, total_duration_ms, segments]
+      properties:
+        project_id: {type: string, format: uuid}
+        project_revision: {type: integer, minimum: 1}
+        observed_at: {type: string, format: date-time}
+        total_duration_ms: {type: integer, minimum: 0}
+        segments:
+          type: array
+          description: "顺序与 active Resource Link 一致；不作跨来源金额加总。"
+          items:
+            type: object
+            required: [link_id, source_application, resource_type, resource_id, relation_key, state, observed_at, duration_ms, deep_link]
+            properties:
+              link_id: {type: string, format: uuid}
+              source_application: {type: string, enum: [contract-ledger, money-flow-ledger, billing-invoice]}
+              resource_type: {type: string, enum: [contract, obligation, transaction, invoice_registration]}
+              resource_id: {type: string, format: uuid}
+              relation_key: {type: string}
+              linked_revision: {type: [integer, "null"], minimum: 1}
+              source_revision: {type: [integer, "null"], minimum: 1}
+              state: {type: string, enum: [available, revision_changed, invalid, unavailable]}
+              error_code: {type: string, enum: ["", source_revision_changed, reference_invalid, source_unavailable]}
+              display_summary: {type: string}
+              business_status: {type: string}
+              observed_at: {type: string, format: date-time}
+              duration_ms: {type: integer, minimum: 0}
+              deep_link: {type: string}
+              contract: {type: [object, "null"], description: "Contract v1.2 金额投影；金额可未知。"}
+              obligation: {type: [object, "null"], description: "Money Obligation v1.2 当前余额投影。"}
+              transaction: {type: [object, "null"], description: "Money Transaction v1.2 不可变资金投影。"}
+              invoice_registration: {type: [object, "null"], description: "Billing Invoice Registration v1 当前投影。"}
+  errors:
+    - {status: 401, code: unauthenticated, retryable: false}
+    - {status: 403, code: capability_denied, retryable: false}
+    - {status: 404, code: project_not_found, retryable: false}
+business_logic:
+  flow:
+    - "Project 只以 active Resource Link 发现来源，不读取目标数据库或共享 ORM。"
+    - "每个来源使用 Project 工作负载身份交换单 action、精确资源短期凭证；目标应用最终复验。"
+    - "来源请求最多八路并行；一个来源失败只标记自己的 segment，成功 segment 仍返回。"
+    - "结果只存在于本次 HTTP 响应，不写 Project 数据库、不缓存为权威事实、不提供聚合写操作。"
+    - "未知金额保持 null／未知，不按 0 计算；跨来源金额不自动相加。"

@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "archive_sha256": "334e60bf7a73f97810e59e19d7e2e65bb56e18e608fca7ef997cc8937f51288d",
+  "bytes": 250785,
+  "private_archive_mode": "0600",
+  "private_parent_mode": "0700",
+  "outside_repository": true
+}

@@ -1,0 +1,71 @@
+{
+  "passed": false,
+  "ui_only": true,
+  "component_test_ports": true,
+  "native_project": false,
+  "production_iam": false,
+  "postgresql": false,
+  "native_business_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "7ba6f4641ded9e17301babd0b273a77ccb2e9444de975737d352793a60f2b5ce",
+  "scenarios": [
+    {
+      "name": "original-empty-layout-no-write-no-hidden-candidates",
+      "passed": true
+    },
+    {
+      "name": "original-600px-drawer-required-discipline-and-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-multi-design-same-person-multi-role-test-save",
+      "passed": true
+    },
+    {
+      "name": "original-edit-and-change-discipline-explicit-test-port",
+      "passed": true
+    },
+    {
+      "name": "original-separate-approver-estimator-and-dirty-cancel",
+      "passed": true
+    },
+    {
+      "name": "not-applicable-disabled-field-preserves-participant-intention",
+      "passed": true
+    },
+    {
+      "name": "candidate-failure-disabled-save-retry-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "catalog-failure-disabled-save-retry-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "save-rejection-keeps-original-form-and-explicit-test-port-retry",
+      "passed": true
+    },
+    {
+      "name": "original-nested-discipline-drawer-and-selection",
+      "passed": true
+    },
+    {
+      "name": "end-rejection-retains-group-no-unhandled-promise",
+      "passed": true
+    },
+    {
+      "name": "normal-confirmation-single-end-group-port-keeps-global-reviewers",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "readonly",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '刷新候选界面', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button id=\"refresh\" type=\"button\">刷新候选界面</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"ant-drawer-mask ant-drawer-mask-motion-appear ant-drawer-mask-motion-appear-active ant-drawer-mask-motion\"></div> from <div>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      -"
+  },
+  "test_port_commands": 7,
+  "test_port_member_rows": 20,
+  "test_port_ended_rows": 18,
+  "page_errors": []
+}

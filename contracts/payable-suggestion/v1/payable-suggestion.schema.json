@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omsbizfoundry.example/contracts/payable-suggestion/v1/payable-suggestion.schema.json",
+  "title": "Cost & Outsourcing payable suggestion submission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "suggestion_id", "tenant_id", "project_id", "source", "ledger_owner", "counterparty", "amount_minor", "currency", "due_on", "purpose", "request_digest"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "suggestion_id": {"type": "string", "format": "uuid"},
+    "tenant_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": "string", "format": "uuid"},
+    "source": {"$ref": "#/$defs/source"},
+    "ledger_owner": {"$ref": "#/$defs/party"},
+    "counterparty": {"$ref": "#/$defs/party"},
+    "amount_minor": {"type": "integer", "minimum": 1},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "due_on": {"type": "string", "format": "date"},
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "request_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["application", "resource_type", "resource_id", "revision", "digest"],
+      "properties": {
+        "application": {"const": "cost-outsourcing"},
+        "resource_type": {"enum": ["cost_entry", "outsourcing_engagement"]},
+        "resource_id": {"type": "string", "format": "uuid"},
+        "revision": {"type": "integer", "minimum": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "party": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "revision", "kind", "legal_name"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "revision": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["organization", "individual"]},
+        "legal_name": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    }
+  }
+}

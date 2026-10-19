@@ -1,0 +1,232 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C7_D1_EVIDENCE_DIR:-"$d1_dir/.runtime/c7-d1-evidence"}
+
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --file "${D1_COMPOSE_OVERRIDE_FILE:?set D1_COMPOSE_OVERRIDE_FILE}" \
+    --profile contract --profile money --profile people --profile project --profile bonus-distribution "$@"
+}
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" "$(printf '%s' "$value" | cut -c21-32)"
+}
+expect_status() { [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }; }
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+request() {
+  method=$1; url=$2; cookie=$3; payload=$4; output=$5; expected=$6; label=$7
+  if [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' --data "$payload" "$url")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" "$url")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+authorize_app() {
+  app=$1; resource_id=${2:-}; output=$3
+  if [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$admin_cookies" --cookie-jar "$admin_cookies" --data-urlencode "csrf_token=$admin_csrf" \
+      --data-urlencode resource_type=project --data-urlencode "resource_id=$resource_id" \
+      "$base_url/gateway/authorize/$app")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$admin_cookies" --cookie-jar "$admin_cookies" --data-urlencode "csrf_token=$admin_csrf" \
+      "$base_url/gateway/authorize/$app")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "authorize $app"
+}
+psql_database() {
+  database=$1
+  compose exec -T postgres psql --set=ON_ERROR_STOP=1 --username "$(env_value POSTGRES_SUPERUSER oms_admin)" --dbname "$database"
+}
+assert_workload_audit() {
+  audience=$1; action=$2; resource_type=$3; resource_id=$4
+  count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='bonus-distribution' AND details->>'audience'='$audience' AND details->'actions' @> '[\\\"$action\\\"]'::jsonb AND details->'scope'->'resources' @> '[{\\\"type\\\":\\\"$resource_type\\\",\\\"id\\\":\\\"$resource_id\\\"}]'::jsonb\"")
+  printf '%s\t%s\t%s\t%s\t%s\n' "$audience" "$action" "$resource_type" "$resource_id" "$count" >>"$workspace/workload-audits.tsv"
+  [ "$count" -ge 1 ] || { echo "missing exact C7 workload audit: $audience/$action/$resource_type/$resource_id" >&2; exit 1; }
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c7.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv workload-audits.tsv ids.json state.json business-published.json production-published.json business-history.json production-history.json pool-list.json receipt-set.json workbench.html bonus.html bonus.js result.md; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+"$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_cookies="$workspace/admin.cookies"
+request GET "$base_url/auth/api/v1/csrf" "$admin_cookies" '' "$workspace/admin-csrf.json" 200 'GET /auth/api/v1/csrf'
+admin_csrf=$(jq -er .csrf_token "$workspace/admin-csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+result=$(curl --silent --show-error --output "$workspace/admin-login.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$admin_cookies" --cookie-jar "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $admin_csrf" \
+  --data "$payload" "$base_url/auth/api/v1/login")
+actual=${result%% *}; duration=${result#* }; record_http 'POST /auth/api/v1/login' 200 "$actual" "$duration"; expect_status 200 "$actual" 'login'
+actor_id=$(jq -er .principal.subject_id "$workspace/admin-login.json")
+
+echo '[1/7] 验证正式选择集、独立容器、Workbench、页面和边界排除'
+manifest="$d1_dir/.runtime/suite-manifest.json"
+for selected in contract-ledger money-flow-ledger people-groups project-workspace bonus-distribution; do
+  jq -e --arg id "$selected" 'any(.applications[]; .id == $id and .enabled == true)' "$manifest" >/dev/null || { echo "$selected is not enabled" >&2; exit 1; }
+done
+for absent in party-directory evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing; do
+  jq -e --arg id "$absent" 'any(.applications[]; .id == $id and .enabled == false)' "$manifest" >/dev/null || { echo "$absent is not disabled" >&2; exit 1; }
+done
+for service in bonus-distribution bonus-distribution-migrate bonus-distribution-workload-keys bonus-distribution-workload-key-permissions; do
+  [ -n "$(compose ps --all --quiet "$service")" ] || { echo "$service is missing from the selected D1 composition" >&2; exit 1; }
+done
+authorize_app bonus-distribution '' "$workspace/authorize-unscoped.out"
+request GET "$base_url/workbench/" "$admin_cookies" '' "$workspace/workbench.html" 200 'GET /workbench/'
+grep -Fq '/gateway/authorize/bonus-distribution' "$workspace/workbench.html" || { echo 'Bonus is missing from Workbench' >&2; exit 1; }
+request GET "$base_url/bonus/" "$admin_cookies" '' "$workspace/bonus.html" 200 'GET /bonus/'
+grep -Fq '奖金分配' "$workspace/bonus.html" || { echo 'Bonus page marker is missing' >&2; exit 1; }
+request GET "$base_url/bonus/assets/bonus-distribution.js" "$admin_cookies" '' "$workspace/bonus.js" 200 'GET Bonus browser asset'
+for marker in 'allowed_actions' 'supersession' 'gatewayMode'; do grep -Fq "$marker" "$workspace/bonus.js" || { echo "Bonus browser marker is missing: $marker" >&2; exit 1; }; done
+for action in bonus-payable-suggestion.create bonus-payable-suggestion.read bonus-payable-suggestion.withdraw; do
+  jq -e --arg action "$action" 'any(.capabilities[]; .id == $action)' "$repo_dir/contracts/access/v1/examples/bonus-distribution-capabilities.json" >/dev/null || {
+    echo "Bonus payable capability is missing: $action" >&2
+    exit 1
+  }
+done
+
+echo '[2/7] 在来源应用自己的数据库建立精确已确认事实'
+tenant_id=$(env_value TENANT_ID)
+project_id=c7d10000-0000-4000-8000-000000000001
+business_person_id=c7d10000-0000-4000-8000-000000000010
+production_person_id=c7d10000-0000-4000-8000-000000000011
+business_assignment_id=c7d10000-0000-4000-8000-000000000020
+production_assignment_id=c7d10000-0000-4000-8000-000000000021
+contract_id=c7d10000-0000-4000-8000-000000000030
+settlement_id=c7d10000-0000-4000-8000-000000000033
+allocation_id=c7d10000-0000-4000-8000-000000000044
+
+psql_database people_groups <<SQL
+INSERT INTO persons(id,tenant_id,reference_code,display_name,status,revision,created_at,updated_at) VALUES
+  ('$business_person_id','$tenant_id','C7-D1-BUSINESS','经营奖金参与人','active',1,now(),now()),
+  ('$production_person_id','$tenant_id','C7-D1-PRODUCTION','生产奖金参与人','active',1,now(),now());
+SQL
+psql_database project_workspace <<SQL
+INSERT INTO projects(id,tenant_id,project_number,project_number_normalized,name,summary,project_type_keys,status,revision,created_by,created_at,updated_at)
+VALUES('$project_id','$tenant_id','C7-D1-001','c7-d1-001','C7 D1 奖金验证项目','正式 D1 来源组合',ARRAY['design'],'active',1,'$actor_id',now(),now());
+INSERT INTO project_assignments(id,tenant_id,project_id,subject_kind,subject_id,source_revision,display_snapshot,role_key,effective_from,created_project_revision,created_at) VALUES
+  ('$business_assignment_id','$tenant_id','$project_id','person','$business_person_id',1,'经营奖金参与人','business_owner',now(),1,now()),
+  ('$production_assignment_id','$tenant_id','$project_id','person','$production_person_id',1,'生产奖金参与人','production_owner',now(),1,now());
+INSERT INTO project_resource_links(id,tenant_id,project_id,target_service,resource_type,resource_id,source_revision,relation_key,note,created_project_revision,linked_at)
+VALUES('c7d10000-0000-4000-8000-000000000060','$tenant_id','$project_id','contract-ledger','settlement','$settlement_id',1,'business-settlement','C7 D1 经营奖金来源',1,now());
+SQL
+psql_database contract_ledger <<SQL
+BEGIN;
+INSERT INTO contracts(id,command_id,number_namespace,contract_number,title,category,currency,total_amount,signed_on,effective_on,status,draft_version,current_revision,created_at,updated_at)
+VALUES('$contract_id','c7d10000-0000-4000-8000-000000000031','C7D1','C7-D1-CONTRACT-001','C7 D1 设计合同','design','CNY',1065.00,'2026-09-01','2026-09-01','active',1,1,now(),now());
+INSERT INTO contract_activation_commands(command_id,contract_id,expected_draft_version,actor_kind,actor_id,resulting_revision,occurred_at)
+VALUES('c7d10000-0000-4000-8000-000000000031','$contract_id',1,'iam_subject','$actor_id',1,now());
+INSERT INTO contract_instruments(id,contract_id,instrument_type,instrument_number,title,change_summary,signed_on,effective_on,effective_order,amount_effect,amount_value,source_command_id,resulting_revision,actor_kind,actor_id,actor_display_name,recorded_at)
+VALUES('c7d10000-0000-4000-8000-000000000032','$contract_id','original_contract','C7-D1-CONTRACT-001','C7 D1 设计合同','原合同激活','2026-09-01','2026-09-01',1,'original',1065.00,'c7d10000-0000-4000-8000-000000000031',1,'iam_subject','$actor_id','C7 D1 系统管理员',now());
+INSERT INTO contract_revisions(contract_id,revision,activation_command_id,source_draft_version,source_instrument_id,number_namespace,contract_number,title,category,currency,total_amount,signed_on,effective_on,actor_kind,actor_id,recorded_at)
+VALUES('$contract_id',1,'c7d10000-0000-4000-8000-000000000031',1,'c7d10000-0000-4000-8000-000000000032','C7D1','C7-D1-CONTRACT-001','C7 D1 设计合同','design','CNY',1065.00,'2026-09-01','2026-09-01','iam_subject','$actor_id',now());
+INSERT INTO contract_settlements(id,contract_id,source_revision,settlement_sequence,settlement_kind,statement_number,title,total_amount,currency,confirmed_on,basis,actor_kind,actor_id,actor_display_name,recorded_at)
+VALUES('$settlement_id','$contract_id',1,1,'progress','C7-D1-SETTLEMENT-001','C7 D1 客户确认结算',1065.00,'CNY','2026-09-28','客户确认成果','iam_subject','$actor_id','C7 D1 系统管理员',now());
+COMMIT;
+SQL
+psql_database money_flow <<SQL
+BEGIN;
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at) VALUES
+ ('c7d10000-0000-4000-8000-000000000040','organization','C7 D1 设计单位',1,now(),now()),
+ ('c7d10000-0000-4000-8000-000000000041','organization','C7 D1 建设单位',1,now(),now());
+INSERT INTO obligations(id,direction,title,ledger_owner_party_id,creditor_party_id,creditor_party_revision,creditor_kind,creditor_legal_name,debtor_party_id,debtor_party_revision,debtor_kind,debtor_legal_name,original_amount,currency,due_on,source_kind,manual_source_reference,status,draft_version,created_at,updated_at)
+VALUES('c7d10000-0000-4000-8000-000000000042','receivable','C7 D1 设计费应收','c7d10000-0000-4000-8000-000000000040','c7d10000-0000-4000-8000-000000000040',1,'organization','C7 D1 设计单位','c7d10000-0000-4000-8000-000000000041',1,'organization','C7 D1 建设单位',1065.00,'CNY','2026-10-31','manual','C7 D1 合同结算','draft',1,now(),now());
+INSERT INTO obligation_revisions(obligation_id,revision,direction,title,ledger_owner_party_id,creditor_party_id,creditor_party_revision,creditor_kind,creditor_legal_name,debtor_party_id,debtor_party_revision,debtor_kind,debtor_legal_name,effective_amount,currency,due_on,source_kind,manual_source_reference,source_draft_version,recorded_by_actor_kind,recorded_by_actor_id,recorded_by_actor_display_name,recorded_at,revision_kind,source_revision)
+VALUES('c7d10000-0000-4000-8000-000000000042',1,'receivable','C7 D1 设计费应收','c7d10000-0000-4000-8000-000000000040','c7d10000-0000-4000-8000-000000000040',1,'organization','C7 D1 设计单位','c7d10000-0000-4000-8000-000000000041',1,'organization','C7 D1 建设单位',1065.00,'CNY','2026-10-31','manual','C7 D1 合同结算',1,'iam_subject','$actor_id','C7 D1 系统管理员',now(),'confirmation',NULL);
+INSERT INTO obligation_confirmation_commands(command_id,obligation_id,expected_draft_version,resulting_revision,payload_hash,actor_kind,actor_id,actor_display_name,confirmed_at)
+VALUES('c7d10000-0000-4000-8000-000000000046','c7d10000-0000-4000-8000-000000000042',1,1,decode(repeat('ab',32),'hex'),'iam_subject','$actor_id','C7 D1 系统管理员',now());
+UPDATE obligations SET status='open',current_revision=1,updated_at=now() WHERE id='c7d10000-0000-4000-8000-000000000042';
+INSERT INTO cash_transactions(id,type,description,ledger_owner_party_id,payer_party_id,payer_party_revision,payer_kind,payer_legal_name,payee_party_id,payee_party_revision,payee_kind,payee_legal_name,amount,currency,occurred_on,account_reference,source_kind,manual_source_reference,recorded_by_actor_kind,recorded_by_actor_id,recorded_by_actor_display_name,recorded_at)
+VALUES('c7d10000-0000-4000-8000-000000000043','receipt','C7 D1 客户回款','c7d10000-0000-4000-8000-000000000040','c7d10000-0000-4000-8000-000000000041',1,'organization','C7 D1 建设单位','c7d10000-0000-4000-8000-000000000040',1,'organization','C7 D1 设计单位',1065.00,'CNY','2026-09-28','C7-D1-CNY-001','manual','C7 D1 银行回单','iam_subject','$actor_id','C7 D1 系统管理员',now());
+INSERT INTO allocations(id,cash_transaction_id,obligation_id,obligation_revision,amount,currency,source_kind,manual_source_reference,applied_by_actor_kind,applied_by_actor_id,applied_by_actor_display_name,applied_at)
+VALUES('$allocation_id','c7d10000-0000-4000-8000-000000000043','c7d10000-0000-4000-8000-000000000042',1,1065.00,'CNY','manual','C7 D1 核销确认','iam_subject','$actor_id','C7 D1 系统管理员',now());
+COMMIT;
+SQL
+
+echo '[3/7] 通过 Money 正式 API 确认 Receipt Set，并取得 Project-scoped C7 凭证'
+authorize_app money-flow-ledger '' "$workspace/authorize-money.out"
+receipt_payload=$(jq -cn --arg command c7d10000-0000-4000-8000-000000000045 --arg project "$project_id" --arg allocation "$allocation_id" '{command_id:$command,project_id:$project,allocation_ids:[$allocation]}')
+request POST "$base_url/money/api/v1/receipt-sets" "$admin_cookies" "$receipt_payload" "$workspace/receipt-set.json" 201 'POST Money Receipt Set'
+receipt_set_id=$(jq -er .receipt_set.id "$workspace/receipt-set.json")
+jq -e '.receipt_set.revision == 1 and .receipt_set.total_amount_minor == 106500 and (.receipt_set.items | length) == 1' "$workspace/receipt-set.json" >/dev/null
+authorize_app bonus-distribution "$project_id" "$workspace/authorize-bonus-project.out"
+
+echo '[4/7] 通过正式 C7 API 建立并发布经营奖金'
+business_payload=$(jq -cn --arg command c7d10000-0000-4000-8000-000000000050 --arg project "$project_id" --arg settlement "$settlement_id" --arg person "$business_person_id" --arg assignment "$business_assignment_id" '{command_id:$command,project:{id:$project,revision:1},source:{settlement_id:$settlement,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:1},assignment:{id:$assignment,revision:1},ratio_basis_points:10000,reason:"经营参与"}]}')
+request POST "$base_url/bonus/api/v1/bonus-pools/business-drafts" "$admin_cookies" "$business_payload" "$workspace/business-draft.json" 201 'POST business Bonus draft'
+business_pool=$(jq -er .id "$workspace/business-draft.json")
+business_publish='{"command_id":"c7d10000-0000-4000-8000-000000000051","expected_revision":1,"reason":"C7 D1 经营奖金确认"}'
+request POST "$base_url/bonus/api/v1/bonus-pools/$business_pool/publication" "$admin_cookies" "$business_publish" "$workspace/business-published.json" 200 'POST business Bonus publication'
+jq -e --arg settlement "$settlement_id" '.state == "published" and .revision == 2 and .amount_minor == 10000 and .source.id == $settlement and .allocations[0].amount_minor == 10000' "$workspace/business-published.json" >/dev/null
+
+echo '[5/7] 通过正式 C7 API 建立并发布生产奖金'
+production_payload=$(jq -cn --arg command c7d10000-0000-4000-8000-000000000052 --arg project "$project_id" --arg receipt "$receipt_set_id" --arg person "$production_person_id" --arg assignment "$production_assignment_id" '{command_id:$command,project:{id:$project,revision:1},source:{receipt_set_id:$receipt,revision:1},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",rate_basis_points:1000,rounding:"half_up"},allocations:[{person:{id:$person,revision:1},assignment:{id:$assignment,revision:1},ratio_basis_points:10000,reason:"生产参与"}]}')
+request POST "$base_url/bonus/api/v1/bonus-pools/production-drafts" "$admin_cookies" "$production_payload" "$workspace/production-draft.json" 201 'POST production Bonus draft'
+production_pool=$(jq -er .id "$workspace/production-draft.json")
+production_publish='{"command_id":"c7d10000-0000-4000-8000-000000000053","expected_revision":1,"reason":"C7 D1 生产奖金确认"}'
+request POST "$base_url/bonus/api/v1/bonus-pools/$production_pool/publication" "$admin_cookies" "$production_publish" "$workspace/production-published.json" 200 'POST production Bonus publication'
+jq -e --arg receipt "$receipt_set_id" '.state == "published" and .revision == 2 and .amount_minor == 10000 and .source.id == $receipt and .source.items[0].transaction_revision == 1' "$workspace/production-published.json" >/dev/null
+
+echo '[6/7] 验证四类精确工作负载凭证审计'
+printf 'audience\taction\tresource_type\tresource_id\taudit_count\n' >"$workspace/workload-audits.tsv"
+assert_workload_audit project-workspace project-workspace.read project "$project_id"
+assert_workload_audit people-groups people-groups.person.reference.read person "$business_person_id"
+assert_workload_audit people-groups people-groups.person.reference.read person "$production_person_id"
+assert_workload_audit contract-ledger contract-ledger.reference.read settlement "$settlement_id"
+assert_workload_audit money-flow-ledger money-flow-ledger.receipt-set.reference.read receipt_set "$receipt_set_id"
+
+echo '[7/7] 固化恢复前 Pool／Allocation／来源快照和历史'
+request GET "$base_url/bonus/api/v1/bonus-pools/$business_pool/history" "$admin_cookies" '' "$workspace/business-history.json" 200 'GET business Bonus history'
+request GET "$base_url/bonus/api/v1/bonus-pools/$production_pool/history" "$admin_cookies" '' "$workspace/production-history.json" 200 'GET production Bonus history'
+request GET "$base_url/bonus/api/v1/bonus-pools?project_id=$project_id" "$admin_cookies" '' "$workspace/pool-list.json" 200 'GET Bonus pools'
+jq -e '(.items | length) == 2 and all(.items[]; .state == "published" and .revision == 2 and .amount_minor == 10000) and (.allowed_actions | index("bonus-pool.business.calculate")) and (.allowed_actions | index("bonus-pool.production.calculate"))' "$workspace/pool-list.json" >/dev/null
+jq -e '(.items | length) == 2 and [.items[].event_kind] == ["drafted","published"]' "$workspace/business-history.json" >/dev/null
+jq -e '(.items | length) == 2 and [.items[].event_kind] == ["drafted","published"]' "$workspace/production-history.json" >/dev/null
+business_sha=$(jq -Sc '{id,tenant_id,bonus_type,state,project,source,policy,amount_minor,unallocated_minor,revision,allocations,supersedes,superseded_by}' "$workspace/business-published.json" | openssl dgst -sha256 -r | awk '{print $1}')
+production_sha=$(jq -Sc '{id,tenant_id,bonus_type,state,project,source,policy,amount_minor,unallocated_minor,revision,allocations,supersedes,superseded_by}' "$workspace/production-published.json" | openssl dgst -sha256 -r | awk '{print $1}')
+business_history_sha=$(jq -Sc . "$workspace/business-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+production_history_sha=$(jq -Sc . "$workspace/production-history.json" | openssl dgst -sha256 -r | awk '{print $1}')
+jq -cn --arg project_id "$project_id" --arg business_pool_id "$business_pool" --arg production_pool_id "$production_pool" --arg receipt_set_id "$receipt_set_id" --arg settlement_id "$settlement_id" '{project_id:$project_id,business_pool_id:$business_pool_id,production_pool_id:$production_pool_id,receipt_set_id:$receipt_set_id,settlement_id:$settlement_id}' >"$workspace/ids.json"
+jq -cn --arg business_sha256 "$business_sha" --arg production_sha256 "$production_sha" --arg business_history_sha256 "$business_history_sha" --arg production_history_sha256 "$production_history_sha" '{business_sha256:$business_sha256,production_sha256:$production_sha256,business_history_sha256:$business_history_sha256,production_history_sha256:$production_history_sha256,pool_count:2,allocation_count:2}' >"$workspace/state.json"
+assertions=$(awk -F '\t' 'NR>1 {count++} END {print count+0}' "$http_evidence"); mismatches=$(awk -F '\t' 'NR>1 && $2!=$3 {count++} END {print count+0}' "$http_evidence")
+printf '%s\n' '# C7 D1 正式组合首次验证' '' "- HTTP 断言：$assertions" "- 状态不匹配：$mismatches" "- 经营 Pool：${business_pool}；生产 Pool：${production_pool}。" '- Nginx → Gateway → IAM → Bonus 正式入口、两类真实来源、独立数据库和精确工作负载审计通过。' '- C7 Capability Manifest 无 payable 行为；C8 未被装入。' '- 下一步：联合备份、空目标恢复、恢复后追加事实及未选装缺席。' >"$workspace/result.md"
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat "$workspace/result.md"

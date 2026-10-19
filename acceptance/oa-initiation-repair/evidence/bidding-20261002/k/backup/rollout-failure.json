@@ -1,0 +1,5 @@
+{
+  "migration_applied": false,
+  "old_binary_rollback_forbidden": false,
+  "data_volumes_and_joint_backup_retained": true
+}

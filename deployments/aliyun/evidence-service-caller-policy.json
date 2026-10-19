@@ -1,0 +1,24 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": [
+        "acs:ram::<ALIYUN_ACCOUNT_ID>:role/omsbizfoundryevidenceuploadrole"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "oss:GetObject",
+        "oss:DeleteObject"
+      ],
+      "Resource": [
+        "acs:oss:*:*:<PRIVATE_BUCKET_NAME>/tenants/*"
+      ]
+    }
+  ]
+}

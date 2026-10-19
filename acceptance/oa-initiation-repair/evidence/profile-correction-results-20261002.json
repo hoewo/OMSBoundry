@@ -1,0 +1,73 @@
+{
+  "schema_version": "1",
+  "date": "2026-10-02",
+  "decision": "BF-085",
+  "full_oa_passed": false,
+  "public_deployed": false,
+  "local_docker_started": false,
+  "remote_batches": [
+    {
+      "run": "e",
+      "path": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002e",
+      "result": {
+        "passed": false,
+        "checks": [],
+        "main_unchanged": true,
+        "public_browser_or_full_oa": false
+      },
+      "failure": "New test incorrectly counted combined draft/business-owner dispatch history as two events. Actual immutable event count is five, not six; assertion corrected, native checks unchanged. Failure logs retained."
+    },
+    {
+      "run": "f",
+      "path": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002f",
+      "result": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "projects",
+            "passed": true,
+            "tests": 97
+          },
+          {
+            "group": "httpserver",
+            "passed": true,
+            "tests": 53
+          }
+        ],
+        "main_unchanged": true,
+        "public_browser_or_full_oa": false
+      },
+      "pass_counts_include_subtests": true,
+      "binary_sha256": {
+        "projects.test": "9dc354d271903af3d0cadf0007f030a40ff3be0048c5612f5e3c92011f666b7d",
+        "httpserver.test": "aae313f67b6fd2a41656bfa7107b24e191ef2957dbb9951adcd4467b96949ff2"
+      },
+      "max_total_cpu": 0.45,
+      "max_total_memory_mib": 448
+    },
+    {
+      "run": "g",
+      "path": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002g",
+      "result": {
+        "passed": true,
+        "main_unchanged": true,
+        "full_suite_or_business_journey": false,
+        "schema": 10,
+        "actual_server_startup": true,
+        "restart_facts_unchanged": true,
+        "anonymous_native_routes_denied": 3,
+        "server_sha256": "823865f918172c6769f7bad776b653e43fdc499300b1545cf71bb891f59a5fbf",
+        "private_owned_database": "oa_initiation_startup_20261002g",
+        "max_total_cpu": 0.4,
+        "max_total_memory_mib": 352
+      }
+    }
+  ],
+  "main_preserved": {
+    "canonical_databases": 13,
+    "container_identities": 17
+  },
+  "restore20_restarted": false,
+  "probe_containers_and_private_pg_stopped": true,
+  "diagnostic_files_and_private_startup_db_retained": true
+}

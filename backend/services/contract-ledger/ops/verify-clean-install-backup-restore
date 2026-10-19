@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  echo "usage: verify-clean-install-backup-restore /absolute/release.tar.gz /absolute/release.tar.gz.sha256" >&2
+  exit 2
+fi
+
+bundle_path=$1
+checksum_path=$2
+case "$bundle_path" in
+  /*) ;;
+  *) echo "release bundle path must be absolute" >&2; exit 2 ;;
+esac
+case "$checksum_path" in
+  /*) ;;
+  *) echo "release checksum path must be absolute" >&2; exit 2 ;;
+esac
+if [ ! -f "$bundle_path" ] || [ ! -f "$checksum_path" ]; then
+  echo "release bundle and checksum must both be regular files" >&2
+  exit 2
+fi
+if [ -z "${TEST_DATABASE_URL:-}" ]; then
+  echo "TEST_DATABASE_URL is required" >&2
+  exit 2
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+app_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+pg_dump_bin=${DELIVERY_PG_DUMP_BIN:-$app_dir/ops/local-pg-dump}
+pg_restore_bin=${DELIVERY_PG_RESTORE_BIN:-$app_dir/ops/local-pg-restore}
+
+case "$pg_dump_bin" in
+  /*) ;;
+  *) echo "DELIVERY_PG_DUMP_BIN must be absolute" >&2; exit 2 ;;
+esac
+case "$pg_restore_bin" in
+  /*) ;;
+  *) echo "DELIVERY_PG_RESTORE_BIN must be absolute" >&2; exit 2 ;;
+esac
+if [ ! -f "$pg_dump_bin" ] || [ ! -x "$pg_dump_bin" ]; then
+  echo "pg_dump entry must be an executable regular file: $pg_dump_bin" >&2
+  exit 2
+fi
+if [ ! -f "$pg_restore_bin" ] || [ ! -x "$pg_restore_bin" ]; then
+  echo "pg_restore entry must be an executable regular file: $pg_restore_bin" >&2
+  exit 2
+fi
+
+cd "$app_dir"
+DELIVERY_BUNDLE_PATH="$bundle_path" \
+DELIVERY_BUNDLE_SHA256_PATH="$checksum_path" \
+DELIVERY_PG_DUMP_BIN="$pg_dump_bin" \
+DELIVERY_PG_RESTORE_BIN="$pg_restore_bin" \
+GOWORK=off \
+go test -count=1 -tags=integration \
+  -run '^TestContractReleaseCleanInstallBackupRestore$' \
+  ./internal/deliveryacceptance

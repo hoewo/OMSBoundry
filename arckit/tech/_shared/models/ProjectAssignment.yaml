@@ -1,0 +1,103 @@
+# ProjectAssignment 数据模型
+# 路径: arckit/tech/_shared/models/ProjectAssignment.yaml
+
+metadata:
+  path: "tech/_shared/models/ProjectAssignment.yaml"
+  domain: "project-workspace"
+  entity_name: "ProjectAssignment"
+  storage: "PostgreSQL"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+type: object
+additionalProperties: false
+description: "人员或 Group 在具体 Project 中承担的角色；引用 People 事实但不复制名册。"
+
+required:
+  - id
+  - tenant_id
+  - project_id
+  - subject_kind
+  - subject_id
+  - source_revision
+  - role_key
+  - effective_from
+  - created_project_revision
+  - created_at
+
+properties:
+  id:
+    type: string
+    format: uuid
+    readOnly: true
+  tenant_id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    readOnly: true
+  project_id:
+    type: string
+    format: uuid
+    readOnly: true
+  subject_kind:
+    type: string
+    enum: [person, group]
+  subject_id:
+    type: string
+    format: uuid
+  source_revision:
+    type: integer
+    minimum: 1
+    description: "People 引用在验证时的 revision。"
+  display_snapshot:
+    type: string
+    maxLength: 200
+    description: "仅用于解释历史的非权威显示快照，不参与授权或当前名册判断。"
+  role_key:
+    type: string
+    enum: [business_owner, production_owner, participant, commercial_contributor]
+  effective_from:
+    type: string
+    format: date-time
+  ended_at:
+    type: [string, "null"]
+    format: date-time
+    readOnly: true
+  end_reason:
+    type: [string, "null"]
+    maxLength: 500
+    readOnly: true
+  created_project_revision:
+    type: integer
+    minimum: 1
+    readOnly: true
+  ended_project_revision:
+    type: [integer, "null"]
+    minimum: 1
+    readOnly: true
+  created_at:
+    type: string
+    format: date-time
+    readOnly: true
+
+relationships:
+  project:
+    type: many-to-one
+    target: Project
+    ownership: project-workspace
+  subject:
+    type: external-reference
+    target: PeoplePersonOrGroup
+    ownership: people-groups
+
+indexes:
+  - name: uq_project_active_single_owner_role
+    columns: [tenant_id, project_id, role_key]
+    unique: true
+    where: "ended_at IS NULL AND role_key IN ('business_owner', 'production_owner')"
+  - name: uq_project_active_subject_role
+    columns: [tenant_id, project_id, subject_kind, subject_id, role_key]
+    unique: true
+    where: "ended_at IS NULL"

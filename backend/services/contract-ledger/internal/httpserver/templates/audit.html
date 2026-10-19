@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>写入审计 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/">Contract Ledger</a>
+    <h1>写入审计</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts">合同</a> <a href="{{.BasePath}}/audit" aria-current="page">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </header>
+  <main>
+    <table>
+      <thead><tr><th>时间</th><th>对象</th><th>动作</th><th>操作者</th><th>摘要</th></tr></thead>
+      <tbody>
+        {{range .Entries}}
+        <tr>
+          <td>{{.OccurredAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
+          <td>{{.ObjectType}} / {{.ObjectID}}</td>
+          <td>{{.Action}}</td>
+          <td>{{.Actor.String}}</td>
+          <td>{{.Summary}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5">尚无审计记录。</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# 客户站点角色到应用能力的覆盖层契约
+metadata: {path: "tech/_shared/contracts/customer-role-capability-overlay.yaml", domain: "assembly", owner: "Customer Overlay", version: "1.0", created: "2026-09-26", updated: "2026-09-26"}
+artifact:
+  schema: "contracts/access/v1/customer-role-capability-overlay.schema.json"
+  example: "contracts/access/v1/examples/reference-oa-c1-role-overlay.json"
+  identity: {overlay_id: "stable key", version: "semantic version", application_id: "target Suite application", audience: "target Capability audience"}
+site_roles:
+  key: "customer-facing role key; never interpreted by the target application"
+  value:
+    actions: "unique Capability IDs from the target application's Capability Manifest"
+assignment_policy:
+  policy_id: "versioned IAM/Policy Provider policy"
+  version: "policy version used to derive resource-scoped actions from Business Facts"
+validation:
+  - "application_id and audience must match the selected Suite application and its Capability Manifest."
+  - "Every action must exist in that target manifest and belong to its namespace; cross-application and unknown actions fail closed."
+  - "A site role may intentionally map to no business action; identity_super_admin in the reference OA C1 overlay is the normative example."
+  - "Changing a customer role name or regrouping its actions changes only this versioned overlay and IAM grants, not target application tables or role conditions."
+  - "Resource-scoped responsibility still requires a versioned Business Fact and policy; a site role mapping cannot invent a Project Assignment."
+responsibilities:
+  customer_overlay: "Own customer-facing role names and their explicit mapping to stable target actions."
+  iam_policy: "Own Subject grants, policy evaluation, bounded scope and short-lived credential issuance."
+  target_application: "Own its Capability Manifest, resource ownership, current state, revision and final authorization."
+forbidden:
+  - "Customer role names in target application authorization code."
+  - "An identity-governance role implicitly receiving business actions."
+  - "Shared role tables, cross-application ORM models or Gateway-side final authorization."

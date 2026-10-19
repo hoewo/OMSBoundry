@@ -1,0 +1,205 @@
+{
+  "passed": false,
+  "mode": "continue",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "native_IAM": true,
+  "grant_writes": 0,
+  "project_writes": 0,
+  "physical_file_deletes": 0,
+  "full_oa_accepted": false,
+  "evidence_provider": "local-http",
+  "browser_errors": [],
+  "network_failures": [
+    {
+      "path": "/evidence/v1/local-uploads/63af5671-4652-49a6-ab7e-a7297f9dcc26",
+      "method": "PUT",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/business/api/v1/business-engagements/231f2977-79d4-4b36-a178-f19a0d8d3119/materials",
+      "method": "POST",
+      "error": "net::ERR_FAILED"
+    }
+  ],
+  "assets": {
+    "reference_oa_react_bidding.js": "0763af8b8257cc9a34bd358f3fd368159f95e28e6c7bbd4183b208f7eac8e20e",
+    "reference_oa_react_bidding.css": "a4fccb70a59235f5dce088af6cca467f943efd93953cec304f35cda3a807484a",
+    "reference_oa_bidding_runtime.js": "e2722dc970486cec274242310ee430b1684698ab5f1d00ad2de858808960ae67",
+    "reference_oa_initiation_runtime.js": "9f3da47d3994a0f69d274b798c2953a755bc967317282b17d4df1072f3d304d1",
+    "reference_oa_business_runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference_oa_architecture_lens.js": "d18fd5a6dff937c148e692d629d69b10d6bae853d945d9fdb69b45c128d54006"
+  },
+  "phases": [
+    "Continued the same real four-upload fixture after read-only verification hit the Gateway rate limit; no replacement or repeated upload",
+    "Four native available versions; size + SHA-256 verified; BE ready is material readiness only",
+    "Actual preview + signed download bytes verified",
+    "Exact reference removal preserves four files/history; Project reads three current references; refresh/reload writes zero facts"
+  ],
+  "entry_exchanges": 2,
+  "before": {
+    "project_revision": 4,
+    "engagement_revision": 11,
+    "materials": [
+      {
+        "id": "dfd7babf-7deb-4be9-a42d-a5042dc2ab92",
+        "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+        "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+        "requirement_key": "tender_document",
+        "evidence_file_id": "7ae70095-e5b4-46f7-9472-f0961f9d8981",
+        "evidence_version": 1,
+        "evidence_source_revision": 1,
+        "display_snapshot": "OA-VERIFY-20261003-A-招标一.png",
+        "created_engagement_revision": 8,
+        "created_at": "2026-10-03T07:19:37.579983Z"
+      },
+      {
+        "id": "b989794c-b7be-4767-8c19-87c5c214fa29",
+        "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+        "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+        "requirement_key": "tender_document",
+        "evidence_file_id": "5053fca8-0879-4fb6-bee4-7f4ec374dfe2",
+        "evidence_version": 1,
+        "evidence_source_revision": 1,
+        "display_snapshot": "OA-VERIFY-20261003-A-招标二.png",
+        "created_engagement_revision": 9,
+        "created_at": "2026-10-03T07:19:38.430903Z"
+      },
+      {
+        "id": "419a7e63-13b1-446a-aba0-03293723f5e8",
+        "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+        "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+        "requirement_key": "bid_document",
+        "evidence_file_id": "23d6ad9d-dc71-4e41-b9ff-cdffeed883ec",
+        "evidence_version": 1,
+        "evidence_source_revision": 1,
+        "display_snapshot": "OA-VERIFY-20261003-A-投标.png",
+        "created_engagement_revision": 10,
+        "created_at": "2026-10-03T07:19:40.234942Z"
+      },
+      {
+        "id": "da42cc42-5c51-4371-932b-3e76f5206514",
+        "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+        "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+        "requirement_key": "award_document",
+        "evidence_file_id": "3c858914-8f18-4e60-a184-932347d9d7db",
+        "evidence_version": 1,
+        "evidence_source_revision": 1,
+        "display_snapshot": "OA-VERIFY-20261003-A-中标材料.png",
+        "created_engagement_revision": 11,
+        "created_at": "2026-10-03T07:19:42.01183Z"
+      }
+    ],
+    "requirements": [
+      {
+        "key": "tender_document",
+        "required": true,
+        "satisfied": true,
+        "material_reference": {
+          "id": "b989794c-b7be-4767-8c19-87c5c214fa29",
+          "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+          "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+          "requirement_key": "tender_document",
+          "evidence_file_id": "5053fca8-0879-4fb6-bee4-7f4ec374dfe2",
+          "evidence_version": 1,
+          "evidence_source_revision": 1,
+          "display_snapshot": "OA-VERIFY-20261003-A-招标二.png",
+          "created_engagement_revision": 9,
+          "created_at": "2026-10-03T07:19:38.430903Z"
+        },
+        "material_references": [
+          {
+            "id": "dfd7babf-7deb-4be9-a42d-a5042dc2ab92",
+            "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+            "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+            "requirement_key": "tender_document",
+            "evidence_file_id": "7ae70095-e5b4-46f7-9472-f0961f9d8981",
+            "evidence_version": 1,
+            "evidence_source_revision": 1,
+            "display_snapshot": "OA-VERIFY-20261003-A-招标一.png",
+            "created_engagement_revision": 8,
+            "created_at": "2026-10-03T07:19:37.579983Z"
+          },
+          {
+            "id": "b989794c-b7be-4767-8c19-87c5c214fa29",
+            "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+            "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+            "requirement_key": "tender_document",
+            "evidence_file_id": "5053fca8-0879-4fb6-bee4-7f4ec374dfe2",
+            "evidence_version": 1,
+            "evidence_source_revision": 1,
+            "display_snapshot": "OA-VERIFY-20261003-A-招标二.png",
+            "created_engagement_revision": 9,
+            "created_at": "2026-10-03T07:19:38.430903Z"
+          }
+        ]
+      },
+      {
+        "key": "bid_document",
+        "required": true,
+        "satisfied": true,
+        "material_reference": {
+          "id": "419a7e63-13b1-446a-aba0-03293723f5e8",
+          "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+          "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+          "requirement_key": "bid_document",
+          "evidence_file_id": "23d6ad9d-dc71-4e41-b9ff-cdffeed883ec",
+          "evidence_version": 1,
+          "evidence_source_revision": 1,
+          "display_snapshot": "OA-VERIFY-20261003-A-投标.png",
+          "created_engagement_revision": 10,
+          "created_at": "2026-10-03T07:19:40.234942Z"
+        },
+        "material_references": [
+          {
+            "id": "419a7e63-13b1-446a-aba0-03293723f5e8",
+            "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+            "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+            "requirement_key": "bid_document",
+            "evidence_file_id": "23d6ad9d-dc71-4e41-b9ff-cdffeed883ec",
+            "evidence_version": 1,
+            "evidence_source_revision": 1,
+            "display_snapshot": "OA-VERIFY-20261003-A-投标.png",
+            "created_engagement_revision": 10,
+            "created_at": "2026-10-03T07:19:40.234942Z"
+          }
+        ]
+      },
+      {
+        "key": "award_document",
+        "required": true,
+        "satisfied": true,
+        "material_reference": {
+          "id": "da42cc42-5c51-4371-932b-3e76f5206514",
+          "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+          "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+          "requirement_key": "award_document",
+          "evidence_file_id": "3c858914-8f18-4e60-a184-932347d9d7db",
+          "evidence_version": 1,
+          "evidence_source_revision": 1,
+          "display_snapshot": "OA-VERIFY-20261003-A-中标材料.png",
+          "created_engagement_revision": 11,
+          "created_at": "2026-10-03T07:19:42.01183Z"
+        },
+        "material_references": [
+          {
+            "id": "da42cc42-5c51-4371-932b-3e76f5206514",
+            "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+            "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+            "requirement_key": "award_document",
+            "evidence_file_id": "3c858914-8f18-4e60-a184-932347d9d7db",
+            "evidence_version": 1,
+            "evidence_source_revision": 1,
+            "display_snapshot": "OA-VERIFY-20261003-A-中标材料.png",
+            "created_engagement_revision": 11,
+            "created_at": "2026-10-03T07:19:42.01183Z"
+          }
+        ]
+      }
+    ]
+  },
+  "continued_from": "public-d/public-react-exercise.json",
+  "readonly_rate_limit_waits": 1,
+  "error": "locator.waitFor: Timeout 60000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '继续原操作', exact: true }) to be visible\u001b[22m\n"
+}

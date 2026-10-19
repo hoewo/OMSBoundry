@@ -1,0 +1,36 @@
+# Business Engagement 当前投影
+metadata: {path: "tech/_shared/models/BusinessEngagementDetails.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.1", created: "2026-09-27", updated: "2026-10-02", status: "additive candidate, not deployed"}
+type: object
+required: [engagement, materials, requirements, missing_requirements]
+properties:
+  engagement:
+    type: object
+    required: [id, tenant_id, project_id, project_source_revision, applicability, material_policy_version, status, revision, created_by, created_at, updated_at]
+    properties:
+      id: {type: string, format: uuid}
+      tenant_id: {type: string, format: uuid}
+      project_id: {type: string, format: uuid}
+      project_source_revision: {type: integer, minimum: 1}
+      applicability: {type: string, enum: [undetermined, applicable, not_applicable]}
+      method: {type: [string, "null"], enum: [comparison, competitive_negotiation, tender, null]}
+      material_policy_version: {type: integer, minimum: 1}
+      status: {type: string, enum: [draft, collecting_evidence, ready, not_applicable, cancelled]}
+      revision: {type: integer, minimum: 1}
+      not_applicable_reason: {type: [string, "null"]}
+      cancellation_reason: {type: [string, "null"]}
+      created_by: {type: string, format: uuid}
+      created_at: {type: string, format: date-time}
+      updated_at: {type: string, format: date-time}
+  materials: {type: array, items: {type: object, required: [id, requirement_key, evidence_file_id, evidence_version, evidence_source_revision, display_snapshot, created_engagement_revision]}}
+  requirements:
+    type: array
+    items:
+      type: object
+      required: [key, required, satisfied]
+      properties:
+        key: {type: string, enum: [tender_document, bid_document, award_document]}
+        required: {type: boolean}
+        satisfied: {type: boolean}
+        material_reference: {type: object, note: "legacy 代表，取最新 created revision／ID；没有当前引用时省略"}
+        material_references: {type: array, maxItems: 100, items: {type: object}, note: "新增当前集合，按 created revision／ID 升序；没有成员或旧不可变回执中省略"}
+  missing_requirements: {type: array, items: {type: string, enum: [tender_document, bid_document, award_document]}}

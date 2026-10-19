@@ -1,0 +1,25 @@
+schema_version: "1"
+contract: project-directory
+version: "1.0.0"
+owner: project-workspace
+operation:
+  method: GET
+  path: /api/v1/project-directory
+  action: project-workspace.read
+  scope: [tenant, resources]
+  query:
+    offset: {type: integer, minimum: 0, default: 0}
+    limit: {type: integer, minimum: 1, maximum: 100, default: 100}
+    keyword: {type: string, max_length: 200, matching: literal-case-insensitive-name-or-number}
+  response:
+    schema_version: "1"
+    items: "visible active root Project with assignments and visible active children"
+    total: "count of visible roots matching keyword (including visible-child matches)"
+    offset: integer
+    limit: integer
+    has_more: boolean
+    allowed_actions: credential-native-actions
+  ordering: "created_at DESC, id DESC; children sort_order ASC, created_at ASC, id ASC"
+  effects: none
+  compatibility: "additive; legacy project-list v1.1 unchanged"
+  exclusions: "no external business status, amounts, shared tables or customer year fields"

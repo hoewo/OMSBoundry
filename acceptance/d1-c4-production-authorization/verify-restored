@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the restored D1 Nginx entry URL}
+evidence_dir=${C4_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c4-evidence"}
+state_file="$evidence_dir/state.json"
+
+for command in curl jq openssl awk; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$state_file" ] || { echo "C4 pre-backup state evidence not found: $state_file" >&2; exit 2; }
+
+env_value() {
+  key=$1
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  printf '%s' "$value"
+}
+
+expect_status() {
+  [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }
+}
+
+cookie_value() {
+  awk -F '\t' -v name="$2" '$6 == name {value=$7} END {print value}' "$1"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c4-restored.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/admin.cookies"
+
+result=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code}' \
+  --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf")
+expect_status 200 "$result" 'fetch CSRF after restore'
+csrf=$(jq -er .csrf_token "$workspace/csrf.json")
+login_payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME)" --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" \
+  '{username:$username,password:$password}')
+result=$(curl --silent --show-error --output "$workspace/login.json" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data "$login_payload" "$base_url/auth/api/v1/login")
+expect_status 200 "$result" 'login after restore'
+
+result=$(curl --silent --show-error --output "$workspace/authorize.out" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+  "$base_url/gateway/authorize/production-operations")
+expect_status 303 "$result" 'authorize Production after restore'
+[ -n "$(cookie_value "$cookies" oms_cap_production_operations)" ] || {
+  echo 'restored Production capability credential is missing' >&2
+  exit 1
+}
+
+consultation_item=$(jq -er .consultation_item "$state_file")
+design_item=$(jq -er .design_item "$state_file")
+project_b_item=$(jq -er .project_b_item "$state_file")
+expected_state_sha=$(jq -er .state_sha256 "$state_file")
+
+fetch_item() {
+  item_id=$1
+  output=$2
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/production/api/v1/production-work-items/$item_id")
+  expect_status 200 "$result" "read restored Production work item $item_id"
+}
+
+fetch_item "$consultation_item" "$workspace/consultation.json"
+fetch_item "$design_item" "$workspace/design.json"
+fetch_item "$project_b_item" "$workspace/project-b.json"
+
+jq -e '.work_item.status == "completed" and .work_item.type_key == "consultation-v1" and .work_item.revision == 5 and (.deliverables | length) == 1' \
+  "$workspace/consultation.json" >/dev/null
+jq -e '.work_item.type_key == "design-v1" and .work_item.revision == 3 and (.deliverables | length) == 1' \
+  "$workspace/design.json" >/dev/null
+jq -e '.work_item.type_key == "consultation-v1" and .work_item.revision == 1' \
+  "$workspace/project-b.json" >/dev/null
+
+actual_state_sha=$(jq -Sc '{work_item:.work_item,stages:.stages,deliverables:.deliverables}' "$workspace/consultation.json" | openssl dgst -sha256 -r | awk '{print $1}')
+[ "$actual_state_sha" = "$expected_state_sha" ] || {
+  echo "restored canonical state digest mismatch: expected=$expected_state_sha actual=$actual_state_sha" >&2
+  exit 1
+}
+
+result=$(curl --silent --show-error --output "$workspace/history.json" --write-out '%{http_code}' \
+  --cookie "$cookies" "$base_url/production/api/v1/production-work-items/$consultation_item/history?limit=50")
+expect_status 200 "$result" 'read restored Production history'
+jq -e '.items | length == 5' "$workspace/history.json" >/dev/null
+
+printf 'PASS D1 C4 restored state: consultation=%s sha256=%s history=%s, design=%s, retry-item=%s\n' \
+  "$consultation_item" "$actual_state_sha" "$(jq -r '.items | length' "$workspace/history.json")" "$design_item" "$project_b_item"

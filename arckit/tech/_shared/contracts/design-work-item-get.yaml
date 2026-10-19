@@ -1,0 +1,22 @@
+# 获取 Design Work Item API 契约
+metadata: {path: "tech/_shared/contracts/design-work-item-get.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/api/v1/design-work-items/{work_item_id}", summary: "读取 Work Item、Stage 与成果引用", auth_required: true, audience: "design-operations", capability: "design-work-item.read"}
+request:
+  path_params: [{name: work_item_id, type: string, format: uuid, required: true}]
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [work_item, stages, deliverables]
+      properties:
+        work_item: {$ref: "../models/DesignWorkItem.yaml"}
+        stages: {type: array, items: {$ref: "../models/DesignStage.yaml"}}
+        deliverables: {type: array, items: {$ref: "../models/DesignDeliverable.yaml"}}
+        reference_statuses: {type: array, description: "Project／Evidence 当前可用性；失败不隐藏自有事实。"}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: WORK_ITEM_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["先返回 Design 自有事实。", "外部当前投影按 available／changed／invalid／unavailable 标记，不改写历史。"]

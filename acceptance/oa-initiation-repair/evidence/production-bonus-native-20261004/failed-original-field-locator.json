@@ -1,0 +1,167 @@
+{
+  "passed": false,
+  "formal_iam": true,
+  "real_people_project_bonus": true,
+  "postgresql_18": true,
+  "main_deployed": false,
+  "normal_workbench_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "suite_restore_accepted": false,
+  "asset_sha256": "6a610242324837b38df22ef027de13e43fa04edfdfa55359068ea3811e7ed345",
+  "scenarios": [
+    {
+      "name": "five-native-apps-api-only-source-setup-active-project-formal-exact-grants",
+      "passed": true
+    },
+    {
+      "name": "original-professional-and-bonus-surfaces-visible-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-drawers-save-six-native-roles-and-same-person-second-profession",
+      "passed": true
+    },
+    {
+      "name": "distinct-typed-project-reference-seven-active-snapshots-read-zero-write",
+      "passed": true
+    }
+  ],
+  "stage": "bonus-form",
+  "error": "locator.fill: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').getByLabel('比例池基数', { exact: true })\u001b[22m\n",
+  "page_errors": [],
+  "client_posts": [
+    {
+      "app": "project",
+      "path": "/api/v1/projects/48f12df1-7872-4f82-9221-ed9086bf7b20/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 5,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "4d1c4ad3-ea31-42dd-b2f8-32c475d0f57a",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "3f9ee289-d22e-4fd8-a6ec-e1c6c6893936",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "3f9ee289-d22e-4fd8-a6ec-e1c6c6893936",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "0e1fe050-974d-442c-a235-039aae39a7fc",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "92727822-8066-4774-883e-6db2d8249b1d",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "8a5f6189-bfc6-498d-b081-b34871fbed4f"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/48f12df1-7872-4f82-9221-ed9086bf7b20/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 6,
+        "operation": "replace_reviewers",
+        "changes": [
+          {
+            "role": "approver",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "3f9ee289-d22e-4fd8-a6ec-e1c6c6893936",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "estimator",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "92727822-8066-4774-883e-6db2d8249b1d",
+                "revision": 1
+              }
+            ]
+          }
+        ],
+        "command_id": "897aa33b-ffa1-4ca3-8244-bfa4a4fcc236"
+      },
+      "status": 200
+    },
+    {
+      "app": "project",
+      "path": "/api/v1/projects/48f12df1-7872-4f82-9221-ed9086bf7b20/reference-oa/production-personnel",
+      "body": {
+        "profile": "reference-oa-production-personnel-v1",
+        "expected_project_revision": 7,
+        "operation": "replace_discipline",
+        "target_discipline": {
+          "id": "9baa5c77-89a5-4b05-a5a0-231149c17b86",
+          "revision": 1
+        },
+        "changes": [
+          {
+            "role": "designer",
+            "operation": "replace",
+            "people": [
+              {
+                "id": "3f9ee289-d22e-4fd8-a6ec-e1c6c6893936",
+                "revision": 1
+              }
+            ]
+          },
+          {
+            "role": "participant",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "reviewer",
+            "operation": "replace",
+            "people": []
+          },
+          {
+            "role": "auditor",
+            "operation": "replace",
+            "people": []
+          }
+        ],
+        "command_id": "c30e1cc9-01da-4630-83fb-23bbb70a0b3e"
+      },
+      "status": 200
+    }
+  ]
+}

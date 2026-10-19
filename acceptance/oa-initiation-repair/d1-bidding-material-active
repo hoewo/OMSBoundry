@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+# Auth58 current material release; retain the existing IAM/Project overrides.
+# This is a test-environment entry point, not a portable Deployment Profile.
+export D1_ENV_FILE=/opt/omsbizfoundry/auth58-v0.1.0-test.20-full.https.env
+export D1_COMPOSE_OVERRIDE_FILE=/opt/omsbizfoundry/acceptance/oa-bidding-material-release-20261003a/compose.oa-public.json
+exec /opt/omsbizfoundry/releases/omsbizfoundry-d1_v0.1.0-test.20_linux_amd64/deployments/d1/ops/d1 "$@"

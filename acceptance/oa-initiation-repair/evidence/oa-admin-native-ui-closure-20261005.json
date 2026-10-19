@@ -1,0 +1,64 @@
+{
+  "schema_version": "1",
+  "passed": true,
+  "observed_at": "2026-10-05",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "permission_rule_layer": {
+    "profile": "reference-oa-administrator-v1",
+    "groups": 7,
+    "rules": 49,
+    "checked": 49,
+    "locked_against_partial_admin_template": 49,
+    "authorization_layers_visible": 4
+  },
+  "native_capability_layer": {
+    "installed_manifests": 12,
+    "catalog_actions": 145,
+    "active_tenant_grants": 145,
+    "credential_checks": 12,
+    "wildcard_grants": 0
+  },
+  "production_ui": {
+    "enabled_and_opened": [
+      "人员配置",
+      "批复审计",
+      "方案阶段",
+      "生产成本管理",
+      "对外委托",
+      "奖金分配"
+    ],
+    "personnel_initialize_enabled": true,
+    "commission_create_enabled": true,
+    "bonus_allocate_enabled": true,
+    "commission_create_form_opened": true,
+    "bonus_allocate_form_opened": true,
+    "bonus_candidates": {
+      "status": 200,
+      "item_count": 0,
+      "reason": "project production personnel is not initialized"
+    },
+    "http_403": 0,
+    "http_429": 0,
+    "http_5xx": 0,
+    "page_errors": 0,
+    "business_writes_during_read_only_check": 0
+  },
+  "assembly_repair": {
+    "bonus_capability_namespaces": ["bonus-pool", "bonus-manual-allocation"],
+    "bonus_entry_actions": ["bonus-pool.read", "bonus-manual-allocation.read"],
+    "bonus_workload_permission": "project-workspace.reference-oa-personnel.read",
+    "unenrolled_project_candidate_list": "200 with an empty items array",
+    "unenrolled_exact_assignment": "404",
+    "project_image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/project-workspace@sha256:ed089229d41856b675d2b6c812acb03a4c757e4def52b245ba3d238237a75f32",
+    "healthy_containers": 17,
+    "business_facts_unchanged": true,
+    "grants_unchanged": true
+  },
+  "business_prerequisites_are_not_permissions": {
+    "approval_record_disabled_without_contract_snapshot": true,
+    "audit_record_disabled_without_recorded_approval": true,
+    "initial_design_adapter_not_implemented": true,
+    "construction_design_adapter_not_implemented": true,
+    "change_completion_adapter_not_implemented": true
+  }
+}

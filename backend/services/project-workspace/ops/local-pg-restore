@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+app_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+
+exec docker compose --project-directory "$app_dir" exec -T \
+  -e PGHOST=127.0.0.1 \
+  -e PGPORT=5432 \
+  -e PGDATABASE="${PGDATABASE:-project_workspace}" \
+  -e PGUSER="${PGUSER:-project_workspace}" \
+  -e PGSSLMODE=disable \
+  postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_restore "$@"' sh "$@"

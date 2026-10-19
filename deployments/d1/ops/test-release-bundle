@@ -1,0 +1,225 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-d1-release-test.XXXXXX")
+cleanup() { rm -rf "$test_root"; }
+trap cleanup EXIT HUP INT TERM
+
+digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+manifest="$test_root/images.env"
+for name in POSTGRES IDENTITY CONTRACT MONEY PEOPLE PARTY PROJECT EVIDENCE BUSINESS_ENGAGEMENT BILLING PRODUCTION APPROVAL_AUDIT_RESULTS COST_OUTSOURCING BONUS_DISTRIBUTION WORKBENCH GATEWAY NGINX; do
+  lower=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')
+  printf 'D1_%s_IMAGE=registry.example/omsbizfoundry/%s@sha256:%s\n' "$name" "$lower" "$digest" >> "$manifest"
+done
+
+RELEASE_PROVENANCE_MODE=development RELEASE_COMMIT=test RELEASE_BUILT_AT=2026-09-24T00:00:00Z \
+  "$script_dir/build-release" v0.1.0-test.3 "$manifest" "$test_root/out" > "$test_root/result"
+archive=$(sed -n '1p' "$test_root/result")
+checksum=$(sed -n '2p' "$test_root/result")
+[ -f "$archive" ] && [ -f "$checksum" ] || { echo 'D1 release outputs are missing' >&2; exit 1; }
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$checksum")") >/dev/null
+else
+  (cd "$(dirname "$archive")" && shasum -a 256 -c "$(basename "$checksum")") >/dev/null
+fi
+
+listing="$test_root/listing"
+tar -tzf "$archive" > "$listing"
+for path in \
+  deployments/d1/.env.example \
+  deployments/d1/.release-bundle \
+  deployments/d1/compose.yaml \
+  deployments/d1/compose.pull.yaml \
+  deployments/d1/compose.https.yaml \
+  deployments/d1/compose.evidence-oss.yaml \
+  deployments/d1/ops/d1 \
+  deployments/d1/ops/evidence-imds-guard \
+  deployments/d1/ops/check-evidence-runtime-profile \
+  deployments/d1/systemd/evidence-imds-guard.conf \
+  deployments/d1/systemd/evidence-imds-guard.env.example \
+  docs/operations/d1-evidence-oss-profile.md \
+  deployments/d1/ops/grant-bootstrap-access \
+  contracts/access/v1/examples/contract-ledger-capabilities.json \
+  contracts/access/v1/examples/project-workspace-capabilities.json \
+  contracts/access/v1/examples/party-directory-capabilities.json \
+  contracts/access/v1/examples/business-engagement-capabilities.json \
+  contracts/access/v1/examples/business-engagement-project-assignment-policy.json \
+  contracts/access/v1/examples/billing-invoice-capabilities.json \
+  contracts/access/v1/examples/production-operations-capabilities.json \
+  contracts/access/v1/examples/approval-audit-results-capabilities.json \
+  contracts/access/v1/examples/cost-outsourcing-capabilities.json \
+  contracts/access/v1/examples/bonus-distribution-capabilities.json \
+  contracts/access/v1/examples/production-operations-project-assignment-policy.json \
+  acceptance/d1-delivery/verify-running \
+  acceptance/d1-full-oa-journey/scenario-v1.json \
+  acceptance/d1-full-oa-journey/verify-c0 \
+  acceptance/d1-full-oa-journey/verify-c1 \
+  acceptance/d1-full-oa-journey/verify-c2 \
+  acceptance/d1-full-oa-journey/verify-c3 \
+  acceptance/d1-full-oa-journey/verify-c4 \
+  acceptance/d1-full-oa-journey/verify-c5 \
+  acceptance/d1-full-oa-journey/verify-c6 \
+  acceptance/d1-full-oa-journey/verify-c7 \
+  acceptance/d1-full-oa-journey/verify-c8 \
+  acceptance/d1-full-oa-journey/test-c8-native-entry.py \
+  acceptance/d1-c8-money-metric/verify-running \
+  acceptance/d1-c8-production-work-items/verify-running \
+  docs/operations/d1-environment-promotion.md \
+  RELEASE-CHECKSUMS.sha256; do
+  grep -q "/$path$" "$listing" || { echo "D1 release is missing $path" >&2; exit 1; }
+done
+if grep -Eq '(^|/)(\.env$|\.runtime(/|$)|[^/]*\.(key|pem)$|\._[^/]*)' "$listing"; then
+  echo 'D1 release contains runtime state, a secret-shaped file, or AppleDouble metadata' >&2
+  exit 1
+fi
+
+mkdir "$test_root/extracted"
+tar -xzf "$archive" -C "$test_root/extracted"
+root="$test_root/extracted/$(basename "$archive" .tar.gz)"
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$root" && sha256sum -c RELEASE-CHECKSUMS.sha256) >/dev/null
+else
+  (cd "$root" && shasum -a 256 -c RELEASE-CHECKSUMS.sha256) >/dev/null
+fi
+
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+for capability_manifest in "$root/contracts/access/v1/examples/"*-capabilities.json; do
+  [ "$(file_mode "$capability_manifest")" = 644 ] || {
+    echo "D1 release capability manifest is not readable by non-root containers: $capability_manifest" >&2
+    exit 1
+  }
+done
+
+d1_script="$root/deployments/d1/ops/d1"
+grep -Fq 'compose_all up --detach --no-deps --no-build --wait evidence-service' "$d1_script" || {
+  echo 'D1 backup does not restart Evidence independently of one-shot dependencies' >&2
+  exit 1
+}
+grep -Fq 'compose_all down --remove-orphans' "$d1_script" || {
+  echo 'D1 upgrade does not replace stale one-shot containers before convergence' >&2
+  exit 1
+}
+if grep -Fq 'compose_all start evidence-service' "$d1_script"; then
+  echo 'D1 backup still restarts Evidence through dependency-sensitive compose start' >&2
+  exit 1
+fi
+grep -Fq 'chown -R postgres:postgres "/backups/$BACKUP_ID"' "$d1_script" || {
+  echo 'D1 restore does not securely transfer the selected host-owned backup to the non-root restore user' >&2
+  exit 1
+}
+grep -Fq 'chown -R "$HOST_UID:$HOST_GID" "/backups/$BACKUP_ID"' "$d1_script" || {
+  echo 'D1 restore does not return the selected backup to the invoking host user' >&2
+  exit 1
+}
+grep -Fq 'chmod 0711 "$backup_dir"' "$d1_script" || {
+  echo 'D1 restore does not make the bind-mounted backup root traversable for the bounded restore window' >&2
+  exit 1
+}
+
+grant_script="$root/deployments/d1/ops/grant-bootstrap-access"
+grep -Fq 'D1_GRANT_RATE_LIMIT_PAUSE_SECONDS' "$grant_script" || {
+  echo 'D1 bootstrap grant script does not expose the bounded rate-limit wait' >&2
+  exit 1
+}
+grep -Fq 'grant remained rate limited for $action after one bounded retry' "$grant_script" || {
+  echo 'D1 bootstrap grant script does not fail closed after one rate-limit retry' >&2
+  exit 1
+}
+
+running_acceptance="$root/acceptance/d1-delivery/verify-running"
+grep -Fq "grep -Fq '/api/v1/bonus-pools'" "$running_acceptance" || {
+  echo 'D1 running acceptance does not preserve the Bonus relative API-path contract' >&2
+  exit 1
+}
+
+grep -Fq 'BUSINESS_ENGAGEMENT_BASE_URL: http://business-engagement:8089' "$root/deployments/d1/compose.yaml" || {
+  echo 'D1 Project runtime does not receive the Business Engagement reference endpoint' >&2
+  exit 1
+}
+
+[ "$(grep -Fc 'OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}' "$root/deployments/d1/compose.yaml")" -eq 2 ] || {
+  echo 'D1 Workbench runtime does not receive the explicit OMS qualification Party identity' >&2
+  exit 1
+}
+
+env_example="$root/deployments/d1/.env.example"
+grep -Fq 'PRODUCTION_BASE_URL: ${PROJECT_PRODUCTION_BASE_URL:-}' "$root/deployments/d1/compose.yaml" || {
+  echo 'D1 Project lacks its optional injected Production material endpoint' >&2
+  exit 1
+}
+grep -qx 'PROJECT_PRODUCTION_BASE_URL=' "$env_example" || {
+  echo 'D1 Project invents a Production startup dependency when it is unselected' >&2
+  exit 1
+}
+grep -qx 'D1_IMAGE_MODE=pull' "$env_example"
+[ "$(grep -Ec '^D1_[A-Z_]+_IMAGE=.*@sha256:[a-f0-9]{64}$' "$env_example")" -eq 17 ] || {
+  echo 'D1 release environment does not contain seventeen digest-pinned images' >&2
+  exit 1
+}
+
+sparse_manifest="$test_root/sparse-images.env"
+grep -E '^D1_(POSTGRES|IDENTITY|CONTRACT|MONEY|PEOPLE|PARTY|PROJECT|EVIDENCE|BUSINESS_ENGAGEMENT|WORKBENCH|GATEWAY|NGINX)_IMAGE=' "$manifest" > "$sparse_manifest"
+RELEASE_PROVENANCE_MODE=development RELEASE_COMMIT=test RELEASE_BUILT_AT=2026-09-24T00:00:00Z \
+  "$script_dir/build-release" v0.1.0-test.4 "$sparse_manifest" "$test_root/sparse-out" > "$test_root/sparse-result"
+sparse_archive=$(sed -n '1p' "$test_root/sparse-result")
+mkdir "$test_root/sparse-extracted"
+tar -xzf "$sparse_archive" -C "$test_root/sparse-extracted"
+sparse_env="$test_root/sparse-extracted/$(basename "$sparse_archive" .tar.gz)/deployments/d1/.env.example"
+[ "$(grep -Ec '^D1_[A-Z_]+_IMAGE=.*@sha256:[a-f0-9]{64}$' "$sparse_env")" -eq 12 ] || {
+  echo 'D1 sparse release did not preserve exactly the selected digest-pinned images' >&2
+  exit 1
+}
+if grep -q '^D1_BILLING_IMAGE=' "$sparse_env"; then
+  echo 'D1 sparse release invented an image for an unselected application' >&2
+  exit 1
+fi
+
+sparse_runtime_env="$test_root/sparse-runtime.env"
+sed \
+  -e 's/^POSTGRES_SUPERUSER_PASSWORD=.*/POSTGRES_SUPERUSER_PASSWORD=AdminPassword_123/' \
+  -e 's/^IDENTITY_DB_PASSWORD=.*/IDENTITY_DB_PASSWORD=IdentityPassword_123/' \
+  -e 's/^CONTRACT_DB_PASSWORD=.*/CONTRACT_DB_PASSWORD=ContractPassword_123/' \
+  -e 's/^MONEY_DB_PASSWORD=.*/MONEY_DB_PASSWORD=MoneyPassword_123/' \
+  -e 's/^PEOPLE_DB_PASSWORD=.*/PEOPLE_DB_PASSWORD=PeoplePassword_123/' \
+  -e 's/^PARTY_DB_PASSWORD=.*/PARTY_DB_PASSWORD=PartyPassword_1234/' \
+  -e 's/^PROJECT_DB_PASSWORD=.*/PROJECT_DB_PASSWORD=ProjectPassword_123/' \
+  -e 's/^EVIDENCE_DB_PASSWORD=.*/EVIDENCE_DB_PASSWORD=EvidencePassword_123/' \
+  -e 's/^BUSINESS_ENGAGEMENT_DB_PASSWORD=.*/BUSINESS_ENGAGEMENT_DB_PASSWORD=BusinessEngagementPassword_123/' \
+  -e 's/^BILLING_DB_PASSWORD=.*/BILLING_DB_PASSWORD=BillingInvoicePassword_123/' \
+  -e 's/^PRODUCTION_DB_PASSWORD=.*/PRODUCTION_DB_PASSWORD=ProductionPassword_123/' \
+  -e 's/^APPROVAL_AUDIT_RESULTS_DB_PASSWORD=.*/APPROVAL_AUDIT_RESULTS_DB_PASSWORD=ApprovalAuditResultsPassword_123/' \
+  -e 's/^COST_OUTSOURCING_DB_PASSWORD=.*/COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123/' \
+  -e 's/^BONUS_DISTRIBUTION_DB_PASSWORD=.*/BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123/' \
+  -e 's/^BOOTSTRAP_ADMIN_PASSWORD=.*/BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123/' \
+  -e 's/^PARTY_CURSOR_HMAC_KEY=.*/PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456/' \
+  -e 's/^EVIDENCE_LOCAL_SIGNING_KEY=.*/EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE/' \
+  -e 's/^ENABLE_BUSINESS_ENGAGEMENT=false/ENABLE_BUSINESS_ENGAGEMENT=true/' \
+  "$sparse_env" > "$sparse_runtime_env"
+D1_ENV_FILE="$sparse_runtime_env" "$root/deployments/d1/ops/d1" config --quiet
+sparse_images=$(D1_ENV_FILE="$sparse_runtime_env" "$root/deployments/d1/ops/d1" images)
+[ "$(printf '%s\n' "$sparse_images" | grep -Ec '@sha256:[a-f0-9]{64}$')" -eq 12 ] || {
+  echo 'D1 sparse release runtime did not resolve exactly the selected digest-pinned images' >&2
+  exit 1
+}
+if printf '%s\n' "$sparse_images" | grep -q ':disabled$'; then
+  echo 'D1 sparse release runtime selected an omitted application image' >&2
+  exit 1
+fi
+
+invalid_env="$test_root/build.env"
+sed 's/^D1_IMAGE_MODE=pull$/D1_IMAGE_MODE=build/' "$env_example" > "$invalid_env"
+if D1_ENV_FILE="$invalid_env" "$root/deployments/d1/ops/d1" images >"$test_root/invalid.out" 2>"$test_root/invalid.err"; then
+  echo 'D1 release bundle accepted target-host build mode' >&2
+  exit 1
+fi
+grep -q 'release bundles only support D1_IMAGE_MODE=pull' "$test_root/invalid.err"
+
+echo 'PASS D1 release bundle test'

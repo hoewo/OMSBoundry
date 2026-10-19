@@ -1,0 +1,81 @@
+{{define "referenceOARealProjects"}}{{if not .DemoPreview}}
+<template data-page-template="projects">
+  <div class="management-section-tabs management-section-tabs--compact"><div class="management-section-tabs__copy"><div class="management-section-tabs__heading"><span class="management-section-tabs__icon">▧</span><div class="management-section-tabs__heading-copy"><h2>项目管理</h2><p>项目经营、生产与基本信息</p></div></div></div><div class="management-section-tabs__extra"><button class="ant-btn ant-btn-primary" type="button" data-real-new-project>＋ 项目立项</button></div></div>
+  <section class="ant-card project-list-page__card real-project-directory"><div class="ant-card-body">
+    <div class="project-list-page__toolbar"><div class="project-list-page__toolbar-controls"><div class="ant-segmented" aria-label="项目列表视图"><button class="ant-segmented-item" type="button" data-real-list-mode="timeline">年份列表</button><button class="ant-segmented-item" type="button" data-real-list-mode="paged">分页列表</button></div></div><div class="real-directory-search"><label class="reference-input project-list-page__search"><span>⌕</span><input type="search" autocomplete="off" maxlength="200" aria-label="搜索项目名称或项目编号" placeholder="搜索项目名称或项目编号" data-real-project-search></label><button class="ant-btn" type="button" data-real-project-search-submit>搜索</button><button class="ant-btn" type="button" data-real-project-reload>重新读取</button></div></div>
+    <div class="initiation-runtime-status" data-real-project-status role="status">正在读取当前权限范围内的项目</div>
+    <div class="project-list-page__list" data-real-project-list></div>
+    <div class="real-directory-pagination" data-real-pagination><span data-real-page-range></span><button class="ant-btn" type="button" data-real-page-prev>上一页</button><label>页码 <input type="number" min="1" aria-label="项目列表页码" data-real-page-number></label><button class="ant-btn" type="button" data-real-page-next>下一页</button><label>每页 <select aria-label="每页项目数量" data-real-page-size><option value="10">10 条</option><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label></div>
+  </div></section>
+</template>
+<section class="oa-view project-detail-page" data-view="project-real-detail">
+  <div class="project-detail-page__shell"><div class="project-detail-page__layout"><div class="project-detail-page__sticky">
+    <section class="project-detail-page__banner"><div class="project-detail-page__banner-main"><div class="project-detail-page__banner-left"><div class="project-detail-page__return-row"><button class="project-detail-page__back-action" type="button" data-real-back-projects>← 返回项目列表</button></div><div class="project-detail-page__title-row"><h1 class="project-detail-page__title" data-real-detail="name">—</h1><span class="project-detail-page__project-code" data-real-detail="number">—</span></div></div><div class="project-detail-page__banner-right"><div class="project-detail-page__meta-tags"><span class="ant-tag" data-real-detail="business">—</span><span class="ant-tag" data-real-detail="production">—</span></div></div></div><nav class="real-package-context" aria-label="项目包上下文" data-real-package-context hidden></nav></section>
+    <nav class="project-detail-page__primary-nav" aria-label="项目详情一级导航" data-tab-count="3"><button class="project-detail-page__primary-tab project-detail-page__primary-tab--active" type="button" data-real-detail-tab="basic">▦ 基本信息</button><button class="project-detail-page__primary-tab" type="button" data-real-detail-tab="business">◇ 经营信息</button><button class="project-detail-page__primary-tab" type="button" data-real-detail-tab="production">⌁ 生产信息</button></nav>
+  </div></div>
+<div class="project-workspace basic-info-tab__workspace" data-real-detail-panel="basic"><section class="project-section-card basic-info-tab__unified"><header class="project-section-card__header project-section-card__header--blue"><div class="project-section-card__title"><span>▧</span><span>项目基本信息</span></div><div class="project-form__actions"><button class="ant-btn" type="button" data-real-profile-open>✎ 编辑</button></div></header><div class="project-section-card__body basic-info-tab__unified-body"><div class="basic-info-tab__readonly-grid">
+    <div class="project-workspace__field"><span class="project-workspace__field-label">项目名称</span><strong class="project-workspace__field-value" data-real-detail="name">—</strong></div>
+    <div class="project-workspace__field"><span class="project-workspace__field-label">项目编号</span><strong class="project-workspace__field-value" data-real-detail="number">—</strong></div>
+    <div class="project-workspace__field"><span class="project-workspace__field-label">承接日期</span><strong class="project-workspace__field-value" data-real-detail="date">—</strong></div>
+    <div class="project-workspace__field"><span class="project-workspace__field-label">项目类型</span><strong class="project-workspace__field-value" data-real-detail="types">—</strong></div>
+    <div class="project-workspace__field project-workspace__field--wide"><span class="project-workspace__field-label">项目概况</span><strong class="project-workspace__field-value project-workspace__field-value--multiline" data-real-detail="summary">—</strong></div>
+    <div class="project-workspace__field"><span class="project-workspace__field-label">项目经营负责人</span><strong class="project-workspace__field-value" data-real-detail="business">—</strong></div>
+    <div class="project-workspace__field"><span class="project-workspace__field-label">项目生产负责人</span><strong class="project-workspace__field-value" data-real-detail="production">—</strong></div>
+  </div><p class="initiation-runtime-status" data-real-detail-status role="status">—</p></div></section></div>
+  <div class="project-workspace business-info-tab" data-real-detail-panel="business" hidden>
+    <div class="project-workspace__tabs"><nav class="ant-tabs-nav" aria-label="经营栏目"><div class="ant-tabs-nav-list" role="tablist">
+      <button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="overview">▦ 总览</button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="client">▣ 甲方信息</button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="personnel">经营参与人</button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="bidding"><span class="project-workspace__tab-label--document">招投标信息</span></button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="contracts"><span class="project-workspace__tab-label--document">合同信息</span></button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="payments"><span class="project-workspace__tab-label--finance">支付信息</span></button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="invoices"><span class="project-workspace__tab-label--finance">开票信息</span></button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="costs"><span class="project-workspace__tab-label--finance">经营成本</span></button><button class="ant-tabs-tab" type="button" role="tab" data-real-business-tab="bonus"><span class="project-workspace__tab-label--finance">奖金分配</span></button>
+    </div></nav></div>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="client" role="tabpanel" hidden><header class="project-workspace__card-header"><div><h3 class="project-workspace__card-title">甲方信息</h3><p class="project-workspace__card-subtitle">甲方名称直接保存到当前项目，历史名称行内匹配后可按 Tab 补全</p></div><button class="ant-btn" type="button" data-real-client-open hidden>＋ 录入甲方信息</button></header>
+      <div class="business-info-tab__client-readonly" data-real-client-readonly hidden><div class="business-info-tab__client-readonly-item"><span>甲方名称</span><strong data-real-client-value="name">—</strong></div><div class="business-info-tab__client-readonly-item"><span>联系人</span><strong data-real-client-value="contact_name">—</strong></div><div class="business-info-tab__client-readonly-item"><span>联系电话</span><strong data-real-client-value="contact_phone">—</strong></div></div>
+      <div class="business-info-tab__client-inline-form" data-real-client-form hidden>
+        <div class="project-workspace__grid">
+          <label class="reference-form__field reference-entity-form__field project-workspace__grid-item--12"><span>甲方名称 *</span><div class="project-party-name-input project-contact-input"><input class="ant-input" type="text" maxlength="200" autocomplete="off" placeholder="输入甲方名称" data-real-client-input="name"><button type="button" tabindex="-1" class="project-contact-input__clear" aria-label="清空甲方名称" data-real-client-clear="name" hidden>×</button><div class="project-party-name-input__completion" data-real-client-name-hint aria-hidden="true" hidden></div></div></label>
+          <label class="reference-form__field reference-entity-form__field project-workspace__grid-item--6"><span>联系人</span><div class="project-contact-input"><input class="ant-input" type="text" maxlength="80" placeholder="输入甲方联系人" data-real-client-input="contact_name"><button type="button" tabindex="-1" class="project-contact-input__clear" aria-label="清空联系人" data-real-client-clear="contact_name" hidden>×</button></div></label>
+          <label class="reference-form__field reference-entity-form__field project-workspace__grid-item--6"><span>联系电话</span><div class="project-contact-input"><input class="ant-input" type="text" maxlength="50" placeholder="输入联系电话" data-real-client-input="contact_phone"><button type="button" tabindex="-1" class="project-contact-input__clear" aria-label="清空联系电话" data-real-client-clear="contact_phone" hidden>×</button></div></label>
+        </div>
+        <div class="business-info-tab__client-edit-footer"><span>名称和联系人直接保存到当前项目，不会新建或修改甲方主数据。</span><div class="project-form__actions"><button class="ant-btn" type="button" data-real-client-cancel>取消</button><button class="ant-btn ant-btn-primary" type="button" data-real-client-submit>保存</button></div></div>
+      </div>
+      <p data-real-client-identity></p><p role="status" data-real-client-status>正在读取甲方信息…</p><button class="ant-btn" type="button" data-real-client-reload hidden>重新读取甲方资料</button>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="personnel" role="tabpanel" hidden>
+      <div data-real-personnel-react><p role="status">正在装入原 OA 经营参与人组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="bidding" role="tabpanel" hidden>
+      <div data-real-bidding-react><p role="status">正在装入原 OA 招投标组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="contracts" role="tabpanel" hidden>
+      <div data-real-contract-react><p role="status">正在装入原 OA 两链合同组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="payments" role="tabpanel" hidden>
+      <div data-real-cash-react><p role="status">正在装入原 OA 两链支付组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="invoices" role="tabpanel" hidden>
+      <div data-real-invoice-react><p role="status">正在装入原 OA 开票组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="costs" role="tabpanel" hidden>
+      <div data-real-cost-react><p role="status">正在装入原 OA 经营成本组件；若持续显示，请刷新页面。</p></div>
+    </section>
+    <section class="project-workspace__card business-info-tab__surface-card" data-real-business-panel="bonus" role="tabpanel" hidden><div data-real-bonus-react><p role="status">正在装入原 OA 经营奖金分配组件。</p></div></section>
+    <section class="project-workspace__card business-info-tab__surface-card real-business-read" data-real-business-reader role="tabpanel" hidden><header class="project-workspace__card-header"><div><h3 class="project-workspace__card-title" data-real-business-title></h3><p class="project-workspace__card-subtitle" data-real-business-description></p></div><button class="ant-btn" type="button" data-real-business-reload>刷新</button></header><p role="status" data-real-business-status></p><div data-real-business-content></div></section>
+  </div>
+  <div data-real-detail-panel="production" hidden><div data-real-production-layout><p role="status">正在装入原 OA 生产栏目。</p></div></div>
+  <div hidden data-real-business-routes>{{range .BusinessApplications}}<span data-real-application="{{.ID}}" data-real-route="{{.RoutePrefix}}"></span>{{end}}</div>
+  </div>
+  <div class="reference-drawer-mask initiation-drawer-mask" data-real-profile-drawer><aside class="reference-drawer initiation-drawer real-profile-drawer" role="dialog" aria-modal="true" aria-labelledby="real-profile-title">
+    <header class="reference-drawer__head"><strong id="real-profile-title">编辑项目基本信息</strong><button class="reference-drawer__close" type="button" aria-label="关闭" data-real-profile-close>×</button></header>
+    <div class="reference-drawer__body"><div class="reference-form">
+      <label class="reference-form__field"><span>项目名称 *</span><input type="text" maxlength="200" data-real-profile-name></label>
+      <label class="reference-form__field"><span data-real-profile-number-label>项目编号 *</span><input type="text" maxlength="64" data-real-profile-number></label>
+      <label class="reference-form__field"><span>承接日期</span><input type="date" data-real-profile-date></label>
+      <label class="reference-form__field"><span>项目概况</span><textarea rows="4" maxlength="2000" data-real-profile-summary></textarea></label>
+      <fieldset class="reference-form__field"><legend>项目类型 *</legend><div class="real-profile-types" data-real-profile-types></div></fieldset>
+      <label class="reference-form__field"><span>项目经营负责人</span><select data-real-profile-business-owner></select></label>
+      <label class="reference-form__field"><span>项目生产负责人</span><select data-real-profile-production-owner></select></label>
+      <input type="hidden" value="修改项目基本资料" data-real-profile-reason>
+      <p data-real-profile-status role="status"></p>
+      <div class="project-form__actions"><button class="ant-btn" type="button" data-real-profile-reload hidden>重新加载最新资料</button><button class="ant-btn" type="button" data-real-profile-close>取消</button><button class="ant-btn ant-btn-primary" type="button" data-real-profile-submit>保存</button></div>
+    </div></div>
+  </aside></div>
+</section>
+{{end}}{{end}}

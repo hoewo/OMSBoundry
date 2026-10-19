@@ -1,0 +1,31 @@
+# Billing 登记最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-reference-get.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/references/invoice-registrations/{invoice_registration_id}", summary: "向受信只读组合层提供精确登记摘要", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.reference.read"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: invoice_registration, id_from: invoice_registration_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, status, issued_on, amount_minor, currency, revision]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: billing-invoice}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        status: {type: string, enum: [recorded, registration_invalidated]}
+        issued_on: {type: string, format: date}
+        amount_minor: {type: integer, minimum: 1}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+        project_ids: {type: array, uniqueItems: true, items: {type: string, format: uuid}}
+        revision: {type: integer, minimum: 1}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: INVOICE_REGISTRATION_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受受信工作负载的单 action、精确登记 Scope 短期凭证。", "返回 Billing 自有摘要，不代理 Contract、Money、Party 或 Evidence 数据。"]

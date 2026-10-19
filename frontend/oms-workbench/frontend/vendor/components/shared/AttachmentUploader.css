@@ -1,0 +1,140 @@
+.attachment-uploader {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attachment-uploader__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.attachment-uploader__label {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.attachment-uploader__helper {
+  margin-top: 3px;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.attachment-uploader__count {
+  flex: none;
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attachment-uploader__dropzone.ant-upload-wrapper .ant-upload-drag {
+  min-height: 112px;
+  border-color: #91caff;
+  border-radius: 10px;
+  background: #f7fbff;
+}
+
+.attachment-uploader__dropzone.ant-upload-wrapper .ant-upload-drag:hover {
+  border-color: #1677ff;
+  background: #f0f7ff;
+}
+
+.attachment-uploader__dropzone .ant-upload-btn {
+  padding: 18px 14px !important;
+}
+
+.attachment-uploader__drop-icon {
+  margin: 0 0 6px;
+  color: #1677ff;
+  font-size: 22px;
+}
+
+.attachment-uploader__drop-title {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.attachment-uploader__drop-hint {
+  margin: 3px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.attachment-uploader__list {
+  border-top: 1px solid #eef2f7;
+}
+
+.attachment-uploader__row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.attachment-uploader__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 58px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: #eef6ff;
+  color: #1668dc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.attachment-uploader__file-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.attachment-uploader__file-info strong {
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-uploader__file-info > span {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.attachment-uploader__file-info .ant-progress {
+  max-width: 240px;
+  margin: 0;
+}
+
+.attachment-uploader__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+@media (max-width: 720px) {
+  .attachment-uploader__row {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .attachment-uploader__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+

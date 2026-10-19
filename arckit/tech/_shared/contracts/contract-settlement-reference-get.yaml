@@ -1,0 +1,33 @@
+# Contract Settlement 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/contract-settlement-reference-get.yaml", domain: "contract-ledger", owner: "Contract Ledger", version: "1.1", created: "2026-09-27", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/settlements/{settlement_id}", summary: "向受信工作负载提供不可变 Contract Settlement 引用投影", auth_required: true, audience: "contract-ledger", capability: "contract-ledger.reference.read"}
+request:
+  path_params: [{name: settlement_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: settlement, id_from: settlement_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, resource_type, display_summary, status, revision, contract_id, currency, current_effective_amount]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: contract-ledger}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: settlement}
+        display_summary: {type: string, minLength: 1, description: "Contract Ledger 自有的结算标题。"}
+        status: {type: string, const: recorded}
+        revision: {type: integer, const: 1, description: "结算为追加且不可变事实；每个 Settlement 记录本身固定为 revision 1。"}
+        category: {type: string, minLength: 1, description: "父 Contract 的稳定类别；存在时由消费策略按版本化映射解释。"}
+        contract_id: {type: string, format: uuid}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+        current_effective_amount: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,6})?$", description: "该不可变 Settlement 自身的精确金额。"}
+  errors:
+    - {status: 401, code: INVALID_CREDENTIAL, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: SETTLEMENT_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受单 action、精确 Settlement Scope 的短期凭证。", "返回不可变结算记录的稳定 ID、父合同、类别、金额和币种；主体和完整 Contract 模型仍不外泄。"]

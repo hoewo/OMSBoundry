@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "application": "contract-ledger",
+  "checks": [
+    {
+      "group": "httpserver",
+      "passed": true,
+      "tests": 1
+    }
+  ],
+  "main_unchanged": true,
+  "public_browser_or_full_oa": false,
+  "focused_test_regex": "^TestWorkspaceNativePostgresExactMoneyHistoryAndReplay$"
+}

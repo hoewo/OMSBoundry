@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project 工作空间 - 线框图</title>
+    <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+    <header><h1>Project 工作空间</h1><div class="meta-info"><div>页面角色：<code>ProjectWorkspacePage</code></div><div>路由：<code>/project/</code></div></div></header>
+
+    <details open>
+        <summary>Base 默认态</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>用户打开“新建项目”，尚未读取或选择 Party。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">项目工作空间</div><div class="nav-button">关闭</div></div><div class="content-area"><div class="modal-overlay"><div class="modal-content" data-label="建立 Project"><label>项目编号</label><div class="input-field">DEMO-2026-001</div><label>项目名称</label><div class="input-field">示范设计项目</div><label>项目类型</label><div class="input-field">design</div><div class="group-box"><div class="group-box-title">客户主体（可选）</div><div class="picker">不选择客户主体（Base 可独立立项）</div><div class="button">加载主体目录</div><p>首个切片不提供创建后的改绑或解绑。</p></div><div class="toolbar"><div class="button">取消</div><div class="toolbar-spacer"></div><div class="button primary">建立项目</div></div></div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>Project 基础字段</li><li>默认“无主体”选项</li><li>加载主体目录</li><li>边界说明</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>直接建立</code> → 不发送 client_party，Party 不成为运行依赖</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>主体目录已加载</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>Gateway 为用户签发 Party 凭证，active Party 列表读取成功。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">建立 Project</div><div class="nav-button">主体目录</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">客户主体（可选）</div><div class="picker">示范设计院 · organization · r4</div><p>已加载 3 个 active 主体。提交值只有 Party ID 与来源 revision。</p></div><div class="section-header">两条授权链</div><div class="split-h"><div class="panel"><div class="panel-header">浏览器选择</div><div class="content-area">用户 Party Credential → active 列表</div></div><div class="split-divider-h"></div><div class="panel"><div class="panel-header">服务端验证</div><div class="content-area">Project 工作负载 → 精确 Party Scope → 当前引用</div></div></div><div class="toolbar"><div class="button">重新加载主体</div><div class="toolbar-spacer"></div><div class="button primary">建立项目</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>active Party 下拉</li><li>名称、类型、revision</li><li>用户授权与工作负载验证说明</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>选择主体</code> → 只准备 ID＋revision；Project 服务再次验证</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>主体目录空或失败</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>active 列表为空，用户无 Party read，或 Party Directory 返回 503。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">建立 Project · 主体不可选</div><div class="nav-button">工作台</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">主体目录暂不可用</div><p>已填写的项目编号、名称和类型保持不变。默认仍是不选择客户主体；这不会阻塞 Base Project。</p></div><div class="picker">不选择客户主体（Base 可独立立项）</div><div class="toolbar"><div class="button">前往主体目录</div><div class="button">重新加载</div><div class="toolbar-spacer"></div><div class="button primary">继续 Base 立项</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>明确失败来源</li><li>保留的 Project 输入</li><li>无主体默认选项</li><li>重载／继续入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>503</code> → 不伪装为空目录，不禁用 Base 创建</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>创建成功与快照</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>Project 服务完成精确 Party 验证并在本地事务中创建 revision 1。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">项目工作空间</div><div class="nav-button">重新载入</div></div><div class="content-area"><div class="toolbar"><span class="badge active">draft</span><span class="badge">project</span><div class="toolbar-spacer"></div><span class="badge">revision 1</span></div><div class="section-header">当前事实</div><div class="card-grid"><div class="card"><div class="card-title">项目</div>示范设计项目</div><div class="card"><div class="card-title">类型</div>design</div><div class="card"><div class="card-title">立项客户快照</div>示范设计院 · source r4</div></div><div class="group-box">该名称是 Project 创建时的不可变快照。Party 后续改名或停用不会静默改写这里。</div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>Project 状态与 revision</li><li>客户名称快照</li><li>来源 Party revision</li><li>历史语义说明</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>读取详情</code> → 只读 Project 自有快照，不在线拼接 Party 当前档案</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>服务端验证拒绝</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>选择的 Party revision 过期、已停用、跨租户或验证服务不可用。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">建立 Project · 验证失败</div><div class="nav-button">帮助</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">Project 没有被创建</div><p>浏览器中的候选不是最终授权。Project 服务重新验证时发现 revision 已变化或 Party 暂不可用，因此整笔命令失败关闭。</p></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">保留的客户选择</div><div class="list-item-subtitle">示范设计院 · 旧 source r4</div></div><span class="badge">需重载</span></div><div class="toolbar"><div class="button">改为无主体</div><div class="toolbar-spacer"></div><div class="button primary">重新加载主体目录</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>零写入声明</li><li>失败原因</li><li>保留的业务输入</li><li>重载或切回 Base</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>422／503</code> → 保留输入，不自动降级为另一个主体或陈旧缓存</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>项目资料可用</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前凭证包含 materials.read，Project 通过 metadata-only 工作负载凭证读取 active Evidence Link。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">示范设计项目 · 项目资料</div><div class="nav-button">刷新权限</div></div><div class="content-area"><div class="toolbar"><span class="badge active">2 份资料</span><span class="badge">Project r7</span><div class="toolbar-spacer"></div><div class="button">重新读取</div></div><div class="card-grid"><div class="card"><div class="card-title">成果审查意见.pdf</div><p>project-material · PDF · 428 KB</p><p>linked r3 · current r3 · SHA-256 摘要</p><div class="button primary">前往 Evidence 获取下载授权</div></div><div class="card"><div class="card-title">项目任务书.docx</div><p>project-brief · DOCX · 96 KB</p><p>linked r1 · current r1 · SHA-256 摘要</p><div class="button primary">前往 Evidence 获取下载授权</div></div></div><div class="group-box">列表只包含元数据。下载按钮进入 Evidence 的独立授权链，Project 没有 download 能力。</div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>资料页签与计数</li><li>文件元数据卡片</li><li>冻结／当前 revision</li><li>独立下载入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>下载</code> → 先授权 Evidence Service；拒绝时停留本页，不扩大 Project Credential</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>资料来源变化或不可用</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>Evidence 当前 revision 与冻结 revision 不同，或单个来源返回禁止、无效、超时／503。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">示范设计项目 · 项目资料</div><div class="nav-button">重新读取</div></div><div class="content-area"><div class="list-item"><div class="list-item-text"><div class="list-item-title">成果审查意见.pdf</div><div class="list-item-subtitle">建立时 r2 · 当前 r3；Project Link 未被自动改写</div></div><span class="badge">来源已更新</span></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">项目任务书</div><div class="list-item-subtitle">Evidence 暂不可用；文件名与下载授权没有被猜测</div></div><span class="badge">可重试</span></div><div class="group-box"><div class="group-box-title">局部失败</div><p>Project 与其他页签继续可用。恢复 Evidence 后重新读取；失败不等于资料为空，也不会删除 Resource Link。</p></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>来源变化状态</li><li>不可用状态</li><li>冻结 revision</li><li>重新读取</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>重新读取</code> → 替换全部本次投影，不把旧成功数据拼入新失败响应</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>资料权限收敛</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>Project materials.read 被撤销、短期凭证过期，或 Evidence 下载授权被拒绝。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">项目工作空间 · 权限已变化</div><div class="nav-button">返回工作台</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">页面已退出资料状态</div><p>刷新 Project 权限后，项目资料页签按最新 allowed_actions 隐藏。已撤销的动作不会因刷新重新出现。</p></div><div class="group-box"><div class="group-box-title">下载授权单独失败</div><p>如果只有 Evidence download 被拒绝，Project 资料列表保持可见；页面说明下载权限不足，不误报 Project 读取权丢失。</p></div><div class="toolbar"><div class="button">返回工作台</div><div class="toolbar-spacer"></div><div class="button primary">刷新 Project 权限</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>Project 权限恢复提示</li><li>页签收敛</li><li>Evidence 下载拒绝反馈</li><li>返回工作台</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>401／403</code> → 区分 Project 资料权限与 Evidence 下载权限，不互相清空</div></div>
+        </div>
+    </details>
+</div>
+</body>
+</html>

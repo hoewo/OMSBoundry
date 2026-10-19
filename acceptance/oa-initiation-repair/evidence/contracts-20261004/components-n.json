@@ -1,0 +1,53 @@
+{
+  "passed": true,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    },
+    {
+      "name": "reopen-original-form-and-save-amendment-intention",
+      "passed": true
+    },
+    {
+      "name": "original-amendment-edit-keeps-identity",
+      "passed": true
+    },
+    {
+      "name": "original-confirmation-cancels-intention-without-removing-history",
+      "passed": true
+    },
+    {
+      "name": "reload-zero-command-and-truthful-disabled-material-controls",
+      "passed": true
+    },
+    {
+      "name": "unknown-core-reply-reload-and-original-command-resume",
+      "passed": true
+    },
+    {
+      "name": "original-forms-readonly-zero-command",
+      "passed": true
+    },
+    {
+      "name": "same-original-drawer-explicit-date-and-two-native-parties",
+      "passed": true
+    },
+    {
+      "name": "explicit-native-activation-frozen-parties-and-reopen-zero-write",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "be43765e9be232bf11a96ee2cf59c2bc2e31ed7ecc5c319c410224974f9eed58",
+  "business_command_count": 17,
+  "page_errors": []
+}

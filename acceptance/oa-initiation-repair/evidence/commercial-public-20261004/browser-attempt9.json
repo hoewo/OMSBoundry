@@ -1,0 +1,164 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "run_id": "35jPS3",
+  "public_real_owners": true,
+  "administrator_only": true,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts",
+      "command_id": "bea18308-360b-4b82-8510-67e331c403ec"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "5916fd71-fc12-4279-bbf4-9bbc43e0543d",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "98673a22-9763-4a17-a256-2c1a3db2b010",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "45a562d4-5c65-4458-897b-728b621bdf10",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "45a562d4-5c65-4458-897b-728b621bdf10",
+      "expected_revision": 14
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts",
+      "command_id": "3b78f858-9b26-4245-95e8-76f5293a8dd2"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/beb67167-60a8-446b-a6ca-744bb2ddfde9/reference-oa-draft",
+      "command_id": "7b2bec18-fb03-4ed8-90cf-3ad4ab8df223",
+      "expected_revision": 0
+    },
+    {
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "command_id": "040ee5e2-6f95-434d-9471-56c3756dfc70",
+      "expected_revision": 15
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1",
+      "command_id": "3f3e233e-076e-41b9-b1ca-92a24d350ec2"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1",
+      "command_id": "6aeca373-3abf-4df5-a5d6-29ea77e6e422"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/parties",
+      "command_id": "5e92e1cd-c805-413f-9fd1-8643e4ff8983"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/parties",
+      "command_id": "d9406bd9-6c0a-49cf-a2d2-2757fe152168"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/activate",
+      "command_id": "517bc605-243a-4a84-9ec8-ac33293c5dfb"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "2b89a008-cec1-4c04-bf09-01f36f56294f",
+      "expected_revision": 1
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/a2489a5d-0cd7-4ee1-9c47-83fe7fab542a/confirm",
+      "command_id": "9c3e1d4c-4ecf-44ad-a4a0-9d2001fdc6ca"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "72ddeb38-abb4-46c9-9f40-3c365346d5a3",
+      "expected_revision": 2
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/1e79f629-81d8-4d52-b85d-08037d06ff7d/confirm",
+      "command_id": "9cba67e7-ad0c-4dc1-91de-f2f92300a401"
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-draft",
+      "command_id": "7a078a0d-0912-417f-9a3c-5cd379891313",
+      "expected_revision": 3
+    },
+    {
+      "method": "POST",
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1/reference-oa-amendments/22e5c1e7-f21a-408f-ab10-9ff839f03139/confirm",
+      "command_id": "5add80f6-f067-4f53-bc50-635b48b8cdcc"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "resume-existing-contract-same-link-command",
+      "passed": true
+    },
+    {
+      "name": "real-two-chain-contract-save-reload-zero-write",
+      "passed": true
+    },
+    {
+      "name": "real-contract-native-activation-freezes-draft",
+      "passed": true
+    },
+    {
+      "name": "real-contract-three-amendment-types-explicit-confirmation",
+      "passed": true
+    }
+  ],
+  "page_errors": [],
+  "native_records": [],
+  "project_revision_before": 14,
+  "existing_resource_ids": [
+    "bbccf086-b1e9-45dc-a71f-eb8207bf95c7"
+  ],
+  "http_failures": [
+    {
+      "status": 400,
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/resource-links",
+      "code": "invalid_request",
+      "message": "invalid resource link"
+    },
+    {
+      "status": 422,
+      "path": "/contract/api/v1/contracts/dd3a4a04-abde-4a2e-8023-c007aac470a1"
+    }
+  ],
+  "invoice_ids": [],
+  "failure": {
+    "stage": "contract-settlement-progress",
+    "type": "Error",
+    "message": "locator.check: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').locator('[data-native-contract-settlement]').locator('.ant-checkbox-input').first()\u001b[22m\n\u001b[2m    - locator resolved to <input value=\"1\" type=\"checkbox\" class=\"ant-checkbox-input\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view i"
+  }
+}

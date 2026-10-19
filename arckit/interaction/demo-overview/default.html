@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>独立 Demo 首页 - 线框图</title>
+    <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+    <header>
+        <h1>独立 Demo 首页</h1>
+        <div class="meta-info">
+            <div>页面角色：<code>DemoOverviewPage</code></div>
+            <div>适用：六个独立小系统</div>
+        </div>
+    </header>
+
+    <details open>
+        <summary>已就绪</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前应用可用且场景摘要读取成功。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar">
+                        <div class="nav-title">Contract Ledger <span class="badge">演示环境</span></div>
+                        <div class="nav-button">身份：演示管理员</div>
+                        <div class="nav-button">帮助</div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active">首页</div>
+                        <div class="tab-item">合同</div>
+                        <div class="tab-item">审计</div>
+                    </div>
+                    <div class="content-area">
+                        <div class="section-header">让合同从草稿到生效、结算和纠错都有可追溯记录</div>
+                        <div class="group-box">
+                            <div class="group-box-title">推荐路径 · 第 2 / 4 步</div>
+                            <p>已建立合同主体，下一步起草第一份合同。</p>
+                            <div class="button primary">继续演示：起草合同</div>
+                            <div class="button">查看全部合同</div>
+                        </div>
+                        <div class="card-grid">
+                            <div class="card"><div class="card-title">有效合同</div><strong>3</strong><p>1 份待结算</p></div>
+                            <div class="card"><div class="card-title">待处理动作</div><strong>2</strong><p>补充与阶段结算</p></div>
+                            <div class="card"><div class="card-title">最近 revision</div><strong>4</strong><p>合同金额已更正</p></div>
+                        </div>
+                        <div class="section-header">最近变化</div>
+                        <div class="list-item"><div class="list-item-text"><div class="list-item-title">西豆设计服务合同</div><div class="list-item-subtitle">金额更正 · revision 4 · 8 分钟前</div></div><span class="badge">已生效</span></div>
+                        <div class="section-header">本 Demo 证明什么</div>
+                        <div class="group-box">只运行 Contract Ledger、自有数据库和模板 IAM；合成数据可以安全重跑和清理。API、健康检查和脚本说明位于“帮助”。</div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>产品栏与演示标识</li><li>局部导航</li><li>推荐路径与单一主操作</li><li>业务摘要、最近变化与帮助说明</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>继续演示</code> → 进入当前推荐步骤</div><div class="interaction-item"><code>摘要数字</code> → 进入带筛选的业务记录列表</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>加载中</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>页面首次进入或刷新数据摘要。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">Project Workspace <span class="badge">演示环境</span></div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item active">首页</div><div class="tab-item">项目</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">把项目身份、责任分配和外部资源组织在一个可追溯入口</div>
+                        <div class="placeholder-box"><div class="spinner"></div><p>正在读取演示场景摘要……</p></div>
+                        <div class="card-grid"><div class="card">摘要占位</div><div class="card">摘要占位</div><div class="card">摘要占位</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>始终可见的产品身份与用途</li><li>数据区域加载占位</li><li>可用的帮助入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>帮助</code> → 加载期间仍可查看访问与诊断说明</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>空状态</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前租户没有演示记录。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">Evidence Service <span class="badge">演示环境</span></div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item active">首页</div><div class="tab-item">文件</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">让文件上传、校验、版本和访问都保持可追溯</div>
+                        <div class="empty-state" data-kit="ContentUnavailableView">
+                            <div class="icon-placeholder">文件</div>
+                            <h2>还没有演示文件</h2>
+                            <p>生成安全的合成场景，或从空白上传第一份文件。</p>
+                            <div class="button primary">生成演示场景</div>
+                            <div class="button">从空白开始</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>空状态原因</li><li>推荐生成入口</li><li>空白创建入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>生成演示场景</code> → 创建命名合成数据并显示稳定 ID</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>错误恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前应用摘要读取失败或外部引用不可用。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">Design Operations <span class="badge">演示环境</span></div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item active">首页</div><div class="tab-item">设计工作项</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">组织设计阶段、负责人和成果交付</div>
+                        <div class="empty-state" data-kit="ContentUnavailableView">
+                            <div class="icon-placeholder">!</div>
+                            <h2>无法读取演示摘要</h2>
+                            <p>Design Operations 仍在运行，但 Project reference-read 当前不可用。现有设计记录不会被改写。</p>
+                            <div class="button primary">重试</div>
+                            <div class="button">查看健康检查</div>
+                        </div>
+                        <div class="group-box"><div class="group-box-title">诊断详情</div>失败来源：Project reference-read · 当前应用：可用 · 最近成功：10 分钟前</div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>错误影响范围</li><li>重试入口</li><li>按需诊断详情</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>重试</code> → 只重新读取失败摘要</div><div class="interaction-item"><code>健康检查</code> → 展开工程诊断信息</div></div>
+        </div>
+    </details>
+</div>
+</body>
+</html>

@@ -1,0 +1,679 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OMSBizFoundry Evidence Control API",
+    "version": "1.0.0-dev.2",
+    "description": "Business-neutral control plane for direct file transfer. File bytes do not pass through these endpoints."
+  },
+  "servers": [
+    {
+      "url": "/evidence"
+    }
+  ],
+  "paths": {
+    "/v1/upload-sessions": {
+      "post": {
+        "operationId": "createUploadSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUploadSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A pending upload session with one exact object authorization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}/versions/upload-sessions": {
+      "post": {
+        "operationId": "createFileVersionUploadSession",
+        "description": "Allocate the next immutable version for an existing File. The caller cannot choose or reuse the version number.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUploadSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A pending upload session for the server-allocated next File version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/upload-sessions/{session_id}/complete": {
+      "post": {
+        "operationId": "completeUploadSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The idempotently confirmed immutable file version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceVersion"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/upload-sessions/{session_id}/abort": {
+      "post": {
+        "operationId": "abortUploadSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbortUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The session is aborted or was already aborted."
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}/versions/{version}/access-grants": {
+      "post": {
+        "operationId": "createAccessGrant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/Version"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessGrantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A short-lived URL after server-side access checks.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGrant"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "SessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "FileId": {
+        "name": "file_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Version": {
+        "name": "version",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "A versioned failure response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "CreateUploadSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_name", "size_bytes"],
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "media_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{64}$"
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/OpaqueClientContext"
+          }
+        }
+      },
+      "OpaqueClientContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "owner_ref": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "metadata": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          }
+        }
+      },
+      "UploadSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "session_id",
+          "file_id",
+          "version",
+          "status",
+          "expires_at",
+          "authorization"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "file_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "const": "pending"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/UploadAuthorization"
+          }
+        }
+      },
+      "UploadAuthorization": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/AliyunOssUploadAuthorization" },
+          { "$ref": "#/components/schemas/LocalHttpUploadAuthorization" }
+        ],
+        "discriminator": {
+          "propertyName": "provider",
+          "mapping": {
+            "aliyun-oss": "#/components/schemas/AliyunOssUploadAuthorization",
+            "local-http": "#/components/schemas/LocalHttpUploadAuthorization"
+          }
+        }
+      },
+      "AliyunOssUploadAuthorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "endpoint",
+          "bucket",
+          "object_key",
+          "access_key_id",
+          "access_key_secret",
+          "security_token",
+          "expires_at",
+          "multipart",
+          "scope"
+        ],
+        "properties": {
+          "provider": {
+            "const": "aliyun-oss"
+          },
+          "region": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "endpoint_is_cname": {
+            "type": "boolean",
+            "description": "When true endpoint is the complete bound custom-domain origin; do not prepend bucket. Defaults to false."
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "access_key_id": {
+            "type": "string"
+          },
+          "access_key_secret": {
+            "type": "string"
+          },
+          "security_token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "multipart": {
+            "$ref": "#/components/schemas/MultipartOptions"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/UploadAuthorizationScope"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LocalHttpUploadAuthorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "upload_url",
+          "method",
+          "object_key",
+          "expires_at",
+          "scope"
+        ],
+        "properties": {
+          "provider": {
+            "const": "local-http"
+          },
+          "upload_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "method": {
+            "const": "PUT"
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/UploadAuthorizationScope"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MultipartOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["threshold_bytes", "part_size_bytes", "parallel"],
+        "properties": {
+          "threshold_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "part_size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "parallel": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          }
+        }
+      },
+      "UploadAuthorizationScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["object_key", "allowed_actions"],
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CompleteUploadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observed_size_bytes"],
+        "properties": {
+          "observed_size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "observed_sha256": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{64}$"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompletedPart"
+            }
+          }
+        }
+      },
+      "CompletedPart": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["part_number", "etag"],
+        "properties": {
+          "part_number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "etag": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "AbortUploadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": ["user_cancelled", "transfer_failed", "client_shutdown"]
+          }
+        }
+      },
+      "EvidenceVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file_id",
+          "version",
+          "status",
+          "file_name",
+          "size_bytes",
+          "media_type",
+          "sha256",
+          "created_at"
+        ],
+        "properties": {
+          "file_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["available", "quarantined", "deleted"]
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateAccessGrantRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["disposition", "delivery_mode"],
+        "properties": {
+          "disposition": {
+            "type": "string",
+            "enum": ["inline", "attachment"]
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": ["blob", "direct"]
+          },
+          "file_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      },
+      "AccessGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file_id",
+          "version",
+          "url",
+          "method",
+          "disposition",
+          "delivery_mode",
+          "expires_at",
+          "refresh_after"
+        ],
+        "properties": {
+          "file_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "method": {
+            "const": "GET"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": ["inline", "attachment"]
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": ["blob", "direct"]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refresh_after": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

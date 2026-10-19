@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "scope": "SHA-256 equality of the private Auth58 joint backup copied off host",
+  "remote_archive_sha256": "ac4ac2d7173f288406ece902b7df6b09bcc9ec368e7c769e0a67e3c1c90ca8ba",
+  "local_archive_sha256": "ac4ac2d7173f288406ece902b7df6b09bcc9ec368e7c769e0a67e3c1c90ca8ba",
+  "bytes": 225596,
+  "local_archive": ".runtime/oa-bidding-material-browser-20261003a/offhost-backup.tar.gz",
+  "private_backup_in_git": false,
+  "full_suite_restore_runtime": false
+}

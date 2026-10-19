@@ -1,0 +1,467 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c4"}
+c3_dir=${OA_JOURNEY_C3_DIR:-"$(dirname "$evidence_dir")/c3"}
+c1_dir=${OA_JOURNEY_C1_DIR:-"$(dirname "$evidence_dir")/c1"}
+c3_state=${OA_JOURNEY_C3_STATE:-"$c3_dir/state-after-c3.json"}
+c1_state=${OA_JOURNEY_C1_STATE:-"$c1_dir/state-after-c1.json"}
+c1_private_state=${OA_JOURNEY_C1_PRIVATE_STATE:-"$c1_dir/state-private-c1.json"}
+plan_state="$evidence_dir/state-plan-c4.json"
+production_evidence_state="$evidence_dir/state-partial-c4-evidence.json"
+fact_state="$evidence_dir/state-partial-c4-facts.json"
+completed_state="$evidence_dir/state-after-c4.json"
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$c3_state" ] || { echo "C3 state not found: $c3_state" >&2; exit 2; }
+[ -f "$c1_state" ] || { echo "C1 state not found: $c1_state" >&2; exit 2; }
+[ -f "$c1_private_state" ] || { echo "C1 private state not found: $c1_private_state" >&2; exit 2; }
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+json_request() {
+  method=$1; url=$2; cookie=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8; idempotency=${9:-}
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie" --cookie-jar "$cookie"
+  [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"
+  [ -z "$idempotency" ] || set -- "$@" -H "Idempotency-Key: $idempotency"
+  if [ -n "$payload" ]; then set -- "$@" -H 'Content-Type: application/json' --data "$payload"; fi
+  result=$(curl "$@" "$url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ] && [ -s "$output" ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  json_request GET "$base_url/auth/api/v1/csrf" "$cookie" '' '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  json_request POST "$base_url/auth/api/v1/login" "$cookie" "$csrf" "$payload" "$output" 200 "POST login $username"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; output=$4
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  [ "$actual" = 303 ] || { [ ! -s "$output" ] || cat "$output" >&2; }
+  expect_status 303 "$actual" "authorize $app"
+}
+
+authorize_project_app() {
+  cookie=$1; csrf=$2; assignment=$3; assignment_revision=$4; output=$5
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+    --data-urlencode resource_type=project --data-urlencode "resource_id=$project_id" \
+    --data-urlencode business_fact_kind=project_assignment --data-urlencode business_fact_source=project-workspace \
+    --data-urlencode "business_fact_id=$assignment" --data-urlencode "business_fact_revision=$assignment_revision" \
+    "$base_url/gateway/authorize/production-operations")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /gateway/authorize/production-operations project assignment' 303 "$actual" "$duration"
+  [ "$actual" = 303 ] || { [ ! -s "$output" ] || cat "$output" >&2; }
+  expect_status 303 "$actual" 'authorize production-operations'
+}
+
+service_container() {
+  container=$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1")
+  [ -n "$container" ] || { echo "$1 container is missing from $project" >&2; exit 1; }
+  [ "$(printf '%s\n' "$container" | wc -l | tr -d ' ')" = 1 ] || { echo "$1 is not unique in $project" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+wait_healthy() {
+  service=$1; container=$(service_container "$service")
+  for _attempt in $(seq 1 90); do
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+    [ "$status" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+postgres_json() {
+  database=$1; sql=$2; container=$(service_container postgres)
+  docker exec "$container" sh -eu -c 'psql -U "$POSTGRES_USER" -d "$1" -At -c "$2"' sh "$database" "$sql"
+}
+
+capture_counts() {
+  output=$1
+  identity=$(postgres_json identity_access "SELECT jsonb_build_object('capability_grants',(SELECT count(*) FROM capability_grants));")
+  evidence=$(postgres_json evidence_service "SELECT jsonb_build_object('files',(SELECT count(*) FROM files),'versions',(SELECT count(*) FROM file_versions));")
+  production=$(postgres_json design_operations "SELECT jsonb_build_object('work_items',(SELECT count(*) FROM design_work_items),'stages',(SELECT count(*) FROM design_stages),'deliverables',(SELECT count(*) FROM design_deliverables),'commands',(SELECT count(*) FROM design_commands),'history_events',(SELECT count(*) FROM design_history_events));")
+  project_counts=$(postgres_json project_workspace "SELECT jsonb_build_object('projects',(SELECT count(*) FROM projects),'resource_links',(SELECT count(*) FROM project_resource_links));")
+  people=$(postgres_json people_groups "SELECT jsonb_build_object('persons',(SELECT count(*) FROM persons),'groups',(SELECT count(*) FROM groups));")
+  jq -n --argjson identity "$identity" --argjson evidence "$evidence" --argjson production "$production" \
+    --argjson project "$project_counts" --argjson people "$people" \
+    '{identity_access:$identity,evidence_service:$evidence,production_operations:$production,project_workspace:$project,people_groups:$people}' >"$output"
+}
+
+ensure_grant() {
+  action=$1
+  active=$(postgres_json identity_access "SELECT count(*) FROM capability_grants WHERE subject_id='$production_subject' AND audience='production-operations' AND action='$action' AND revoked_at IS NULL;")
+  case "$active" in
+    0)
+      payload=$(jq -cn --arg subject "$production_subject" --arg action "$action" '{subject_id:$subject,audience:"production-operations",action:$action}')
+      json_request POST "$base_url/auth/api/v1/admin/grants" "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204 "GRANT $action"
+      ;;
+    1) ;;
+    *) echo "unexpected active grant count for $action: $active" >&2; exit 1 ;;
+  esac
+}
+
+upload_bytes() {
+  url=$1; content_file=$2; create_key=$3; complete_key=$4; prefix=$5
+  size=$(wc -c <"$content_file" | tr -d ' ')
+  sha=$(openssl dgst -sha256 "$content_file" | awk '{print $2}')
+  payload=$(jq -cn --arg name "$(basename "$content_file")" --argjson size "$size" --arg sha "$sha" \
+    '{file_name:$name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:"c4-production-proof"}}')
+  json_request POST "$url" "$admin_cookies" "$admin_csrf" "$payload" "$workspace/$prefix-session.json" 201 "POST $prefix upload session" "$create_key"
+  upload_url=$(jq -er .authorization.upload_url "$workspace/$prefix-session.json")
+  session_id=$(jq -er .session_id "$workspace/$prefix-session.json")
+  result=$(curl --silent --show-error --output "$workspace/$prefix-upload.body" --write-out '%{http_code} %{time_total}' \
+    --request PUT -H 'Content-Type: text/plain' --data-binary "@$content_file" "$upload_url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "PUT $prefix bytes" 204 "$actual" "$duration"
+  expect_status 204 "$actual" "PUT $prefix bytes"
+  payload=$(jq -cn --argjson size "$size" --arg sha "$sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+  json_request POST "$base_url/evidence/v1/upload-sessions/$session_id/complete" "$admin_cookies" "$admin_csrf" "$payload" \
+    "$workspace/$prefix-version.json" 200 "POST $prefix upload complete" "$complete_key"
+  file_id=$(jq -er .file_id "$workspace/$prefix-version.json")
+  version=$(jq -er .version "$workspace/$prefix-version.json")
+  json_request GET "$base_url/evidence/v1/references/files/$file_id/versions/$version" "$admin_cookies" "$admin_csrf" '' \
+    "$workspace/$prefix-reference.json" 200 "GET $prefix Evidence reference"
+  jq -e --arg id "$file_id" --argjson version "$version" \
+    '.id==$id and .version==$version and .revision==$version and .status=="available"' \
+    "$workspace/$prefix-reference.json" >/dev/null
+}
+
+assert_final_items() {
+  design_file=$1; consultation_file=$2
+  json_request GET "$base_url/production/api/v1/production-work-items/$design_item" "$production_cookies" '' '' "$workspace/design-final.json" 200 'GET final design-v1 item'
+  jq -e --arg project "$project_id" --arg file "$design_file" '
+    .work_item.project_id == $project and .work_item.type_key == "design-v1" and .work_item.status == "completed" and .work_item.revision == 8 and
+    ([.stages[]|{key:.stage_key,status}]|sort_by(.key)) == ([
+      {key:"construction-drawing",status:"completed"},{key:"construction-support",status:"completed"},
+      {key:"preliminary-design",status:"not-applicable"},{key:"scheme",status:"not-applicable"}]|sort_by(.key)) and
+    (.deliverables|length)==2 and all(.deliverables[];.evidence_file_id==$file and .evidence_version==1)
+  ' "$workspace/design-final.json" >/dev/null || { echo 'final design-v1 projection is unexpected' >&2; cat "$workspace/design-final.json" >&2; exit 1; }
+
+  json_request GET "$base_url/production/api/v1/production-work-items/$consultation_item" "$production_cookies" '' '' "$workspace/consultation-final.json" 200 'GET final consultation-v1 item'
+  jq -e --arg project "$project_id" --arg file "$consultation_file" '
+    .work_item.project_id == $project and .work_item.type_key == "consultation-v1" and .work_item.status == "completed" and .work_item.revision == 8 and
+    ([.stages[]|{key:.stage_key,status}]|sort_by(.key)) == ([{key:"report",status:"completed"},{key:"scheme",status:"not-applicable"}]|sort_by(.key)) and
+    (.deliverables|length)==1 and .deliverables[0].evidence_file_id==$file and .deliverables[0].evidence_version==2
+  ' "$workspace/consultation-final.json" >/dev/null || { echo 'final consultation-v1 projection is unexpected' >&2; cat "$workspace/consultation-final.json" >&2; exit 1; }
+
+  json_request GET "$base_url/production/api/v1/production-work-items/$design_item/history?limit=50" "$production_cookies" '' '' "$workspace/design-history.json" 200 'GET design-v1 history'
+  json_request GET "$base_url/production/api/v1/production-work-items/$consultation_item/history?limit=50" "$production_cookies" '' '' "$workspace/consultation-history.json" 200 'GET consultation-v1 history'
+  jq -e '(.items|length)==8 and ([.items[].work_item_revision]|sort)==[1,2,3,4,5,6,7,8]' "$workspace/design-history.json" >/dev/null
+  jq -e '(.items|length)==8 and ([.items[].work_item_revision]|sort)==[1,2,3,4,5,6,7,8]' "$workspace/consultation-history.json" >/dev/null
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-full-oa-c4.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+evidence_stopped=false
+prior_pass=false
+[ ! -f "$completed_state" ] || prior_pass=true
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$evidence_stopped" = true ]; then docker start "$(service_container evidence-service)" >/dev/null 2>&1 || true; fi
+  mkdir -p "$evidence_dir"
+  for artifact in ownership-before.json ownership-after.json ownership-delta.json state-plan-c4.json \
+    state-partial-c4-evidence.json state-partial-c4-facts.json \
+    design-final.json consultation-final.json design-history.json consultation-history.json evidence-fault.json; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  if [ "$prior_pass" = true ]; then
+    [ ! -f "$workspace/http-evidence.tsv" ] || cp "$workspace/http-evidence.tsv" "$evidence_dir/http-evidence-completed-rerun.tsv"
+    [ ! -f "$workspace/state-after-c4.json" ] || cp "$workspace/state-after-c4.json" "$evidence_dir/state-after-c4-completed-rerun.json"
+    [ ! -f "$workspace/c4-summary.md" ] || cp "$workspace/c4-summary.md" "$evidence_dir/c4-summary-completed-rerun.md"
+  else
+    [ ! -f "$workspace/http-evidence.tsv" ] || cp "$workspace/http-evidence.tsv" "$evidence_dir/http-evidence.tsv"
+    [ ! -f "$workspace/state-after-c4.json" ] || cp "$workspace/state-after-c4.json" "$completed_state"
+    [ ! -f "$workspace/c4-summary.md" ] || cp "$workspace/c4-summary.md" "$evidence_dir/c4-summary.md"
+  fi
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+tenant_id=$(env_value TENANT_ID)
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$tenant_id" ] && [ -n "$admin_password" ] || { echo 'TENANT_ID and BOOTSTRAP_ADMIN_PASSWORD are required' >&2; exit 2; }
+c3_sha=$(openssl dgst -sha256 "$c3_state" | awk '{print $2}')
+jq -e --arg tenant "$tenant_id" '.phase=="C3" and .result=="pass" and .tenant_id==$tenant and .project.status=="active" and .project.revision==10' "$c3_state" >/dev/null || { echo 'C3 state is not the required passing checkpoint' >&2; exit 1; }
+[ "$(stat -c '%a' "$c1_private_state" 2>/dev/null || stat -f '%Lp' "$c1_private_state")" = 600 ] || { echo 'C1 private state must have mode 0600' >&2; exit 1; }
+
+project_id=$(jq -er .project.id "$c3_state")
+production_subject=$(jq -er '.actors[]|select(.role=="production_owner")|.subject_id' "$c1_private_state")
+production_username=$(jq -er '.actors[]|select(.role=="production_owner")|.username' "$c1_private_state")
+production_password=$(jq -er '.actors[]|select(.role=="production_owner")|.password' "$c1_private_state")
+production_assignment=$(jq -er '.assignments[]|select(.role_key=="production_owner")|.id' "$c1_state")
+production_assignment_revision=$(jq -er '.assignments[]|select(.role_key=="production_owner")|.created_project_revision' "$c1_state")
+
+echo '[1/8] Revalidate C3, login through IAM and grant the retained production owner'
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+authorize_app "$admin_cookies" "$admin_csrf" evidence-service "$workspace/admin-authorize-evidence-service.out"
+if [ -f "$evidence_dir/ownership-before.json" ]; then cp "$evidence_dir/ownership-before.json" "$workspace/ownership-before.json"; else capture_counts "$workspace/ownership-before.json"; fi
+jq -r '.capabilities[].id' "$repo_dir/contracts/access/v1/examples/production-operations-capabilities.json" | while IFS= read -r action; do ensure_grant "$action"; done
+
+production_cookies="$workspace/production-owner.cookies"
+production_csrf=$(fetch_csrf "$production_cookies" "$workspace/production-csrf.json")
+login "$production_cookies" "$production_csrf" "$production_username" "$production_password" "$workspace/production-login.json"
+authorize_project_app "$production_cookies" "$production_csrf" "$production_assignment" "$production_assignment_revision" "$workspace/production-authorize.out"
+
+if [ ! -f "$plan_state" ]; then
+  mkdir -p "$evidence_dir"
+  stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$(openssl rand -hex 3)"
+  jq -n --arg c3 "$c3_sha" --arg tenant "$tenant_id" --arg project "$project_id" --arg stamp "$stamp" \
+    --arg design_file_create "$(new_uuid)" --arg design_file_complete "$(new_uuid)" \
+    --arg consultation_file_create "$(new_uuid)" --arg consultation_file_complete "$(new_uuid)" \
+    --arg consultation_v2_create "$(new_uuid)" --arg consultation_v2_complete "$(new_uuid)" \
+    --arg design_create "$(new_uuid)" --arg design_owner "$(new_uuid)" --arg design_cross_type "$(new_uuid)" \
+    --arg design_skip_scheme "$(new_uuid)" --arg design_skip_preliminary "$(new_uuid)" \
+    --arg design_drawing_put "$(new_uuid)" --arg design_drawing_complete "$(new_uuid)" \
+    --arg design_support_put "$(new_uuid)" --arg design_support_complete "$(new_uuid)" \
+    --arg consultation_create "$(new_uuid)" --arg consultation_owner "$(new_uuid)" --arg consultation_stale "$(new_uuid)" \
+    --arg consultation_skip_scheme "$(new_uuid)" --arg consultation_report_v1 "$(new_uuid)" \
+    --arg consultation_report_v2 "$(new_uuid)" --arg consultation_complete "$(new_uuid)" \
+    --arg consultation_reopen "$(new_uuid)" --arg consultation_recomplete "$(new_uuid)" \
+    '{schema_version:"1",phase:"C4-plan",tenant_id:$tenant,project_id:$project,c3_state_sha256:$c3,stamp:$stamp,commands:{
+      design_file_create:$design_file_create,design_file_complete:$design_file_complete,
+      consultation_file_create:$consultation_file_create,consultation_file_complete:$consultation_file_complete,
+      consultation_v2_create:$consultation_v2_create,consultation_v2_complete:$consultation_v2_complete,
+      design_create:$design_create,design_owner:$design_owner,design_cross_type:$design_cross_type,
+      design_skip_scheme:$design_skip_scheme,design_skip_preliminary:$design_skip_preliminary,
+      design_drawing_put:$design_drawing_put,design_drawing_complete:$design_drawing_complete,
+      design_support_put:$design_support_put,design_support_complete:$design_support_complete,
+      consultation_create:$consultation_create,consultation_owner:$consultation_owner,consultation_stale:$consultation_stale,
+      consultation_skip_scheme:$consultation_skip_scheme,consultation_report_v1:$consultation_report_v1,
+      consultation_report_v2:$consultation_report_v2,consultation_complete:$consultation_complete,
+      consultation_reopen:$consultation_reopen,consultation_recomplete:$consultation_recomplete}}' >"$plan_state"
+fi
+cp "$plan_state" "$workspace/state-plan-c4.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c3 "$c3_sha" '.phase=="C4-plan" and .tenant_id==$tenant and .project_id==$project and .c3_state_sha256==$c3' "$plan_state" >/dev/null
+stamp=$(jq -er .stamp "$plan_state")
+
+if [ ! -f "$production_evidence_state" ]; then
+  echo '[2/8] Create two stable Evidence files and one immutable replacement version'
+  printf 'C4 design deliverables %s\n' "$stamp" >"$workspace/design-production-evidence.txt"
+  upload_bytes "$base_url/evidence/v1/upload-sessions" "$workspace/design-production-evidence.txt" \
+    "$(jq -er .commands.design_file_create "$plan_state")" "$(jq -er .commands.design_file_complete "$plan_state")" design
+
+  printf 'C4 consultation report v1 %s\n' "$stamp" >"$workspace/consultation-report-v1.txt"
+  upload_bytes "$base_url/evidence/v1/upload-sessions" "$workspace/consultation-report-v1.txt" \
+    "$(jq -er .commands.consultation_file_create "$plan_state")" "$(jq -er .commands.consultation_file_complete "$plan_state")" consultation-v1
+  consultation_file=$(jq -er .file_id "$workspace/consultation-v1-version.json")
+  printf 'C4 consultation report v2 corrected %s\n' "$stamp" >"$workspace/consultation-report-v2.txt"
+  upload_bytes "$base_url/evidence/v1/files/$consultation_file/versions/upload-sessions" "$workspace/consultation-report-v2.txt" \
+    "$(jq -er .commands.consultation_v2_create "$plan_state")" "$(jq -er .commands.consultation_v2_complete "$plan_state")" consultation-v2
+
+  design_file=$(jq -er .file_id "$workspace/design-version.json")
+  jq -n --arg tenant "$tenant_id" --arg c3 "$c3_sha" \
+    --arg design "$design_file" --argjson design_revision "$(jq -er .revision "$workspace/design-reference.json")" \
+    --arg consultation "$consultation_file" --argjson consultation_v1_revision "$(jq -er .revision "$workspace/consultation-v1-reference.json")" \
+    --argjson consultation_v2_revision "$(jq -er .revision "$workspace/consultation-v2-reference.json")" \
+    '{schema_version:"1",phase:"C4-partial-evidence",result:"resumable",tenant_id:$tenant,c3_state_sha256:$c3,
+      design_file:{id:$design,version:1,revision:$design_revision},
+      consultation_file:{id:$consultation,version_1_revision:$consultation_v1_revision,version_2_revision:$consultation_v2_revision}}' >"$production_evidence_state"
+fi
+cp "$production_evidence_state" "$workspace/state-partial-c4-evidence.json"
+jq -e --arg tenant "$tenant_id" --arg c3 "$c3_sha" '.phase=="C4-partial-evidence" and .tenant_id==$tenant and .c3_state_sha256==$c3 and .design_file.version==1 and .consultation_file.version_2_revision>=2' "$production_evidence_state" >/dev/null
+design_file=$(jq -er .design_file.id "$production_evidence_state")
+design_evidence_revision=$(jq -er .design_file.revision "$production_evidence_state")
+consultation_file=$(jq -er .consultation_file.id "$production_evidence_state")
+consultation_v1_revision=$(jq -er .consultation_file.version_1_revision "$production_evidence_state")
+consultation_v2_revision=$(jq -er .consultation_file.version_2_revision "$production_evidence_state")
+
+if [ ! -f "$fact_state" ]; then
+  echo '[3/8] Create design-v1 and consultation-v1 on the same existing Project'
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_create "$plan_state")" --arg project "$project_id" \
+    '{command_id:$command,project_id:$project,project_source_revision:10,type_key:"design-v1"}')
+  json_request POST "$base_url/production/api/v1/production-work-items" "$production_cookies" '' "$payload" "$workspace/design-created.json" 201 'POST design-v1 work item' "$(jq -er .commands.design_create "$plan_state")"
+  design_item=$(jq -er .work_item.id "$workspace/design-created.json")
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_create "$plan_state")" --arg project "$project_id" \
+    '{command_id:$command,project_id:$project,project_source_revision:10,type_key:"consultation-v1"}')
+  json_request POST "$base_url/production/api/v1/production-work-items" "$production_cookies" '' "$payload" "$workspace/consultation-created.json" 201 'POST consultation-v1 work item' "$(jq -er .commands.consultation_create "$plan_state")"
+  consultation_item=$(jq -er .work_item.id "$workspace/consultation-created.json")
+
+  for item in design consultation; do
+    case "$item" in
+      design) item_id=$design_item ;;
+      consultation) item_id=$consultation_item ;;
+    esac
+    payload=$(jq -cn --arg command "$(jq -er ".commands.${item}_owner" "$plan_state")" --arg assignment "$production_assignment" --argjson source "$production_assignment_revision" \
+      '{command_id:$command,expected_revision:1,assignment_id:$assignment,assignment_source_revision:$source}')
+    json_request POST "$base_url/production/api/v1/production-work-items/$item_id/owner" "$production_cookies" '' "$payload" "$workspace/$item-owner.json" 200 "POST $item owner" "$(jq -er ".commands.${item}_owner" "$plan_state")"
+  done
+
+  echo '[4/8] Prove cross-type artifact and stale revision fail without writes'
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_cross_type "$plan_state")" --arg file "$consultation_file" --argjson source "$consultation_v1_revision" \
+    '{command_id:$command,expected_revision:2,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$source}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/report/deliverables" "$production_cookies" '' "$payload" "$workspace/design-cross-type.json" 422 'POST design item consultation stage denied' "$(jq -er .commands.design_cross_type "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_stale "$plan_state")" '{command_id:$command,expected_revision:1,operation:"set-not-applicable",reason:"stale revision must fail"}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/scheme/applicability" "$production_cookies" '' "$payload" "$workspace/consultation-stale.json" 409 'POST stale consultation revision denied' "$(jq -er .commands.consultation_stale "$plan_state")"
+
+  echo '[5/8] Complete design-v1 and prove Evidence failure/recovery on consultation-v1'
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_skip_scheme "$plan_state")" '{command_id:$command,expected_revision:2,operation:"set-not-applicable",reason:"reference OA C4 direct drawing path"}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/scheme/applicability" "$production_cookies" '' "$payload" "$workspace/design-scheme.json" 200 'POST design scheme not applicable' "$(jq -er .commands.design_skip_scheme "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_skip_preliminary "$plan_state")" '{command_id:$command,expected_revision:3,operation:"set-not-applicable",reason:"reference OA C4 no preliminary stage"}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/preliminary-design/applicability" "$production_cookies" '' "$payload" "$workspace/design-preliminary.json" 200 'POST preliminary design not applicable' "$(jq -er .commands.design_skip_preliminary "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_drawing_put "$plan_state")" --arg file "$design_file" --argjson source "$design_evidence_revision" \
+    '{command_id:$command,expected_revision:4,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$source}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/construction-drawing/deliverables" "$production_cookies" '' "$payload" "$workspace/design-drawing-put.json" 200 'POST design drawing deliverable' "$(jq -er .commands.design_drawing_put "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_drawing_complete "$plan_state")" '{command_id:$command,expected_revision:5}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/construction-drawing/complete" "$production_cookies" '' "$payload" "$workspace/design-drawing-complete.json" 200 'POST complete design drawing' "$(jq -er .commands.design_drawing_complete "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_support_put "$plan_state")" --arg file "$design_file" --argjson source "$design_evidence_revision" \
+    '{command_id:$command,expected_revision:6,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$source}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/construction-support/deliverables" "$production_cookies" '' "$payload" "$workspace/design-support-put.json" 200 'POST design support deliverable' "$(jq -er .commands.design_support_put "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.design_support_complete "$plan_state")" '{command_id:$command,expected_revision:7}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$design_item/stages/construction-support/complete" "$production_cookies" '' "$payload" "$workspace/design-support-complete.json" 200 'POST complete design support' "$(jq -er .commands.design_support_complete "$plan_state")"
+
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_skip_scheme "$plan_state")" '{command_id:$command,expected_revision:2,operation:"set-not-applicable",reason:"direct report engagement"}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/scheme/applicability" "$production_cookies" '' "$payload" "$workspace/consultation-scheme.json" 200 'POST consultation scheme not applicable' "$(jq -er .commands.consultation_skip_scheme "$plan_state")"
+  report_v1_payload=$(jq -cn --arg command "$(jq -er .commands.consultation_report_v1 "$plan_state")" --arg file "$consultation_file" --argjson source "$consultation_v1_revision" \
+    '{command_id:$command,expected_revision:3,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$source}')
+  evidence_container=$(service_container evidence-service)
+  docker stop "$evidence_container" >/dev/null
+  evidence_stopped=true
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/deliverables" "$production_cookies" '' "$report_v1_payload" "$workspace/consultation-evidence-down.json" 503 'POST consultation report with Evidence down' "$(jq -er .commands.consultation_report_v1 "$plan_state")"
+  json_request GET "$base_url/production/api/v1/production-work-items/$consultation_item" "$production_cookies" '' '' "$workspace/consultation-after-failure.json" 200 'GET consultation after failed Evidence reference'
+  jq -e '.work_item.revision==3 and (.deliverables|length)==0' "$workspace/consultation-after-failure.json" >/dev/null
+  docker start "$evidence_container" >/dev/null
+  wait_healthy evidence-service
+  evidence_stopped=false
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/deliverables" "$production_cookies" '' "$report_v1_payload" "$workspace/consultation-evidence-recovered.json" 200 'RETRY consultation report after Evidence recovery' "$(jq -er .commands.consultation_report_v1 "$plan_state")"
+  jq -n --arg tenant "$tenant_id" --arg item "$consultation_item" --arg command "$(jq -er .commands.consultation_report_v1 "$plan_state")" \
+    '{schema_version:"1",phase:"C4-evidence-fault",result:"pass",tenant_id:$tenant,work_item_id:$item,command_id:$command,failed_revision:3,recovered_revision:4,zero_write_on_failure:true}' >"$workspace/evidence-fault.json"
+
+  echo '[6/8] Replace, complete, reopen and recomplete consultation-v1'
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_report_v2 "$plan_state")" --arg file "$consultation_file" --argjson source "$consultation_v2_revision" \
+    '{command_id:$command,expected_revision:4,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:2,evidence_source_revision:$source}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/deliverables" "$production_cookies" '' "$payload" "$workspace/consultation-report-v2.json" 200 'POST consultation report replacement' "$(jq -er .commands.consultation_report_v2 "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_complete "$plan_state")" '{command_id:$command,expected_revision:5}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/complete" "$production_cookies" '' "$payload" "$workspace/consultation-completed.json" 200 'POST complete consultation report' "$(jq -er .commands.consultation_complete "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_reopen "$plan_state")" '{command_id:$command,expected_revision:6,reason:"customer review requires explicit rework"}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/reopen" "$production_cookies" '' "$payload" "$workspace/consultation-reopened.json" 200 'POST reopen consultation report' "$(jq -er .commands.consultation_reopen "$plan_state")"
+  payload=$(jq -cn --arg command "$(jq -er .commands.consultation_recomplete "$plan_state")" '{command_id:$command,expected_revision:7}')
+  json_request POST "$base_url/production/api/v1/production-work-items/$consultation_item/stages/report/complete" "$production_cookies" '' "$payload" "$workspace/consultation-recompleted.json" 200 'POST recomplete consultation report' "$(jq -er .commands.consultation_recomplete "$plan_state")"
+
+  jq -n --arg tenant "$tenant_id" --arg c3 "$c3_sha" --arg project "$project_id" --arg design "$design_item" --arg consultation "$consultation_item" \
+    '{schema_version:"1",phase:"C4-partial-facts",result:"resumable",tenant_id:$tenant,c3_state_sha256:$c3,project_id:$project,
+      design:{id:$design,type_key:"design-v1",revision:8,status:"completed"},consultation:{id:$consultation,type_key:"consultation-v1",revision:8,status:"completed"},
+      checks:{cross_type_artifact_denied:true,stale_revision_denied:true,evidence_failure_zero_write:true,artifact_replaced:true,rework_completed:true}}' >"$fact_state"
+  cp "$workspace/evidence-fault.json" "$evidence_dir/evidence-fault.json"
+fi
+cp "$fact_state" "$workspace/state-partial-c4-facts.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c3 "$c3_sha" '.phase=="C4-partial-facts" and .tenant_id==$tenant and .project_id==$project and .c3_state_sha256==$c3 and .design.revision==8 and .consultation.revision==8' "$fact_state" >/dev/null
+design_item=$(jq -er .design.id "$fact_state")
+consultation_item=$(jq -er .consultation.id "$fact_state")
+
+echo '[7/8] Re-read exact final projections, histories, workload scopes and ownership deltas'
+assert_final_items "$design_file" "$consultation_file"
+for expectation in \
+  "project-workspace|project-workspace.read|project|$project_id" \
+  "evidence-service|evidence-service.view|file|$design_file" \
+  "evidence-service|evidence-service.view|file|$consultation_file"
+do
+  IFS='|' read -r audience action type id <<EOF
+$expectation
+EOF
+  count=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='production-operations' AND details->>'audience'='$audience' AND details->'actions' @> '[\"$action\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"$type\",\"id\":\"$id\"}]'::jsonb;")
+  [ "$count" -ge 1 ] || { echo "missing exact workload credential audit: $expectation" >&2; exit 1; }
+done
+
+capture_counts "$workspace/ownership-after.json"
+jq -n --slurpfile before "$workspace/ownership-before.json" --slurpfile after "$workspace/ownership-after.json" '
+  $after[0] as $a | $before[0] as $b |
+  reduce ($a|keys[]) as $app ({};.[$app]=reduce ($a[$app]|keys[]) as $key ({};.[$key]=($a[$app][$key]-$b[$app][$key])))
+' >"$workspace/ownership-delta.json"
+grant_count=$(jq '.capabilities|length' "$repo_dir/contracts/access/v1/examples/production-operations-capabilities.json")
+jq -e --argjson grants "$grant_count" '
+  .identity_access.capability_grants==$grants and
+  .evidence_service.files==2 and .evidence_service.versions==3 and
+  .production_operations.work_items==2 and .production_operations.stages==6 and .production_operations.deliverables==4 and
+  .production_operations.commands==16 and .production_operations.history_events==16 and
+  .project_workspace.projects==0 and .project_workspace.resource_links==0 and
+  .people_groups.persons==0 and .people_groups.groups==0
+' "$workspace/ownership-delta.json" >/dev/null || { echo 'C4 ownership delta is unexpected' >&2; cat "$workspace/ownership-delta.json" >&2; exit 1; }
+
+echo '[8/8] Persist C4 and leave the isolated stack healthy'
+running=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l | tr -d ' ')
+healthy=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.Status}}' | awk '/healthy/{count++} END{print count+0}')
+[ "$running" = 17 ] && [ "$healthy" = 17 ] || { echo "isolated stack ended $running/$healthy, expected 17/17" >&2; exit 1; }
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --arg captured "$captured_at" --arg tenant "$tenant_id" --arg c3 "$c3_sha" --arg project "$project_id" \
+  --arg design "$design_item" --arg consultation "$consultation_item" --arg design_file "$design_file" --arg consultation_file "$consultation_file" \
+  --slurpfile delta "$workspace/ownership-delta.json" \
+  '{schema_version:"1",scenario_id:"reference-oa-full-suite-continuous-v1",phase:"C4",result:"pass",captured_at:$captured,tenant_id:$tenant,c3_state_sha256:$c3,
+    project:{id:$project,revision:10,status:"active"},design:{id:$design,type_key:"design-v1",revision:8,status:"completed"},
+    consultation:{id:$consultation,type_key:"consultation-v1",revision:8,status:"completed"},
+    evidence:{design_file:{id:$design_file,version:1},consultation_file:{id:$consultation_file,current_version:2}},
+    checks:{same_tenant_and_project:"pass",cross_type_artifact_denied:"pass",stale_work_item_revision_denied:"pass",evidence_failure_zero_write:"pass",artifact_replacement:"pass",rework_completed:"pass",exact_workload_credentials:"pass",ownership_delta_exact:"pass",isolated_stack_health:"17/17"},ownership_delta:$delta[0]}' >"$workspace/state-after-c4.json"
+
+assertions=$(awk -F '\t' 'NR>1{count++} END{print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3{count++} END{print count+0}' "$http_evidence")
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat >"$workspace/c4-summary.md" <<EOF
+# C4 continuous journey result
+
+- Result: pass
+- Tenant: \`$tenant_id\`
+- Project: \`$project_id\` remains revision 10; no second Project was created
+- Design work item: \`$design_item\` revision 8, completed
+- Consultation work item: \`$consultation_item\` revision 8, completed after replacement and rework
+- Evidence: two stable File IDs and three immutable versions
+- Negative paths: cross-type report stage 422; stale revision 409; both zero-write
+- Fault: only Evidence stopped; report command wrote zero facts, then the same command committed once after recovery
+- HTTP assertions: $assertions; mismatches: 0
+- Isolated stack health: 17/17
+EOF
+mkdir -p "$evidence_dir"
+for artifact in ownership-before.json ownership-after.json ownership-delta.json \
+  design-final.json consultation-final.json design-history.json consultation-history.json; do
+  [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+done
+echo "PASS C4: tenant=$tenant_id project=$project_id@10 design=$design_item@8 consultation=$consultation_item@8"

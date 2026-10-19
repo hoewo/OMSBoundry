@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "closure": [
+    "Project server/migration 11",
+    "Workbench original personnel components",
+    "IAM same binary/new catalog 0.7"
+  ],
+  "gateway_manifest_unchanged": true,
+  "selected_assignment_policies_unchanged": true,
+  "grant_writes": 0,
+  "schema_change": "10 -> 11",
+  "old_binary_direct_rollback_forbidden": true,
+  "official_release": false
+}

@@ -1,0 +1,168 @@
+#!/bin/sh
+set -eu
+
+action=${1:-}
+source_manifest=${D1_SOURCE_IMAGE_MANIFEST:-}
+target_registry=${D1_TARGET_REGISTRY:-}
+target_namespace=${D1_TARGET_REGISTRY_NAMESPACE:-}
+release_version=${D1_RELEASE_VERSION:-}
+manifest_out=${D1_IMAGE_MANIFEST_OUT:-}
+image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_CONTRACT_IMAGE D1_MONEY_IMAGE D1_PEOPLE_IMAGE D1_PARTY_IMAGE D1_PROJECT_IMAGE D1_EVIDENCE_IMAGE D1_BUSINESS_ENGAGEMENT_IMAGE D1_BILLING_IMAGE D1_PRODUCTION_IMAGE D1_APPROVAL_AUDIT_RESULTS_IMAGE D1_COST_OUTSOURCING_IMAGE D1_BONUS_DISTRIBUTION_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: D1_SOURCE_IMAGE_MANIFEST=path D1_TARGET_REGISTRY=host \
+       D1_TARGET_REGISTRY_NAMESPACE=namespace D1_RELEASE_VERSION=version \
+       D1_IMAGE_MANIFEST_OUT=path promote-images plan|promote|self-test
+
+Run interactive docker login for both private Registries before promote. The
+script copies linux/amd64 images by pull/tag/push, never rebuilds source code,
+never accepts a Registry password, and records the target Registry digests.
+USAGE
+  exit 2
+}
+
+fail() { echo "ERROR: $*" >&2; exit 1; }
+
+manifest_value() {
+  key=$1
+  count=$(grep -Ec "^${key}=" "$source_manifest" || true)
+  [ "$count" -eq 1 ] || fail "$key must appear exactly once in $source_manifest"
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$source_manifest"
+}
+
+validate_coordinates() {
+  [ -f "$source_manifest" ] || fail "source image manifest does not exist: $source_manifest"
+  printf '%s\n' "$target_registry" | grep -Eq '^[a-z0-9][a-z0-9.-]+(:[0-9]+)?$' || fail 'D1_TARGET_REGISTRY must be a registry hostname without scheme or path'
+  printf '%s\n' "$target_namespace" | grep -Eq '^[a-z0-9][a-z0-9._-]{1,63}$' || fail 'D1_TARGET_REGISTRY_NAMESPACE must be 2-64 lowercase letters, digits, dot, underscore, or dash'
+  printf '%s\n' "$release_version" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' || fail 'D1_RELEASE_VERSION is invalid'
+  case "$release_version" in latest|dev) fail 'D1_RELEASE_VERSION must identify an immutable release' ;; esac
+  [ -n "$manifest_out" ] || fail 'D1_IMAGE_MANIFEST_OUT is required'
+  case "$manifest_out" in /*) ;; *) fail 'D1_IMAGE_MANIFEST_OUT must be an absolute path' ;; esac
+  for key in $image_keys; do
+    reference=$(manifest_value "$key")
+    case "$reference" in *@sha256:*) digest=${reference##*@sha256:} ;; *) fail "$key must use name@sha256:<digest>" ;; esac
+    printf '%s\n' "$digest" | grep -Eq '^[a-f0-9]{64}$' || fail "$key has an invalid digest"
+    case "$reference" in *[!A-Za-z0-9_./:@-]*) fail "$key contains unsupported characters" ;; esac
+  done
+}
+
+repository_for_key() {
+  case "$1" in
+    D1_POSTGRES_IMAGE) echo base-postgres ;;
+    D1_IDENTITY_IMAGE) echo identity-access ;;
+    D1_CONTRACT_IMAGE) echo contract-ledger ;;
+    D1_MONEY_IMAGE) echo money-flow-ledger ;;
+    D1_PEOPLE_IMAGE) echo people-groups ;;
+    D1_PARTY_IMAGE) echo party-directory ;;
+    D1_PROJECT_IMAGE) echo project-workspace ;;
+    D1_EVIDENCE_IMAGE) echo evidence-service ;;
+    D1_BUSINESS_ENGAGEMENT_IMAGE) echo business-engagement ;;
+    D1_BILLING_IMAGE) echo billing-invoice ;;
+    D1_PRODUCTION_IMAGE) echo production-operations ;;
+    D1_APPROVAL_AUDIT_RESULTS_IMAGE) echo approval-audit-results ;;
+    D1_COST_OUTSOURCING_IMAGE) echo cost-outsourcing ;;
+    D1_BONUS_DISTRIBUTION_IMAGE) echo bonus-distribution ;;
+    D1_WORKBENCH_IMAGE) echo unified-workbench ;;
+    D1_GATEWAY_IMAGE) echo gateway ;;
+    D1_NGINX_IMAGE) echo base-nginx ;;
+    *) fail "unknown image key: $1" ;;
+  esac
+}
+
+target_tag() { printf '%s/%s/%s:%s' "$target_registry" "$target_namespace" "$1" "$release_version"; }
+
+read_registry_digest() {
+  reference=$1
+  raw=$(docker buildx imagetools inspect "$reference" --format '{{json .Manifest.Digest}}')
+  digest=${raw#\"}
+  digest=${digest%\"}
+  printf '%s\n' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "could not read target digest for $reference"
+  printf '%s' "$digest"
+}
+
+promote_one() {
+  key=$1
+  repository=$(repository_for_key "$key")
+  source_reference=$(manifest_value "$key")
+  target_reference=$(target_tag "$repository")
+  echo "promote linux/amd64 artifact: $key -> $target_reference" >&2
+  docker pull --platform linux/amd64 "$source_reference"
+  source_platform=$(docker image inspect --platform linux/amd64 "$source_reference" --format '{{.Os}}/{{.Architecture}}')
+  [ "$source_platform" = linux/amd64 ] || fail "$key source platform is $source_platform, expected linux/amd64"
+  source_id=$(docker image inspect --platform linux/amd64 "$source_reference" --format '{{.Id}}')
+  docker tag "$source_reference" "$target_reference"
+  target_id=$(docker image inspect --platform linux/amd64 "$target_reference" --format '{{.Id}}')
+  [ -n "$source_id" ] && [ "$source_id" = "$target_id" ] || fail "$key changed content before target push"
+  docker push --platform linux/amd64 "$target_reference"
+  target_digest=$(read_registry_digest "$target_reference")
+  published_image=$(docker buildx imagetools inspect "$target_reference@$target_digest" --format '{{json .Image}}')
+  target_platform=$(printf '%s\n' "$published_image" | jq -r '(.os // "") + "/" + (.architecture // "")')
+  [ "$target_platform" = linux/amd64 ] || fail "$key target platform is $target_platform, expected linux/amd64"
+  printf '%s=%s@%s\n' "$key" "$target_reference" "$target_digest" >> "$work_manifest"
+}
+
+print_plan() {
+  echo 'OMSBizFoundry D1 immutable image promotion plan'
+  echo "  source manifest: $source_manifest"
+  echo "  target: $target_registry/$target_namespace"
+  echo "  release: $release_version"
+  echo '  platform: linux/amd64'
+  for key in $image_keys; do
+    printf '  %s: %s -> %s\n' "$key" "$(manifest_value "$key")" "$(target_tag "$(repository_for_key "$key")")"
+  done
+}
+
+run_self_test() {
+  test_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-d1-promotion.XXXXXX")
+  trap 'rm -rf "$test_dir"' EXIT HUP INT TERM
+  source_manifest="$test_dir/source.env"
+  target_registry=registry.example
+  target_namespace=omsbizfoundry
+  release_version=v0.1.0-test.3
+  manifest_out="$test_dir/target.env"
+  source_digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  for key in $image_keys; do
+    printf '%s=source.example/oms/%s@sha256:%s\n' "$key" "$(repository_for_key "$key")" "$source_digest" >> "$source_manifest"
+  done
+  validate_coordinates
+  docker() {
+    case "$*" in
+      pull\ --platform\ linux/amd64\ *) return 0 ;;
+      image\ inspect\ --platform\ linux/amd64\ *\ --format\ \{\{.Os\}\}/\{\{.Architecture\}\}) printf '%s\n' linux/amd64 ;;
+      image\ inspect\ --platform\ linux/amd64\ *\ --format\ \{\{.Id\}\}) printf '%s\n' sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+      tag\ *) return 0 ;;
+      push\ --platform\ linux/amd64\ *) return 0 ;;
+      buildx\ imagetools\ inspect\ *@sha256:*\ --format\ \{\{json\ .Image\}\}) printf '%s\n' '{"os":"linux","architecture":"amd64"}' ;;
+      buildx\ imagetools\ inspect\ *\ --format\ \{\{json\ .Manifest.Digest\}\}) printf '%s\n' '"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"' ;;
+      *) fail "unexpected docker self-test call: $*" ;;
+    esac
+  }
+  work_manifest="$test_dir/work.env"
+  : > "$work_manifest"
+  for key in $image_keys; do promote_one "$key"; done
+  [ "$(grep -Ec '^D1_[A-Z_]+_IMAGE=registry\.example/omsbizfoundry/.+@sha256:c{64}$' "$work_manifest")" -eq 17 ] || fail 'self-test did not produce seventeen target digest references'
+  echo 'PASS D1 image promotion self-test'
+}
+
+case "$action" in
+  self-test) run_self_test; exit 0 ;;
+  plan|promote) validate_coordinates ;;
+  *) usage ;;
+esac
+
+if [ "$action" = plan ]; then print_plan; exit 0; fi
+command -v docker >/dev/null 2>&1 || fail 'docker is required'
+command -v jq >/dev/null 2>&1 || fail 'jq is required'
+docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
+[ ! -e "$manifest_out" ] || fail "target image manifest already exists: $manifest_out"
+mkdir -p "$(dirname -- "$manifest_out")"
+umask 077
+work_manifest=$(mktemp "${TMPDIR:-/tmp}/omsbizfoundry-promoted-images.XXXXXX")
+trap 'rm -f "$work_manifest"' EXIT HUP INT TERM
+: > "$work_manifest"
+for key in $image_keys; do promote_one "$key"; done
+chmod 0600 "$work_manifest"
+mv "$work_manifest" "$manifest_out"
+trap - EXIT HUP INT TERM
+echo "target digest manifest written: $manifest_out"

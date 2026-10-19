@@ -1,0 +1,671 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c2"}
+c1_dir=${OA_JOURNEY_C1_DIR:-"$(dirname "$evidence_dir")/c1"}
+c1_state=${OA_JOURNEY_C1_STATE:-"$c1_dir/state-after-c1.json"}
+c1_private_state=${OA_JOURNEY_C1_PRIVATE_STATE:-"$c1_dir/state-private-c1.json"}
+partial_state="$evidence_dir/state-partial-c2.json"
+engagement_partial_state="$evidence_dir/state-partial-c2-after-engagement.json"
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$c1_state" ] || { echo "C1 state not found: $c1_state" >&2; exit 2; }
+[ -f "$c1_private_state" ] || { echo "C1 private state not found: $c1_private_state" >&2; exit 2; }
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+json_request() {
+  method=$1; url=$2; cookie=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8; idempotency_key=${9:-}
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie" --cookie-jar "$cookie"
+  [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"
+  [ -z "$idempotency_key" ] || set -- "$@" -H "Idempotency-Key: $idempotency_key"
+  if [ -n "$payload" ]; then set -- "$@" -H 'Content-Type: application/json' --data "$payload"; fi
+  result=$(curl "$@" "$url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ] && [ -s "$output" ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  json_request GET "$base_url/auth/api/v1/csrf" "$cookie" '' '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  json_request POST "$base_url/auth/api/v1/login" "$cookie" "$csrf" "$payload" "$output" 200 "POST login $username"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; output=$4; resource_id=${5:-}; fact_id=${6:-}; fact_revision=${7:-}
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf"
+  if [ -n "$resource_id" ]; then
+    set -- "$@" --data-urlencode resource_type=project --data-urlencode "resource_id=$resource_id"
+  fi
+  if [ -n "$fact_id" ]; then
+    set -- "$@" --data-urlencode business_fact_kind=project_assignment \
+      --data-urlencode business_fact_source=project-workspace --data-urlencode "business_fact_id=$fact_id" \
+      --data-urlencode "business_fact_revision=$fact_revision"
+  fi
+  result=$(curl "$@" "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  [ "$actual" = 303 ] || { [ ! -s "$output" ] || cat "$output" >&2; }
+  expect_status 303 "$actual" "authorize $app"
+}
+
+hidden_value() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$2" | head -1; }
+
+form_hidden_value() {
+  action=$1; name=$2; file=$3
+  awk -v action="$action" -v name="$name" '
+    index($0,"<form") && index($0,"action=\"" action "\"") {inside=1}
+    inside && index($0,"name=\"" name "\"") {line=$0; sub(".*name=\"" name "\" value=\"","",line); sub("\".*","",line); print line; exit}
+    inside && index($0,"</form>") {inside=0}
+  ' "$file"
+}
+
+location_value() { sed -n "s/.*[?&]$1=\([^&[:space:]]*\).*/\1/p" "$2" | tr -d '\r' | head -1; }
+
+form_request() {
+  path=$1; output=$2; shift 2
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url/contract$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /contract$path" 303 "$actual" "$duration"
+  if [ "$actual" != 303 ] && [ -s "$output.body" ]; then cat "$output.body" >&2; printf '\n' >&2; fi
+  expect_status 303 "$actual" "POST /contract$path"
+}
+
+service_container() {
+  container=$(docker ps --all --quiet \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter "label=com.docker.compose.service=$1")
+  [ -n "$container" ] || { echo "$1 container is missing from $project" >&2; exit 1; }
+  [ "$(printf '%s\n' "$container" | wc -l | tr -d ' ')" = 1 ] || { echo "$1 is not unique in $project" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+wait_healthy() {
+  service=$1; container=$(service_container "$service")
+  for _attempt in $(seq 1 90); do
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+    [ "$status" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+run_contract_party_operation() {
+  input=$1; operation=$2; container=$(service_container contract-ledger)
+  docker exec -i "$container" sh -eu -c "temporary=\$(mktemp); trap 'rm -f \"\$temporary\"' EXIT; cat >\"\$temporary\"; /app/ops $operation --input \"\$temporary\"" <"$input"
+}
+
+postgres_json() {
+  database=$1; sql=$2; container=$(service_container postgres)
+  docker exec "$container" sh -eu -c 'psql -U "$POSTGRES_USER" -d "$1" -At -c "$2"' sh "$database" "$sql"
+}
+
+capture_counts() {
+  output=$1
+  party=$(postgres_json party_directory "SELECT jsonb_build_object('parties',(SELECT count(*) FROM parties),'revisions',(SELECT count(*) FROM party_revisions));")
+  evidence=$(postgres_json evidence_service "SELECT jsonb_build_object('files',(SELECT count(*) FROM files),'versions',(SELECT count(*) FROM file_versions));")
+  business=$(postgres_json business_engagement "SELECT jsonb_build_object('engagements',(SELECT count(*) FROM business_engagements),'materials',(SELECT count(*) FROM business_engagement_materials),'history_events',(SELECT count(*) FROM business_engagement_history_events));")
+  contract=$(postgres_json contract_ledger "SELECT jsonb_build_object('contracts',(SELECT count(*) FROM contracts),'local_parties',(SELECT count(*) FROM parties),'revisions',(SELECT count(*) FROM contract_revisions),'settlements',(SELECT count(*) FROM contract_settlements),'settlement_parties',(SELECT count(*) FROM contract_settlement_parties),'party_mappings',(SELECT count(*) FROM party_migration_mappings),'runtime_transitions',(SELECT count(*) FROM party_runtime_transitions));")
+  project_counts=$(postgres_json project_workspace "SELECT jsonb_build_object('projects',(SELECT count(*) FROM projects),'resource_links',(SELECT count(*) FROM project_resource_links));")
+  jq -n --argjson party "$party" --argjson evidence "$evidence" --argjson business "$business" \
+    --argjson contract "$contract" --argjson project "$project_counts" \
+    '{party_directory:$party,evidence_service:$evidence,business_engagement:$business,contract_ledger:$contract,project_workspace:$project}' >"$output"
+}
+
+upload_evidence() {
+  slug=$1; purpose=$2
+  content="$workspace/$slug.txt"
+  printf 'OA continuous C2 %s %s\n' "$purpose" "$stamp" >"$content"
+  size=$(wc -c <"$content" | tr -d ' ')
+  sha=$(openssl dgst -sha256 "$content" | awk '{print $2}')
+  payload=$(jq -cn --arg name "$slug-$stamp.txt" --argjson size "$size" --arg sha "$sha" --arg purpose "$purpose" \
+    '{file_name:$name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:$purpose}}')
+  json_request POST "$base_url/evidence/v1/upload-sessions" "$admin_cookies" "$admin_csrf" "$payload" \
+    "$workspace/$slug-upload-session.json" 201 "POST Evidence upload session ($slug)" "$(new_uuid)"
+  upload_url=$(jq -er .authorization.upload_url "$workspace/$slug-upload-session.json")
+  session_id=$(jq -er .session_id "$workspace/$slug-upload-session.json")
+  file_id=$(jq -er .file_id "$workspace/$slug-upload-session.json")
+  result=$(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{time_total}' \
+    --request PUT -H 'Content-Type: text/plain' --data-binary "@$content" "$upload_url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "PUT Evidence bytes ($slug)" 204 "$actual" "$duration"
+  expect_status 204 "$actual" "upload Evidence bytes ($slug)"
+  payload=$(jq -cn --argjson size "$size" --arg sha "$sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+  json_request POST "$base_url/evidence/v1/upload-sessions/$session_id/complete" "$admin_cookies" "$admin_csrf" "$payload" \
+    "$workspace/$slug-evidence.json" 200 "POST Evidence complete ($slug)" "$(new_uuid)"
+  jq -e --arg id "$file_id" --arg sha "$sha" '.file_id == $id and .version == 1 and .status == "available" and .sha256 == $sha' "$workspace/$slug-evidence.json" >/dev/null
+  json_request GET "$base_url/evidence/v1/references/files/$file_id/versions/1" "$admin_cookies" "$admin_csrf" '' \
+    "$workspace/$slug-evidence-reference.json" 200 "GET Evidence reference ($slug)"
+  jq -e --arg id "$file_id" '.id == $id and .version == 1 and .revision == 1 and .status == "available"' "$workspace/$slug-evidence-reference.json" >/dev/null
+  printf '%s' "$file_id"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-full-oa-c2.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+evidence_stopped=false
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$evidence_stopped" = true ]; then
+    docker start "$(service_container evidence-service)" >/dev/null 2>&1 || true
+  fi
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv ownership-before.json ownership-after.json ownership-delta.json \
+    state-partial-c2.json state-partial-c2-after-engagement.json state-after-c2.json c2-summary.md contract-party-preflight-before.json contract-party-preflight-after.json \
+    contract-party-map.json contract-party-cutover.json business-history.json; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT HUP INT TERM
+
+tenant_id=$(env_value TENANT_ID)
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$tenant_id" ] || { echo 'TENANT_ID is required' >&2; exit 2; }
+[ -n "$admin_password" ] || { echo 'BOOTSTRAP_ADMIN_PASSWORD is required' >&2; exit 2; }
+
+jq -e --arg tenant "$tenant_id" '
+  .phase == "C1" and .result == "pass" and .tenant_id == $tenant and
+  .project.status == "active" and .project.revision >= 5 and
+  ([.assignments[].role_key] | sort) == (["business_owner","participant","production_owner"] | sort)
+' "$c1_state" >/dev/null || { echo 'C1 state is not a passing continuous fixture for this tenant' >&2; exit 1; }
+[ "$(stat -c '%a' "$c1_private_state" 2>/dev/null || stat -f '%Lp' "$c1_private_state")" = 600 ] || {
+  echo 'C1 private state must have mode 0600' >&2; exit 1;
+}
+jq -e '.schema_version == "1" and ([.actors[].role] | index("business_owner")) != null' "$c1_private_state" >/dev/null || {
+  echo 'C1 private state does not contain the business owner' >&2; exit 1;
+}
+
+project_id=$(jq -er .project.id "$c1_state")
+project_revision=$(jq -er .project.revision "$c1_state")
+client_party_id=$(jq -er .party.id "$c1_state")
+client_party_revision=$(jq -er .party.revision "$c1_state")
+business_assignment_id=$(jq -er '.assignments[] | select(.role_key == "business_owner") | .id' "$c1_state")
+business_assignment_revision=$(jq -er '.assignments[] | select(.role_key == "business_owner") | .created_project_revision' "$c1_state")
+business_username=$(jq -er '.actors[] | select(.role == "business_owner") | .username' "$c1_private_state")
+business_password=$(jq -er '.actors[] | select(.role == "business_owner") | .password' "$c1_private_state")
+c1_sha=$(openssl dgst -sha256 "$c1_state" | awk '{print $2}')
+
+echo '[1/9] Revalidate C1 fixture and capture ownership baseline'
+skip_bootstrap_grants=${OA_JOURNEY_SKIP_BOOTSTRAP_GRANTS:-false}
+case "$skip_bootstrap_grants" in true|false) ;; *) echo 'OA_JOURNEY_SKIP_BOOTSTRAP_GRANTS must be true or false' >&2; exit 2 ;; esac
+if [ "$skip_bootstrap_grants" = true ]; then
+  echo 'Using the retained IAM grant fixture; login and every application authorization are still revalidated'
+else
+  D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+fi
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+for app in party-directory project-workspace evidence-service contract-ledger; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$app" "$workspace/admin-authorize-$app.out"
+done
+
+business_cookies="$workspace/business-owner.cookies"
+business_csrf=$(fetch_csrf "$business_cookies" "$workspace/business-owner-csrf.json")
+login "$business_cookies" "$business_csrf" "$business_username" "$business_password" "$workspace/business-owner-login.json"
+authorize_app "$business_cookies" "$business_csrf" business-engagement "$workspace/business-owner-authorize.out" \
+  "$project_id" "$business_assignment_id" "$business_assignment_revision"
+
+json_request GET "$base_url/project/api/v1/projects/$project_id" "$admin_cookies" "$admin_csrf" '' \
+  "$workspace/project-before.json" 200 'GET C1 Project before C2'
+jq -e --arg id "$project_id" --argjson revision "$project_revision" \
+  '.project.id == $id and .project.revision >= $revision and .project.revision <= 7 and .project.status == "active"' "$workspace/project-before.json" >/dev/null || {
+  echo 'live Project no longer matches C1 state' >&2; exit 1;
+}
+json_request GET "$base_url/party/api/v1/parties/$client_party_id" "$admin_cookies" "$admin_csrf" '' \
+  "$workspace/client-party.json" 200 'GET C1 client Party'
+jq -e --arg id "$client_party_id" --argjson revision "$client_party_revision" '.id == $id and .revision == $revision' "$workspace/client-party.json" >/dev/null || {
+  echo 'live client Party no longer matches C1 state' >&2; exit 1;
+}
+# A validation driver failure must not be hidden by creating a second Contract.
+# If immutable C2 facts exist and the original ownership baseline was retained,
+# reconstruct a bounded checkpoint from owner databases and continue from it.
+if [ ! -f "$partial_state" ] && [ -f "$evidence_dir/ownership-before.json" ] && \
+   [ -f "$evidence_dir/contract-party-map.json" ] && [ -f "$evidence_dir/contract-party-cutover.json" ]; then
+  echo 'Recovering C2 checkpoint from immutable owner facts after a prior driver interruption'
+  contract_id=$(postgres_json contract_ledger "SELECT c.id::text FROM contracts c JOIN contract_settlements s ON s.contract_id=c.id WHERE c.title LIKE '连续旅程设计咨询合同 %' ORDER BY s.recorded_at DESC LIMIT 1;")
+  contract_revision=$(postgres_json contract_ledger "SELECT current_revision FROM contracts WHERE id='$contract_id'::uuid;")
+  settlement_id=$(postgres_json contract_ledger "SELECT id::text FROM contract_settlements WHERE contract_id='$contract_id'::uuid ORDER BY settlement_sequence DESC LIMIT 1;")
+  bid_file_id=$(postgres_json evidence_service "SELECT file_id::text FROM file_versions WHERE file_name LIKE 'c2-bid-document-%' ORDER BY created_at DESC LIMIT 1;")
+  award_file_id=$(postgres_json evidence_service "SELECT file_id::text FROM file_versions WHERE file_name LIKE 'c2-award-document-%' ORDER BY created_at DESC LIMIT 1;")
+  supplier_party_id=$(postgres_json party_directory "SELECT id::text FROM parties WHERE registration_identifier LIKE 'OA-C2-SUPPLIER-%' ORDER BY created_at DESC LIMIT 1;")
+  supplier_party_revision=$(postgres_json party_directory "SELECT revision FROM parties WHERE id='$supplier_party_id'::uuid;")
+  [ -n "$contract_id" ] && [ -n "$settlement_id" ] && [ -n "$bid_file_id" ] && [ -n "$award_file_id" ] && [ -n "$supplier_party_id" ] || {
+    echo 'prior C2 facts are incomplete; refusing to invent a checkpoint' >&2; exit 1;
+  }
+  jq -e '.state.mode == "directory" and .mapped_party_count == 2 and .referenced_party_count == 2' "$evidence_dir/contract-party-cutover.json" >/dev/null || {
+    echo 'prior Contract Party cutover evidence is invalid' >&2; exit 1;
+  }
+  mkdir -p "$evidence_dir"
+  jq -n --arg tenant_id "$tenant_id" --arg c1_sha256 "$c1_sha" --arg project_id "$project_id" \
+    --arg bid_file_id "$bid_file_id" --arg award_file_id "$award_file_id" \
+    --arg supplier_party_id "$supplier_party_id" --argjson supplier_party_revision "$supplier_party_revision" \
+    --arg contract_id "$contract_id" --argjson contract_revision "$contract_revision" --arg settlement_id "$settlement_id" \
+    --arg contract_link_command "$(new_uuid)" --arg engagement_create_command "$(new_uuid)" \
+    --arg applicability_command "$(new_uuid)" --arg method_command "$(new_uuid)" --arg stale_command "$(new_uuid)" \
+    --arg bid_command "$(new_uuid)" --arg award_command "$(new_uuid)" --arg engagement_link_command "$(new_uuid)" \
+    '{schema_version:"1",phase:"C2-partial-after-settlement",result:"resumable",tenant_id:$tenant_id,c1_state_sha256:$c1_sha256,project_id:$project_id,evidence:{bid_file_id:$bid_file_id,award_file_id:$award_file_id},supplier_party:{id:$supplier_party_id,revision:$supplier_party_revision},contract:{id:$contract_id,revision:$contract_revision},settlement:{id:$settlement_id,revision:1},commands:{contract_link:$contract_link_command,engagement_create:$engagement_create_command,applicability:$applicability_command,method:$method_command,stale:$stale_command,bid_material:$bid_command,award_material:$award_command,engagement_link:$engagement_link_command}}' \
+    >"$partial_state"
+fi
+
+resume_after_settlement=false
+if [ -f "$partial_state" ]; then
+  jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c1_sha "$c1_sha" \
+    '.phase == "C2-partial-after-settlement" and .result == "resumable" and .tenant_id == $tenant and .project_id == $project and .c1_state_sha256 == $c1_sha' \
+    "$partial_state" >/dev/null || { echo 'C2 partial checkpoint does not match C1' >&2; exit 1; }
+  cp "$evidence_dir/ownership-before.json" "$workspace/ownership-before.json"
+  bid_file_id=$(jq -er .evidence.bid_file_id "$partial_state")
+  award_file_id=$(jq -er .evidence.award_file_id "$partial_state")
+  supplier_party_id=$(jq -er .supplier_party.id "$partial_state")
+  supplier_party_revision=$(jq -er .supplier_party.revision "$partial_state")
+  contract_id=$(jq -er .contract.id "$partial_state")
+  contract_revision=$(jq -er .contract.revision "$partial_state")
+  settlement_id=$(jq -er .settlement.id "$partial_state")
+  resume_after_settlement=true
+else
+  capture_counts "$workspace/ownership-before.json"
+fi
+
+stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$(openssl rand -hex 3)"
+
+if [ "$resume_after_settlement" != true ]; then
+echo '[2/9] Upload two immutable Evidence files through Nginx, Gateway and IAM'
+bid_file_id=$(upload_evidence c2-bid-document bid_document)
+award_file_id=$(upload_evidence c2-award-document award_document)
+
+echo '[3/9] Create supplier Directory Party and independent Contract facts'
+supplier_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg legal_name "连续旅程专业受托方 $stamp" \
+  --arg registration_identifier "OA-C2-SUPPLIER-$stamp" \
+  '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+json_request POST "$base_url/party/api/v1/parties" "$admin_cookies" "$admin_csrf" "$supplier_payload" \
+  "$workspace/supplier-party.json" 201 'POST C2 supplier Party'
+supplier_party_id=$(jq -er .id "$workspace/supplier-party.json")
+supplier_party_revision=$(jq -er .revision "$workspace/supplier-party.json")
+
+json_request GET "$base_url/contract/contracts" "$admin_cookies" "$admin_csrf" '' "$workspace/contract-form.html" 200 'GET Contract form'
+contract_csrf=$(hidden_value csrf_token "$workspace/contract-form.html")
+contract_command=$(hidden_value command_id "$workspace/contract-form.html")
+form_request /contracts "$workspace/contract-create" \
+  --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" \
+  --data-urlencode number_namespace=OA-C2 --data-urlencode "contract_number=OA-C2-$stamp" \
+  --data-urlencode "title=连续旅程设计咨询合同 $stamp" --data-urlencode category=design \
+  --data-urlencode currency=CNY --data-urlencode total_amount=100000.00 \
+  --data-urlencode "signed_on=$(date -u '+%Y-%m-%d')" --data-urlencode "effective_on=$(date -u '+%Y-%m-%d')"
+contract_id=$(location_value contract_id "$workspace/contract-create.headers")
+[ -n "$contract_id" ] || { echo 'Contract ID is missing' >&2; exit 1; }
+
+client_legal_name=$(jq -er .legal_name "$workspace/client-party.json")
+client_registration=$(jq -er .registration_identifier "$workspace/client-party.json")
+supplier_legal_name=$(jq -er .legal_name "$workspace/supplier-party.json")
+supplier_registration=$(jq -er .registration_identifier "$workspace/supplier-party.json")
+
+create_local_contract_party() {
+  slug=$1; legal_name=$2; registration=$3
+  json_request GET "$base_url/contract/parties" "$admin_cookies" "$admin_csrf" '' "$workspace/$slug-local-party-form.html" 200 "GET Contract Party form ($slug)"
+  csrf=$(hidden_value csrf_token "$workspace/$slug-local-party-form.html")
+  form_request /parties "$workspace/$slug-local-party-create" --data-urlencode "csrf_token=$csrf" \
+    --data-urlencode kind=organization --data-urlencode "legal_name=$legal_name" --data-urlencode "registration_identifier=$registration"
+}
+create_local_contract_party client "$client_legal_name" "$client_registration"
+create_local_contract_party supplier "$supplier_legal_name" "$supplier_registration"
+
+link_local_contract_party() {
+  slug=$1; registration=$2; role=$3
+  json_request GET "$base_url/contract/contracts/$contract_id" "$admin_cookies" "$admin_csrf" '' "$workspace/$slug-contract-detail.html" 200 "GET Contract detail ($slug)"
+  local_party=$(awk -v registration="$registration" 'index($0,"<option value=\"") && index($0,registration) {line=$0; sub(".*<option value=\"","",line); sub("\".*","",line); print line; exit}' "$workspace/$slug-contract-detail.html")
+  [ -n "$local_party" ] || { echo "local Contract Party $registration is unavailable" >&2; exit 1; }
+  path="/contracts/$contract_id/parties"
+  csrf=$(form_hidden_value "/contract$path" csrf_token "$workspace/$slug-contract-detail.html")
+  command_id=$(form_hidden_value "/contract$path" command_id "$workspace/$slug-contract-detail.html")
+  expected=$(form_hidden_value "/contract$path" expected_draft_version "$workspace/$slug-contract-detail.html")
+  form_request "$path" "$workspace/$slug-contract-party-link" --data-urlencode "csrf_token=$csrf" \
+    --data-urlencode "command_id=$command_id" --data-urlencode "expected_draft_version=$expected" \
+    --data-urlencode "party_id=$local_party" --data-urlencode "role=$role"
+}
+link_local_contract_party client "$client_registration" 委托方
+link_local_contract_party supplier "$supplier_registration" 受托方
+
+json_request GET "$base_url/contract/contracts/$contract_id" "$admin_cookies" "$admin_csrf" '' "$workspace/contract-activation-form.html" 200 'GET Contract activation form'
+activation_path="/contracts/$contract_id/activate"
+activation_csrf=$(form_hidden_value "/contract$activation_path" csrf_token "$workspace/contract-activation-form.html")
+activation_command=$(form_hidden_value "/contract$activation_path" command_id "$workspace/contract-activation-form.html")
+activation_draft=$(form_hidden_value "/contract$activation_path" expected_draft_version "$workspace/contract-activation-form.html")
+form_request "$activation_path" "$workspace/contract-activation" --data-urlencode "csrf_token=$activation_csrf" \
+  --data-urlencode "command_id=$activation_command" --data-urlencode "expected_draft_version=$activation_draft"
+
+echo '[4/9] Map referenced Contract Parties explicitly, then cut over runtime authority'
+contract_container=$(service_container contract-ledger)
+docker exec "$contract_container" /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/contract-party-preflight-before.json"
+client_local_id=$(jq -er --arg registration "$client_registration" '.items[] | select(.registration_identifier == $registration) | .local_party_id' "$workspace/contract-party-preflight-before.json")
+client_local_sha=$(jq -er --arg registration "$client_registration" '.items[] | select(.registration_identifier == $registration) | .local_snapshot_sha256' "$workspace/contract-party-preflight-before.json")
+supplier_local_id=$(jq -er --arg registration "$supplier_registration" '.items[] | select(.registration_identifier == $registration) | .local_party_id' "$workspace/contract-party-preflight-before.json")
+supplier_local_sha=$(jq -er --arg registration "$supplier_registration" '.items[] | select(.registration_identifier == $registration) | .local_snapshot_sha256' "$workspace/contract-party-preflight-before.json")
+reviewer_subject=$(jq -er .principal.subject_id "$workspace/admin-login.json")
+reviewer_name=$(jq -er .principal.display_name "$workspace/admin-login.json")
+migration_batch=$(new_uuid)
+jq -cn --arg tenant "$tenant_id" --arg batch "$migration_batch" --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  --arg client_command "$(new_uuid)" --arg client_local "$client_local_id" --arg client_sha "$client_local_sha" \
+  --arg client_target "$client_party_id" --argjson client_revision "$client_party_revision" \
+  --arg supplier_command "$(new_uuid)" --arg supplier_local "$supplier_local_id" --arg supplier_sha "$supplier_local_sha" \
+  --arg supplier_target "$supplier_party_id" --argjson supplier_revision "$supplier_party_revision" \
+  '{format:"omsbizfoundry.contract-party-mapping-review/v1",tenant_id:$tenant,migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,mappings:[{command_id:$client_command,local_party_id:$client_local,local_snapshot_sha256:$client_sha,decision:"map_existing_directory_party",target_party_id:$client_target,target_party_revision:$client_revision,reason:"C2 client Party exact review"},{command_id:$supplier_command,local_party_id:$supplier_local,local_snapshot_sha256:$supplier_sha,decision:"map_existing_directory_party",target_party_id:$supplier_target,target_party_revision:$supplier_revision,reason:"C2 supplier Party exact review"}]}' \
+  >"$workspace/contract-party-map-request.json"
+run_contract_party_operation "$workspace/contract-party-map-request.json" party-migration-map >"$workspace/contract-party-map.json"
+jq -e '.recorded == 2 and .replayed == 0' "$workspace/contract-party-map.json" >/dev/null
+docker exec "$contract_container" /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/contract-party-preflight-after.json"
+jq -e '.counts.referenced == 2 and .counts.blocking_issues == 0' "$workspace/contract-party-preflight-after.json" >/dev/null || {
+  echo 'referenced Contract Parties are not ready for cutover' >&2; exit 1;
+}
+jq -cn --arg tenant "$tenant_id" --arg command "$(new_uuid)" --arg batch "$migration_batch" \
+  --arg reviewer "$reviewer_subject" --arg reviewer_name "$reviewer_name" \
+  '{format:"omsbizfoundry.contract-party-runtime-transition/v1",tenant_id:$tenant,command_id:$command,action:"cutover",migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,reason:"C2 all referenced Contract Parties map to exact Directory revisions"}' \
+  >"$workspace/contract-party-cutover-request.json"
+run_contract_party_operation "$workspace/contract-party-cutover-request.json" party-runtime-transition >"$workspace/contract-party-cutover.json"
+jq -e '.state.mode == "directory" and .mapped_party_count == 2 and .referenced_party_count == 2' "$workspace/contract-party-cutover.json" >/dev/null
+
+echo '[5/9] Record Settlement after Party cutover and verify Directory identities'
+json_request GET "$base_url/contract/contracts/$contract_id" "$admin_cookies" "$admin_csrf" '' "$workspace/settlement-form.html" 200 'GET Contract settlement form'
+settlement_path="/contracts/$contract_id/settlements"
+settlement_csrf=$(form_hidden_value "/contract$settlement_path" csrf_token "$workspace/settlement-form.html")
+settlement_command=$(form_hidden_value "/contract$settlement_path" command_id "$workspace/settlement-form.html")
+settlement_revision=$(form_hidden_value "/contract$settlement_path" expected_revision "$workspace/settlement-form.html")
+settlement_sequence=$(form_hidden_value "/contract$settlement_path" expected_settlement_sequence "$workspace/settlement-form.html")
+form_request "$settlement_path" "$workspace/settlement-create" --data-urlencode "csrf_token=$settlement_csrf" \
+  --data-urlencode "command_id=$settlement_command" --data-urlencode "expected_revision=$settlement_revision" \
+  --data-urlencode "expected_settlement_sequence=$settlement_sequence" --data-urlencode settlement_kind=progress \
+  --data-urlencode "settlement_number=OA-C2-SETTLEMENT-$stamp" --data-urlencode 'settlement_title=连续旅程阶段结算' \
+  --data-urlencode settlement_amount=50000.00 --data-urlencode "settlement_confirmed_on=$(date -u '+%Y-%m-%d')" \
+  --data-urlencode 'settlement_basis=客户与受托方确认截至本阶段的累计结算金额' \
+  --data-urlencode confirming_party_position=1 --data-urlencode confirming_party_position=2
+settlement_id=$(postgres_json contract_ledger "SELECT id::text FROM contract_settlements WHERE contract_id='$contract_id'::uuid ORDER BY settlement_sequence DESC LIMIT 1;")
+[ -n "$settlement_id" ] || { echo 'Settlement ID is missing' >&2; exit 1; }
+
+jq -n --arg tenant_id "$tenant_id" --arg c1_sha256 "$c1_sha" --arg project_id "$project_id" \
+  --arg bid_file_id "$bid_file_id" --arg award_file_id "$award_file_id" \
+  --arg supplier_party_id "$supplier_party_id" --argjson supplier_party_revision "$supplier_party_revision" \
+  --arg contract_id "$contract_id" --argjson contract_revision 1 --arg settlement_id "$settlement_id" \
+  --arg contract_link_command "$(new_uuid)" --arg engagement_create_command "$(new_uuid)" \
+  --arg applicability_command "$(new_uuid)" --arg method_command "$(new_uuid)" --arg stale_command "$(new_uuid)" \
+  --arg bid_command "$(new_uuid)" --arg award_command "$(new_uuid)" --arg engagement_link_command "$(new_uuid)" \
+  '{schema_version:"1",phase:"C2-partial-after-settlement",result:"resumable",tenant_id:$tenant_id,c1_state_sha256:$c1_sha256,project_id:$project_id,evidence:{bid_file_id:$bid_file_id,award_file_id:$award_file_id},supplier_party:{id:$supplier_party_id,revision:$supplier_party_revision},contract:{id:$contract_id,revision:$contract_revision},settlement:{id:$settlement_id,revision:1},commands:{contract_link:$contract_link_command,engagement_create:$engagement_create_command,applicability:$applicability_command,method:$method_command,stale:$stale_command,bid_material:$bid_command,award_material:$award_command,engagement_link:$engagement_link_command}}' \
+  >"$workspace/state-partial-c2.json"
+mkdir -p "$evidence_dir"
+cp "$workspace/state-partial-c2.json" "$partial_state"
+else
+  echo '[2-5/9] Resume the exact Evidence, Party, Contract and Settlement facts from the retained checkpoint'
+fi
+
+# Human administrators may manage Contract facts but cannot impersonate a
+# service-to-service reference consumer. Exact settlement snapshot mappings are
+# checked read-only here; the Project workload proves the runtime reference
+# path immediately after the Contract link is recorded.
+json_request GET "$base_url/contract/api/v1/references/contracts/$contract_id" "$admin_cookies" "$admin_csrf" '' \
+  "$workspace/admin-contract-reference-denied.json" 403 'GET Contract reference as human administrator'
+mapped_party_ids=$(postgres_json contract_ledger "SELECT COALESCE(jsonb_agg(m.target_party_id::text ORDER BY m.target_party_id::text),'[]'::jsonb) FROM contract_settlement_parties s JOIN party_migration_mappings m ON m.tenant_id='$tenant_id'::uuid AND m.local_party_id=s.source_party_id WHERE s.settlement_id='$settlement_id'::uuid;")
+printf '%s\n' "$mapped_party_ids" >"$workspace/settlement-directory-party-ids.json"
+jq -e --arg client "$client_party_id" --arg supplier "$supplier_party_id" \
+  'sort == ([$client,$supplier] | sort)' "$workspace/settlement-directory-party-ids.json" >/dev/null || {
+  echo 'Settlement snapshots do not map to the exact C1 client and C2 supplier Parties' >&2; exit 1;
+}
+
+contract_link_command=$(jq -er .commands.contract_link "$partial_state")
+engagement_create_command=$(jq -er .commands.engagement_create "$partial_state")
+applicability_command=$(jq -er .commands.applicability "$partial_state")
+method_command=$(jq -er .commands.method "$partial_state")
+stale_command=$(jq -er .commands.stale "$partial_state")
+bid_command=$(jq -er .commands.bid_material "$partial_state")
+award_command=$(jq -er .commands.award_material "$partial_state")
+engagement_link_command=$(jq -er .commands.engagement_link "$partial_state")
+
+# The Evidence outage is deliberately destructive to one container. Once the
+# exact engagement reached ready@5, retain a second checkpoint so a later
+# packaging/configuration failure can be repaired without injecting the same
+# outage again. The checkpoint can be reconstructed only from the immutable
+# create history event identified by the original command ID.
+if [ ! -f "$engagement_partial_state" ]; then
+  engagement_id=$(postgres_json business_engagement "SELECT engagement_id::text FROM business_engagement_history_events WHERE tenant_id='$tenant_id'::uuid AND command_id='$engagement_create_command'::uuid AND event_type='engagement_created' ORDER BY occurred_at DESC LIMIT 1;")
+  if [ -n "$engagement_id" ]; then
+    engagement_fact=$(postgres_json business_engagement "SELECT jsonb_build_object('id',e.id::text,'project_id',e.project_id::text,'project_source_revision',e.project_source_revision,'status',e.status,'revision',e.revision,'materials',(SELECT count(*) FROM business_engagement_materials m WHERE m.engagement_id=e.id AND m.superseded_at IS NULL),'history',(SELECT count(*) FROM business_engagement_history_events h WHERE h.engagement_id=e.id)) FROM business_engagements e WHERE e.tenant_id='$tenant_id'::uuid AND e.id='$engagement_id'::uuid;")
+    printf '%s\n' "$engagement_fact" | jq -e --arg project "$project_id" \
+      '.project_id == $project and .project_source_revision == 6 and .status == "ready" and .revision == 5 and .materials == 2 and .history == 5' >/dev/null || {
+      echo 'existing Engagement does not satisfy the bounded C2 resume checkpoint' >&2; exit 1;
+    }
+    mkdir -p "$evidence_dir"
+    jq -n --arg tenant_id "$tenant_id" --arg c1_sha256 "$c1_sha" --arg project_id "$project_id" \
+      --arg engagement_id "$engagement_id" --arg engagement_link_command "$engagement_link_command" \
+      '{schema_version:"1",phase:"C2-partial-after-engagement",result:"resumable",tenant_id:$tenant_id,c1_state_sha256:$c1_sha256,project_id:$project_id,business_engagement:{id:$engagement_id,revision:5,status:"ready",project_source_revision:6},commands:{engagement_link:$engagement_link_command}}' \
+      >"$engagement_partial_state"
+  fi
+fi
+
+resume_after_engagement=false
+if [ -f "$engagement_partial_state" ]; then
+  jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c1_sha "$c1_sha" --arg command "$engagement_link_command" \
+    '.phase == "C2-partial-after-engagement" and .result == "resumable" and .tenant_id == $tenant and .project_id == $project and .c1_state_sha256 == $c1_sha and .business_engagement.revision == 5 and .business_engagement.status == "ready" and .commands.engagement_link == $command' \
+    "$engagement_partial_state" >/dev/null || { echo 'C2 Engagement checkpoint does not match C1 or the original commands' >&2; exit 1; }
+  engagement_id=$(jq -er .business_engagement.id "$engagement_partial_state")
+  resume_after_engagement=true
+fi
+
+echo '[6/9] Link Contract to the one Project without moving Contract facts'
+contract_link_payload=$(jq -cn --arg command_id "$contract_link_command" --arg contract "$contract_id" --argjson revision "$contract_revision" \
+  '{command_id:$command_id,expected_revision:5,operation:"link",target_service:"contract-ledger",resource_type:"contract",resource_id:$contract,source_revision:$revision,relation_key:"primary-contract",note:"C2 exact Contract reference"}')
+json_request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$admin_csrf" "$contract_link_payload" \
+  "$workspace/project-contract-link.json" 200 'POST Project Contract link'
+project_revision=$(jq -er .project.revision "$workspace/project-contract-link.json")
+jq -e --arg contract "$contract_id" '.project.revision == 6 and .resource_link.resource_id == $contract' "$workspace/project-contract-link.json" >/dev/null
+json_request GET "$base_url/project/api/v1/projects/$project_id/commercial-summary" "$admin_cookies" "$admin_csrf" '' \
+  "$workspace/project-contract-summary.json" 200 'GET Project Contract composition through workload credential'
+jq -e --arg contract "$contract_id" '
+  .project_revision >= 6 and .project_revision <= 7 and
+  any(.segments[]; .source_application == "contract-ledger" and .resource_type == "contract" and
+    .resource_id == $contract and .state == "available" and .source_revision == 1 and
+    .linked_revision == 1 and (.contract.current_effective_amount | tonumber) == 100000)
+' "$workspace/project-contract-summary.json" >/dev/null || {
+  echo 'Project workload did not resolve the exact Contract reference' >&2; exit 1;
+}
+contract_workload_audits=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='contract-ledger' AND details->'scope'->'resources' @> '[{\"type\":\"contract\",\"id\":\"$contract_id\"}]'::jsonb;")
+[ "$contract_workload_audits" -ge 1 ] || { echo 'exact Project workload Contract credential audit is missing' >&2; exit 1; }
+
+if [ "$resume_after_engagement" != true ]; then
+echo '[7/9] Build Business Engagement on the current Project revision and reject stale write'
+engagement_create=$(jq -cn --arg command_id "$engagement_create_command" --arg project "$project_id" --argjson revision "$project_revision" \
+  '{command_id:$command_id,project_id:$project,project_source_revision:$revision}')
+json_request POST "$base_url/business/api/v1/business-engagements" "$business_cookies" "$business_csrf" "$engagement_create" \
+  "$workspace/engagement-created.json" 201 'POST Business Engagement'
+engagement_id=$(jq -er .engagement.id "$workspace/engagement-created.json")
+payload=$(jq -cn --arg command_id "$applicability_command" '{command_id:$command_id,expected_revision:1,applicable:true,reason:""}')
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/applicability" "$business_cookies" "$business_csrf" "$payload" \
+  "$workspace/engagement-applicable.json" 200 'POST Engagement applicability'
+payload=$(jq -cn --arg command_id "$method_command" '{command_id:$command_id,expected_revision:2,method:"comparison"}')
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/method" "$business_cookies" "$business_csrf" "$payload" \
+  "$workspace/engagement-method.json" 200 'POST Engagement method'
+stale_payload=$(jq -cn --arg command_id "$stale_command" '{command_id:$command_id,expected_revision:2,applicable:true,reason:"stale must fail"}')
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/applicability" "$business_cookies" "$business_csrf" "$stale_payload" \
+  "$workspace/engagement-stale.json" 409 'POST stale Engagement revision'
+json_request GET "$base_url/business/api/v1/business-engagements/$engagement_id/history" "$business_cookies" "$business_csrf" '' \
+  "$workspace/history-after-stale.json" 200 'GET Engagement history after stale write'
+jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected"]' "$workspace/history-after-stale.json" >/dev/null
+
+payload=$(jq -cn --arg command_id "$bid_command" --arg file "$bid_file_id" \
+  '{command_id:$command_id,expected_revision:3,operation:"put",requirement_key:"bid_document",evidence_file_id:$file,evidence_version:1,evidence_source_revision:1}')
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/materials" "$business_cookies" "$business_csrf" "$payload" \
+  "$workspace/engagement-bid-material.json" 200 'POST Engagement bid material'
+jq -e '.engagement.revision == 4 and .engagement.status == "collecting_evidence"' "$workspace/engagement-bid-material.json" >/dev/null
+
+echo '[8/9] Stop only Evidence, prove zero write, recover and replay the same command exactly once'
+award_payload=$(jq -cn --arg command_id "$award_command" --arg file "$award_file_id" \
+  '{command_id:$command_id,expected_revision:4,operation:"put",requirement_key:"award_document",evidence_file_id:$file,evidence_version:1,evidence_source_revision:1}')
+evidence_container=$(service_container evidence-service)
+docker stop "$evidence_container" >/dev/null
+evidence_stopped=true
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/materials" "$business_cookies" "$business_csrf" "$award_payload" \
+  "$workspace/engagement-evidence-unavailable.json" 503 'POST Engagement award material with Evidence down'
+jq -e '.error.code == "REFERENCE_SERVICE_UNAVAILABLE" and .error.retryable == true' "$workspace/engagement-evidence-unavailable.json" >/dev/null
+json_request GET "$base_url/business/api/v1/business-engagements/$engagement_id" "$business_cookies" "$business_csrf" '' \
+  "$workspace/engagement-after-failure.json" 200 'GET Engagement after Evidence failure'
+jq -e '.engagement.revision == 4 and (.materials | map(select(.superseded_at == null)) | length) == 1' "$workspace/engagement-after-failure.json" >/dev/null
+docker start "$evidence_container" >/dev/null
+wait_healthy evidence-service
+evidence_stopped=false
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/materials" "$business_cookies" "$business_csrf" "$award_payload" \
+  "$workspace/engagement-award-material.json" 200 'POST same Engagement award command after recovery'
+json_request POST "$base_url/business/api/v1/business-engagements/$engagement_id/materials" "$business_cookies" "$business_csrf" "$award_payload" \
+  "$workspace/engagement-award-replay.json" 200 'REPLAY same Engagement award command'
+jq -e '.engagement.revision == 5 and .engagement.status == "ready" and (.materials | map(select(.superseded_at == null)) | length) == 2' "$workspace/engagement-award-material.json" >/dev/null
+jq -e --arg id "$engagement_id" '.engagement.id == $id and .engagement.revision == 5 and .engagement.status == "ready"' "$workspace/engagement-award-replay.json" >/dev/null
+json_request GET "$base_url/business/api/v1/business-engagements/$engagement_id/history" "$business_cookies" "$business_csrf" '' \
+  "$workspace/business-history.json" 200 'GET final Engagement history'
+jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected","material_put","material_put"]' "$workspace/business-history.json" >/dev/null
+
+jq -n --arg tenant_id "$tenant_id" --arg c1_sha256 "$c1_sha" --arg project_id "$project_id" \
+  --arg engagement_id "$engagement_id" --arg engagement_link_command "$engagement_link_command" \
+  '{schema_version:"1",phase:"C2-partial-after-engagement",result:"resumable",tenant_id:$tenant_id,c1_state_sha256:$c1_sha256,project_id:$project_id,business_engagement:{id:$engagement_id,revision:5,status:"ready",project_source_revision:6},commands:{engagement_link:$engagement_link_command}}' \
+  >"$workspace/state-partial-c2-after-engagement.json"
+mkdir -p "$evidence_dir"
+cp "$workspace/state-partial-c2-after-engagement.json" "$engagement_partial_state"
+else
+  echo '[7-8/9] Resume the exact ready Engagement; do not inject the Evidence outage twice'
+fi
+
+json_request GET "$base_url/business/api/v1/business-engagements/$engagement_id" "$business_cookies" "$business_csrf" '' \
+  "$workspace/engagement-ready.json" 200 'GET ready Engagement checkpoint'
+jq -e --arg id "$engagement_id" '.engagement.id == $id and .engagement.revision == 5 and .engagement.status == "ready" and (.materials | map(select(.superseded_at == null)) | length) == 2' "$workspace/engagement-ready.json" >/dev/null || {
+  echo 'live Engagement no longer matches the ready checkpoint' >&2; exit 1;
+}
+json_request GET "$base_url/business/api/v1/business-engagements/$engagement_id/history" "$business_cookies" "$business_csrf" '' \
+  "$workspace/business-history.json" 200 'GET final Engagement history'
+jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected","material_put","material_put"]' "$workspace/business-history.json" >/dev/null
+
+echo '[9/9] Link Engagement, capture ownership delta and persist resumable C2 state'
+engagement_link_payload=$(jq -cn --arg command_id "$engagement_link_command" --arg engagement "$engagement_id" \
+  '{command_id:$command_id,expected_revision:6,operation:"link",target_service:"business-engagement",resource_type:"business-engagement",resource_id:$engagement,source_revision:5,relation_key:"business-engagement",note:"C2 ready engagement"}')
+json_request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$admin_csrf" "$engagement_link_payload" \
+  "$workspace/project-engagement-link.json" 200 'POST Project Engagement link'
+project_revision=$(jq -er .project.revision "$workspace/project-engagement-link.json")
+jq -e '.project.revision == 7' "$workspace/project-engagement-link.json" >/dev/null
+
+json_request GET "$base_url/project/api/v1/projects/$project_id/materials" "$admin_cookies" "$admin_csrf" '' \
+  "$workspace/project-indirect-materials.json" 200 'GET Project indirect Business Engagement materials'
+jq -e --arg project "$project_id" --arg engagement "$engagement_id" --arg bid "$bid_file_id" --arg award "$award_file_id" '
+  .project_id == $project and .project_revision == 7 and .state == "available" and (.segments | length) == 2 and
+  all(.segments[];
+    .source_application == "business-engagement" and .resource_type == "business-engagement" and
+    .resource_id == $engagement and .source_revision == 5 and .linked_revision == 5 and
+    .source_status == "ready" and (.source_digest | length) == 64 and .state == "available" and
+    .evidence_source_revision == 1 and .evidence_linked_revision == 1 and .evidence_version == 1 and
+    (.evidence_digest | length) == 64 and .size_bytes > 0 and (.media_type | startswith("text/plain"))) and
+  ([.segments[].evidence_file_id] | sort) == ([$bid,$award] | sort) and
+  ([.. | objects | keys[]] | index("object_key") | not) and
+  ([.. | objects | keys[]] | index("bucket") | not)
+' "$workspace/project-indirect-materials.json" >/dev/null || {
+  echo 'Project did not compose the exact Business Engagement and Evidence projections' >&2; exit 1;
+}
+engagement_workload_audits=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='business-engagement' AND details->'actions' @> '[\"business-engagement.material-reference.read\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"business-engagement\",\"id\":\"$engagement_id\"}]'::jsonb;")
+[ "$engagement_workload_audits" -ge 1 ] || { echo 'exact Project workload Business Engagement credential audit is missing' >&2; exit 1; }
+for evidence_file_id in "$bid_file_id" "$award_file_id"; do
+  evidence_workload_audits=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='evidence-service' AND details->'actions' @> '[\"evidence-service.metadata.read\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"file\",\"id\":\"$evidence_file_id\"}]'::jsonb;")
+  [ "$evidence_workload_audits" -ge 1 ] || { echo "exact Project workload Evidence credential audit is missing for $evidence_file_id" >&2; exit 1; }
+done
+
+capture_counts "$workspace/ownership-after.json"
+jq -n --slurpfile before "$workspace/ownership-before.json" --slurpfile after "$workspace/ownership-after.json" '
+  $after[0] as $a | $before[0] as $b |
+  reduce ($a | keys[]) as $app ({};
+    .[$app] = reduce ($a[$app] | keys[]) as $key ({}; .[$key] = ($a[$app][$key] - $b[$app][$key])))
+' >"$workspace/ownership-delta.json"
+jq -e '
+  .party_directory.parties == 1 and .party_directory.revisions == 1 and
+  .evidence_service.files == 2 and .evidence_service.versions == 2 and
+  .business_engagement.engagements == 1 and .business_engagement.materials == 2 and .business_engagement.history_events == 5 and
+  .contract_ledger.contracts == 1 and .contract_ledger.local_parties == 2 and .contract_ledger.revisions == 1 and
+  .contract_ledger.settlements == 1 and .contract_ledger.settlement_parties == 2 and
+  .contract_ledger.party_mappings == 2 and .contract_ledger.runtime_transitions == 1 and
+  .project_workspace.projects == 0 and .project_workspace.resource_links == 2
+' "$workspace/ownership-delta.json" >/dev/null || { echo 'C2 ownership delta is unexpected' >&2; cat "$workspace/ownership-delta.json" >&2; exit 1; }
+
+running=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l | tr -d ' ')
+healthy=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.Status}}' | awk '/healthy/{count++} END{print count+0}')
+[ "$running" = 17 ] && [ "$healthy" = 17 ] || { echo "isolated stack ended $running/$healthy, expected 17/17" >&2; exit 1; }
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n \
+  --arg schema_version 1 --arg scenario_id reference-oa-full-suite-continuous-v1 --arg captured_at "$captured_at" \
+  --arg tenant_id "$tenant_id" --arg c1_sha256 "$c1_sha" --arg project_id "$project_id" --argjson project_revision "$project_revision" \
+  --arg client_party_id "$client_party_id" --argjson client_party_revision "$client_party_revision" \
+  --arg supplier_party_id "$supplier_party_id" --argjson supplier_party_revision "$supplier_party_revision" \
+  --arg bid_file_id "$bid_file_id" --arg award_file_id "$award_file_id" \
+  --arg engagement_id "$engagement_id" --arg contract_id "$contract_id" --argjson contract_revision "$contract_revision" \
+  --arg settlement_id "$settlement_id" --slurpfile ownership_delta "$workspace/ownership-delta.json" \
+  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:"C2",result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,c1_state_sha256:$c1_sha256,project:{id:$project_id,revision:$project_revision,status:"active"},parties:{client:{id:$client_party_id,revision:$client_party_revision},supplier:{id:$supplier_party_id,revision:$supplier_party_revision}},evidence:[{purpose:"bid_document",file_id:$bid_file_id,version:1,source_revision:1},{purpose:"award_document",file_id:$award_file_id,version:1,source_revision:1}],business_engagement:{id:$engagement_id,revision:5,status:"ready",project_source_revision:6},contract:{id:$contract_id,revision:$contract_revision,status:"active",party_runtime_mode:"directory"},settlement:{id:$settlement_id,revision:1,amount:"50000.000000",currency:"CNY"},checks:{same_tenant_and_project:"pass",stale_engagement_revision_zero_write:"pass",evidence_outage_zero_write:"pass",same_command_recovery_single_commit:"pass",contract_party_exact_mapping:"pass",contract_did_not_receive_business_engagement_write:"pass",indirect_materials_runtime_chain:"pass",exact_workload_credentials:"pass",ownership_delta_exact:"pass",isolated_stack_health:"17/17"},ownership_delta:$ownership_delta[0]}' \
+  >"$workspace/state-after-c2.json"
+
+cat >"$workspace/c2-summary.md" <<EOF
+# C2 continuous journey result
+
+- Result: pass
+- Tenant: \`$tenant_id\`
+- Project: \`$project_id\` revision $project_revision
+- Business Engagement: \`$engagement_id\` revision 5, ready
+- Contract: \`$contract_id\` revision $contract_revision, active
+- Settlement: \`$settlement_id\` revision 1
+- Evidence failure: zero write; identical command recovered once and replayed without a duplicate
+- Indirect materials: Project used exact IAM workload credentials to compose BE@5 and both Evidence@1 metadata projections
+- Contract Party authority: directory; both referenced local snapshots explicitly mapped
+- Isolated stack health: 17/17
+EOF
+
+mkdir -p "$evidence_dir"
+cp "$workspace/state-after-c2.json" "$evidence_dir/state-after-c2.json"
+cp "$workspace/http-evidence.tsv" "$evidence_dir/http-evidence.tsv"
+cp "$workspace/ownership-before.json" "$evidence_dir/ownership-before.json"
+cp "$workspace/ownership-after.json" "$evidence_dir/ownership-after.json"
+cp "$workspace/ownership-delta.json" "$evidence_dir/ownership-delta.json"
+cp "$workspace/c2-summary.md" "$evidence_dir/c2-summary.md"
+
+echo "PASS C2: tenant=$tenant_id project=$project_id@$project_revision engagement=$engagement_id@5 contract=$contract_id@$contract_revision settlement=$settlement_id"

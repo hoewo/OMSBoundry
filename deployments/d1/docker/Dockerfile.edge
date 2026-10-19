@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.7
+ARG GO_IMAGE=golang:1.26.0-alpine
+ARG RUNTIME_IMAGE=alpine:3.22
+FROM ${GO_IMAGE} AS build
+ARG APP_PATH
+ARG TARGETOS
+ARG TARGETARCH
+ARG BUILD_GOMAXPROCS=2
+WORKDIR /src
+COPY ${APP_PATH}/ ./${APP_PATH}/
+WORKDIR /src/${APP_PATH}
+RUN --mount=type=cache,id=oms-go-build,target=/root/.cache/go-build,sharing=locked \
+    GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -p 1 -trimpath -ldflags='-s -w' -o /out/server ./cmd/server
+
+FROM ${RUNTIME_IMAGE}
+RUN apk add --no-cache ca-certificates tzdata && addgroup -S oms && adduser -S -G oms oms
+COPY --from=build /out/server /app/server
+USER oms
+ENTRYPOINT ["/app/server"]

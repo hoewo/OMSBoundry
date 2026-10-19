@@ -1,0 +1,297 @@
+{
+  "schema_version": "1",
+  "identities": [
+    {
+      "id": "project-workspace",
+      "subject_id": "44444444-4444-4444-8444-444444444444",
+      "display_name": "Project Workspace",
+      "public_keys_path": "/workload-public/project-workspace.json",
+      "permissions": [
+        {
+          "audience": "people-groups",
+          "action": "people-groups.view",
+          "resource_types": ["person", "group"]
+        },
+        {
+          "audience": "party-directory",
+          "action": "party-directory.reference.read",
+          "resource_types": ["party"]
+        },
+        {
+          "audience": "contract-ledger",
+          "action": "contract-ledger.reference.read",
+          "resource_types": ["contract", "settlement"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.reference.read",
+          "resource_types": ["obligation", "transaction"]
+        },
+        {
+          "audience": "billing-invoice",
+          "action": "billing-invoice.reference.read",
+          "resource_types": ["invoice_registration"]
+        },
+        {
+          "audience": "approval-audit-results",
+          "action": "approval-audit-result.read",
+          "resource_types": ["project", "approval_audit_result"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        },
+        {
+          "audience": "business-engagement",
+          "action": "business-engagement.material-reference.read",
+          "resource_types": ["business-engagement"]
+        },
+        {
+          "audience": "production-operations",
+          "action": "production-work-item.reference.read",
+          "resource_types": ["production-work-item"]
+        },
+        {
+          "audience": "cost-outsourcing",
+          "action": "cost-entry.read",
+          "resource_types": ["cost_entry"]
+        },
+        {
+          "audience": "cost-outsourcing",
+          "action": "outsourcing-engagement.read",
+          "resource_types": ["outsourcing_engagement"]
+        }
+      ]
+    },
+    {
+      "id": "business-engagement",
+      "subject_id": "55555555-5555-4555-8555-555555555555",
+      "display_name": "Business Engagement",
+      "public_keys_path": "/workload-public/business-engagement.json",
+      "permissions": [
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.view",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "contract-ledger",
+      "subject_id": "66666666-6666-4666-8666-666666666666",
+      "display_name": "Contract Ledger",
+      "public_keys_path": "/workload-public/contract-ledger.json",
+      "permissions": [
+        {
+          "audience": "party-directory",
+          "action": "party-directory.reference.read",
+          "resource_types": ["party"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "money-flow-ledger",
+      "subject_id": "77777777-7777-4777-8777-777777777778",
+      "display_name": "Money Flow Ledger",
+      "public_keys_path": "/workload-public/money-flow-ledger.json",
+      "permissions": [
+        {
+          "audience": "party-directory",
+          "action": "party-directory.reference.read",
+          "resource_types": ["party"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "billing-invoice",
+      "subject_id": "88888888-8888-4888-8888-888888888888",
+      "display_name": "Billing Invoice",
+      "public_keys_path": "/workload-public/billing-invoice.json",
+      "permissions": [
+        {
+          "audience": "party-directory",
+          "action": "party-directory.reference.read",
+          "resource_types": ["party"]
+        },
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "contract-ledger",
+          "action": "contract-ledger.reference.read",
+          "resource_types": ["contract", "settlement"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.reference.read",
+          "resource_types": ["obligation"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "production-operations",
+      "subject_id": "99999999-9999-4999-8999-999999999999",
+      "display_name": "Production Operations",
+      "public_keys_path": "/workload-public/production-operations.json",
+      "permissions": [
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "people-groups",
+          "action": "people-groups.policy-fact.read",
+          "resource_types": ["person"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.view",
+          "resource_types": ["file"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "approval-audit-results",
+      "subject_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "display_name": "Approval & Audit Results",
+      "public_keys_path": "/workload-public/approval-audit-results.json",
+      "permissions": [
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "contract-ledger",
+          "action": "contract-ledger.reference.read",
+          "resource_types": ["contract", "settlement"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.view",
+          "resource_types": ["file"]
+        }
+      ]
+    },
+    {
+      "id": "cost-outsourcing",
+      "subject_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "display_name": "Cost & Outsourcing",
+      "public_keys_path": "/workload-public/cost-outsourcing.json",
+      "permissions": [
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "party-directory",
+          "action": "party-directory.reference.read",
+          "resource_types": ["party"]
+        },
+        {
+          "audience": "contract-ledger",
+          "action": "contract-ledger.reference.read",
+          "resource_types": ["contract"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.view",
+          "resource_types": ["file"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.submit",
+          "resource_types": ["payable_suggestion"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.read",
+          "resource_types": ["payable_suggestion"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.withdraw",
+          "resource_types": ["payable_suggestion"]
+        }
+      ]
+    },
+    {
+      "id": "bonus-distribution",
+      "subject_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "display_name": "Bonus Distribution",
+      "public_keys_path": "/workload-public/bonus-distribution.json",
+      "permissions": [
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "project-workspace",
+          "action": "project-workspace.reference-oa-personnel.read",
+          "resource_types": ["project"]
+        },
+        {
+          "audience": "people-groups",
+          "action": "people-groups.person.reference.read",
+          "resource_types": ["person"]
+        },
+        {
+          "audience": "contract-ledger",
+          "action": "contract-ledger.reference.read",
+          "resource_types": ["settlement"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.receipt-set.reference.read",
+          "resource_types": ["receipt_set"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.submit",
+          "resource_types": ["payable_suggestion"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.read",
+          "resource_types": ["payable_suggestion"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payable-suggestion.withdraw",
+          "resource_types": ["payable_suggestion"]
+        }
+      ]
+    }
+  ]
+}

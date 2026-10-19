@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 1,
+  "iam_provider": "real_verifier_test_issuer",
+  "original_components_verified": false,
+  "tests": [
+    {
+      "test": "TestProtectedHTTPWithNativeIAMPostgresAndTypedResolver",
+      "exit_code": 0,
+      "started": true,
+      "passed": true,
+      "skipped": false,
+      "binary_sha256": "98518438daa27be65b62db88673b29b91aa5bd5f29b33c8eb23622dd959c8b9b"
+    }
+  ],
+  "own_database": "oa_invoice_candidate_20261004a",
+  "test_schemas_cleaned": true,
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

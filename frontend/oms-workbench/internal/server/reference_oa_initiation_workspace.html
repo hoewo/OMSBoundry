@@ -1,0 +1,81 @@
+{{define "referenceOAInitiationWorkspace"}}
+<template data-page-template="initiation-reference">
+  <div class="management-section-tabs management-section-tabs--compact">
+    <div class="management-section-tabs__copy"><span class="management-section-tabs__eyebrow">当前工作区</span><div class="management-section-tabs__heading"><span class="management-section-tabs__icon">⚑</span><div class="management-section-tabs__heading-copy"><h2>项目立项</h2><p>在当前授权范围内创建和查看待立项项目</p></div></div></div>
+    <div class="management-section-tabs__extra"><button class="ant-btn ant-btn-primary" type="button" data-initiation-create-open>＋ 新建待立项项目</button></div>
+  </div>
+
+<section class="ant-card project-list-page__card initiation-workspace" data-initiation-workspace data-production-stage-profile="{{.ProductionStageProfile}}" data-production-personnel-profile="{{.ProductionPersonnelProfile}}" data-bonus-profile="{{.BonusProfile}}" data-tenant-id="{{.TenantID}}" data-subject-id="{{.SubjectID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" {{range .Applications}}{{if eq .ID "project-workspace"}}data-project-route-prefix="{{.RoutePrefix}}" data-project-application="{{.ID}}" data-project-csrf-token="{{$.CSRFToken}}"{{end}}{{if eq .ID "people-groups"}}data-people-route-prefix="{{.RoutePrefix}}" data-people-application="{{.ID}}"{{end}}{{end}}>
+    <div class="ant-card-head"><div class="project-list-page__card-title"><span>待立项项目</span><small>{{if .DemoPreview}}此处是界面验证数据。{{else}}先派发名称与经营负责人，再补齐编号及项目类型完成立项；生产负责人可后补。{{end}}</small></div></div>
+    <div class="ant-card-body">
+      <div class="initiation-runtime-status" data-initiation-runtime-status role="status">
+        {{if .DemoPreview}}当前是界面演示数据，不会写入 Project Workspace。{{else}}进入本页后将通过 Gateway 与 IAM 读取 Project Workspace 的真实待立项数据。{{end}}
+      </div>
+      <div class="project-list-page__toolbar initiation-workspace__toolbar">
+        <div class="project-list-page__toolbar-copy"><strong data-initiation-scope-title>{{if .DemoPreview}}关于我的{{else}}当前权限可见{{end}}</strong><span data-initiation-scope-copy>{{if .DemoPreview}}只展示需要当前账号处理的待立项项目{{else}}由 Project Workspace 按当前 IAM 能力返回{{end}}</span></div>
+        <div class="project-list-page__toolbar-controls">
+          {{if .DemoPreview}}<label class="reference-select"><span class="sr-only">待立项项目范围</span><select data-initiation-scope><option value="mine">关于我的</option><option value="all">全部项目</option></select></label>{{else}}<span class="ant-tag">当前 IAM 范围</span>{{end}}
+          <label class="reference-input project-list-page__search"><span>⌕</span><input type="search" autocomplete="off" placeholder="搜索项目名称或项目编号" data-initiation-search></label>
+        </div>
+      </div>
+
+      <div class="project-list-page__results initiation-workspace__results">
+        <div class="project-list-page__empty" hidden data-initiation-empty><div class="reference-empty"><span>⚑</span><strong>暂无待立项项目</strong><small>{{if .DemoPreview}}请调整查询范围或搜索关键词。{{else}}当前权限范围内无待立项记录；可新建项目或调整搜索关键词。{{end}}</small></div></div>
+        <div class="project-list-page__list" data-initiation-list>
+          {{if .DemoPreview}}
+          <article class="project-list-page__item project-list-page__item--with-actions" data-initiation-item data-related="true" data-search-text="S207省道改扩建工程 DRAFT-S207 王可 项目" data-project-name="S207省道改扩建工程" data-project-number="待完善" data-node-type="project" data-business-manager="王可" data-created="2026-09-28">
+            <button class="project-list-page__item-primary" type="button" data-initiation-complete-open><div class="project-list-page__item-head"><div class="project-list-page__identity"><h3 class="project-list-page__name">S207省道改扩建工程</h3><div class="project-list-page__meta-inline"><span class="ant-tag initiation-tag">⚑ 待立项</span><span class="ant-tag">项目</span><span class="project-list-page__meta-separator"></span><span>项目编号：待完善</span><span class="project-list-page__meta-separator"></span><span>经营负责人：王可</span><span class="project-list-page__meta-separator"></span><span>创建时间：2026-09-28</span></div></div></div></button>
+            <div class="project-list-page__item-actions"><button class="ant-btn ant-btn-text project-list-page__delete" type="button" aria-label="删除待立项项目：S207省道改扩建工程" data-initiation-delete>删除</button><button class="ant-btn ant-btn-text project-list-page__entry" type="button" data-initiation-complete-open><span class="project-list-page__entry-label">完成立项</span><span>›</span></button></div>
+          </article>
+          <article class="project-list-page__item project-list-page__item--with-actions project-list-page__item--package" data-initiation-item data-related="true" data-search-text="北环快速路工程项目包 PACKAGE-BH 李晨 项目包" data-project-name="北环快速路工程项目包" data-project-number="" data-node-type="package" data-business-manager="李晨" data-created="2026-09-27">
+            <button class="project-list-page__item-primary" type="button" data-initiation-complete-open><div class="project-list-page__item-head"><div class="project-list-page__identity"><h3 class="project-list-page__name">北环快速路工程项目包</h3><div class="project-list-page__meta-inline"><span class="ant-tag initiation-tag">⚑ 待立项</span><span class="ant-tag initiation-package-tag">项目包</span><span class="project-list-page__meta-separator"></span><span>项目编号：未编号（选填）</span><span class="project-list-page__meta-separator"></span><span>经营负责人：李晨</span><span class="project-list-page__meta-separator"></span><span>创建时间：2026-09-27</span></div></div></div></button>
+            <div class="project-list-page__item-actions"><button class="ant-btn ant-btn-text project-list-page__delete" type="button" aria-label="删除待立项项目：北环快速路工程项目包" data-initiation-delete>删除</button><button class="ant-btn ant-btn-text project-list-page__entry" type="button" data-initiation-complete-open><span class="project-list-page__entry-label">完成立项</span><span>›</span></button></div>
+          </article>
+          <article class="project-list-page__item project-list-page__item--with-actions" data-initiation-item data-related="false" data-search-text="南城片区综合管廊设计 NC-2026-009 赵倩 项目" data-project-name="南城片区综合管廊设计" data-project-number="NC-2026-009" data-node-type="project" data-business-manager="赵倩" data-created="2026-09-24">
+            <button class="project-list-page__item-primary" type="button" data-initiation-complete-open><div class="project-list-page__item-head"><div class="project-list-page__identity"><h3 class="project-list-page__name">南城片区综合管廊设计</h3><div class="project-list-page__meta-inline"><span class="ant-tag initiation-tag">⚑ 待立项</span><span class="ant-tag">项目</span><span class="project-list-page__meta-separator"></span><span>项目编号：NC-2026-009</span><span class="project-list-page__meta-separator"></span><span>经营负责人：赵倩</span><span class="project-list-page__meta-separator"></span><span>创建时间：2026-09-24</span></div></div></div></button>
+            <div class="project-list-page__item-actions"><button class="ant-btn ant-btn-text project-list-page__delete" type="button" aria-label="删除待立项项目：南城片区综合管廊设计" data-initiation-delete>删除</button><button class="ant-btn ant-btn-text project-list-page__entry" type="button" data-initiation-complete-open><span class="project-list-page__entry-label">完成立项</span><span>›</span></button></div>
+          </article>
+          {{end}}
+        </div>
+      </div>
+      <div class="project-list-page__pagination initiation-workspace__pagination"><span data-initiation-page-summary>第 1-2 条 / 共 2 条</span><div><button class="ant-btn" type="button" data-initiation-page-prev disabled>‹</button><span data-initiation-page-current>1 / 1</span><button class="ant-btn" type="button" data-initiation-page-next disabled>›</button></div></div>
+    </div>
+  </section>
+
+  <div class="reference-drawer-mask initiation-drawer-mask" data-initiation-drawer="create"><aside class="reference-drawer management-theme-drawer initiation-drawer initiation-drawer--create" role="dialog" aria-modal="true" aria-labelledby="initiation-create-title">
+    <header class="reference-drawer__head ant-drawer-header"><strong class="ant-drawer-title" id="initiation-create-title" data-initiation-create-title>派发项目立项</strong><button class="reference-drawer__close" type="button" aria-label="关闭" data-initiation-drawer-close>×</button></header>
+    <div class="reference-drawer__body ant-drawer-body">
+      <div class="management-theme-drawer__intro" data-initiation-create-intro><span data-initiation-create-kicker>普通项目立项</span><p data-initiation-create-copy>当前按普通项目流程立项，完成立项前必须填写正式项目编号。</p></div>
+      <div class="reference-form">
+        <fieldset class="reference-form__field"><legend>立项类型</legend><div class="project-list-page__node-type-picker" role="group" aria-label="立项类型"><button class="ant-radio-button-wrapper ant-radio-button-wrapper-checked" type="button" aria-pressed="true" data-initiation-node-type="project"><span class="project-list-page__node-type-icon">▧</span><span class="project-list-page__node-type-copy"><strong>普通项目</strong><small>独立编号、独立经营与生产</small></span></button><button class="ant-radio-button-wrapper" type="button" aria-pressed="false" data-initiation-node-type="package"><span class="project-list-page__node-type-icon">▣</span><span class="project-list-page__node-type-copy"><strong>项目包</strong><small>包含多个子项目，共享经营信息</small></span></button></div></fieldset>
+        <div class="project-list-page__type-hint" data-initiation-type-hint>普通项目按现有流程立项，完成立项前必须填写正式项目编号。</div>
+        <label class="reference-form__field"><span>项目名称 <b>*</b></span><textarea rows="2" placeholder="请输入项目名称" data-initiation-create-name></textarea><small hidden data-initiation-create-name-error>请输入项目名称</small></label>
+        <label class="reference-form__field"><span>项目经营负责人 <b>*</b></span><select data-initiation-business-owner><option value="">请选择项目经营负责人</option></select><small data-initiation-people-status role="status">从人员目录加载可用负责人</small><button class="ant-btn" type="button" data-initiation-people-reload>重新加载人员</button></label>
+        <div class="initiation-validation-note" hidden data-initiation-create-note><strong data-initiation-create-note-title>正在提交</strong><span data-initiation-create-note-copy>请求将经过 Gateway、IAM，并由 Project Workspace 写入自己的数据库。</span></div>
+        <div class="project-form__actions"><button class="ant-btn" type="button" data-initiation-drawer-close>取消</button><button class="ant-btn ant-btn-primary" type="button" data-initiation-create-validate>创建待立项项目</button></div>
+      </div>
+    </div>
+  </aside></div>
+
+  <div class="reference-drawer-mask initiation-drawer-mask" data-initiation-drawer="complete"><aside class="reference-drawer management-theme-drawer initiation-drawer initiation-drawer--complete" role="dialog" aria-modal="true" aria-labelledby="initiation-complete-title">
+    <header class="reference-drawer__head ant-drawer-header"><strong class="ant-drawer-title" id="initiation-complete-title" data-initiation-complete-title>完成项目立项</strong><button class="reference-drawer__close" type="button" aria-label="关闭" data-initiation-drawer-close>×</button></header>
+    <div class="reference-drawer__body ant-drawer-body">
+      <div class="management-theme-drawer__intro"><span>立项信息</span><p data-initiation-complete-intro>补齐基本信息后完成立项；普通项目必须填写正式项目编号。</p></div>
+      <div class="reference-form">
+        <label class="reference-form__field"><span>项目名称 <b>*</b></span><textarea rows="2" data-initiation-complete-name></textarea></label>
+        <label class="reference-form__field"><span data-initiation-number-label>项目编号</span><input type="text" placeholder="请输入项目编号" data-initiation-complete-number><small hidden data-initiation-number-error>项目编号只能包含字母、数字、下划线和连字符</small></label>
+        <div class="project-workspace__grid initiation-form-grid"><label class="reference-form__field project-workspace__grid-item--6"><span>承接日期</span><input type="date" data-initiation-start-date></label><label class="reference-form__field project-workspace__grid-item--6"><span>管理费率（%）</span><div class="reference-input-suffix"><input type="number" min="0" disabled placeholder="字段及保存接口待接通"><span>%</span></div></label><label class="reference-form__field project-workspace__grid-item--6"><span>甲方名称</span><input type="text" disabled placeholder="主体引用保存接口待接通"></label><label class="reference-form__field project-workspace__grid-item--6"><span>资质单位</span><input type="text" disabled placeholder="字段及主体引用接口待接通"></label></div>
+        <label class="reference-form__field"><span>项目概况</span><textarea rows="4" maxlength="2000" placeholder="补充项目范围、建设内容与当前进展" data-initiation-complete-summary></textarea></label>
+        <fieldset class="reference-form__field"><legend>项目类型 <b>*</b></legend><div class="reference-check-group"><label><input type="checkbox" value="design" data-initiation-complete-type> 设计</label><label><input type="checkbox" value="consultation" data-initiation-complete-type> 咨询</label><label><input type="checkbox" value="survey" data-initiation-complete-type> 勘察</label><label><input type="checkbox" value="mapping" data-initiation-complete-type> 测绘</label></div></fieldset>
+        <label class="reference-form__field" hidden data-initiation-business-recovery-field><span>补齐项目经营负责人 <b>*</b></span><select data-initiation-recovery-business-owner><option value="">请选择项目经营负责人</option></select><small>仅当旧待立项项目缺少经营负责人时显示；由有权限的账号明确选择。</small></label>
+        <label class="reference-form__field"><span>项目生产负责人（可后补）</span><select data-initiation-production-owner><option value="">暂不设置</option></select><small>可在完成立项后补充；没有分工权限时保持只读。</small></label>
+        <div class="initiation-validation-note" hidden data-initiation-complete-note role="status"><strong data-initiation-complete-note-title>正在提交</strong><span data-initiation-complete-note-copy></span></div>
+        <div class="project-form__actions"><button class="ant-btn" type="button" data-initiation-drawer-close>取消</button><button class="ant-btn" type="button" data-initiation-complete-reload>重新加载资料</button><button class="ant-btn ant-btn-primary" type="button" data-initiation-complete-validate>完成立项并进入详情</button></div>
+      </div>
+    </div>
+  </aside></div>
+
+  <div class="reference-modal-mask" hidden data-initiation-delete-dialog><section class="reference-modal" role="dialog" aria-modal="true" aria-labelledby="initiation-delete-title"><header><h3 id="initiation-delete-title">确认删除待立项项目</h3><button type="button" aria-label="关闭" data-initiation-delete-close>×</button></header><div class="initiation-delete-dialog__body"><p>删除后，该条待立项任务将从列表中移除。</p><dl><div><dt>项目</dt><dd data-initiation-delete-name>—</dd></div><div><dt>项目编号</dt><dd data-initiation-delete-number>—</dd></div></dl><div class="initiation-delete-dialog__warning">此操作不可恢复。验证页面不会实际删除 Project Workspace 的业务事实。</div><div class="initiation-delete-dialog__actions"><button class="ant-btn" type="button" data-initiation-delete-close>取消</button><button class="ant-btn ant-btn-danger" type="button" data-initiation-delete-confirm>确认验证</button></div></div></section></div>
+  <div class="initiation-toast" hidden data-initiation-toast role="status">删除确认交互已验证；未写入真实业务数据。</div>
+</template>
+{{end}}

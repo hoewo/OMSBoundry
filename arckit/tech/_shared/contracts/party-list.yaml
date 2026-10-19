@@ -1,0 +1,30 @@
+# 查询 Party 列表 API 契约
+metadata: {path: "tech/_shared/contracts/party-list.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/parties", summary: "查询租户内当前主体档案", auth_required: true, audience: "party-directory", capability: "party-directory.read"}
+request:
+  query_params:
+    - {name: query, type: string, maxLength: 200, required: false}
+    - {name: kind, type: string, enum: [organization, individual], required: false}
+    - {name: status, type: string, enum: [active, inactive, all], default: active}
+    - {name: limit, type: integer, minimum: 1, maximum: 100, default: 50}
+    - {name: cursor, type: string, required: false, description: "绑定全部筛选条件的不可篡改 keyset 游标。"}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items, allowed_actions]
+      properties:
+        items: {type: array, items: {$ref: "../models/Party.yaml"}}
+        next_cursor: {type: [string, "null"]}
+        allowed_actions:
+          type: array
+          uniqueItems: true
+          items: {type: string, enum: [party-directory.read, party-directory.create]}
+  errors:
+    - {status: 400, code: INVALID_CURSOR, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+business_logic:
+  flow: ["Tenant 是第一过滤条件。", "query 匹配标准化名称或登记标识。", "按标准化名称、显示名称、Party ID 稳定排序。", "allowed_actions 只反映已验证凭证下的列表级读／创建动作，不替代写端点最终授权。"]

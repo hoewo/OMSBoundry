@@ -1,0 +1,7 @@
+# 生产环境将 server 块的监听与证书配置替换为以下形式；证书文件由运维挂载，不能进入仓库。
+listen 443 ssl http2;
+ssl_certificate /etc/nginx/tls/fullchain.pem;
+ssl_certificate_key /etc/nginx/tls/privkey.pem;
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_session_cache shared:TLS:10m;
+ssl_session_timeout 1d;

@@ -1,0 +1,27 @@
+# Billing / Invoice 权限收敛 revision 视图
+metadata:
+  path: "tech/_shared/models/InvoiceRegistrationRevisionView.yaml"
+  domain: "billing-invoice"
+  entity_name: "InvoiceRegistrationRevisionView"
+  storage: "none"
+  owner: "Billing / Invoice"
+  version: "1.0"
+  created: "2026-09-27"
+  updated: "2026-09-27"
+
+type: object
+additionalProperties: false
+description: "不可变 revision 的权限收敛 API 视图；数据库中的完整快照不因调用者权限而改变。"
+required: [invoice_registration_id, tenant_id, revision, event_kind, command_id, snapshot, reason, actor_ref, occurred_at]
+properties:
+  invoice_registration_id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  event_kind: {type: string, enum: [recorded, details_corrected, evidence_changed, registration_invalidated], readOnly: true}
+  command_id: {type: string, format: uuid, readOnly: true}
+  snapshot: {$ref: "InvoiceRegistrationView.yaml"}
+  reason: {type: string, minLength: 1, maxLength: 1000, readOnly: true}
+  actor_ref: {type: string, minLength: 1, maxLength: 256, readOnly: true}
+  occurred_at: {type: string, format: date-time, readOnly: true}
+
+visibility_invariant: "Every snapshot in one history response uses the same server-computed amount visibility; historical amounts never leak through an older revision."

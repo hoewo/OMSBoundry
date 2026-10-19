@@ -1,0 +1,36 @@
+{
+  "business_facts_unchanged": true,
+  "business_writes": 0,
+  "frontend_node_tests": {
+    "failed": 0,
+    "passed": 166
+  },
+  "go_test": "passed",
+  "go_vet": "passed",
+  "grants_unchanged": true,
+  "healthy_containers": 17,
+  "http_403": 0,
+  "http_429": 0,
+  "http_5xx": 0,
+  "image": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:be69a0a853608042f29e728876830f852917220c2aed07fb7b0c42297bd604e1",
+  "page_errors": 0,
+  "passed": true,
+  "runtime_node_tests": {
+    "failed": 0,
+    "passed": 28
+  },
+  "tabs": [
+    "总览",
+    "人员配置",
+    "批复审计",
+    "方案阶段",
+    "初步设计",
+    "施工图设计",
+    "变更竣工",
+    "生产成本管理",
+    "对外委托",
+    "奖金分配"
+  ],
+  "typescript": "passed",
+  "vite_build": "passed"
+}

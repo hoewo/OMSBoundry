@@ -1,0 +1,29 @@
+# 登记或移除 Business Engagement 材料 API 契约
+metadata: {path: "tech/_shared/contracts/business-engagement-material.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.1", created: "2026-09-27", updated: "2026-10-02", status: "additive candidate, not deployed"}
+endpoint: {method: POST, path: "/api/v1/business-engagements/{engagement_id}/materials", summary: "登记、替换或移除 Evidence File Version 引用", auth_required: true, audience: "business-engagement", capability: "business-engagement.evidence.manage"}
+request:
+  path_params: [{name: engagement_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, operation, requirement_key]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      operation: {type: string, enum: [put, remove, append, remove_one]}
+      requirement_key: {type: string, enum: [tender_document, bid_document, award_document]}
+      evidence_file_id: {type: string, format: uuid, note: "put/append 时必填，remove/remove_one 时必须省略或空字符串"}
+      evidence_version: {type: integer, minimum: 1, note: "put/append 时必填；移除时省略或 0"}
+      evidence_source_revision: {type: integer, minimum: 1, note: "put/append 时必填；移除时省略或 0"}
+      material_reference_id: {type: string, format: uuid, note: "仅 remove_one 必填，必须定位本 Engagement 同 kind 的当前引用；其他操作省略"}
+responses:
+  success: {status: 200, schema: {$ref: "../models/BusinessEngagementDetails.yaml"}}
+  errors: [{status: 409, code: REVISION_CONFLICT, retryable: true}, {status: 409, code: ENGAGEMENT_STATE_CONFLICT, retryable: false}, {status: 422, code: REFERENCE_INVALID, retryable: false}, {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}]
+business_logic:
+  flow:
+    - "put/append 先验证同 tenant、version／revision 匹配的 Evidence Reference；重放在依赖查询之前。"
+    - "旧 put 取代整类所有当前引用，旧 remove 结束整类所有当前引用；hash 及旧回执不重写。"
+    - "append 保留其余引用，拒绝同 kind 的重复 File/Version；当前引用总数上限 100。"
+    - "remove_one 仅结束指定当前引用，保留其余成员；错误 kind／已结束／相邻记录／跨租户拒绝、零写入。"
+    - "结束引用追加 superseded revision 和历史，不物理删除 Evidence 文件或旧材料行。"
+    - "按有效材料重新计算 collecting_evidence 或 ready；同类至少一份满足，ready 不代表中标／签约。"

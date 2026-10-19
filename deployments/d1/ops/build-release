@@ -1,0 +1,181 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "usage: build-release VERSION IMAGE_MANIFEST [OUTPUT_DIRECTORY]" >&2
+  exit 2
+fi
+
+version=$1
+image_manifest=$2
+output=${3:-dist}
+if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+  echo "VERSION must look like v1.2.3 or v1.2.3-rc.1" >&2
+  exit 2
+fi
+[ -f "$image_manifest" ] || { echo "image manifest does not exist: $image_manifest" >&2; exit 2; }
+image_manifest=$(CDPATH= cd -- "$(dirname -- "$image_manifest")" && pwd)/$(basename -- "$image_manifest")
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$d1_dir/../.." && pwd)
+provenance=$("$repo_dir/ops/resolve-release-provenance" "$repo_dir")
+commit=$(printf '%s\n' "$provenance" | sed -n '1p')
+built_at=$(printf '%s\n' "$provenance" | sed -n '2p')
+
+image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_CONTRACT_IMAGE D1_MONEY_IMAGE D1_PEOPLE_IMAGE D1_PARTY_IMAGE D1_PROJECT_IMAGE D1_EVIDENCE_IMAGE D1_BUSINESS_ENGAGEMENT_IMAGE D1_BILLING_IMAGE D1_PRODUCTION_IMAGE D1_APPROVAL_AUDIT_RESULTS_IMAGE D1_COST_OUTSOURCING_IMAGE D1_BONUS_DISTRIBUTION_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
+required_image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
+
+manifest_value() {
+  key=$1
+  count=$(grep -Ec "^${key}=" "$image_manifest" || true)
+  [ "$count" -le 1 ] || { echo "$key must appear at most once in $image_manifest" >&2; exit 2; }
+  [ "$count" -eq 1 ] || return 0
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$image_manifest")
+  [ -n "$value" ] || { echo "$key must not be empty in $image_manifest" >&2; exit 2; }
+  printf '%s\n' "$value"
+}
+
+image_is_required() {
+  key=$1
+  for required in $required_image_keys; do
+    [ "$key" != "$required" ] || return 0
+  done
+  return 1
+}
+
+validate_image_manifest() {
+  for key in $image_keys; do
+    reference=$(manifest_value "$key")
+    if [ -z "$reference" ]; then
+      image_is_required "$key" && { echo "$key must appear exactly once in $image_manifest" >&2; exit 2; }
+      continue
+    fi
+    case "$reference" in *@sha256:*) digest=${reference##*@sha256:} ;; *) echo "$key must use name@sha256:<digest>" >&2; exit 2 ;; esac
+    printf '%s\n' "$digest" | grep -Eq '^[a-f0-9]{64}$' || { echo "$key has an invalid SHA-256 digest" >&2; exit 2; }
+    case "$reference" in *[!A-Za-z0-9_./:@-]*) echo "$key contains unsupported characters" >&2; exit 2 ;; esac
+  done
+}
+
+digest_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "sha256sum or shasum is required" >&2
+    exit 1
+  fi
+}
+
+validate_image_manifest
+mkdir -p "$output"
+output=$(CDPATH= cd -- "$output" && pwd)
+bundle_name="omsbizfoundry-d1_${version}_linux_amd64"
+archive="$output/$bundle_name.tar.gz"
+checksum="$archive.sha256"
+if [ -e "$archive" ] || [ -e "$checksum" ]; then
+  echo "release output already exists: $archive" >&2
+  exit 1
+fi
+
+umask 077
+stage=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-d1-release.XXXXXX")
+temporary_archive="$output/.$bundle_name.tar.gz.tmp.$$"
+temporary_checksum="$output/.$bundle_name.tar.gz.sha256.tmp.$$"
+cleanup() {
+  rm -rf "$stage"
+  rm -f "$temporary_archive" "$temporary_checksum"
+}
+trap cleanup EXIT HUP INT TERM
+
+root="$stage/$bundle_name"
+mkdir -p \
+  "$root/deployments/d1/nginx" \
+  "$root/deployments/d1/ops" \
+  "$root/deployments/d1/systemd" \
+  "$root/deployments/d1/postgres" \
+  "$root/contracts/access/v1/examples" \
+  "$root/acceptance/d1-delivery" \
+  "$root/acceptance/d1-full-oa-journey" \
+  "$root/acceptance/d1-c8-money-metric" \
+  "$root/acceptance/d1-c8-production-work-items" \
+  "$root/docs/operations"
+
+for file in compose.yaml compose.pull.yaml compose.https.yaml compose.evidence-oss.yaml RELEASE.md; do
+  cp "$d1_dir/$file" "$root/deployments/d1/$file"
+done
+for file in nginx.conf nginx-https.conf nginx-tls.conf.example; do
+  cp "$d1_dir/nginx/$file" "$root/deployments/d1/nginx/$file"
+done
+cp "$d1_dir/postgres/01-create-app-databases.sh" "$root/deployments/d1/postgres/"
+for file in d1 grant-bootstrap-access render-nginx-config render-suite-manifest bootstrap-host bootstrap-remote-host evidence-imds-guard check-evidence-runtime-profile; do
+  cp "$d1_dir/ops/$file" "$root/deployments/d1/ops/$file"
+done
+for file in evidence-imds-guard.conf evidence-imds-guard.env.example; do
+  cp "$d1_dir/systemd/$file" "$root/deployments/d1/systemd/$file"
+done
+for file in contract-ledger-capabilities.json money-flow-ledger-capabilities.json people-groups-capabilities.json party-directory-capabilities.json project-workspace-capabilities.json evidence-service-capabilities.json business-engagement-capabilities.json billing-invoice-capabilities.json production-operations-capabilities.json approval-audit-results-capabilities.json cost-outsourcing-capabilities.json bonus-distribution-capabilities.json; do
+  cp "$repo_dir/contracts/access/v1/examples/$file" "$root/contracts/access/v1/examples/$file"
+done
+for file in project-assignment-policy.json business-engagement-project-assignment-policy.json production-operations-project-assignment-policy.json workload-identity-policy.json; do
+  cp "$repo_dir/contracts/access/v1/examples/$file" "$root/contracts/access/v1/examples/$file"
+done
+cp "$repo_dir/acceptance/d1-delivery/verify-running" "$root/acceptance/d1-delivery/verify-running"
+for file in README.md scenario-v1.json verify-scenario verify-c0 verify-c1 verify-c2 verify-c3 verify-c4 verify-c5 verify-c6 verify-c7 verify-c8 test-c8-native-entry.py; do
+  cp "$repo_dir/acceptance/d1-full-oa-journey/$file" "$root/acceptance/d1-full-oa-journey/$file"
+done
+cp "$repo_dir/acceptance/d1-c8-money-metric/verify-running" "$root/acceptance/d1-c8-money-metric/verify-running"
+cp "$repo_dir/acceptance/d1-c8-production-work-items/verify-running" "$root/acceptance/d1-c8-production-work-items/verify-running"
+cp "$repo_dir/docs/operations/d1-compact.md" "$root/docs/operations/d1-compact.md"
+cp "$repo_dir/docs/operations/d1-environment-promotion.md" "$root/docs/operations/d1-environment-promotion.md"
+cp "$repo_dir/docs/operations/d1-evidence-oss-profile.md" "$root/docs/operations/d1-evidence-oss-profile.md"
+
+{
+  printf 'SUITE_VERSION=%s\n' "$version"
+  printf '%s\n' 'D1_IMAGE_MODE=pull'
+  for key in $image_keys; do
+    reference=$(manifest_value "$key")
+    [ -z "$reference" ] || printf '%s=%s\n' "$key" "$reference"
+  done
+  awk '
+    /^SUITE_VERSION=/ {next}
+    /^D1_IMAGE_MODE=/ {next}
+    /^# D1_(POSTGRES|IDENTITY|CONTRACT|MONEY|PEOPLE|PARTY|PROJECT|EVIDENCE|BUSINESS_ENGAGEMENT|BILLING|PRODUCTION|APPROVAL_AUDIT_RESULTS|COST_OUTSOURCING|BONUS_DISTRIBUTION|WORKBENCH|GATEWAY|NGINX)_IMAGE=/ {next}
+    {print}
+  ' "$d1_dir/.env.example"
+} > "$root/deployments/d1/.env.example"
+
+printf 'version=%s\ncommit=%s\nbuilt_at=%s\ntarget=linux/amd64\n' "$version" "$commit" "$built_at" > "$root/RELEASE-METADATA"
+printf 'version=%s\nmode=pull\n' "$version" > "$root/deployments/d1/.release-bundle"
+
+chmod 0755 "$root/deployments/d1/ops/"* "$root/deployments/d1/postgres/01-create-app-databases.sh" \
+  "$root/acceptance/d1-delivery/verify-running" "$root/acceptance/d1-full-oa-journey/verify-scenario" \
+  "$root/acceptance/d1-full-oa-journey/verify-c0" "$root/acceptance/d1-full-oa-journey/verify-c1" \
+  "$root/acceptance/d1-full-oa-journey/verify-c2" "$root/acceptance/d1-full-oa-journey/verify-c3" \
+  "$root/acceptance/d1-full-oa-journey/verify-c4" "$root/acceptance/d1-full-oa-journey/verify-c5" \
+  "$root/acceptance/d1-full-oa-journey/verify-c6" "$root/acceptance/d1-full-oa-journey/verify-c7" \
+  "$root/acceptance/d1-full-oa-journey/verify-c8" \
+  "$root/acceptance/d1-c8-money-metric/verify-running" \
+  "$root/acceptance/d1-c8-production-work-items/verify-running"
+chmod 0644 "$root/contracts/access/v1/examples/"*-capabilities.json
+chmod 0644 "$root/contracts/access/v1/examples/"*-policy.json
+chmod 0600 "$root/deployments/d1/.env.example" "$root/RELEASE-METADATA" "$root/deployments/d1/.release-bundle"
+
+inner_manifest="$root/RELEASE-CHECKSUMS.sha256"
+find "$root" -type f ! -name RELEASE-CHECKSUMS.sha256 -print | sed "s|^$root/||" | LC_ALL=C sort | while IFS= read -r relative; do
+  printf '%s  %s\n' "$(digest_file "$root/$relative")" "$relative"
+done > "$inner_manifest"
+chmod 0600 "$inner_manifest"
+
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "$temporary_archive" -C "$stage" "$bundle_name"
+chmod 0600 "$temporary_archive"
+printf '%s  %s\n' "$(digest_file "$temporary_archive")" "$(basename "$archive")" > "$temporary_checksum"
+chmod 0600 "$temporary_checksum"
+ln "$temporary_archive" "$archive"
+if ! ln "$temporary_checksum" "$checksum"; then
+  rm -f "$archive"
+  exit 1
+fi
+rm -f "$temporary_archive" "$temporary_checksum"
+printf '%s\n%s\n' "$archive" "$checksum"

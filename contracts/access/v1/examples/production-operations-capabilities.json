@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "application_id": "production-operations",
+  "application_version": "0.2.0",
+  "audience": "production-operations",
+  "capability_namespace": "production-work-item",
+  "capabilities": [
+    { "id": "production-work-item.create", "description": "在凭证范围内建立指定不可变类型版本的生产工作项", "risk": "write", "resource_types": ["project"] },
+    { "id": "production-work-item.read", "description": "读取凭证范围内的生产工作项与当前阶段投影", "risk": "read", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.owner.manage", "description": "绑定经版本化 Project Assignment 验证的生产负责人", "risk": "privileged", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.deliverable.manage", "description": "登记或替换由 Evidence Service 拥有的阶段成果引用", "risk": "write", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.stage.manage", "description": "按不可变类型定义推进、跳过或重开生产阶段", "risk": "write", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.cancel", "description": "取消生产工作项并保留不可变历史", "risk": "privileged", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.history.read", "description": "读取生产工作项的不可变变更历史", "risk": "read", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.reference.read", "description": "供受信调用方读取精确生产工作项版本化引用", "risk": "privileged", "resource_types": ["production-work-item"] },
+    { "id": "production-work-item.work-items.read", "description": "按当前 IAM Subject 发布本人可执行的 WorkItemProjection v1", "risk": "read", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.stage-material.read", "description": "读取显式版本化生产阶段资料集合和评分", "risk": "read", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.stage-material.register", "description": "原子追加阶段主文件、校审单和精确评分；也允许把显式 v2 阶段集合升级到兼容 v3，同时需要资料读取能力", "risk": "write", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.stage-material.withdraw", "description": "追加阶段资料移出历史而不删除 Evidence 字节，同时需要资料读取能力", "risk": "privileged", "resource_types": ["project", "production-work-item"] },
+    { "id": "production-work-item.stage-material.history.read", "description": "读取版本化生产资料和定义升级的不可变历史，同时需要资料读取能力", "risk": "read", "resource_types": ["project", "production-work-item"] }
+  ]
+}

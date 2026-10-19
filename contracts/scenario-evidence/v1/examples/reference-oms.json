@@ -1,0 +1,192 @@
+{
+  "schema_version": "customer-scenario-evidence/v1",
+  "scenario_id": "reference-oms-operations",
+  "title": "OMS 合同履约与资金运营参考产品",
+  "source_kind": "reference_product",
+  "claim_scope": "reference_baseline",
+  "assessment_status": "evidence_ready",
+  "problem": {
+    "statement": "验证第二个参考产品 OMS 的合同履约与资金运营需求，能否在不复制单体原型和不提前发明生产边界的前提下，归入 BizFoundry 的稳定事实、配置、策略、类型化扩展和客户装配。",
+    "observable_outcomes": [
+      "甲方合同、施工队合同、人员名册、发票、应收应付、实际收付和文件证据的业务关系有明确候选所有者",
+      "管理费、审批矩阵、税务和人员支付责任等未知规则保持 needs_business_evidence",
+      "OMS 与参考 OA 的共性和差异形成六层账目，但不冒充第二真实客户或生产架构验收"
+    ],
+    "out_of_scope": [
+      "声明 OMS 已由 BizFoundry 完整重组或已经通过生产验收",
+      "声明两个参考产品足以证明跨客户产品边界",
+      "替 OMS 决定仍开放的权限、生产服务划分、管理费、税务和外部集成规则"
+    ]
+  },
+  "source_evidence": {
+    "evidence_refs": [
+      "oms-source:README.md",
+      "oms-source:docs/architecture.md",
+      "oms-source:docs/decisions.md",
+      "oms-source:arckit/spec/business-operations/operating-workflow.md",
+      "oms-source:arckit/tech/deployment/decision.md"
+    ],
+    "customer_confirmation_refs": []
+  },
+  "facts": [
+    {
+      "id": "contract-chain-fact",
+      "owner": "contract-ledger candidate",
+      "meaning": "甲方合同、施工队合同及二者之间的上下游履约关系。",
+      "states": ["active", "settled", "ended"],
+      "correction": "合同关键事实通过新版本、补充、终止或结算记录演进；OMS 来源尚未给出完整生产状态机。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#业务关系"]
+    },
+    {
+      "id": "party-roster-fact",
+      "owner": "party-directory and people-groups candidates",
+      "meaning": "甲方、施工队、工头和人员的当前档案，以及施工队人员名册和归属关系。",
+      "states": ["active", "changed", "ended"],
+      "correction": "当前档案应以 revision 更正，历史合同、审批和支付保留当时快照；OMS 来源尚未确定名册变更规则。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#参与方"]
+    },
+    {
+      "id": "money-obligation-fact",
+      "owner": "money-flow-ledger candidate",
+      "meaning": "审批确认的应收应付、预计日期、实际收付款、核销和余额。",
+      "states": ["proposed", "confirmed", "partially-settled", "settled"],
+      "correction": "关键金额、日期、对象或归属变化后重新确认；实际资金与核销通过独立更正或反向记录纠错。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#审批驱动的业务确认"]
+    },
+    {
+      "id": "invoice-fact",
+      "owner": "billing candidate",
+      "meaning": "关联甲方合同的发票、含税金额、税务字段和票据附件。",
+      "states": ["recorded", "corrected", "cancelled"],
+      "correction": "票据更正和撤销必须形成可追溯记录；OMS 来源尚未确定红冲、退票和跨期规则。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#甲方应收账"]
+    },
+    {
+      "id": "construction-operation-fact",
+      "owner": "construction-operations candidate",
+      "meaning": "施工队承担的范围、年度预算和人员履约上下文。",
+      "states": ["planned", "active", "completed", "cancelled"],
+      "correction": "范围、预算和参与关系应通过有历史的变更表达；OMS 来源尚未确定正式生命周期。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#组织施工队履约"]
+    },
+    {
+      "id": "operating-summary-fact",
+      "owner": "operating-ledger candidate",
+      "meaning": "我方税费、成本、成员工资及其他公司收支的期间汇总。",
+      "states": ["recorded", "adjusted", "reversed"],
+      "correction": "以调整或反向汇总记录保留历史，不静默改写已引用的期间结果。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#我方经营总账"]
+    },
+    {
+      "id": "evidence-version-fact",
+      "owner": "evidence-service candidate",
+      "meaning": "合同、票据、审批和资金记录引用的版本化文件证据。",
+      "states": ["uploaded", "referenced", "superseded"],
+      "correction": "新增文件版本替代当前版本，已完成审批继续引用当时版本。",
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#文件证据"]
+    }
+  ],
+  "applications": {
+    "enabled": ["oms-prototype"],
+    "disabled": ["gateway", "identity-access", "evidence-service"]
+  },
+  "differences": [
+    {
+      "id": "shared-contract-money-history",
+      "requirement": "合同、义务、实际资金、核销、余额、文件版本和历史纠错保持独立事实。",
+      "layer": "stable_core",
+      "disposition": "implemented",
+      "rationale": "这些含义与参考 OA 和当前 BizFoundry 内核一致，现有 Contract、Money 与 Evidence 已有运行证据；OMS 原型只提供第二参考产品的业务佐证。",
+      "fact_refs": ["contract-chain-fact", "money-obligation-fact", "evidence-version-fact"],
+      "delivery_artifacts": ["contract-ledger", "money-flow-ledger", "evidence-service"],
+      "evidence_refs": ["contracts/scenario-evidence/v1/examples/reference-oa.json", "docs/reports/reference-product-comparison-oa-oms.md"]
+    },
+    {
+      "id": "organization-role-vocabulary",
+      "requirement": "甲方、我方、施工队、工头和人员需要稳定角色 key 与客户可读术语。",
+      "layer": "configuration",
+      "disposition": "accepted_deferred",
+      "rationale": "角色显示可以配置，但 Party 当前档案、People Membership 和消费应用快照的边界要先由独立 Party 纵向闭环验证。",
+      "fact_refs": ["party-roster-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["docs/decisions.md#BF-036"]
+    },
+    {
+      "id": "approval-business-times",
+      "requirement": "应收确认、应付确认和付款授权是三个不同业务时点。",
+      "layer": "policy",
+      "disposition": "needs_business_evidence",
+      "rationale": "时点分离已经稳定，但审批人、门槛、串并行、超时和例外层级尚未确定，不能用通用审批平台或页面按钮猜测。",
+      "fact_refs": ["money-obligation-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#审批记录边界"]
+    },
+    {
+      "id": "billing-lifecycle",
+      "requirement": "发票拥有独立于应收和回款的记录、更正、撤销及附件生命周期。",
+      "layer": "stable_core",
+      "disposition": "accepted_deferred",
+      "rationale": "参考 OA 和 OMS 都需要 Billing，但完整票据纠错规则仍不足；不得让 Money Flow 或 Contract 代为拥有发票事实。",
+      "fact_refs": ["invoice-fact", "contract-chain-fact", "money-obligation-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["arckit/spec/assembly/full-reference-oa-validation.md#C3开票应收与回款"]
+    },
+    {
+      "id": "construction-production-type",
+      "requirement": "施工队范围、年度预算和人员履约需要独立于通用 Project 与 Contract 的生命周期。",
+      "layer": "typed_extension",
+      "disposition": "accepted_deferred",
+      "rationale": "它与参考 OA 的 design-v1 同属有自己状态和完成条件的生产类型，但正式边界和纠错需由 OMS 业务证据继续确认。",
+      "fact_refs": ["construction-operation-fact", "party-roster-fact", "contract-chain-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#管理施工队年度运营信息"]
+    },
+    {
+      "id": "operating-summary-boundary",
+      "requirement": "公司费用和非系统项目收支只形成经营汇总，不污染 Money Flow 的业务义务与核销内核。",
+      "layer": "typed_extension",
+      "disposition": "accepted_deferred",
+      "rationale": "汇总账有独立含义，但科目、期间关闭、调整和与外部财务系统的边界仍需证据。",
+      "fact_refs": ["operating-summary-fact", "money-obligation-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#经营总账与现金流"]
+    },
+    {
+      "id": "fee-tax-and-person-payment",
+      "requirement": "管理费、税务及人员款项支付责任需要可版本化、可追溯的业务规则。",
+      "layer": "policy",
+      "disposition": "needs_business_evidence",
+      "rationale": "计费基数、费率、舍入、税务、用工关系和直接或间接支付责任全部仍为开放问题。",
+      "fact_refs": ["money-obligation-fact", "operating-summary-fact", "party-roster-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["oms-source:arckit/spec/business-operations/operating-workflow.md#当前范围边界"]
+    },
+    {
+      "id": "oms-operations-composition",
+      "requirement": "以甲方合同为主线装配主体、施工履约、票据、资金、经营汇总和证据体验。",
+      "layer": "customer_assembly",
+      "disposition": "accepted_deferred",
+      "rationale": "当前仅有单页交互原型；Suite Manifest、版本化契约、故障恢复和真实生产拓扑尚未实现。",
+      "fact_refs": ["contract-chain-fact", "party-roster-fact", "money-obligation-fact", "invoice-fact", "construction-operation-fact", "operating-summary-fact", "evidence-version-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": ["oms-source:platform/README.md", "docs/reports/reference-product-comparison-oa-oms.md"]
+    }
+  ],
+  "connectors": [],
+  "boundary_signals": {
+    "customer_core_branches": null,
+    "customer_databases": null,
+    "shared_business_tables": null,
+    "customer_business_migrations": null,
+    "cross_app_internal_reads": null,
+    "onsite_core_patches": null,
+    "hidden_mandatory_dependencies": null
+  },
+  "acceptance_evidence": [],
+  "limitations": [
+    "OMS is a second reference product, not a second real customer.",
+    "The current OMS artifact is a browser-memory prototype; production services, IAM, persistence and integrations remain open.",
+    "Boundary signals remain unmeasured, so this evidence cannot be final_ready or passed.",
+    "The comparison supports prioritization but cannot establish cross-customer product boundaries."
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "source_commit": "826e0fc65aa09947fc4f64f62a2644fa5d11a302",
+  "original_files_checked": 60,
+  "source_writes": 0,
+  "personnel_css_sha256": "0bc0b4c247c96487e58b2fd80762783a70070bdf2bad0b2411889723f0206db0",
+  "bonus_css_sha256": "bffbbea6f57ff12337ef429c8219bf5973d40d607819cc187f6b94e4c4a42d0b",
+  "normal_bundle_sha256": "8dfcbaf1f98bc3d828557d78715526bf8675a37409cc90f2b694c5eba0ec44ea",
+  "normal_workbench_selected": true,
+  "files": [
+    {
+      "path": "backend/services/project-workspace/internal/projects/reference_oa_assignment_reference.go",
+      "sha256": "c82ad38ebc3a8a82732f7db04976610020d6548345265b61020a992a63597b91"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/httpserver/reference_oa_production.go",
+      "sha256": "546cbb5c37d4bbc5fcdbf357baac7502215cacbb61d282be0454de32234f43c6"
+    },
+    {
+      "path": "backend/services/bonus-distribution/internal/database/migrations/0004_reference_oa_professional_allocations.sql",
+      "sha256": "4ebca11abcfb375729d22604310475f05cc893ab3f19d88be7e3d6d053b0bfa7"
+    },
+    {
+      "path": "backend/services/bonus-distribution/internal/referencebonus/model.go",
+      "sha256": "48744dad5955d2579b0b136592d5727005d33d02ee7b0d291dba4b78fe86e4e5"
+    },
+    {
+      "path": "backend/services/bonus-distribution/internal/referencebonus/service.go",
+      "sha256": "623902a35df28efd6917e1f4c98ccfb373ef3345e54f47c42fd1f37a15f2b543"
+    },
+    {
+      "path": "backend/services/bonus-distribution/internal/references/professional.go",
+      "sha256": "3c218290a11b3cf630fd48459c009fbe8b25c22e72b9ac75c5b0f1042d5488f5"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/bonus-adapter.mjs",
+      "sha256": "7ff86091527436a122d13da37775df790ebdf16982e37d773fba9ac49625b3e5"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/production-personnel-native.mjs",
+      "sha256": "e85454f264ed607372a57c579ced0b1c74cacf5a6d0895487f7c52f2bfd166a7"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/production-personnel-workspace.tsx",
+      "sha256": "db0afd8ce2c2456bc0514e578aa3eb39a5a76a6fc0c7b5161de4e75bfb0f1a39"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/src/workspace.tsx",
+      "sha256": "23d1eec5916aac076abec3f3558317ddd494df6ecd81ba67405b03e048510c72"
+    },
+    {
+      "path": "frontend/oms-workbench/frontend/vendor/components/shared/BonusAllocationForm.tsx",
+      "sha256": "af2d63d281d1c118257ff38ad625d70fb780896a31f0b4128d3e290d3e703691"
+    },
+    {
+      "path": "frontend/oms-workbench/internal/server/reference_oa_initiation_runtime.js",
+      "sha256": "0265758bcf3e988a1ac54fb370a48fd40f1f23e874b43af87c757206b54f87dd"
+    },
+    {
+      "path": "deployments/d1/compose.yaml",
+      "sha256": "93a22ca6ff63ffa1b61cb83f3e0208b0bbe43b991dbfa0325ce5a83247a11f12"
+    },
+    {
+      "path": "deployments/d1/ops/d1",
+      "sha256": "b0479a9b3501ff59ed47c045fe79c27f27400f3f8bd4b92f4122e16de45a17dd"
+    },
+    {
+      "path": "deployments/d1/ops/render-suite-manifest",
+      "sha256": "661c7cada4fcc2b302e33bbc45110e67452be8fd22afd0aea6ee7446161e7b8e"
+    },
+    {
+      "path": "acceptance/oa-initiation-repair/production-personnel-native-runtime.mjs",
+      "sha256": "6f14fc5e82e3af9514e312d7de7ef3f9e55330f7d64e2aac187fb8a5a4201926"
+    },
+    {
+      "path": "acceptance/oa-initiation-repair/verify-production-bonus-native-browser.mjs",
+      "sha256": "47b717be15af2844cde0705981e8e2957f1f9f6335dfb7d56b00ba8461bdff74"
+    }
+  ],
+  "main_deployed": false,
+  "backup_bytes_copied": false,
+  "credential_state_copied": false,
+  "adaptation": "Original form/list/manager/CSS reused. Explicit source-qualified native ports, exact-money display and uncertainty/error handling replace monolithic access; no UI redesign."
+}

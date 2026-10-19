@@ -1,0 +1,41 @@
+{
+  "passed": false,
+  "candidate_only": true,
+  "real_iam": true,
+  "real_billing_process": true,
+  "real_evidence_process": true,
+  "postgresql18": true,
+  "project_party_reference_provider": "explicit_http_test_fixture",
+  "real_project_party": false,
+  "external_evidence_provider": "local",
+  "public_entry": false,
+  "oss_verified": false,
+  "full_oa": false,
+  "binary_sha256": {
+    "billing": "de28a20ff2d50aad316d5fe02aef8240d7cb30142c553ef468c06dcf4e1f2968",
+    "evidence-ops": "e1493b6717568bcec6972a8e7b19e94391ee7b7755288b6a795d344c6e260894",
+    "evidence-backup": "37d728756cb74f259a08bb5c5345c20a794c9dfadb3819153d6deaac9ebf470d",
+    "iam": "5f6a1d3dd7fef44120da7ce78a5ddb1a87b1cb56abe40863750e214a72660d16",
+    "keyctl": "cfabeb76dcb8efd265e9980076671891b4cd89eb3ee9723615a65e1e9fca9ec3",
+    "billing-ops": "536b092f8145101962f7c1961ca08708cfa4a79090cc82fe0426d88304d61077",
+    "evidence": "14638185d4597181cfef08584fc3d6dec55dce4193182500bd3c87ab199f7f58"
+  },
+  "failure_type": "AssertionError",
+  "failure_check": "POST /api/v1/credentials status=403 expected=200",
+  "main_unchanged": true,
+  "private_pg_and_runner_stopped": true,
+  "checks": [
+    {
+      "check": "actual_iam_billing_evidence_ready",
+      "passed": true,
+      "published_ports": 0,
+      "project_party_fixture": true
+    },
+    {
+      "check": "exact_int64_create_blind_write_denied_actual_upload_owner_reference_replay",
+      "passed": true,
+      "revision": 2,
+      "sha256": "40f0dbaf91786f2c0592ee7a8bc1fce16cba4d640a910e75a5071159f6fd8fd1"
+    }
+  ]
+}

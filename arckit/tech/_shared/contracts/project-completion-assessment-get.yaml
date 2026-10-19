@@ -1,0 +1,21 @@
+# Project 完成检查只读评估契约
+metadata: {path: "tech/_shared/contracts/project-completion-assessment-get.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.0", created: "2026-09-28", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/projects/{project_id}/completion-assessment", summary: "只读解释版本化完成条件及与最近确认的漂移", auth_required: true, audience: "project-workspace", capability: "project-workspace.completion.read"}
+request:
+  path_params: [{name: project_id, type: string, format: uuid, required: true}]
+  query: [{name: profile, type: string, default: reference-oa-c5-v1}]
+responses:
+  success:
+    status: 200
+    schema:
+      allOf:
+        - {$ref: "../models/ProjectCompletionAssessment.yaml"}
+        - {type: object, required: [allowed_actions], properties: {allowed_actions: {type: array, items: {type: string, enum: [project-workspace.completion.read, project-workspace.completion.confirm]}}}}
+  errors:
+    - {status: 401, code: credential_required, retryable: false}
+    - {status: 403, code: capability_denied, retryable: false}
+    - {status: 404, code: project_not_found, retryable: false}
+business_logic:
+  - "GET 读取 Project 当前 revision 和 Results 最小引用，不写任一数据库。"
+  - "Results 不可用时返回 unavailable requirement；不得把依赖故障解释为 pending 或 satisfied。"
+  - "C5 profile 只回答批复／审计检查点，不宣称完整 OA Project completed。"

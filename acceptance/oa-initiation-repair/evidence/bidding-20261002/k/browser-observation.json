@@ -1,0 +1,80 @@
+{
+  "version": "v0.1.0-oa.20261002.11",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "native_app": "Google Chrome",
+  "destination": "https://oatest.antuinfo.cn/workbench/",
+  "synthetic": false,
+  "observations": [
+    {
+      "phase": "comparison",
+      "method": "比选",
+      "notice": "已保存。材料齐备不等于中标或签约。",
+      "required_missing": [
+        "投标文件",
+        "中标文件"
+      ],
+      "optional_unregistered": [
+        "招标文件"
+      ],
+      "attachment_actions_enabled": false
+    },
+    {
+      "phase": "negotiation",
+      "method": "竞争性谈判",
+      "notice": "已保存。材料齐备不等于中标或签约。",
+      "required_missing": [
+        "投标文件",
+        "中标文件"
+      ],
+      "optional_unregistered": [
+        "招标文件"
+      ],
+      "attachment_actions_enabled": false
+    },
+    {
+      "phase": "tender",
+      "method": "招投标",
+      "notice": "已保存。材料齐备不等于中标或签约。",
+      "required_missing": [
+        "招标文件",
+        "投标文件",
+        "中标文件"
+      ],
+      "optional_unregistered": [],
+      "attachment_actions_enabled": false
+    },
+    {
+      "phase": "not-applicable",
+      "method": "招投标",
+      "notice": "已保存。材料齐备不等于中标或签约。",
+      "restore_button_visible": true,
+      "method_disabled": true
+    },
+    {
+      "phase": "restored",
+      "method": "招投标",
+      "notice": "已保存。材料齐备不等于中标或签约。",
+      "required_missing": [
+        "招标文件",
+        "投标文件",
+        "中标文件"
+      ],
+      "method_enabled": true,
+      "attachment_actions_enabled": false
+    },
+    {
+      "phase": "final",
+      "method": "招投标",
+      "notice": "当前项目招投标资料已读取。",
+      "required_missing": [
+        "招标文件",
+        "投标文件",
+        "中标文件"
+      ],
+      "refresh_observed": true,
+      "attachment_actions_enabled": false
+    }
+  ],
+  "full_oa_accepted": false
+}

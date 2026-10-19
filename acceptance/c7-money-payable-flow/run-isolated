@@ -1,0 +1,216 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-c7-money.XXXXXX")
+container="oms-c7-money-pg18-$$"
+evidence_dir=${C7_MONEY_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c7-money-payable-evidence"}
+service_pids=''
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv processes.tsv initial-unavailable.json accepted-suggestion.json accepted-intake.json accepted-decision.json accepted-synchronized.json accepted-history.json rejected-suggestion.json rejected-intake.json rejected-decision.json rejected-synchronized.json money-facts.tsv source-withdrawal.tsv mapping-1.json mapping-2.json result.md bonus.log money.log; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command in go docker curl jq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -z "$(docker ps -q)" ] || { echo 'this isolated acceptance requires Docker to have zero running containers' >&2; exit 2; }
+
+echo '[1/7] 低并发构建两个应用和一个运维命令（此时不启动 Docker）'
+(cd "$repo_dir/backend/services/bonus-distribution" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/bonus-distribution" ./cmd/server)
+(cd "$repo_dir/backend/services/money-flow-ledger" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money-flow-ledger" ./cmd/server)
+(cd "$repo_dir/backend/services/money-flow-ledger" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money-ops" ./cmd/ops)
+
+echo '[2/7] 启动唯一 PostgreSQL 容器和 Bonus；Money 暂不启动'
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55470:5432 postgres:18.6 >/dev/null
+for attempt in $(seq 1 60); do
+  docker exec "$container" pg_isready -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { echo 'PostgreSQL did not become ready' >&2; exit 1; }
+  sleep 1
+done
+docker exec "$container" createdb -U postgres bonus
+docker exec "$container" createdb -U postgres money
+
+tenant_id=11111111-1111-4111-8111-111111111111
+actor_id=22222222-2222-4222-8222-222222222222
+project_id=73000000-0000-4000-8000-000000000001
+pool_id=73000000-0000-4000-8000-000000000002
+allocation_1=73000000-0000-4000-8000-000000000003
+person_1=73000000-0000-4000-8000-000000000004
+assignment_1=73000000-0000-4000-8000-000000000005
+allocation_2=73000000-0000-4000-8000-000000000006
+person_2=73000000-0000-4000-8000-000000000007
+assignment_2=73000000-0000-4000-8000-000000000008
+owner_id=73000000-0000-4000-8000-000000000009
+beneficiary_1=73000000-0000-4000-8000-000000000010
+beneficiary_2=73000000-0000-4000-8000-000000000011
+person_digest_1=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+person_digest_2=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+project_digest=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+allocation_digest_1=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+allocation_digest_2=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+bonus_token=bonus-template-token-1234567890
+money_token=money-reference-token-1234567890
+
+HTTP_ADDR=127.0.0.1:19215 \
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55470/bonus?sslmode=disable' \
+MIGRATION_MODE=auto IDENTITY_PROVIDER=template \
+TEMPLATE_TENANT_ID="$tenant_id" TEMPLATE_SUBJECT_ID="$actor_id" TEMPLATE_DISPLAY_NAME='C7 验收人' TEMPLATE_ACCESS_TOKEN="$bonus_token" \
+PROJECT_BASE_URL=http://127.0.0.1:9 PROJECT_ACCESS_TOKEN=project-reference-token-123456 \
+PEOPLE_BASE_URL=http://127.0.0.1:9 PEOPLE_ACCESS_TOKEN=people-reference-token-1234567 \
+MONEY_BASE_URL=http://127.0.0.1:19216 MONEY_ACCESS_TOKEN="$money_token" \
+"$runtime/bonus-distribution" >"$runtime/bonus.log" 2>&1 &
+bonus_pid=$!
+service_pids="$service_pids $bonus_pid"
+
+wait_http() {
+  url=$1
+  for attempt in $(seq 1 60); do
+    curl --silent --fail "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 60 ] || { echo "$url did not become ready" >&2; exit 1; }
+    sleep 1
+  done
+}
+wait_http http://127.0.0.1:19215/health/ready
+
+project_json=$(jq -cn --arg id "$project_id" --arg digest "$project_digest" '{id:$id,revision:1,code:"C7-MONEY",display_name:"C7 到 Money 验收项目",digest:$digest}')
+person_json_1=$(jq -cn --arg id "$person_1" --arg digest "$person_digest_1" '{id:$id,revision:3,display_name:"经营奖金参与人",digest:$digest}')
+person_json_2=$(jq -cn --arg id "$person_2" --arg digest "$person_digest_2" '{id:$id,revision:4,display_name:"生产奖金参与人",digest:$digest}')
+assignment_json_1=$(jq -cn --arg id "$assignment_1" --arg project "$project_id" --arg person "$person_1" '{id:$id,revision:2,project_id:$project,person_id:$person,role_key:"business_owner",digest:"sha256:1111111111111111111111111111111111111111111111111111111111111111"}')
+assignment_json_2=$(jq -cn --arg id "$assignment_2" --arg project "$project_id" --arg person "$person_2" '{id:$id,revision:2,project_id:$project,person_id:$person,role_key:"production_owner",digest:"sha256:2222222222222222222222222222222222222222222222222222222222222222"}')
+allocation_json_1=$(jq -cn --arg id "$allocation_1" --arg tenant "$tenant_id" --arg pool "$pool_id" --arg project "$project_id" --argjson person "$person_json_1" --argjson assignment "$assignment_json_1" '{id:$id,tenant_id:$tenant,pool_id:$pool,pool_revision:2,project_id:$project,bonus_type:"business",person:$person,assignment:$assignment,ratio_basis_points:5000,amount_minor:10000,currency:"CNY",reason:"经营奖金",state:"published",revision:2,created_at:"2026-09-29T12:00:00Z",updated_at:"2026-09-29T12:01:00Z"}')
+allocation_json_2=$(jq -cn --arg id "$allocation_2" --arg tenant "$tenant_id" --arg pool "$pool_id" --arg project "$project_id" --argjson person "$person_json_2" --argjson assignment "$assignment_json_2" '{id:$id,tenant_id:$tenant,pool_id:$pool,pool_revision:2,project_id:$project,bonus_type:"business",person:$person,assignment:$assignment,ratio_basis_points:5000,amount_minor:10000,currency:"CNY",reason:"生产奖金",state:"published",revision:2,created_at:"2026-09-29T12:00:00Z",updated_at:"2026-09-29T12:01:00Z"}')
+pool_json=$(jq -cn --arg id "$pool_id" --arg tenant "$tenant_id" --argjson project "$project_json" --argjson first "$allocation_json_1" --argjson second "$allocation_json_2" --arg actor "$actor_id" '{id:$id,tenant_id:$tenant,project:$project,bonus_type:"business",state:"published",source:{type:"contract_settlement",id:"73000000-0000-4000-8000-000000000020",revision:1,project_id:$project.id,currency:"CNY",total_amount_minor:200000,state:"confirmed",digest:"sha256:3333333333333333333333333333333333333333333333333333333333333333",items:[{type:"contract_settlement",id:"73000000-0000-4000-8000-000000000020",revision:1,amount_minor:200000,currency:"CNY",state:"confirmed",digest:"sha256:4444444444444444444444444444444444444444444444444444444444444444"}]},policy:{key:"reference-oa-bonus-v1",version:"1.0.0",bonus_type:"business",rate_basis_points:1000,rounding:"half_up",formula:"confirmed_amount * rate",parameters_digest:"sha256:5555555555555555555555555555555555555555555555555555555555555555"},currency:"CNY",amount_minor:20000,unallocated_minor:0,allocations:[$first,$second],revision:2,created_by:$actor,updated_by:$actor,created_at:"2026-09-29T12:00:00Z",updated_at:"2026-09-29T12:01:00Z"}')
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d bonus <<SQL
+INSERT INTO bonus_pools(tenant_id,id,project_id,bonus_type,state,currency,amount_minor,unallocated_minor,revision,snapshot,created_at,updated_at)
+VALUES('$tenant_id','$pool_id','$project_id','business','published','CNY',20000,0,2,'$pool_json'::jsonb,'2026-09-29T12:00:00Z','2026-09-29T12:01:00Z');
+INSERT INTO bonus_pool_revisions(tenant_id,pool_id,revision,event_kind,command_id,snapshot,reason,actor_ref,occurred_at) VALUES
+('$tenant_id','$pool_id',1,'drafted','73000000-0000-4000-8000-000000000021',jsonb_set(jsonb_set('$pool_json'::jsonb,'{state}','"draft"'::jsonb),'{revision}','1'::jsonb),'验收夹具草稿','$actor_id','2026-09-29T12:00:00Z'),
+('$tenant_id','$pool_id',2,'published','73000000-0000-4000-8000-000000000022','$pool_json'::jsonb,'验收夹具发布','$actor_id','2026-09-29T12:01:00Z');
+INSERT INTO bonus_allocations(tenant_id,id,pool_id,project_id,bonus_type,person_id,assignment_id,state,currency,amount_minor,ratio_basis_points,pool_revision,revision,snapshot,created_at,updated_at) VALUES
+('$tenant_id','$allocation_1','$pool_id','$project_id','business','$person_1','$assignment_1','published','CNY',10000,5000,2,2,'$allocation_json_1'::jsonb,'2026-09-29T12:00:00Z','2026-09-29T12:01:00Z'),
+('$tenant_id','$allocation_2','$pool_id','$project_id','business','$person_2','$assignment_2','published','CNY',10000,5000,2,2,'$allocation_json_2'::jsonb,'2026-09-29T12:00:00Z','2026-09-29T12:01:00Z');
+INSERT INTO bonus_allocation_revisions(tenant_id,allocation_id,pool_id,revision,event_kind,command_id,snapshot,reason,actor_ref,occurred_at) VALUES
+('$tenant_id','$allocation_1','$pool_id',1,'drafted','73000000-0000-4000-8000-000000000021',jsonb_set(jsonb_set(jsonb_set('$allocation_json_1'::jsonb,'{state}','"draft"'::jsonb),'{revision}','1'::jsonb),'{pool_revision}','1'::jsonb),'验收夹具草稿','$actor_id','2026-09-29T12:00:00Z'),
+('$tenant_id','$allocation_1','$pool_id',2,'published','73000000-0000-4000-8000-000000000022','$allocation_json_1'::jsonb,'验收夹具发布','$actor_id','2026-09-29T12:01:00Z'),
+('$tenant_id','$allocation_2','$pool_id',1,'drafted','73000000-0000-4000-8000-000000000021',jsonb_set(jsonb_set(jsonb_set('$allocation_json_2'::jsonb,'{state}','"draft"'::jsonb),'{revision}','1'::jsonb),'{pool_revision}','1'::jsonb),'验收夹具草稿','$actor_id','2026-09-29T12:00:00Z'),
+('$tenant_id','$allocation_2','$pool_id',2,'published','73000000-0000-4000-8000-000000000022','$allocation_json_2'::jsonb,'验收夹具发布','$actor_id','2026-09-29T12:01:00Z');
+SQL
+
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+request() {
+  method=$1; url=$2; token=$3; payload=$4; output=$5; expected=$6
+  if [ -n "$payload" ]; then
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data "$payload" "$url")
+  else
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" "$url")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { sed -n '1,120p' "$output" >&2; echo "expected HTTP $expected, got $actual" >&2; exit 1; }
+}
+
+proposal_1=$(jq -cn --arg allocation "$allocation_1" --arg owner "$owner_id" '{command_id:"73000000-0000-4000-8000-000000000030",allocation_id:$allocation,allocation_revision:2,ledger_owner:{id:$owner,revision:1,kind:"organization",legal_name:"Money 设计单位"},due_on:"2026-11-30",purpose:"经营奖金应付"}')
+request POST http://127.0.0.1:19215/api/v1/bonus-payable-suggestions "$bonus_token" "$proposal_1" "$runtime/initial-unavailable.json" 201
+jq -e '.state == "target_unavailable" and .revision == 1 and (.target_revision // 0) == 0' "$runtime/initial-unavailable.json" >/dev/null
+suggestion_1=$(jq -er .id "$runtime/initial-unavailable.json")
+
+echo '[3/7] 启动 Money，建立本地主体及两条精确人工映射'
+HTTP_ADDR=127.0.0.1:19216 \
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55470/money?sslmode=disable' MIGRATION_MODE=auto IDENTITY_PROVIDER=local \
+BOOTSTRAP_ADMIN_USERNAME=c7-money-admin BOOTSTRAP_ADMIN_DISPLAY_NAME='C7 资金管理员' BOOTSTRAP_ADMIN_PASSWORD='c7-money-acceptance-password-2026' \
+REFERENCE_TENANT_ID="$tenant_id" REFERENCE_ACCESS_TOKEN="$money_token" \
+"$runtime/money-flow-ledger" >"$runtime/money.log" 2>&1 &
+money_pid=$!
+service_pids="$service_pids $money_pid"
+wait_http http://127.0.0.1:19216/health/ready
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d money <<SQL
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at) VALUES
+('$owner_id','organization','Money 设计单位',1,now(),now()),
+('$beneficiary_1','individual','经营奖金参与人',1,now(),now()),
+('$beneficiary_2','individual','生产奖金参与人',1,now(),now());
+SQL
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55470/money?sslmode=disable' "$runtime/money-ops" payable-party-map --command-id 73000000-0000-4000-8000-000000000040 --tenant-id "$tenant_id" --person-id "$person_1" --person-revision 3 --person-digest "$person_digest_1" --local-party-id "$beneficiary_1" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$actor_id" --reviewed-by-display-name '资金负责人' --reason '经营奖金参与人与资金主体人工复核' >"$runtime/mapping-1.json"
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55470/money?sslmode=disable' "$runtime/money-ops" payable-party-map --command-id 73000000-0000-4000-8000-000000000041 --tenant-id "$tenant_id" --person-id "$person_2" --person-revision 4 --person-digest "$person_digest_2" --local-party-id "$beneficiary_2" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$actor_id" --reviewed-by-display-name '资金负责人' --reason '生产奖金参与人与资金主体人工复核' >"$runtime/mapping-2.json"
+
+echo '[4/7] 原命令恢复提交；Money 独立接受并由 C7 显式同步'
+request POST http://127.0.0.1:19215/api/v1/bonus-payable-suggestions "$bonus_token" "$proposal_1" "$runtime/accepted-suggestion.json" 201
+jq -e '.state == "proposed" and .revision == 2 and .target_revision == 1 and .amount_minor == 10000' "$runtime/accepted-suggestion.json" >/dev/null
+request GET "http://127.0.0.1:19216/api/v1/payable-suggestion-intakes/$suggestion_1" "$money_token" '' "$runtime/accepted-intake.json" 200
+jq -e '.status == "pending" and .revision == 1' "$runtime/accepted-intake.json" >/dev/null
+accept_payload='{"command_id":"73000000-0000-4000-8000-000000000042","expected_revision":1,"decision":"accept","reason":"资金负责人确认奖金应付"}'
+request POST "http://127.0.0.1:19216/api/v1/payable-suggestion-intakes/$suggestion_1/decisions" "$money_token" "$accept_payload" "$runtime/accepted-decision.json" 200
+jq -e '.intake.status == "accepted" and .intake.revision == 2 and .intake.obligation.revision == 1' "$runtime/accepted-decision.json" >/dev/null
+sync_1='{"command_id":"73000000-0000-4000-8000-000000000043","expected_revision":2,"reason":"同步 Money 接受决定"}'
+request POST "http://127.0.0.1:19215/api/v1/bonus-payable-suggestions/$suggestion_1/synchronization" "$bonus_token" "$sync_1" "$runtime/accepted-synchronized.json" 200
+jq -e '.state == "accepted" and .revision == 3 and .target_revision == 2 and .obligation.revision == 1' "$runtime/accepted-synchronized.json" >/dev/null
+request POST "http://127.0.0.1:19215/api/v1/bonus-payable-suggestions/$suggestion_1/synchronization" "$bonus_token" "$sync_1" "$runtime/accepted-synchronized-replay.json" 200
+jq -e --slurpfile original "$runtime/accepted-synchronized.json" '.id == $original[0].id and .revision == $original[0].revision and .obligation.id == $original[0].obligation.id' "$runtime/accepted-synchronized-replay.json" >/dev/null
+
+echo '[5/7] 第二条建议由 Money 独立拒绝，不生成义务'
+proposal_2=$(jq -cn --arg allocation "$allocation_2" --arg owner "$owner_id" '{command_id:"73000000-0000-4000-8000-000000000050",allocation_id:$allocation,allocation_revision:2,ledger_owner:{id:$owner,revision:1,kind:"organization",legal_name:"Money 设计单位"},due_on:"2026-12-15",purpose:"生产奖金应付"}')
+request POST http://127.0.0.1:19215/api/v1/bonus-payable-suggestions "$bonus_token" "$proposal_2" "$runtime/rejected-suggestion.json" 201
+jq -e '.state == "proposed" and .target_revision == 1' "$runtime/rejected-suggestion.json" >/dev/null
+suggestion_2=$(jq -er .id "$runtime/rejected-suggestion.json")
+request GET "http://127.0.0.1:19216/api/v1/payable-suggestion-intakes/$suggestion_2" "$money_token" '' "$runtime/rejected-intake.json" 200
+reject_payload='{"command_id":"73000000-0000-4000-8000-000000000051","expected_revision":1,"decision":"reject","reason":"不属于当前资金账套"}'
+request POST "http://127.0.0.1:19216/api/v1/payable-suggestion-intakes/$suggestion_2/decisions" "$money_token" "$reject_payload" "$runtime/rejected-decision.json" 200
+jq -e '.intake.status == "rejected" and .intake.obligation == null' "$runtime/rejected-decision.json" >/dev/null
+sync_2='{"command_id":"73000000-0000-4000-8000-000000000052","expected_revision":2,"reason":"同步 Money 拒绝决定"}'
+request POST "http://127.0.0.1:19215/api/v1/bonus-payable-suggestions/$suggestion_2/synchronization" "$bonus_token" "$sync_2" "$runtime/rejected-synchronized.json" 200
+jq -e '.state == "rejected" and .target_revision == 2 and .obligation == null and .decision_reason == "不属于当前资金账套"' "$runtime/rejected-synchronized.json" >/dev/null
+
+echo '[6/7] 验证不可变证据、来源撤回不级联删除及唯一 Money 义务'
+request GET "http://127.0.0.1:19215/api/v1/bonus-payable-suggestions/$suggestion_1/history" "$bonus_token" '' "$runtime/accepted-history.json" 200
+jq -e '(.items | length) == 3 and [.items[].event_kind] == ["proposed","submitted","accepted"]' "$runtime/accepted-history.json" >/dev/null
+if docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d money -c "UPDATE payable_party_source_mappings SET review_reason='tampered' WHERE tenant_id='$tenant_id' AND source_resource_id='$person_1'" >/dev/null 2>&1; then
+  echo 'reviewed Person mapping mutation unexpectedly succeeded' >&2
+  exit 1
+fi
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d bonus <<SQL
+BEGIN;
+INSERT INTO bonus_allocation_revisions(tenant_id,allocation_id,pool_id,revision,event_kind,command_id,snapshot,reason,actor_ref,occurred_at)
+SELECT tenant_id,id,pool_id,revision+1,'withdrawn','73000000-0000-4000-8000-000000000053',jsonb_set(jsonb_set(jsonb_set(snapshot,'{state}','"withdrawn"'::jsonb),'{revision}',to_jsonb(revision+1)),'{pool_revision}','3'::jsonb),'奖金来源撤回后的边界验证','$actor_id',now()
+FROM bonus_allocations WHERE tenant_id='$tenant_id' AND pool_id='$pool_id';
+UPDATE bonus_allocations
+SET state='withdrawn',pool_revision=3,revision=revision+1,snapshot=jsonb_set(jsonb_set(jsonb_set(snapshot,'{state}','"withdrawn"'::jsonb),'{revision}',to_jsonb(revision+1)),'{pool_revision}','3'::jsonb),updated_at=now()
+WHERE tenant_id='$tenant_id' AND pool_id='$pool_id';
+INSERT INTO bonus_pool_revisions(tenant_id,pool_id,revision,event_kind,command_id,snapshot,reason,actor_ref,occurred_at)
+SELECT tenant_id,id,revision+1,'withdrawn','73000000-0000-4000-8000-000000000053',jsonb_set(jsonb_set(jsonb_set(snapshot,'{state}','"withdrawn"'::jsonb),'{revision}',to_jsonb(revision+1)),'{allocations}',(SELECT jsonb_agg(a.snapshot ORDER BY a.id) FROM bonus_allocations a WHERE a.tenant_id='$tenant_id' AND a.pool_id='$pool_id')),'奖金来源撤回后的边界验证','$actor_id',now()
+FROM bonus_pools WHERE tenant_id='$tenant_id' AND id='$pool_id';
+UPDATE bonus_pools
+SET state='withdrawn',revision=revision+1,snapshot=jsonb_set(jsonb_set(jsonb_set(snapshot,'{state}','"withdrawn"'::jsonb),'{revision}',to_jsonb(revision+1)),'{allocations}',(SELECT jsonb_agg(a.snapshot ORDER BY a.id) FROM bonus_allocations a WHERE a.tenant_id='$tenant_id' AND a.pool_id='$pool_id')),updated_at=now()
+WHERE tenant_id='$tenant_id' AND id='$pool_id';
+COMMIT;
+SQL
+docker exec "$container" psql -U postgres -d money -AtF '|' -c "SELECT count(*),min(direction),min(status),min(source_kind),min(source_application),min(source_resource_type),min(source_resource_id::text),min(source_revision::text) FROM obligations" >"$runtime/money-facts.tsv"
+grep -Eq "^1\|payable\|open\|bonus_payable_suggestion\|bonus-distribution\|bonus_allocation\|$allocation_1\|2$" "$runtime/money-facts.tsv"
+docker exec "$container" psql -U postgres -d bonus -AtF '|' -c "SELECT p.state,p.revision,(SELECT count(*) FROM bonus_allocations a WHERE a.tenant_id=p.tenant_id AND a.pool_id=p.id AND a.state='withdrawn'),(SELECT min(a.revision) FROM bonus_allocations a WHERE a.tenant_id=p.tenant_id AND a.pool_id=p.id),(SELECT count(*) FROM bonus_pool_revisions r WHERE r.tenant_id=p.tenant_id AND r.pool_id=p.id),(SELECT min(c) FROM (SELECT count(*) c FROM bonus_allocation_revisions r WHERE r.tenant_id=p.tenant_id AND r.pool_id=p.id GROUP BY allocation_id) counts) FROM bonus_pools p WHERE p.tenant_id='$tenant_id' AND p.id='$pool_id'" >"$runtime/source-withdrawal.tsv"
+grep -Eq '^withdrawn\|3\|2\|3\|3\|3$' "$runtime/source-withdrawal.tsv"
+
+echo '[7/7] 写入资源清单和结果；退出时自动停止进程并删除容器'
+printf 'service\tpid\tport\tdatabase\nbonus-distribution\t%s\t19215\tbonus\nmoney-flow-ledger\t%s\t19216\tmoney\npostgresql\tdocker:%s\t55470\tbonus,money\n' "$bonus_pid" "$money_pid" "$container" >"$runtime/processes.tsv"
+assertions=$(awk -F '\t' 'NR>1 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+printf '%s\n' \
+  '# C7 → Money 跨进程应付建议结果' \
+  '' \
+  "- HTTP 断言：${assertions}；状态不匹配：${mismatches}。" \
+  '- 仅使用一个 PostgreSQL 容器和两个应用进程；C7 与 Money 使用独立数据库并通过版本化 HTTP 契约通信。' \
+  '- Money 不可用时 C7 保存 target_unavailable；恢复后原命令继续提交，同步命令重放未重复事实。' \
+  '- Money 接受第一条建议并创建唯一 bonus_payable_suggestion 应付义务；拒绝第二条建议时未创建义务。' \
+  '- People Person 精确 revision/digest 经过人工复核后映射到 Money individual Party，映射不可改写。' \
+  '- 来源侧随后追加 withdrawn revision，Money 已确认义务保持 open；没有跨库级联删除或共享表。' >"$runtime/result.md"
+[ "$mismatches" = 0 ] || exit 1
+cat "$runtime/result.md"

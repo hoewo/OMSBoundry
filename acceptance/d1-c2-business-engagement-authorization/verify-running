@@ -1,0 +1,686 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+overlay=${C2_ROLE_OVERLAY:-"$repo_dir/contracts/access/v1/examples/reference-oa-c2-role-overlay.json"}
+
+for command in curl jq openssl docker awk sort node; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$overlay" ] || { echo "C2 role overlay not found: $overlay" >&2; exit 2; }
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  if [ -n "${D1_COMPOSE_OVERRIDE_FILE:-}" ]; then
+    case "$D1_COMPOSE_OVERRIDE_FILE" in /*) ;; *) echo 'D1_COMPOSE_OVERRIDE_FILE must be absolute' >&2; exit 2 ;; esac
+    [ -f "$D1_COMPOSE_OVERRIDE_FILE" ] || { echo "compose override not found: $D1_COMPOSE_OVERRIDE_FILE" >&2; exit 2; }
+    docker compose --project-name "$compose_project" --env-file "$env_file" \
+      --file "$d1_dir/compose.yaml" --file "$D1_COMPOSE_OVERRIDE_FILE" \
+      --profile people --profile project --profile evidence --profile business-engagement "$@"
+  else
+    docker compose --project-name "$compose_project" --env-file "$env_file" \
+      --file "$d1_dir/compose.yaml" --profile people --profile project --profile evidence --profile business-engagement "$@"
+  fi
+}
+
+expect_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" \
+    "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" \
+    "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+cookie_value() {
+  cookie_file="$1"
+  cookie_name="$2"
+  awk -F '\t' -v name="$cookie_name" '$6 == name {value=$7} END {print value}' "$cookie_file"
+}
+
+decode_jwt_payload() {
+  token="$1"
+  part=$(printf '%s' "$token" | cut -d. -f2)
+  case $((${#part} % 4)) in
+    0) padding='' ;;
+    2) padding='==' ;;
+    3) padding='=' ;;
+    *) echo "invalid JWT payload encoding" >&2; return 1 ;;
+  esac
+  printf '%s%s' "$part" "$padding" | tr '_-' '/+' | openssl base64 -d -A
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+fetch_csrf() {
+  cookie_file="$1"
+  output_file="$2"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "GET /auth/api/v1/csrf" 200 "$actual" "$duration"
+  expect_status 200 "$actual" "fetch csrf"
+  jq -er .csrf_token "$output_file"
+}
+
+login() {
+  cookie_file="$1"
+  csrf_token="$2"
+  username="$3"
+  password="$4"
+  output_file="$5"
+	expected="${6:-200}"
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth/api/v1/login")
+  actual=${result%% *}
+  duration=${result#* }
+	record_http "POST /auth/api/v1/login" "$expected" "$actual" "$duration"
+	expect_status "$expected" "$actual" "login $username"
+}
+
+wait_healthy() {
+	service="$1"
+	container_id=$(compose ps -q "$service")
+	[ -n "$container_id" ] || { echo "$service container is missing" >&2; exit 1; }
+	for _attempt in $(seq 1 60); do
+		[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")" = healthy ] && return 0
+		sleep 1
+	done
+	echo "$service did not recover" >&2
+	exit 1
+}
+
+auth_json() {
+  path="$1"
+  cookie_file="$2"
+  csrf_token="$3"
+  request_payload="$4"
+  output_file="$5"
+  expected="$6"
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$request_payload" "$base_url/auth$path")
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then cat "$output_file" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$path"
+}
+
+authorize_app() {
+  cookie_file="$1"
+  csrf_token="$2"
+  app_id="$3"
+  resource_type="$4"
+  resource_id="$5"
+  fact_id="${6:-}"
+  fact_revision="${7:-}"
+  expected="$8"
+  output_file="$9"
+  if [ -n "$fact_id" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" --data-urlencode business_fact_kind=project_assignment \
+      --data-urlencode business_fact_source=project-workspace --data-urlencode "business_fact_id=$fact_id" \
+      --data-urlencode "business_fact_revision=$fact_revision" "$base_url/gateway/authorize/$app_id")
+  elif [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" --data-urlencode "resource_type=$resource_type" \
+      --data-urlencode "resource_id=$resource_id" "$base_url/gateway/authorize/$app_id")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      --data-urlencode "csrf_token=$csrf_token" "$base_url/gateway/authorize/$app_id")
+  fi
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "POST /gateway/authorize/$app_id" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ]; then cat "$output_file" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "authorize $app_id"
+}
+
+app_json() {
+  method="$1"
+  prefix="$2"
+  path="$3"
+  cookie_file="$4"
+  request_payload="$5"
+  output_file="$6"
+  expected="$7"
+  if [ -n "$request_payload" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      -H 'Content-Type: application/json' --data "$request_payload" "$base_url$prefix$path")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url$prefix$path")
+  fi
+  actual=${result%% *}
+  duration=${result#* }
+  record_http "$method $prefix$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then cat "$output_file" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$method $prefix$path"
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c2-authorization.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+admin_restored=false
+evidence_stopped=false
+identity_stopped=false
+project_stopped=false
+cleanup() {
+	if [ "$evidence_stopped" = true ]; then
+		compose start evidence-service >/dev/null 2>&1 || true
+	fi
+	if [ "$identity_stopped" = true ]; then
+		compose start identity-access >/dev/null 2>&1 || true
+	fi
+	if [ "$project_stopped" = true ]; then
+		compose start project-workspace >/dev/null 2>&1 || true
+	fi
+  if [ "$admin_restored" != true ]; then
+    D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null 2>&1 || true
+  fi
+  if [ -n "${C2_EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$C2_EVIDENCE_DIR"
+    cp "$http_evidence" "$C2_EVIDENCE_DIR/http-evidence.tsv" 2>/dev/null || true
+  fi
+  rm -rf "$workspace"
+}
+trap cleanup EXIT HUP INT TERM
+
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$admin_password" ] || { echo "BOOTSTRAP_ADMIN_PASSWORD is required" >&2; exit 2; }
+
+jq -e '
+  .schema_version == "1" and .overlay_id == "reference-oa-c2" and
+  .application_id == "business-engagement" and .audience == "business-engagement" and
+  .assignment_policy.policy_id == "business-engagement-project-access" and
+  .site_roles.identity_super_admin.actions == [] and .site_roles.finance.actions == []
+' "$overlay" >/dev/null
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+admin_subject_id=$(curl --fail --silent --show-error --cookie "$admin_cookies" "$base_url/auth/api/v1/session" | jq -er .principal.subject_id)
+
+authorize_app "$admin_cookies" "$admin_csrf" people-groups "" "" "" "" 303 "$workspace/admin-authorize-people.out"
+authorize_app "$admin_cookies" "$admin_csrf" project-workspace "" "" "" "" 303 "$workspace/admin-authorize-project.out"
+authorize_app "$admin_cookies" "$admin_csrf" evidence-service "" "" "" "" 303 "$workspace/admin-authorize-evidence.out"
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+
+actor_password() {
+  role_slug=$(printf '%s' "$1" | tr '_' '-')
+  printf 'C2-%s-%s!Aa7' "$role_slug" "$stamp"
+}
+
+create_actor() {
+  actor_role="$1"
+  actor_display="$2"
+  actor_slug=$(printf '%s' "$actor_role" | tr '_' '-')
+  actor_username="c2-$actor_slug-$stamp"
+  actor_password_value=$(actor_password "$actor_role")
+  actor_payload=$(jq -cn --arg username "$actor_username" --arg display_name "$actor_display" '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$actor_payload" "$workspace/$actor_role-invitation.json" 201
+  actor_subject=$(jq -er .subject.id "$workspace/$actor_role-invitation.json")
+  actor_token=$(jq -er .token "$workspace/$actor_role-invitation.json")
+  actor_cookies="$workspace/$actor_role.cookies"
+  actor_csrf=$(fetch_csrf "$actor_cookies" "$workspace/$actor_role-csrf.json")
+  actor_payload=$(jq -cn --arg token "$actor_token" --arg password "$actor_password_value" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$actor_cookies" "$actor_csrf" "$actor_payload" "$workspace/$actor_role-activation.json" 200
+  login "$actor_cookies" "$actor_csrf" "$actor_username" "$actor_password_value" "$workspace/$actor_role-login.json"
+  jq -cn --arg role "$actor_role" --arg username "$actor_username" --arg subject_id "$actor_subject" \
+    '{role:$role,username:$username,subject_id:$subject_id}' >"$workspace/$actor_role-meta.json"
+  printf '%s\n' "$actor_csrf" >"$workspace/$actor_role.csrf"
+}
+
+for actor in \
+  'business_manager:经营经理' \
+  'general_manager:总经理' \
+  'business_owner:项目经营负责人' \
+  'production_owner:项目生产负责人' \
+  'finance:财务人员'
+do
+  create_actor "${actor%%:*}" "${actor#*:}"
+done
+
+create_person() {
+  person_role="$1"
+  display_name="$2"
+  person_subject=$(jq -er .subject_id "$workspace/$person_role-meta.json")
+  person_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$display_name" --arg iam_subject_id "$person_subject" \
+    '{command_id:$command_id,display_name:$display_name,iam_subject_id:$iam_subject_id}')
+  app_json POST /people /api/v1/persons "$admin_cookies" "$person_payload" "$workspace/$person_role-person.json" 201
+}
+
+create_person business_owner '项目经营负责人'
+create_person production_owner '项目生产负责人'
+business_owner_person=$(jq -er .id "$workspace/business_owner-person.json")
+business_owner_person_revision=$(jq -er .revision "$workspace/business_owner-person.json")
+production_owner_person=$(jq -er .id "$workspace/production_owner-person.json")
+production_owner_person_revision=$(jq -er .revision "$workspace/production_owner-person.json")
+
+grant_site_role() {
+  grant_role="$1"
+  grant_subject=$(jq -er .subject_id "$workspace/$grant_role-meta.json")
+  jq -r --arg role "$grant_role" '.site_roles[$role].actions[]' "$overlay" |
+  while IFS= read -r grant_action; do
+    grant_payload=$(jq -cn --arg subject_id "$grant_subject" --arg audience business-engagement --arg action "$grant_action" \
+      '{subject_id:$subject_id,audience:$audience,action:$action}')
+    auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$grant_payload" /dev/null 204
+  done
+}
+
+grant_site_role business_manager
+grant_site_role general_manager
+
+create_project() {
+  project_number="$1"
+  project_name="$2"
+  project_output="$3"
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "$project_number" --arg name "$project_name" \
+    '{command_id:$command_id,project_number:$project_number,name:$name,summary:"C2 business engagement authorization",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+  app_json POST /project /api/v1/projects "$admin_cookies" "$payload" "$project_output" 201
+}
+
+create_project "C2-A-$stamp" "C2 Project A $stamp" "$workspace/project-a.json"
+create_project "C2-B-$stamp" "C2 Project B $stamp" "$workspace/project-b.json"
+project_a=$(jq -er .id "$workspace/project-a.json")
+project_b=$(jq -er .id "$workspace/project-b.json")
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$business_owner_person" --argjson source_revision "$business_owner_person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"business_owner"}')
+app_json POST /project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$assignment_payload" "$workspace/business-owner-assignment.json" 200
+business_assignment_id=$(jq -er .assignment.id "$workspace/business-owner-assignment.json")
+business_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/business-owner-assignment.json")
+
+assignment_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person_id "$production_owner_person" --argjson source_revision "$production_owner_person_revision" \
+  '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person_id,source_revision:$source_revision,role_key:"production_owner"}')
+app_json POST /project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$assignment_payload" "$workspace/production-owner-assignment.json" 200
+production_assignment_id=$(jq -er .assignment.id "$workspace/production-owner-assignment.json")
+production_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/production-owner-assignment.json")
+
+complete_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3}')
+app_json POST /project "/api/v1/projects/$project_a/complete-initiation" "$admin_cookies" "$complete_payload" "$workspace/project-a-active.json" 200
+project_active_revision=$(jq -er .revision "$workspace/project-a-active.json")
+jq -e '.status == "active"' "$workspace/project-a-active.json" >/dev/null
+
+# Create one real Evidence version through the public Nginx/Gateway path. The
+# Business Engagement service later has to exchange an exact File-scoped
+# workload credential before it may accept this reference.
+evidence_content="$workspace/c2-award.txt"
+printf 'C2 authorization evidence %s\n' "$stamp" >"$evidence_content"
+evidence_size=$(wc -c <"$evidence_content" | tr -d ' ')
+evidence_sha=$(openssl dgst -sha256 "$evidence_content" | awk '{print $2}')
+upload_payload=$(jq -cn --arg file_name "c2-award-$stamp.txt" --argjson size "$evidence_size" --arg sha "$evidence_sha" \
+  '{file_name:$file_name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:"c2-authorization-proof"}}')
+result=$(curl --silent --show-error --output "$workspace/upload-session.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: c2-upload-$stamp" \
+  --data "$upload_payload" "$base_url/evidence/v1/upload-sessions")
+actual=${result%% *}; duration=${result#* }
+record_http 'POST /evidence/v1/upload-sessions' 201 "$actual" "$duration"
+expect_status 201 "$actual" 'create Evidence upload session'
+upload_url=$(jq -er .authorization.upload_url "$workspace/upload-session.json")
+upload_session=$(jq -er .session_id "$workspace/upload-session.json")
+evidence_file=$(jq -er .file_id "$workspace/upload-session.json")
+result=$(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{time_total}' \
+  --request PUT -H 'Content-Type: text/plain' --data-binary "@$evidence_content" "$upload_url")
+actual=${result%% *}; duration=${result#* }
+record_http 'PUT /evidence/v1/local-uploads/{id}' 204 "$actual" "$duration"
+expect_status 204 "$actual" 'upload Evidence bytes'
+complete_upload=$(jq -cn --argjson size "$evidence_size" --arg sha "$evidence_sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+result=$(curl --silent --show-error --output "$workspace/evidence-version.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: c2-complete-$stamp" \
+  --data "$complete_upload" "$base_url/evidence/v1/upload-sessions/$upload_session/complete")
+actual=${result%% *}; duration=${result#* }
+record_http 'POST /evidence/v1/upload-sessions/{id}/complete' 200 "$actual" "$duration"
+expect_status 200 "$actual" 'complete Evidence upload'
+jq -e --arg id "$evidence_file" --arg sha "$evidence_sha" '.file_id == $id and .version == 1 and .status == "available" and .sha256 == $sha' "$workspace/evidence-version.json" >/dev/null
+
+business_owner_cookies="$workspace/business_owner.cookies"
+business_owner_csrf=$(cat "$workspace/business_owner.csrf")
+production_owner_cookies="$workspace/production_owner.cookies"
+production_owner_csrf=$(cat "$workspace/production_owner.csrf")
+business_manager_cookies="$workspace/business_manager.cookies"
+business_manager_csrf=$(cat "$workspace/business_manager.csrf")
+general_manager_cookies="$workspace/general_manager.cookies"
+general_manager_csrf=$(cat "$workspace/general_manager.csrf")
+finance_cookies="$workspace/finance.cookies"
+finance_csrf=$(cat "$workspace/finance.csrf")
+
+authorize_app "$business_owner_cookies" "$business_owner_csrf" business-engagement project "$project_a" "$business_assignment_id" "$business_assignment_revision" 303 "$workspace/business-owner-authorize.out"
+business_owner_credential=$(cookie_value "$business_owner_cookies" oms_cap_business_engagement)
+[ -n "$business_owner_credential" ] || { echo 'business owner credential is missing' >&2; exit 1; }
+decode_jwt_payload "$business_owner_credential" >"$workspace/business-owner-claims.json"
+jq -e --arg project_id "$project_a" '
+  .aud == "business-engagement" and
+  (.actions | sort) == (["business-engagement.applicability.manage","business-engagement.create","business-engagement.evidence.manage","business-engagement.history.read","business-engagement.method.select","business-engagement.read"] | sort) and
+  (.actions | index("business-engagement.cancel")) == null and
+  .scope == {kind:"resources",resources:[{type:"project",id:$project_id}]} and (.exp - .iat) <= 300
+' "$workspace/business-owner-claims.json" >/dev/null
+
+authorize_app "$production_owner_cookies" "$production_owner_csrf" business-engagement project "$project_a" "$production_assignment_id" "$production_assignment_revision" 303 "$workspace/production-owner-authorize.out"
+production_owner_credential=$(cookie_value "$production_owner_cookies" oms_cap_business_engagement)
+decode_jwt_payload "$production_owner_credential" >"$workspace/production-owner-claims.json"
+jq -e --arg project_id "$project_a" '
+  (.actions | sort) == (["business-engagement.history.read","business-engagement.read"] | sort) and
+  .scope == {kind:"resources",resources:[{type:"project",id:$project_id}]}
+' "$workspace/production-owner-claims.json" >/dev/null
+
+authorize_app "$business_manager_cookies" "$business_manager_csrf" business-engagement "" "" "" "" 303 "$workspace/business-manager-authorize.out"
+authorize_app "$general_manager_cookies" "$general_manager_csrf" business-engagement "" "" "" "" 303 "$workspace/general-manager-authorize.out"
+authorize_app "$finance_cookies" "$finance_csrf" business-engagement "" "" "" "" 403 "$workspace/finance-authorize-denied.json"
+[ -z "$(cookie_value "$finance_cookies" oms_cap_business_engagement)" ] || { echo 'finance unexpectedly received a Business Engagement credential' >&2; exit 1; }
+
+# The human workspace is served through the same Nginx/Gateway application
+# route as the API. It must remain unavailable without an IAM-issued
+# application credential, while an authorized browser receives the page,
+# script, and security policy from the formal entry path.
+result=$(curl --silent --show-error --dump-header "$workspace/business-page.headers" \
+  --output "$workspace/business-page.html" --write-out '%{http_code} %{time_total}' \
+  --cookie "$business_manager_cookies" "$base_url/business/")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /business/' 200 "$actual" "$duration"
+expect_status 200 "$actual" 'Business Engagement workspace'
+grep -F '经营承接工作区' "$workspace/business-page.html" >/dev/null
+grep -i '^content-security-policy:' "$workspace/business-page.headers" | grep -F "script-src 'self'" >/dev/null
+result=$(curl --silent --show-error --output "$workspace/business-demo.js" --write-out '%{http_code} %{time_total}' \
+  --cookie "$business_manager_cookies" "$base_url/business/assets/demo.js")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /business/assets/demo.js' 200 "$actual" "$duration"
+expect_status 200 "$actual" 'Business Engagement workspace script'
+grep -F 'allowed_actions' "$workspace/business-demo.js" >/dev/null
+grep -F '/gateway/authorize/business-engagement' "$workspace/business-demo.js" >/dev/null
+grep -F 'error.status===409' "$workspace/business-demo.js" >/dev/null
+grep -F 'error.status===503' "$workspace/business-demo.js" >/dev/null
+grep -F 'command_id:uuid()' "$workspace/business-demo.js" >/dev/null
+grep -F '../project/?project_id=' "$workspace/business-demo.js" >/dev/null
+node --check "$workspace/business-demo.js" >/dev/null
+
+# A valid fact for Project A cannot be replayed against Project B. Gateway must
+# also clear the old application cookie when reauthorization fails.
+authorize_app "$business_owner_cookies" "$business_owner_csrf" business-engagement project "$project_b" "$business_assignment_id" "$business_assignment_revision" 403 "$workspace/business-owner-project-b-denied.json"
+[ -z "$(cookie_value "$business_owner_cookies" oms_cap_business_engagement)" ] || { echo 'failed reauthorization retained stale Business Engagement cookie' >&2; exit 1; }
+authorize_app "$business_owner_cookies" "$business_owner_csrf" business-engagement project "$project_a" "$business_assignment_id" "$business_assignment_revision" 303 "$workspace/business-owner-reauthorize-a.out"
+
+create_engagement=$(jq -cn --arg command_id "$(new_uuid)" --arg project_id "$project_a" --argjson revision "$project_active_revision" \
+  '{command_id:$command_id,project_id:$project_id,project_source_revision:$revision}')
+app_json POST /business /api/v1/business-engagements "$business_owner_cookies" "$create_engagement" "$workspace/engagement-created.json" 201
+engagement_id=$(jq -er .engagement.id "$workspace/engagement-created.json")
+jq -e --arg project_id "$project_a" '.engagement.project_id == $project_id and .engagement.status == "draft" and .engagement.revision == 1' "$workspace/engagement-created.json" >/dev/null
+
+applicability_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:1,applicable:true,reason:""}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/applicability" "$business_owner_cookies" "$applicability_payload" "$workspace/applicable.json" 200
+method_payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:2,method:"comparison"}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/method" "$business_owner_cookies" "$method_payload" "$workspace/method.json" 200
+
+# A stale browser revision must fail without changing the aggregate or adding
+# a history event. The page detects this 409, discards the pending replay and
+# reloads the latest state so the operator has to decide again.
+stale_applicability=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:2,applicable:true,reason:"stale browser revision"}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/applicability" "$business_owner_cookies" "$stale_applicability" "$workspace/stale-revision-conflict.json" 409
+jq -e '.error.code == "REVISION_CONFLICT" and .error.retryable == true' "$workspace/stale-revision-conflict.json" >/dev/null
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_owner_cookies" "" "$workspace/after-stale-conflict.json" 200
+jq -e '.engagement.revision == 3 and .engagement.method == "comparison"' "$workspace/after-stale-conflict.json" >/dev/null
+app_json GET /business "/api/v1/business-engagements/$engagement_id/history" "$business_owner_cookies" "" "$workspace/after-stale-conflict-history.json" 200
+jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected"]' "$workspace/after-stale-conflict-history.json" >/dev/null
+
+material_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg file_id "$evidence_file" \
+  '{command_id:$command_id,expected_revision:3,operation:"put",requirement_key:"award_document",evidence_file_id:$file_id,evidence_version:1,evidence_source_revision:1}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/materials" "$business_owner_cookies" "$material_payload" "$workspace/material.json" 200
+jq -e --arg file_id "$evidence_file" '.engagement.revision == 4 and .engagement.status == "collecting_evidence" and .materials[0].evidence_file_id == $file_id' "$workspace/material.json" >/dev/null
+engagement_revision=4
+
+if [ "${C2_ENABLE_DEPENDENCY_FAILURE_TEST:-false}" = true ]; then
+	# Stop only the isolated D1 Evidence container, prove the target returns
+	# retryable 503 without a partial write, then restore the dependency and
+	# retry the same intent with a new command_id.
+	compose stop evidence-service >/dev/null
+	evidence_stopped=true
+	unavailable_material=$(jq -cn --arg command_id "$(new_uuid)" --arg file_id "$evidence_file" --argjson revision "$engagement_revision" \
+	  '{command_id:$command_id,expected_revision:$revision,operation:"put",requirement_key:"award_document",evidence_file_id:$file_id,evidence_version:1,evidence_source_revision:1}')
+	app_json POST /business "/api/v1/business-engagements/$engagement_id/materials" "$business_owner_cookies" "$unavailable_material" "$workspace/evidence-unavailable.json" 503
+	jq -e '.error.code == "REFERENCE_SERVICE_UNAVAILABLE" and .error.retryable == true' "$workspace/evidence-unavailable.json" >/dev/null
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_owner_cookies" "" "$workspace/after-evidence-unavailable.json" 200
+	jq -e --argjson revision "$engagement_revision" '.engagement.revision == $revision and (.materials | length) == 1' "$workspace/after-evidence-unavailable.json" >/dev/null
+
+	compose start evidence-service >/dev/null
+	wait_healthy evidence-service
+	evidence_stopped=false
+	retry_material=$(printf '%s' "$unavailable_material" | jq --arg command_id "$(new_uuid)" '.command_id=$command_id')
+	app_json POST /business "/api/v1/business-engagements/$engagement_id/materials" "$business_owner_cookies" "$retry_material" "$workspace/evidence-retry.json" 200
+	jq -e --arg file_id "$evidence_file" '.engagement.revision == 5 and (.materials | map(select(.superseded_at == null)) | length) == 1 and (.materials | map(select(.superseded_at == null))[0].evidence_file_id) == $file_id' "$workspace/evidence-retry.json" >/dev/null
+	engagement_revision=5
+fi
+
+app_json GET /business /api/v1/business-engagements "$business_owner_cookies" "" "$workspace/business-owner-list.json" 200
+jq -e --arg engagement_id "$engagement_id" '
+  (.items | any(.id == $engagement_id)) and
+  (.allowed_actions | index("business-engagement.create")) != null and
+  (.allowed_actions | index("business-engagement.cancel")) == null
+' "$workspace/business-owner-list.json" >/dev/null
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_owner_cookies" "" "$workspace/business-owner-details.json" 200
+jq -e '
+  (.allowed_actions | index("business-engagement.read")) != null and
+  (.allowed_actions | index("business-engagement.applicability.manage")) != null and
+  (.allowed_actions | index("business-engagement.method.select")) != null and
+  (.allowed_actions | index("business-engagement.evidence.manage")) != null and
+  (.allowed_actions | index("business-engagement.history.read")) != null and
+  (.allowed_actions | index("business-engagement.cancel")) == null
+' "$workspace/business-owner-details.json" >/dev/null
+
+cancel_payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson revision "$engagement_revision" '{command_id:$command_id,expected_revision:$revision,reason:"owner must not cancel"}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/cancel" "$business_owner_cookies" "$cancel_payload" "$workspace/owner-cancel-denied.json" 403
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$production_owner_cookies" "" "$workspace/production-owner-read.json" 200
+app_json POST /business "/api/v1/business-engagements/$engagement_id/method" "$production_owner_cookies" "$method_payload" "$workspace/production-owner-write-denied.json" 403
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$general_manager_cookies" "" "$workspace/general-manager-read.json" 200
+app_json POST /business /api/v1/business-engagements "$general_manager_cookies" "$create_engagement" "$workspace/general-manager-create-denied.json" 403
+
+result=$(curl --silent --show-error --output "$workspace/finance-forged-denied.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$finance_cookies" -H 'Authorization: Bearer forged' -H 'X-OMS-Subject-ID: forged-admin' \
+  -H 'X-Allowed-Actions: business-engagement.create,business-engagement.cancel' -H 'Content-Type: application/json' \
+  --data "$create_engagement" "$base_url/business/api/v1/business-engagements")
+actual=${result%% *}; duration=${result#* }
+record_http 'POST /business/api/v1/business-engagements forged-identity' 401 "$actual" "$duration"
+expect_status 401 "$actual" 'forged Business Engagement identity'
+
+# Direct grants can be revoked independently from Project-derived roles. A
+# refresh replaces the old cookie and the target still performs final checks.
+business_manager_subject=$(jq -er .subject_id "$workspace/business_manager-meta.json")
+revoke_payload=$(jq -cn --arg subject_id "$business_manager_subject" --arg audience business-engagement --arg action business-engagement.method.select \
+  '{subject_id:$subject_id,audience:$audience,action:$action}')
+auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$revoke_payload" /dev/null 204
+authorize_app "$business_manager_cookies" "$business_manager_csrf" business-engagement "" "" "" "" 303 "$workspace/business-manager-after-revoke.out"
+decode_jwt_payload "$(cookie_value "$business_manager_cookies" oms_cap_business_engagement)" >"$workspace/business-manager-after-revoke-claims.json"
+jq -e '(.actions | index("business-engagement.method.select")) == null and (.actions | index("business-engagement.cancel")) != null' "$workspace/business-manager-after-revoke-claims.json" >/dev/null
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_manager_cookies" "" "$workspace/business-manager-after-revoke-details.json" 200
+jq -e '
+  (.allowed_actions | index("business-engagement.method.select")) == null and
+  (.allowed_actions | index("business-engagement.cancel")) != null and
+  (.allowed_actions | index("business-engagement.read")) != null
+' "$workspace/business-manager-after-revoke-details.json" >/dev/null
+app_json POST /business "/api/v1/business-engagements/$engagement_id/method" "$business_manager_cookies" "$method_payload" "$workspace/business-manager-method-after-revoke-denied.json" 403
+
+cancel_payload=$(jq -cn --arg command_id "$(new_uuid)" --argjson revision "$engagement_revision" '{command_id:$command_id,expected_revision:$revision,reason:"C2 cancellation boundary proof"}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/cancel" "$business_manager_cookies" "$cancel_payload" "$workspace/cancelled.json" 200
+cancelled_revision=$((engagement_revision + 1))
+jq -e --argjson revision "$cancelled_revision" '.engagement.status == "cancelled" and .engagement.revision == $revision' "$workspace/cancelled.json" >/dev/null
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_manager_cookies" "" "$workspace/cancelled-details.json" 200
+jq -e '
+  (.allowed_actions | sort) == (["business-engagement.history.read","business-engagement.read"] | sort)
+' "$workspace/cancelled-details.json" >/dev/null
+after_cancel_method=$(jq -cn --arg command_id "$(new_uuid)" --argjson revision "$cancelled_revision" '{command_id:$command_id,expected_revision:$revision,method:"tender"}')
+app_json POST /business "/api/v1/business-engagements/$engagement_id/method" "$business_owner_cookies" "$after_cancel_method" "$workspace/cancelled-state-denied.json" 409
+app_json GET /business "/api/v1/business-engagements/$engagement_id/history" "$general_manager_cookies" "" "$workspace/history.json" 200
+if [ "${C2_ENABLE_DEPENDENCY_FAILURE_TEST:-false}" = true ]; then
+	jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected","material_put","material_put","engagement_cancelled"]' "$workspace/history.json" >/dev/null
+else
+	jq -e '(.items | map(.event_type)) == ["engagement_created","applicability_changed","method_selected","material_put","engagement_cancelled"]' "$workspace/history.json" >/dev/null
+fi
+
+# Ending the assignment prevents new policy credentials. The already-issued
+# owner token remains usable only inside its signed <=300 second residual
+# window, which was asserted above.
+fresh_owner_cookies="$workspace/business-owner-fresh.cookies"
+fresh_owner_csrf=$(fetch_csrf "$fresh_owner_cookies" "$workspace/business-owner-fresh-csrf.json")
+login "$fresh_owner_cookies" "$fresh_owner_csrf" "$(jq -er .username "$workspace/business_owner-meta.json")" "$(actor_password business_owner)" "$workspace/business-owner-fresh-login.json"
+end_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$business_assignment_id" --argjson expected_revision "$project_active_revision" \
+  '{command_id:$command_id,expected_revision:$expected_revision,operation:"end",assignment_id:$assignment_id,end_reason:"C2 handoff proof"}')
+app_json POST /project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$end_payload" "$workspace/business-owner-ended.json" 200
+authorize_app "$fresh_owner_cookies" "$fresh_owner_csrf" business-engagement project "$project_a" "$business_assignment_id" "$business_assignment_revision" 403 "$workspace/ended-assignment-new-credential-denied.json"
+result=$(curl --silent --show-error --output "$workspace/ended-assignment-page.out" --write-out '%{http_code} %{time_total}' \
+  --cookie "$fresh_owner_cookies" "$base_url/business/")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /business/ after ended Assignment' 303 "$actual" "$duration"
+expect_status 303 "$actual" 'ended Assignment browser entry'
+app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_owner_cookies" "" "$workspace/old-owner-residual-read.json" 200
+
+if [ "${C2_ENABLE_IAM_BOUNDARY_TEST:-false}" = true ]; then
+	# Disabling an account invalidates its Suite Session immediately. A capability
+	# already signed before the change remains offline-verifiable only inside its
+	# <=300 second lifetime; an explicit refresh fails and clears that old cookie.
+	manager_status=$(jq -cn --arg subject_id "$business_manager_subject" '{subject_id:$subject_id,status:"disabled"}')
+	auth_json /api/v1/admin/status "$admin_cookies" "$admin_csrf" "$manager_status" /dev/null 204
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$business_manager_cookies" "" "$workspace/disabled-manager-residual-read.json" 200
+	result=$(curl --silent --show-error --output "$workspace/disabled-manager-session.json" --write-out '%{http_code} %{time_total}' \
+		--cookie "$business_manager_cookies" "$base_url/auth/api/v1/session")
+	actual=${result%% *}; duration=${result#* }
+	record_http 'GET /auth/api/v1/session after account disable' 401 "$actual" "$duration"
+	expect_status 401 "$actual" 'disabled account session'
+	authorize_app "$business_manager_cookies" "$business_manager_csrf" business-engagement "" "" "" "" 401 "$workspace/disabled-manager-authorize.json"
+	[ -z "$(cookie_value "$business_manager_cookies" oms_cap_business_engagement)" ] || { echo 'disabled account refresh retained stale Business Engagement cookie' >&2; exit 1; }
+	login "$business_manager_cookies" "$business_manager_csrf" "$(jq -er .username "$workspace/business_manager-meta.json")" "$(actor_password business_manager)" "$workspace/disabled-manager-login.json" 401
+
+	# IAM outage: an already-issued target credential remains TTL-bounded and
+	# locally verifiable, but no new credential may be issued. Explicit refresh
+	# fails closed and removes the browser's stale application cookie.
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$general_manager_cookies" "" "$workspace/pre-iam-outage-read.json" 200
+	compose stop identity-access >/dev/null
+	identity_stopped=true
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$general_manager_cookies" "" "$workspace/iam-outage-residual-read.json" 200
+	authorize_app "$general_manager_cookies" "$general_manager_csrf" business-engagement "" "" "" "" 502 "$workspace/iam-outage-authorize.json"
+	[ -z "$(cookie_value "$general_manager_cookies" oms_cap_business_engagement)" ] || { echo 'IAM outage refresh retained stale Business Engagement cookie' >&2; exit 1; }
+	compose start identity-access >/dev/null
+	wait_healthy identity-access
+	identity_stopped=false
+	authorize_app "$general_manager_cookies" "$general_manager_csrf" business-engagement "" "" "" "" 303 "$workspace/iam-recovered-authorize.out"
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$general_manager_cookies" "" "$workspace/iam-recovered-read.json" 200
+
+	# Policy dependency outage: Project is stopped while IAM remains healthy.
+	# Existing signed access remains TTL-bounded; a policy refresh returns an
+	# explicit 503, writes no issuance audit, and succeeds exactly once after
+	# Project recovery.
+	policy_before=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='"'"'iam_policy_credential_issued'"'"' AND details->'"'"'policy_decision'"'"'->>'"'"'policy_id'"'"'='"'"'business-engagement-project-access'"'"'"')
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$production_owner_cookies" "" "$workspace/pre-policy-outage-read.json" 200
+	compose stop project-workspace >/dev/null
+	project_stopped=true
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$production_owner_cookies" "" "$workspace/policy-outage-residual-read.json" 200
+	authorize_app "$production_owner_cookies" "$production_owner_csrf" business-engagement project "$project_a" "$production_assignment_id" "$production_assignment_revision" 503 "$workspace/policy-outage-authorize.json"
+	[ -z "$(cookie_value "$production_owner_cookies" oms_cap_business_engagement)" ] || { echo 'Policy outage refresh retained stale Business Engagement cookie' >&2; exit 1; }
+	policy_after_failure=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='"'"'iam_policy_credential_issued'"'"' AND details->'"'"'policy_decision'"'"'->>'"'"'policy_id'"'"'='"'"'business-engagement-project-access'"'"'"')
+	[ "$policy_after_failure" -eq "$policy_before" ] || { echo 'failed policy evaluation wrote an issuance audit' >&2; exit 1; }
+	compose start project-workspace >/dev/null
+	wait_healthy project-workspace
+	project_stopped=false
+	authorize_app "$production_owner_cookies" "$production_owner_csrf" business-engagement project "$project_a" "$production_assignment_id" "$production_assignment_revision" 303 "$workspace/policy-recovered-authorize.out"
+	policy_after_recovery=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='"'"'iam_policy_credential_issued'"'"' AND details->'"'"'policy_decision'"'"'->>'"'"'policy_id'"'"'='"'"'business-engagement-project-access'"'"'"')
+	[ "$policy_after_recovery" -eq $((policy_before + 1)) ] || { echo 'recovered policy evaluation did not issue exactly one credential audit' >&2; exit 1; }
+	app_json GET /business "/api/v1/business-engagements/$engagement_id" "$production_owner_cookies" "" "$workspace/policy-recovered-read.json" 200
+fi
+
+# IAM administration is not an implicit business role. Remove the bootstrap
+# administrator's explicit Business Engagement grants and prove that even an
+# administrator cannot mint an application credential without those grants.
+jq -r '.capabilities[].id' "$repo_dir/contracts/access/v1/examples/business-engagement-capabilities.json" |
+while IFS= read -r admin_action; do
+  revoke_payload=$(jq -cn --arg subject_id "$admin_subject_id" --arg audience business-engagement --arg action "$admin_action" \
+    '{subject_id:$subject_id,audience:$audience,action:$action}')
+  auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$revoke_payload" /dev/null 204
+done
+identity_admin_cookies="$workspace/identity-admin-fresh.cookies"
+identity_admin_csrf=$(fetch_csrf "$identity_admin_cookies" "$workspace/identity-admin-csrf.json")
+login "$identity_admin_cookies" "$identity_admin_csrf" "$admin_username" "$admin_password" "$workspace/identity-admin-login.json"
+authorize_app "$identity_admin_cookies" "$identity_admin_csrf" business-engagement "" "" "" "" 403 "$workspace/identity-admin-business-denied.json"
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_restored=true
+
+# The consuming application must not carry static cross-application tokens.
+compose exec -T business-engagement sh -eu -c '
+  test -z "${PROJECT_ACCESS_TOKEN:-}"
+  test -z "${EVIDENCE_ACCESS_TOKEN:-}"
+  test -n "${IAM_SERVICE_CREDENTIAL_URL:-}"
+  test -n "${WORKLOAD_ID:-}"
+' >/dev/null
+
+audit_counts=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -F"," -c "SELECT count(*) FILTER (WHERE action='"'"'iam_policy_credential_issued'"'"' AND details->'"'"'policy_decision'"'"'->>'"'"'policy_id'"'"'='"'"'business-engagement-project-access'"'"'),count(*) FILTER (WHERE action='"'"'iam_service_credential_issued'"'"' AND details->>'"'"'workload_id'"'"'='"'"'business-engagement'"'"' AND details->>'"'"'audience'"'"'='"'"'project-workspace'"'"'),count(*) FILTER (WHERE action='"'"'iam_service_credential_issued'"'"' AND details->>'"'"'workload_id'"'"'='"'"'business-engagement'"'"' AND details->>'"'"'audience'"'"'='"'"'evidence-service'"'"'),count(*) FILTER (WHERE action='"'"'iam_capability_revoked'"'"'),count(*) FILTER (WHERE action='"'"'iam_subject_status_changed'"'"' AND details->>'"'"'status'"'"'='"'"'disabled'"'"') FROM iam_audit_entries"')
+policy_audits=$(printf '%s' "$audit_counts" | cut -d, -f1)
+project_workload_audits=$(printf '%s' "$audit_counts" | cut -d, -f2)
+evidence_workload_audits=$(printf '%s' "$audit_counts" | cut -d, -f3)
+revoke_audits=$(printf '%s' "$audit_counts" | cut -d, -f4)
+disabled_audits=$(printf '%s' "$audit_counts" | cut -d, -f5)
+[ "$policy_audits" -ge 3 ] && [ "$project_workload_audits" -ge 1 ] && [ "$evidence_workload_audits" -ge 1 ] && [ "$revoke_audits" -ge 8 ] || {
+  echo "expected policy/workload/revoke audit evidence, got $audit_counts" >&2
+  exit 1
+}
+if [ "${C2_ENABLE_IAM_BOUNDARY_TEST:-false}" = true ]; then
+	[ "$disabled_audits" -ge 1 ] || { echo "expected disabled-account audit evidence, got $audit_counts" >&2; exit 1; }
+fi
+
+business_history_count=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d business_engagement -At -c "SELECT count(*) FROM business_engagement_history_events"')
+[ "$business_history_count" -ge 5 ] || { echo "Business Engagement history evidence is incomplete: $business_history_count" >&2; exit 1; }
+
+http_samples=$(awk -F '\t' 'NR > 1 {count++} END {print count+0}' "$http_evidence")
+http_failures=$(awk -F '\t' 'NR > 1 && $2 != $3 {count++} END {print count+0}' "$http_evidence")
+max_latency=$(awk -F '\t' 'NR > 1 && $4 > max {max=$4} END {printf "%.6f", max+0}' "$http_evidence")
+[ "$http_failures" -eq 0 ] || { echo "$http_failures HTTP matrix assertions failed" >&2; exit 1; }
+
+printf '%s\n' \
+  'D1 C2 Business Engagement authorization acceptance passed:' \
+  '- public path was Nginx -> Gateway -> IAM capability credential -> target application' \
+  '- Project Assignment policy issued application-specific actions for business and production owners' \
+  '- owner credential was exact Project-scoped, <=300 seconds, and excluded privileged cancellation' \
+  '- direct tenant roles, no-access Finance, and IAM administrator separation matched the C2 overlay' \
+  '- mismatched Project facts, forged identity headers, ended Assignment, and revoked actions failed closed' \
+  '- target application enforced action, resource scope, revision, and cancelled-state rules' \
+  '- browser workspace and API projected server-computed allowed_actions; refresh removed revoked actions' \
+  '- stale revision returned 409 with no write; browser recovery reloads latest state and never replays the stale command' \
+	"- dependency-failure injection enabled: ${C2_ENABLE_DEPENDENCY_FAILURE_TEST:-false}; 503 retained the projection and required a new command_id" \
+	"- IAM boundary injection enabled: ${C2_ENABLE_IAM_BOUNDARY_TEST:-false}; disabled account, IAM outage, and Policy dependency outage were fail-closed on refresh" \
+  '- ended Assignment blocked a fresh browser entry while the signed residual token stayed TTL-bounded' \
+  '- Business Engagement exchanged short-lived exact Project/File service credentials without static tokens' \
+  '- Evidence reference snapshot and immutable Business Engagement history were preserved' \
+	"- IAM audit evidence: policy=$policy_audits, project_workload=$project_workload_audits, evidence_workload=$evidence_workload_audits, revocations=$revoke_audits, disabled=$disabled_audits" \
+  "- observed HTTP assertions: $http_samples; status mismatches: $http_failures; max local request time: ${max_latency}s"

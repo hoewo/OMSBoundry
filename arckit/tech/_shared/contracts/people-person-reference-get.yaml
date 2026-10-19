@@ -1,0 +1,27 @@
+# People Person 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/people-person-reference-get.yaml", domain: "people-groups", owner: "People & Groups", version: "1.0", created: "2026-09-28", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/persons/{person_id}", summary: "向受信业务应用提供精确 Person 当前引用", auth_required: true, audience: "people-groups", capability: "people-groups.person.reference.read"}
+request:
+  path_params:
+    - {name: person_id, type: string, format: uuid, required: true}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, resource_type, display_name, status, revision]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: people-groups}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: person}
+        display_name: {type: string, minLength: 1}
+        status: {type: string, enum: [active, inactive]}
+        revision: {type: integer, minimum: 1}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PERSON_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受精确 Person Scope。", "不返回 IAM 账号、密码、完整组织或薪酬事实。", "消费应用冻结 ID、revision、display_name 与响应 digest，后续变化不改写历史。"]

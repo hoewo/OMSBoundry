@@ -1,0 +1,11 @@
+# Business Engagement 历史页
+metadata: {path: "tech/_shared/models/BusinessEngagementHistoryPage.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+type: object
+required: [items]
+properties:
+  items:
+    type: array
+    items:
+      type: object
+      required: [id, tenant_id, engagement_id, engagement_revision, event_sequence, event_type, command_id, actor_subject, occurred_at, payload]
+  next_after_sequence: {type: [integer, "null"], minimum: 1}

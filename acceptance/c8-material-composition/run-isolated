@@ -1,0 +1,248 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-c8-materials.XXXXXX")
+container="oms-c8-materials-pg18-$$"
+evidence_dir=${C8_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c8-material-composition-evidence"}
+database_port=${C8_DATABASE_PORT:-55469}
+browser_fixture=${C8_BROWSER_FIXTURE:-}
+browser_release=${C8_BROWSER_RELEASE:-}
+service_pids=''
+containers_before=$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')
+
+if [ "$containers_before" -ne 0 ]; then
+  echo "C8 low-resource acceptance requires Docker to start at zero running containers; found $containers_before" >&2
+  exit 2
+fi
+
+rm -rf "$evidence_dir"
+mkdir -p "$evidence_dir"
+
+cleanup() {
+  result=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  [ -z "$browser_fixture" ] || rm -f "$browser_fixture"
+  [ -z "$browser_release" ] || rm -f "$browser_release"
+  containers_after=$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')
+  printf 'phase\trunning_containers\nstart\t%s\nend\t%s\n' "$containers_before" "$containers_after" >"$runtime/resource-usage.tsv"
+  if [ "$containers_after" -ne 0 ]; then
+    echo "C8 cleanup left $containers_after running Docker container(s)" >&2
+    result=1
+  fi
+  mkdir -p "$evidence_dir"
+  for artifact in processes.tsv http-evidence.tsv resource-usage.tsv materials.json materials-outage.json materials-recovered.json wrong-project.json workload-audit.tsv result.md iam.log project.log evidence.log evidence-recovery.log; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$result"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command in go docker curl jq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+build() {
+  name=$1
+  package=$2
+  (cd "$repo_dir" && GOMAXPROCS=2 go build -p 1 -o "$runtime/$name" "$package")
+}
+build identity-access ./backend/platform/identity-access/cmd/server
+build project-workspace ./backend/services/project-workspace/cmd/server
+build evidence-service ./backend/services/evidence-service/cmd/server
+build workload-keyctl ./packages/workload-identity/cmd/workload-keyctl
+
+tenant_id=11111111-1111-4111-8111-111111111111
+actor_id=22222222-2222-4222-8222-222222222222
+project_id=c8000000-0000-4000-8000-000000000001
+adjacent_project_id=c8000000-0000-4000-8000-000000000002
+file_id=c8000000-0000-4000-8000-000000000010
+project_workload_subject=c8000000-0000-4000-8000-000000000070
+issuer=https://iam.c8.test
+
+WORKLOAD_ID=project-workspace WORKLOAD_SUBJECT_ID="$project_workload_subject" \
+WORKLOAD_KEY_FILE="$runtime/project-workload-private.json" WORKLOAD_PUBLIC_KEY_FILE="$runtime/project-workload-public.json" \
+  "$runtime/workload-keyctl" init
+
+jq -n --arg public "$runtime/project-workload-public.json" --arg subject "$project_workload_subject" '{
+  schema_version:"1", identities:[{
+    id:"project-workspace", subject_id:$subject, display_name:"Project Workspace",
+    public_keys_path:$public,
+    permissions:[
+      {audience:"evidence-service",action:"evidence-service.metadata.read",resource_types:["file"]}
+    ]
+  }]
+}' >"$runtime/workload-policy.json"
+
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p "127.0.0.1:$database_port:5432" postgres:18.6 >/dev/null
+[ "$(docker ps -q | wc -l | tr -d ' ')" -eq 1 ] || { echo 'C8 resource ceiling exceeded' >&2; exit 1; }
+for attempt in $(seq 1 60); do
+  docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { echo 'PostgreSQL did not become ready' >&2; exit 1; }
+  sleep 1
+done
+for database in identity project evidence; do
+  docker exec "$container" createdb -U postgres "$database"
+done
+
+start() {
+  name=$1
+  shift
+  "$@" >"$runtime/$name.log" 2>&1 &
+  pid=$!
+  service_pids="$service_pids $pid"
+  eval "${name}_pid=$pid"
+}
+
+wait_http() {
+  url=$1
+  for attempt in $(seq 1 90); do
+    curl --silent --fail "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 90 ] || { echo "$url did not become ready" >&2; exit 1; }
+    sleep 1
+  done
+}
+
+manifest_paths="$repo_dir/contracts/access/v1/examples/project-workspace-capabilities.json,$repo_dir/contracts/access/v1/examples/evidence-service-capabilities.json"
+start iam env HTTP_ADDR=127.0.0.1:19300 DATABASE_URL="postgres://postgres:postgres@127.0.0.1:$database_port/identity?sslmode=disable" \
+  MIGRATION_MODE=auto SESSION_COOKIE_SECURE=false TENANT_ID="$tenant_id" TENANT_NAME='C8 资料组合' \
+  PUBLIC_ISSUER="$issuer" SIGNING_KEY_FILE="$runtime/iam-signing.json" \
+  BOOTSTRAP_ADMIN_USERNAME=admin BOOTSTRAP_ADMIN_DISPLAY_NAME='C8 验收管理员' BOOTSTRAP_ADMIN_PASSWORD='C8AcceptancePassword_2026' \
+  CAPABILITY_MANIFEST_PATHS="$manifest_paths" WORKLOAD_IDENTITY_POLICY_PATH="$runtime/workload-policy.json" \
+  "$runtime/identity-access"
+wait_http http://127.0.0.1:19300/health/ready
+curl --silent --fail http://127.0.0.1:19300/api/v1/.well-known/jwks.json >"$runtime/iam-public.json"
+
+mkdir -p "$runtime/evidence-objects"
+start evidence env HTTP_ADDR=127.0.0.1:19301 DATABASE_URL="postgres://postgres:postgres@127.0.0.1:$database_port/evidence?sslmode=disable" \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  STORAGE_PROVIDER=local PUBLIC_BASE_URL=http://127.0.0.1:19301 LOCAL_STORAGE_ROOT="$runtime/evidence-objects" \
+  LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE \
+  "$runtime/evidence-service"
+wait_http http://127.0.0.1:19301/health/ready
+
+start project env HTTP_ADDR=127.0.0.1:19302 DATABASE_URL="postgres://postgres:postgres@127.0.0.1:$database_port/project?sslmode=disable" \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  IAM_SERVICE_CREDENTIAL_URL=http://127.0.0.1:19300/api/v1/service-credentials \
+  WORKLOAD_ID=project-workspace WORKLOAD_SUBJECT_ID="$project_workload_subject" WORKLOAD_KEY_FILE="$runtime/project-workload-private.json" \
+  WORKLOAD_REFRESH_BEFORE=15s REFERENCE_TIMEOUT=2s EVIDENCE_BASE_URL=http://127.0.0.1:19301 \
+  "$runtime/project-workspace"
+wait_http http://127.0.0.1:19302/health/ready
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d evidence <<SQL
+INSERT INTO files(tenant_id,id,created_at,created_by_subject)
+VALUES('$tenant_id','$file_id',now(),'$actor_id');
+INSERT INTO file_versions(tenant_id,file_id,version,status,file_name,size_bytes,media_type,sha256,provider,bucket,object_key,created_at,created_by_subject,created_by_name)
+VALUES('$tenant_id','$file_id',1,'available','C8-项目成果.pdf',4096,'application/pdf',repeat('a',64),'local','','c8/$file_id/1',now(),'$actor_id','C8 验收管理员');
+SQL
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d project <<SQL
+INSERT INTO projects(id,tenant_id,project_number,project_number_normalized,name,summary,project_type_keys,status,revision,created_by,created_at,updated_at) VALUES
+  ('$project_id','$tenant_id','C8-001','c8-001','C8 资料组合项目','真实 IAM 与 Evidence 组合',ARRAY['design'],'active',1,'$actor_id',now(),now()),
+  ('$adjacent_project_id','$tenant_id','C8-002','c8-002','C8 相邻项目','精确 Scope 负例',ARRAY['design'],'active',1,'$actor_id',now(),now());
+INSERT INTO project_resource_links(id,tenant_id,project_id,target_service,resource_type,resource_id,source_revision,relation_key,note,created_project_revision,linked_at) VALUES
+  ('c8000000-0000-4000-8000-000000000020','$tenant_id','$project_id','evidence-service','evidence-file','$file_id',1,'primary-material','当前资料',1,now()),
+  ('c8000000-0000-4000-8000-000000000021','$tenant_id','$project_id','evidence-service','evidence-file','$file_id',2,'stale-material','冻结旧 revision 的负例',1,now());
+SQL
+
+admin_cookies="$runtime/admin.cookies"
+csrf=$(curl --silent --fail --cookie-jar "$admin_cookies" http://127.0.0.1:19300/api/v1/csrf | jq -er .csrf_token)
+curl --silent --fail --cookie "$admin_cookies" --cookie-jar "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data '{"username":"admin","password":"C8AcceptancePassword_2026"}' http://127.0.0.1:19300/api/v1/login >/dev/null
+admin_subject=$(curl --silent --fail --cookie "$admin_cookies" http://127.0.0.1:19300/api/v1/session | jq -er .principal.subject_id)
+
+grant_materials() {
+  scoped_project=$1
+  scope=$(jq -cn --arg project "$scoped_project" '{kind:"resources",resources:[{type:"project",id:$project}]}')
+  payload=$(jq -cn --arg subject "$admin_subject" --argjson scope "$scope" '{subject_id:$subject,audience:"project-workspace",action:"project-workspace.materials.read",scope:$scope}')
+  curl --silent --fail --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+    --data "$payload" http://127.0.0.1:19300/api/v1/admin/grants >/dev/null
+}
+credential() {
+  scoped_project=$1
+  scope=$(jq -cn --arg project "$scoped_project" '{kind:"resources",resources:[{type:"project",id:$project}]}')
+  payload=$(jq -cn --argjson scope "$scope" '{audience:"project-workspace",scope:$scope}')
+  curl --silent --fail --cookie "$admin_cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+    --data "$payload" http://127.0.0.1:19300/api/v1/credentials | jq -er .token
+}
+grant_materials "$project_id"
+grant_materials "$adjacent_project_id"
+materials_token=$(credential "$project_id")
+adjacent_token=$(credential "$adjacent_project_id")
+
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+request() {
+  url=$1
+  token=$2
+  output=$3
+  expected=$4
+  actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' -H "Authorization: Bearer $token" "$url")
+  printf 'GET %s\t%s\t%s\n' "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { cat "$output" >&2; echo "expected HTTP $expected, got $actual" >&2; exit 1; }
+}
+
+echo '[1/4] 真实 IAM 工作负载换票和 Project 资料组合'
+request "http://127.0.0.1:19302/api/v1/projects/$project_id/materials" "$materials_token" "$runtime/materials.json" 200
+jq -e --arg file "$file_id" '
+  .project_id == "c8000000-0000-4000-8000-000000000001" and
+  .project_revision == 1 and (.segments | length) == 2 and
+  any(.segments[]; .resource_id == $file and .relation_key == "primary-material" and .state == "available" and .source_revision == 1 and .linked_revision == 1 and .file_name == "C8-项目成果.pdf" and .source_digest == ("a" * 64)) and
+  any(.segments[]; .resource_id == $file and .relation_key == "stale-material" and .state == "revision_changed" and .error_code == "source_revision_changed" and .source_revision == 1 and .linked_revision == 2) and
+  ([.. | objects | keys[]] | index("object_key") | not) and
+  ([.. | objects | keys[]] | index("bucket") | not)
+' "$runtime/materials.json" >/dev/null
+
+echo '[2/4] 相邻 Project Scope 在进入组合前被拒绝'
+request "http://127.0.0.1:19302/api/v1/projects/$project_id/materials" "$adjacent_token" "$runtime/wrong-project.json" 403
+jq -e '.error.code == "scope_denied"' "$runtime/wrong-project.json" >/dev/null
+
+echo '[3/4] Evidence 停机产生局部分段失败，恢复后重新可用'
+kill "$evidence_pid"
+wait "$evidence_pid" >/dev/null 2>&1 || true
+request "http://127.0.0.1:19302/api/v1/projects/$project_id/materials" "$materials_token" "$runtime/materials-outage.json" 200
+jq -e '(.segments | length) == 2 and all(.segments[]; .state == "unavailable" and .error_code == "source_unavailable")' "$runtime/materials-outage.json" >/dev/null
+
+start evidence_recovery env HTTP_ADDR=127.0.0.1:19301 DATABASE_URL="postgres://postgres:postgres@127.0.0.1:$database_port/evidence?sslmode=disable" \
+  MIGRATION_MODE=auto IDENTITY_PROVIDER=iam IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant_id" IAM_PUBLIC_KEYS_PATH="$runtime/iam-public.json" \
+  STORAGE_PROVIDER=local PUBLIC_BASE_URL=http://127.0.0.1:19301 LOCAL_STORAGE_ROOT="$runtime/evidence-objects" \
+  LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE \
+  "$runtime/evidence-service"
+wait_http http://127.0.0.1:19301/health/ready
+request "http://127.0.0.1:19302/api/v1/projects/$project_id/materials" "$materials_token" "$runtime/materials-recovered.json" 200
+jq -e 'any(.segments[]; .relation_key == "primary-material" and .state == "available")' "$runtime/materials-recovered.json" >/dev/null
+
+echo '[4/4] IAM 审计确认单 action、精确 File Scope，且没有下载权'
+metadata_audits=$(docker exec "$container" psql -U postgres -d identity -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='evidence-service' AND details->'actions' @> '[\"evidence-service.metadata.read\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"file\",\"id\":\"$file_id\"}]'::jsonb")
+download_audits=$(docker exec "$container" psql -U postgres -d identity -At -c "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->'actions' @> '[\"evidence-service.download\"]'::jsonb")
+printf 'audience\taction\tresource_type\tresource_id\taudit_count\n' >"$runtime/workload-audit.tsv"
+printf 'evidence-service\tevidence-service.metadata.read\tfile\t%s\t%s\n' "$file_id" "$metadata_audits" >>"$runtime/workload-audit.tsv"
+printf 'evidence-service\tevidence-service.download\tfile\t%s\t%s\n' "$file_id" "$download_audits" >>"$runtime/workload-audit.tsv"
+[ "$metadata_audits" -ge 1 ]
+[ "$download_audits" -eq 0 ]
+
+printf 'service\tpid_or_container\tport\n' >"$runtime/processes.tsv"
+printf 'iam\t%s\t19300\nevidence\t%s\t19301\nproject\t%s\t19302\npostgresql\tdocker:%s\t%s\n' "$iam_pid" "$evidence_recovery_pid" "$project_pid" "$container" "$database_port" >>"$runtime/processes.tsv"
+printf '%s\n' \
+  '# C8 Project → Evidence 最小运行组合结果' \
+  '' \
+  '- 全程最多一个 PostgreSQL 容器；IAM、Evidence、Project 为顺序启动的本地进程。' \
+  '- Project 使用独立工作负载私钥向真实 IAM 换取 metadata.read + 精确 File Scope 短期凭证。' \
+  '- direct Evidence Link 返回 available，冻结旧 revision 返回 revision_changed，相邻 Project 凭证返回 403。' \
+  '- Evidence 停机时只把各资料分段标记 unavailable；恢复后同一 Project 查询重新返回 available。' \
+  '- Project 没有获得 Evidence download 权限，返回值不暴露 bucket 或 object_key。' >"$runtime/result.md"
+cat "$runtime/result.md"
+
+if [ -n "$browser_fixture" ] || [ -n "$browser_release" ]; then
+  [ -n "$browser_fixture" ] && [ -n "$browser_release" ] || { echo 'C8_BROWSER_FIXTURE and C8_BROWSER_RELEASE must be set together' >&2; exit 2; }
+  umask 077
+  jq -n --arg base_url 'http://127.0.0.1:19302' --arg project_id "$project_id" --arg token "$materials_token" \
+    '{base_url:$base_url,project_id:$project_id,token:$token}' >"$browser_fixture"
+  rm -f "$browser_release"
+  echo "C8 browser fixture ready; create $browser_release to continue cleanup"
+  while [ ! -f "$browser_release" ]; do sleep 1; done
+fi

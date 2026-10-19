@@ -1,0 +1,56 @@
+{
+  "start_utc": "2026-10-02 09:48:32 UTC",
+  "source": "docker logs gateway; only request time/method/path/status/duration retained; periodic health requests excluded",
+  "credentials_included": false,
+  "events": [
+    {
+      "time": "2026-10-02T09:48:41.868690392Z",
+      "method": "GET",
+      "path": "/auth/api/v1/csrf",
+      "status": 200,
+      "duration_ms": 8
+    },
+    {
+      "time": "2026-10-02T09:48:41.942377215Z",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace",
+      "status": 303,
+      "duration_ms": 25
+    },
+    {
+      "time": "2026-10-02T09:48:42.001680125Z",
+      "method": "GET",
+      "path": "/project/",
+      "status": 200,
+      "duration_ms": 14
+    },
+    {
+      "time": "2026-10-02T09:48:42.211965745Z",
+      "method": "POST",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/basic-info-changes",
+      "status": 200,
+      "duration_ms": 162
+    },
+    {
+      "time": "2026-10-02T09:48:42.265892749Z",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace",
+      "status": 303,
+      "duration_ms": 4
+    },
+    {
+      "time": "2026-10-02T09:48:42.313398035Z",
+      "method": "GET",
+      "path": "/project/",
+      "status": 200,
+      "duration_ms": 2
+    },
+    {
+      "time": "2026-10-02T09:48:42.365364385Z",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e",
+      "status": 200,
+      "duration_ms": 7
+    }
+  ]
+}

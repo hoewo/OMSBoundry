@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "application_id": "billing-invoice",
+  "application_version": "0.1.0",
+  "audience": "billing-invoice",
+  "capabilities": [
+    { "id": "billing-invoice.read", "description": "读取凭证范围内的发票登记当前投影与有效汇总", "risk": "read", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.amount.read", "description": "读取凭证范围内的发票金额与币种", "risk": "read", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.record", "description": "登记经过来源和主体校验的发票事实", "risk": "write", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.correct", "description": "以追加 revision 纠正发票登记", "risk": "write", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.registration.invalidate", "description": "将发票登记标记无效并保留全部历史", "risk": "privileged", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.evidence.manage", "description": "登记或替换发票 Evidence File ID 与 Version", "risk": "write", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.history.read", "description": "读取发票登记的不可变 revision 历史", "risk": "read", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.export", "description": "独立授权导出精确发票登记，仍须金额读取能力及资源范围", "risk": "privileged", "resource_types": ["project", "invoice_registration"] },
+    { "id": "billing-invoice.reference.read", "description": "供受信工作负载按精确登记 Scope 读取稳定引用", "risk": "read", "resource_types": ["invoice_registration"] }
+  ]
+}

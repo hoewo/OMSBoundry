@@ -1,0 +1,74 @@
+{
+  "version": "v0.1.0-oa.20261003.1",
+  "platform": "linux/amd64",
+  "official_release": false,
+  "commit": "unknown",
+  "source_archive_sha256": "f95a62ad1957c7ee52596c1f2195fffe8f28c0b25f1bbb491e41c409c366d254",
+  "applications": {
+    "business-engagement": {
+      "Dockerfile": "a12661b2dae096155cbd97650285e8e7c6f36f65ba10a10ef45b0df9b6a60b7e",
+      "ops": "660a900b830eef50f88d33e1ffee87d30a0a77359ee20972cf32662ad0049d48",
+      "server": "bd61c28749d634ce338d4b61d70a8b021ab004a984e5b487ada4711e7c8e37f3",
+      "workload-keyctl": "335a733b7fab4234c7420154853ae89eec1d977620509e68990205e50c4bcb95"
+    },
+    "unified-workbench": {
+      "Dockerfile": "b10650001148a5b8c9a3720a4333459362e0c7d40d74e471d6e9fa3e9d306ad3",
+      "server": "5d82f530fc90ad5550b0970e739a4521062953cc3eba61ac7d7e8b8af0a45392"
+    }
+  },
+  "contracts": {
+    "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+    "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb"
+  },
+  "assets": {
+    "reference_oa_react_bidding.js": "0763af8b8257cc9a34bd358f3fd368159f95e28e6c7bbd4183b208f7eac8e20e",
+    "reference_oa_react_bidding.css": "a4fccb70a59235f5dce088af6cca467f943efd93953cec304f35cda3a807484a",
+    "reference_oa_bidding_runtime.js": "e2722dc970486cec274242310ee430b1684698ab5f1d00ad2de858808960ae67",
+    "reference_oa_initiation_runtime.js": "9f3da47d3994a0f69d274b798c2953a755bc967317282b17d4df1072f3d304d1",
+    "reference_oa_business_runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference_oa_architecture_lens.js": "d18fd5a6dff937c148e692d629d69b10d6bae853d945d9fdb69b45c128d54006"
+  },
+  "frontend_inputs": {
+    "frontend/oms-workbench/frontend/package-lock.json": "cdfede3348f46df29f5ec79fdfe4b89aec67d35ebe6cb1e6ffd0bf42bd0ecf1d",
+    "frontend/oms-workbench/frontend/package.json": "824d265d1ff6682901c5be318f7c1dae851a6ef46481b984dd955645cc4e6aa6",
+    "frontend/oms-workbench/frontend/source-provenance.json": "9ecc8f8b4cbb0158e44204e46448ed0d58db5ba6ed7f400408836145135acfe8",
+    "frontend/oms-workbench/frontend/src/bidding-adapter.mjs": "99ad12c0ba243f7a54830d09e991cd974438ed6e491283208ab185610dde23e4",
+    "frontend/oms-workbench/frontend/src/bidding-adapter.test.mjs": "26e05b9ed573a214dc5405910074306652a874d695f6a5f7a8c92139f9634a66",
+    "frontend/oms-workbench/frontend/src/hooks/useProjectPermissions.ts": "cf519a74fa6f91b0e1f792f61eaea7a60fb1761426ffcb6a29a2300fdbc4c610",
+    "frontend/oms-workbench/frontend/src/lib/file-transfer.ts": "a0ef403bbca1eba9f2396ced0abe477cb959471b767d848b3674f80d33cc9de3",
+    "frontend/oms-workbench/frontend/src/services/bidding.ts": "ba6563d0048d19f81f667123b73471b3fda9d9831579229e7c0667adb0148801",
+    "frontend/oms-workbench/frontend/src/services/file.ts": "178bb7e77e2cd16c292403aeb9d06c9b2111bcedc21ffc142d28adc14844646a",
+    "frontend/oms-workbench/frontend/src/services/oa2026.ts": "e5b04152940044db5fcb4f1ee40050cf3d687a33e9bd5064f936ffc2aebfb2ca",
+    "frontend/oms-workbench/frontend/src/services/registry.ts": "bf380ec34b0ead4e49e84e8c46ce1c1485e9d6cc5ebdea42bc764e863bddcefd",
+    "frontend/oms-workbench/frontend/src/types.ts": "0c8ec2e01a0290b8b128c6802a041f1d1168cec10189c7cadc24256c2f3db4f9",
+    "frontend/oms-workbench/frontend/src/workspace.tsx": "56c9261ac93abb9cb995219c4ce47fecb66cb2f892cc83212b9ce0be3ee1cd2a",
+    "frontend/oms-workbench/frontend/tsconfig.json": "c7b0b80a1d78698f0359823ff8fcdd6b8ce140be370251d0095a4c836ad9968b",
+    "frontend/oms-workbench/frontend/vendor/components/business/BiddingFileList.css": "8ccbb8bcea90892e1e9658e86aa291f5bb031ddeea566cafae8d0ce6ac441d3b",
+    "frontend/oms-workbench/frontend/vendor/components/business/BiddingFileList.tsx": "caa8f3a40bdaa02915d1e740538f2993edd396d9fae26e41933510c73d7d4093",
+    "frontend/oms-workbench/frontend/vendor/components/oa2026/OA2026Controls.css": "2e243f4b0454b3eb9bd8bb88a0ff46a0b37341cad027b6418adc78b1d38591d6",
+    "frontend/oms-workbench/frontend/vendor/components/oa2026/OA2026Controls.tsx": "ba3ff8d251be95e0e24092abd079574af0f005ab785348d65d01f8d07bfc130f",
+    "frontend/oms-workbench/frontend/vendor/components/shared/ConfirmDeleteDialog.css": "a81efe90098da3a4548f93bbc1eaeab8799b5df8b599008ddf882581634277c3",
+    "frontend/oms-workbench/frontend/vendor/components/shared/ConfirmDeleteDialog.tsx": "0387342bf8df39ac0a79c026b334b58899c1ef3bf6395610759c0677299c9d10",
+    "frontend/oms-workbench/frontend/vendor/components/shared/FilePreviewDrawer.css": "bb1a0f21b9613f62cca26bbc2ebef75c6005785d201a42d9feead27add2fde25",
+    "frontend/oms-workbench/frontend/vendor/components/shared/FilePreviewDrawer.tsx": "503cac311c70f6a53cad3629fd8eefbd8544b29ba50501f7baf4c18f356258f6",
+    "frontend/oms-workbench/frontend/vendor/components/shared/SectionTitle.tsx": "3b35fcb3f1f188f6366a7d34ea5a32df73691081957bd5c1b78b6f99a23acbe0",
+    "frontend/oms-workbench/frontend/vendor/components/shared/useFilePreviewSource.tsx": "9a1a9e13b14be1ca9441e317f0dd4636723f36bfbef844b665db6280fb536fe2",
+    "frontend/oms-workbench/frontend/vendor/components/shared/useResizableWidth.ts": "dcf93664e0f42b108d997dbd69740d747e444f935f6f1ae923d2c8f001f854a9",
+    "frontend/oms-workbench/frontend/vendor/utils/error.ts": "562e3985a55a70909fcd6e61f9fdf890567c3fe9f4562ae523ff06ae458c1e20",
+    "frontend/oms-workbench/frontend/vendor/utils/upload.ts": "b5f8f1d2460695f7eac021c4c435e6ef7604a14f83c13d7e1f0ff38050df6e49",
+    "frontend/oms-workbench/frontend/vite.config.js": "4de75e25e33c377da528513fdc144584e1528421295bb9661ef6157b42e8b093",
+    "packages/file-transfer-core/src/ali-oss.test.ts": "35e8aed048b6c0c2d1070c1748d2aea6aeb03965fb6529bd31d35048578c3186",
+    "packages/file-transfer-core/src/ali-oss.ts": "c4a526b5a26fbd55e26f40146ed1500ec2149cc3ba8d6da5ce168aacdc915204",
+    "packages/file-transfer-core/src/api.test.ts": "855d63c6c2dca31c82de324ad4bc6e63fdd8dc4d75896a9f73f7153b1346dad2",
+    "packages/file-transfer-core/src/api.ts": "8bc491ef5465a41d5e4d8260fedde1ab277da13cd41a3a8621aaf1a604bf6827",
+    "packages/file-transfer-core/src/cache.ts": "c934a10be5c4670af4bc56b499ef711bc5f561985537756e6f1770f4816f8f81",
+    "packages/file-transfer-core/src/client.test.ts": "0f077c95483d64432039cbd839fa089282fb40411d3c01cf8e551f3eb1b4e8f4",
+    "packages/file-transfer-core/src/client.ts": "c5d40709a250f21b5cd7b97774e7ed28021595fb6d23ffa22422b319437c5a51",
+    "packages/file-transfer-core/src/errors.ts": "468339b305aa50f5f0f7a3f43573cee1809ab60df60294298f20aa7bfc27a79b",
+    "packages/file-transfer-core/src/index.ts": "7cf795d63182a34cdeba8790f7ae37691f4f046334e5618364b15466fa545757",
+    "packages/file-transfer-core/src/local-http.test.ts": "cd88398c79b97dcf4d6455b94084aa2831d13ca23e3983983baa6ce802d6d844",
+    "packages/file-transfer-core/src/local-http.ts": "a7586914e2cdef4dfbc52b07244df0dbda52ed14fb50d0e6a89a618008bbbfcb",
+    "packages/file-transfer-core/src/types-ali-oss.d.ts": "8ded577fa3b2a366655ec0bcb2cad1cbc87ef317632f80b492b75e5b398be049",
+    "packages/file-transfer-core/src/types.ts": "423edeffc9275401d033a640fb78d10b80bd0e82f572678bd4d6654d46162bd4"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "application_id": "people-groups",
+  "application_version": "0.1.0",
+  "audience": "people-groups",
+  "capabilities": [
+    { "id": "people-groups.view", "description": "查看人员、组、成员关系、配置和名册快照", "risk": "read", "resource_types": ["person", "group", "membership", "roster_snapshot"] },
+    { "id": "people-groups.person.manage", "description": "建立和维护最小人员资料及 IAM Subject 引用", "risk": "write", "resource_types": ["person"] },
+    { "id": "people-groups.configuration.manage", "description": "维护组类型、组内角色和能力定义", "risk": "privileged", "resource_types": ["definition"] },
+    { "id": "people-groups.group.manage", "description": "建立、维护和归档组", "risk": "write", "resource_types": ["group"] },
+    { "id": "people-groups.membership.manage", "description": "加入、调整和结束成员关系", "risk": "write", "resource_types": ["group", "membership"] },
+    { "id": "people-groups.capability.manage", "description": "声明或结束组能力", "risk": "write", "resource_types": ["group", "group_capability"] },
+    { "id": "people-groups.snapshot.publish", "description": "发布不可变可校验名册快照", "risk": "privileged", "resource_types": ["group", "roster_snapshot"] },
+    { "id": "people-groups.policy-fact.read", "description": "供受信 IAM Policy Provider 读取 Person 与 IAM Subject 的版本化映射事实", "risk": "privileged", "resource_types": ["person"] },
+    { "id": "people-groups.person.reference.read", "description": "供受信业务应用读取精确 Person 当前引用", "risk": "privileged", "resource_types": ["person"] }
+  ]
+}

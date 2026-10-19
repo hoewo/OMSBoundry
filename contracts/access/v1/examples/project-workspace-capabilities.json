@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "application_id": "project-workspace",
+  "application_version": "0.8.0",
+  "audience": "project-workspace",
+  "capabilities": [
+    { "id": "project-workspace.reference-oa-personnel.read", "description": "显式选装 OA 扩展后读取范围内 Project 的六种真实专业分工及结束历史，旧 read 不继承", "risk": "read", "resource_types": ["project"] },
+    { "id": "project-workspace.reference-oa-personnel.manage", "description": "显式选装 OA 扩展后整组建立或结束分工及参与适用性，旧 assignment.manage 不继承", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.reference-oa-discipline.read", "description": "读取 OA Tenant 专业目录，需 Tenant scope；项目内只读发现另由精确人员读能力控制", "risk": "read", "resource_types": ["reference_oa_discipline"] },
+    { "id": "project-workspace.reference-oa-discipline.manage", "description": "新增或追加修订 OA Tenant 专业目录及停用历史，独立于项目人员配置权限", "risk": "write", "resource_types": ["reference_oa_discipline"] },
+    { "id": "project-workspace.counterparty-context.read", "description": "读取本项目的业务对方联系资料，不读取主体主档或资金", "risk": "read", "resource_types": ["project"] },
+    { "id": "project-workspace.counterparty-context.manage", "description": "追加本项目业务对方联系资料快照，不改绑正式主体", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.create", "description": "建立租户内的项目草稿", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.read", "description": "读取凭证范围内的项目、分工、资源引用和当前投影", "risk": "read", "resource_types": ["project", "project_assignment", "project_resource_link"] },
+    { "id": "project-workspace.commercial-summary.read", "description": "读取凭证范围内项目的合同、资金与开票只读经营组合", "risk": "read", "resource_types": ["project"] },
+    { "id": "project-workspace.materials.read", "description": "读取凭证范围内项目直接关联或经版本化业务来源投影关联的 Evidence 资料元数据组合", "risk": "read", "resource_types": ["project"] },
+    { "id": "project-workspace.update", "description": "替换立项期项目的基础资料", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.profile.correct", "description": "更正已立项项目基本资料并记录原因与历史", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.assignment.manage", "description": "建立或结束项目内人员与小组分工", "risk": "write", "resource_types": ["project", "project_assignment"] },
+    { "id": "project-workspace.assignment.business-owner.manage", "description": "建立或结束项目经营负责人分工", "risk": "privileged", "resource_types": ["project", "project_assignment"] },
+    { "id": "project-workspace.assignment.production-owner.manage", "description": "建立或结束项目生产负责人分工", "risk": "privileged", "resource_types": ["project", "project_assignment"] },
+    { "id": "project-workspace.assignment.participant.manage", "description": "建立或结束项目参与人员与小组分工", "risk": "write", "resource_types": ["project", "project_assignment"] },
+    { "id": "project-workspace.assignment.commercial-contributor.manage", "description": "显式建立或结束项目商业参与人员分工，旧全分工权限不隐含此能力", "risk": "write", "resource_types": ["project", "project_assignment"] },
+    { "id": "project-workspace.resource-link.manage", "description": "建立或解除项目与外部业务资源的类型化引用", "risk": "write", "resource_types": ["project", "project_resource_link"] },
+    { "id": "project-workspace.hierarchy.manage", "description": "建立项目包、调整两级父子关系并在安全条件满足时撤销转换", "risk": "privileged", "resource_types": ["project", "project_package", "project_package_conversion"] },
+    { "id": "project-workspace.initiation.complete", "description": "完成项目立项并校验必需事实", "risk": "write", "resource_types": ["project"] },
+    { "id": "project-workspace.cancel", "description": "取消项目并保留已有事实和历史", "risk": "privileged", "resource_types": ["project"] },
+    { "id": "project-workspace.history.read", "description": "读取项目的不可变变更历史", "risk": "read", "resource_types": ["project"] },
+    { "id": "project-workspace.policy-fact.read", "description": "供受信 IAM Policy Provider 读取版本化 Project Assignment 授权事实", "risk": "privileged", "resource_types": ["project"] }
+    ,{ "id": "project-workspace.completion.read", "description": "读取 Project 的版本化完成条件评估和来源漂移", "risk": "read", "resource_types": ["project"] }
+    ,{ "id": "project-workspace.completion.confirm", "description": "确认满足的完成 Profile 检查点并冻结精确来源", "risk": "privileged", "resource_types": ["project"] }
+  ]
+}

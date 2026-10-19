@@ -1,0 +1,69 @@
+{
+  "schema_version": "oa-initiation-recovery-browser-observation-v1",
+  "date": "2026-10-02",
+  "method": "native Google Chrome via CUA accessibility and inline screenshot; not synthetic probe",
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "session": "existing authenticated test administrator; no credential printed",
+  "user_project_read_only": {
+    "project_id": "f75d4570-5d6a-42ba-ade6-d1cda913ddda",
+    "revision": 6,
+    "missing_business_recovery_select_visible": true,
+    "existing_production_owner_populated": true,
+    "consultation_and_survey_checked": true,
+    "reload_button_clicked_and_values_preserved": true,
+    "person_selected": false,
+    "save_or_complete_clicked": false
+  },
+  "fixture_setup": {
+    "phase": "fixture-prepared-not-browser-proof",
+    "fixture_id": "5db2eb3f-7125-4190-bbb0-59ce0beab79d",
+    "project_number": "OA-RECOVERY-20261002-B",
+    "status": "pending_completion",
+    "revision": 3,
+    "old_production_display": "C8 当前生产负责人",
+    "select_business_and_production_display": "C8 当前生产负责人",
+    "all_existing_project_rows_unchanged": true,
+    "user_project_untouched": true
+  },
+  "fixture_clicks": {
+    "fixture_id": "5db2eb3f-7125-4190-bbb0-59ce0beab79d",
+    "business_owner_explicitly_selected": true,
+    "production_owner_explicitly_changed": true,
+    "duplicate_display_labels": true,
+    "selection": "second active directory person for both fields; exact distinct Person IDs verified by backend, not inferred from identical labels",
+    "complete_button_clicked": true,
+    "drawer_closed": true,
+    "same_oa_project_detail_visible": true,
+    "public_url_after_completion": "https://oatest.antuinfo.cn/workbench/?project_id=5db2eb3f-7125-4190-bbb0-59ce0beab79d&tab=basic",
+    "chrome_refresh_clicked": true,
+    "owners_and_types_persisted_in_same_detail": true
+  },
+  "visual": {
+    "full_height_drawer_footer_reachable_at_observed_desktop_view": true,
+    "screenshot_inspected_inline": true,
+    "screenshot_archive": false,
+    "all_responsive_layouts_tested": false
+  },
+  "readback": {
+    "passed": true,
+    "fixture_id": "5db2eb3f-7125-4190-bbb0-59ce0beab79d",
+    "status": "active",
+    "revision": 5,
+    "same_project_completed": true,
+    "business_owner_recovered": true,
+    "production_replaced_with_history": true,
+    "existing_project_rows_unchanged": true,
+    "user_project_untouched": true,
+    "grant_writes": 0,
+    "runtime_sha256": "588eb7fa8f0869c8730721e967089bea0a455ce8910bfd06740f0d0d276f7bcf",
+    "browser_observation_recorded_separately": true,
+    "full_oa_accepted": false
+  },
+  "full_oa_accepted": false,
+  "failed_verifier_attempt": {
+    "assertion": "assignment count at line 92",
+    "cause": "default detail returns current assignments only; verifier omitted include_inactive=true",
+    "correction": "explicit history query; replayed read-only verifier without another save",
+    "application_validation_relaxed": false
+  }
+}

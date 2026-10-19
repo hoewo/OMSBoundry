@@ -1,0 +1,5 @@
+#!/bin/sh
+# Backward-compatible repository entry; the D1 release owns the implementation.
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec sh "$script_dir/../../d1/ops/evidence-imds-guard" "$@"

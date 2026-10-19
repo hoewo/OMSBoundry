@@ -1,0 +1,226 @@
+{
+  "passed": true,
+  "private_backups_exported": false,
+  "files": [
+    {
+      "file": "pg/results.json",
+      "sha256": "1b0066e7f39709d2e6eb28fc9cf05285f369c54e667d854994c9dde75aecb26a",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "startup/results.json",
+      "sha256": "4c37f58dc2aa757246d232b0e0749e3bca1429b57648fccf065cf4abd42b2568",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "contract/results.json",
+      "sha256": "2fad8aad66c556f91ead3353b416c2f33ba2b2faea2373bca5937f3eb3b5bee6",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/artifacts/manifest.json",
+      "sha256": "1ffc08ec700ac73853497b75569b0fdb6219fee470eb44c213ccc962a434ea5e",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/publication/results.json",
+      "sha256": "4c0d765f5f39c3f667c74aaf1cc7fd9e8ca3d83d375eb89ddd10579ece6f5457",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/offhost-export.json",
+      "sha256": "1c71ec73d86d7ff1353eb17b283c1f470797a9a14c71d835db2e4e4e92ec3c14",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/offhost-confirmed.json",
+      "sha256": "c837dbf1b76feee1da5d105cdcc137c74e4c0e9c9430457d514d6139f74370b9",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/browser-ownership/before.json",
+      "sha256": "6478c3105f98c9464d026e6ee7551f5a06fc27465eb3e803e7b3c9012391cfde",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/browser-ownership/after.json",
+      "sha256": "b5f913980b48fffcf950bd5a1719eb36fb27161239eab26793e865f099e21d9d",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/browser-ownership/interrupted-readback.json",
+      "sha256": "c3beed2d661f97776f6c8a21bf5b2c2e78fd170441482f87c2341ed0cf090dca",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/browser-ownership/mismatch-diagnostic-initial.json",
+      "sha256": "a8893b6715d3b10bd537a76e6f28a7c4f57e2457747d098194429f611faae6d4",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "release/browser-ownership/login-metadata.json",
+      "sha256": "99587b4d07e9eef2d21c1debbf01ca17a4fc89dbb26e08a9a7357ce8932a58d7",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "backup/preflight.json",
+      "sha256": "8755ed3dc659cea3cd74815b2637dd0f9cae901f589d9f9a7d385edf2f65c7a5",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "backup/cold-backup.json",
+      "sha256": "6c5c67ad62e1e7a56f12eec74e27e1063ec020d855c95e8c61bd49b0635f0eb7",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "backup/restore.json",
+      "sha256": "1d47ed08f9a8b53f61aff32683cc6299dcbae4b64d205e9f55096865508516c3",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "backup/rollout.json",
+      "sha256": "b6ee4ca32e7405791782c3b860219025477b0de72df7b96f183fe0fd6e0c5dd3",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route/artifacts/manifest.json",
+      "sha256": "a4ce31cb70d1662e674c30c1f9245087768546d47809ec9fb1029e5b9e9f195a",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route/publication/results.json",
+      "sha256": "93ac7a93f61d1e2939f6b4f25517923ca973540ffa3afac21955ef46b4b945f6",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route/offhost-export.json",
+      "sha256": "0f3ff0b716d630c2059d45a32bd0466270cbd857fb4f14b09046e6a6d91542ae",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route/offhost-confirmed.json",
+      "sha256": "3f491104925afd9139df55ff89667e9facadbeb50c071e5eb663370ebe460289",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route_backup/preflight.json",
+      "sha256": "e5e76fa1d760558701d71410f52a4fd6bc17a021a4e1f21c45a98f801cbeb8e2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route_backup/cold-backup.json",
+      "sha256": "7a88a67a25df73d05e9f06cc8f7e57aaf7c184f7196cb75f5ee2277116c2dffa",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route_backup/restore.json",
+      "sha256": "1af6a8eeeffde3766281aaa93eec61a9abb5b8e92c9f15ac33f9fe19909371d2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "route_backup/rollout.json",
+      "sha256": "1e9b0eb38a5a0abdf5e9cbffc47068729b0177caf15f00f2d6989a25051bee75",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh/artifacts/manifest.json",
+      "sha256": "f37a20c8653ab402778b7f186e21b533637623fa5fb1fe1f9339b328ae183e5a",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh/publication/results.json",
+      "sha256": "ddea6df8aa4c6f876e707f067afb9296ca789d6a7209c986dae35df699b3b253",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh/offhost-export.json",
+      "sha256": "77f5b5a41c35c5485965bdfbc2e95188fbf1df5f930bf0db6a36fa539806bdaf",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh/offhost-confirmed.json",
+      "sha256": "57980cef15eac96b9bdfe7f2329fb9425dcea79e27b101d71edf0711dace11cb",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh_backup/preflight.json",
+      "sha256": "e5e76fa1d760558701d71410f52a4fd6bc17a021a4e1f21c45a98f801cbeb8e2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh_backup/cold-backup.json",
+      "sha256": "3d49c8463b5faf73702eda3d7baf29f0b58f4da9e36ec5ae6d822769ec45edd1",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh_backup/restore.json",
+      "sha256": "1af6a8eeeffde3766281aaa93eec61a9abb5b8e92c9f15ac33f9fe19909371d2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "refresh_backup/rollout.json",
+      "sha256": "1e9b0eb38a5a0abdf5e9cbffc47068729b0177caf15f00f2d6989a25051bee75",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility/artifacts/manifest.json",
+      "sha256": "c61829eb46af6bf0fcaed97c7f2841fb446f771b883e5a40a9128c34a652b056",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility/publication/results.json",
+      "sha256": "1401692e2a87eed492d19970049d21a407f077f1ce594e410105e04892743db1",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility/offhost-export.json",
+      "sha256": "8a96395a4cc8ca8f5e38f2ccd20950ef37770e89e19be5debcc136a077f1a92e",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility/offhost-confirmed.json",
+      "sha256": "59ad320d63c8e6ee7abf10183626c03912370d8d3168d0a97ead7a65603cba68",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility/closing-check.json",
+      "sha256": "e77c754959e8d98075f2e1a48f8825c09e8e035f5d9dcfac1d51c9814eb0ab70",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility_backup/preflight.json",
+      "sha256": "e5e76fa1d760558701d71410f52a4fd6bc17a021a4e1f21c45a98f801cbeb8e2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility_backup/cold-backup.json",
+      "sha256": "5fd4600b7d1c69ed0576983ac3cbc77f9f0e597425b6b3e1566c0d98608ff5cd",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility_backup/restore.json",
+      "sha256": "1af6a8eeeffde3766281aaa93eec61a9abb5b8e92c9f15ac33f9fe19909371d2",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "visibility_backup/rollout.json",
+      "sha256": "1e9b0eb38a5a0abdf5e9cbffc47068729b0177caf15f00f2d6989a25051bee75",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "contract_startup_a/results.json",
+      "sha256": "298e0932c70fffd2b8c309ae8400981fdb1ae2648a9d5cf915b9812905b49191",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "contract_startup_b/results.json",
+      "sha256": "330d17bd3c160d8a22f51eeab3f4c9d9090ec6602ca13c9bd0ac39c5746e2918",
+      "remote_bytes_equal": true
+    },
+    {
+      "file": "contract_startup_c/results.json",
+      "sha256": "742fdef20dea17bfb2f0b372ff94f4362eaf97fc1524eaa8f52b0e81fc32533e",
+      "remote_bytes_equal": true
+    }
+  ]
+}

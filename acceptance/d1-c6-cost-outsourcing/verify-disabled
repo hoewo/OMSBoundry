@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+enabled_env=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+override=${D1_COMPOSE_OVERRIDE_FILE:?set D1_COMPOSE_OVERRIDE_FILE}
+evidence_dir=${C6_D1_EVIDENCE_DIR:-"$d1_dir/.runtime/c6-d1-evidence"}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c6-disabled.XXXXXX")
+disabled_env="$workspace/d1-disabled.env"
+sed 's/^ENABLE_COST_OUTSOURCING=true$/ENABLE_COST_OUTSOURCING=false/' "$enabled_env" >"$disabled_env"
+grep -qx 'ENABLE_COST_OUTSOURCING=false' "$disabled_env" || { echo 'failed to create disabled C6 selection' >&2; exit 1; }
+restore_enabled() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  D1_ENV_FILE="$enabled_env" "$d1_dir/ops/d1" apply >/dev/null 2>&1 || true
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap restore_enabled EXIT HUP INT TERM
+
+D1_ENV_FILE="$disabled_env" "$d1_dir/ops/d1" apply
+docker ps --format '{{.Names}}' | grep -Eq "^${project}-cost-outsourcing(-[0-9]+)?$" && { echo 'disabled C6 runtime is still present' >&2; exit 1; }
+jq -e '.applications[] | select(.id == "cost-outsourcing") | .enabled == false' "$d1_dir/.runtime/suite-manifest.json" >/dev/null
+
+cookies="$workspace/admin.cookies"
+result=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code}' --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf")
+[ "$result" = 200 ] || { echo "disabled selection CSRF HTTP $result" >&2; exit 1; }
+csrf=$(jq -er .csrf_token "$workspace/csrf.json")
+username=$(awk -F= '$1=="BOOTSTRAP_ADMIN_USERNAME" {print $2}' "$enabled_env"); password=$(awk -F= '$1=="BOOTSTRAP_ADMIN_PASSWORD" {print $2}' "$enabled_env")
+payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+result=$(curl --silent --show-error --output "$workspace/login.json" --write-out '%{http_code}' --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" "$base_url/auth/api/v1/login")
+[ "$result" = 200 ] || { echo "disabled selection login HTTP $result" >&2; exit 1; }
+curl --fail --silent --show-error --cookie "$cookies" "$base_url/workbench/" >"$workspace/workbench.html"
+! grep -Fq '/gateway/authorize/cost-outsourcing' "$workspace/workbench.html" || { echo 'disabled C6 still appears in Workbench' >&2; exit 1; }
+result=$(curl --silent --show-error --output "$workspace/route.out" --write-out '%{http_code}' --cookie "$cookies" "$base_url/cost-outsourcing/")
+[ "$result" = 404 ] || { echo "disabled C6 route HTTP $result, expected 404" >&2; exit 1; }
+
+backup_output=$(D1_ENV_FILE="$disabled_env" "$d1_dir/ops/d1" backup)
+printf '%s\n' "$backup_output"
+backup_id=$(printf '%s\n' "$backup_output" | sed -n 's/^backup created: \([^ ]*\).*/\1/p')
+[ -n "$backup_id" ] || { echo 'disabled selection backup ID is missing' >&2; exit 1; }
+backup_dir_value=$(awk -F= '$1=="D1_BACKUP_DIR" {sub(/^[^=]*=/,""); print}' "$disabled_env")
+case "$backup_dir_value" in /*) backup_root="$backup_dir_value" ;; *) backup_root="$d1_dir/${backup_dir_value#./}" ;; esac
+grep -qx 'ENABLE_COST_OUTSOURCING=false' "$backup_root/$backup_id/suite-selection.env"
+[ ! -e "$backup_root/$backup_id/cost-outsourcing.dump" ] || { echo 'disabled backup unexpectedly contains C6 dump' >&2; exit 1; }
+
+D1_ENV_FILE="$enabled_env" "$d1_dir/ops/d1" apply
+result=$(curl --silent --show-error --output "$workspace/authorize.out" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+  "$base_url/gateway/authorize/cost-outsourcing")
+[ "$result" = 303 ] || { echo "re-enabled C6 authorization HTTP $result" >&2; exit 1; }
+result=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/cost-outsourcing/")
+[ "$result" = 200 ] || { echo "re-enabled and authorized C6 route HTTP $result" >&2; exit 1; }
+printf '%s\n' '# C6 D1 未选装缺席复验' '' '- Suite Manifest enabled=false。' '- Workbench 无入口，Gateway route 为 404，C6 runtime 容器缺席。' '- 取消选装后的备份 selection=false 且无 cost-outsourcing.dump。' '- 重新选装后路由恢复；数据库卷没有因取消选装被删除。' >"$evidence_dir/disabled-result.md"
+cat "$evidence_dir/disabled-result.md"
+trap - EXIT HUP INT TERM
+rm -rf "$workspace"

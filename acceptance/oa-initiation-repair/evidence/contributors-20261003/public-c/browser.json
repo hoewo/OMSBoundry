@@ -1,0 +1,22 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "real_iam_gateway_postgresql": true,
+  "full_oa_accepted": false,
+  "original_components": true,
+  "scenarios": [
+    {
+      "name": "original-520-drawer-cancel-zero-write",
+      "passed": true
+    }
+  ],
+  "commands": [],
+  "page_errors": [],
+  "explicit_admin_grant": true,
+  "reused_prior_explicit_grant": true,
+  "detail_status": 200,
+  "failure": {
+    "type": "TimeoutError",
+    "stage": "native-add"
+  }
+}

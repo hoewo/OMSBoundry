@@ -1,0 +1,11 @@
+{
+  "passed": false,
+  "scope": "Rendering/interaction only, fixture HTTP owner APIs",
+  "facts": {
+    "writes": 2,
+    "uploads": 2,
+    "access": 1,
+    "deletes": 0
+  },
+  "browser_errors": []
+}

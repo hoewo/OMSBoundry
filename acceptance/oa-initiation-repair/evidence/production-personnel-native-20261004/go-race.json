@@ -1,0 +1,17 @@
+{
+  "top_level_pass": 14,
+  "pass_including_subtests": 20,
+  "failed": [],
+  "skipped": [],
+  "no_test_packages": [],
+  "checks": [
+    {
+      "test": "TestReferenceOAProductionMigration11To12PreservesLegacyAndDoesNotSelectOverlay",
+      "output": "reference_oa_production_migration_integration_test.go:78: migration11_to12_idempotent=true four_old_roles_ids_revisions_snapshots_receipts_history_unchanged=true profiles_and_customer_facts_zero=true no_automatic_grants=true"
+    },
+    {
+      "test": "TestOAProductionNativePG18ColdRestoreReplayAndContinue",
+      "output": "reference_oa_production_repository_integration_test.go:375: project_only_pg18_cold_empty_target_restore=true canonical_digest=76447a519db91ccaf64e71b138c42759 dump_sha256=c84c2f18be7832e0333b04cf920255e81e2918e850fc9e2879960afea3274249 facts_and_audit_unchanged=true offline_replay_zero_write=true continued_new_identities=true suite_restore=false production_iam=false"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "passed": false,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": false,
+  "identity_template": false,
+  "native_iam_project_people": true,
+  "native_gateway": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "startup",
+    "type": "AssertionError",
+    "message": "legacy pool still admitted\n\n403 !== 200\n"
+  },
+  "post_attempt_count": 0,
+  "page_errors": [],
+  "source_digest": {
+    "project": "c7cb48614bdcdcd2ff5bd6f82de22eb44be9088462f4f398a3a5256d0d1b206b",
+    "people": "dd116d1980ee86a6d87effc1ad817eb875d42af5bf551235354696b7095bb926",
+    "contract_count": "0"
+  },
+  "workload_exchanges": [],
+  "cleanup_failure": {
+    "type": "AssertionError",
+    "message": "The expression evaluated to a falsy value:\n\n  assert(exchanges.some(v=>v.audience==='project-workspace'))\n"
+  }
+}

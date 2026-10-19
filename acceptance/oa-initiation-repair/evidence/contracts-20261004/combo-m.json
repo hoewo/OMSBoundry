@@ -1,0 +1,76 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "real_iam": true,
+  "real_contract_process": true,
+  "real_evidence_process": true,
+  "postgresql18": true,
+  "external_evidence_provider": "local",
+  "public_entry": false,
+  "oss_verified": false,
+  "full_oa": false,
+  "binary_sha256": {
+    "evidence-ops": "e1493b6717568bcec6972a8e7b19e94391ee7b7755288b6a795d344c6e260894",
+    "contract-backup": "3ecb1ad2d002e473a0008d293afabe604264b258d918b4a3ee5f233e08b50ac1",
+    "evidence-backup": "37d728756cb74f259a08bb5c5345c20a794c9dfadb3819153d6deaac9ebf470d",
+    "contract-ops": "dd2aea486b267347897d80b3c2848ebc29cd02aad9473ece35307ce4c584ef62",
+    "iam": "5f6a1d3dd7fef44120da7ce78a5ddb1a87b1cb56abe40863750e214a72660d16",
+    "contract": "70f2adc8f60fdbab3c4abc840b218c9d052d6b8a0b4843345cdf89e0ac517049",
+    "keyctl": "cfabeb76dcb8efd265e9980076671891b4cd89eb3ee9723615a65e1e9fca9ec3",
+    "evidence": "14638185d4597181cfef08584fc3d6dec55dce4193182500bd3c87ab199f7f58"
+  },
+  "private_runner_stopped": true,
+  "main_unchanged": true,
+  "private_pg_stopped": true,
+  "events": [
+    {
+      "check": "real_private_processes_ready",
+      "passed": true,
+      "published_ports": 0,
+      "total_cpu_limit": 0.55
+    },
+    {
+      "check": "three_real_upload_complete_owner_references_and_replay",
+      "passed": true,
+      "material_revision": 3,
+      "files": 3
+    },
+    {
+      "check": "real_exact_file_access_grant_and_byte_digest",
+      "passed": true,
+      "sha256": "ffce038168f7231405149f0f58d3a935f2c98652fc111b5701a23fa82c8af97c"
+    },
+    {
+      "check": "anonymous_material_command_rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "check": "neighbor_material_command_rejected",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "check": "missing_file_scope_rejected_without_write",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "check": "real_iam_single_metadata_workload_and_outage_zero_write",
+      "passed": true,
+      "audits": 5,
+      "anonymous": 401,
+      "neighbor": 403,
+      "missing_file_scope": 403,
+      "outage": 503
+    },
+    {
+      "check": "cold_app_backups_empty_targets_restore_ids_history_bytes_continue",
+      "passed": true,
+      "contract_schema": 22,
+      "evidence_bytes_restored": true,
+      "material_revision": 4,
+      "removal_keeps_bytes": true
+    }
+  ]
+}

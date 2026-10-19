@@ -1,0 +1,107 @@
+{
+  "passed": true,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    },
+    {
+      "name": "reopen-original-form-and-save-amendment-intention",
+      "passed": true
+    },
+    {
+      "name": "original-contract-uploader-and-separate-reference-command",
+      "passed": true
+    },
+    {
+      "name": "original-amendment-edit-keeps-identity",
+      "passed": true
+    },
+    {
+      "name": "original-confirmation-cancels-intention-without-removing-history",
+      "passed": true
+    },
+    {
+      "name": "reload-zero-command",
+      "passed": true
+    },
+    {
+      "name": "unknown-core-reply-reload-and-original-command-resume",
+      "passed": true
+    },
+    {
+      "name": "original-forms-readonly-zero-command",
+      "passed": true
+    },
+    {
+      "name": "same-original-drawer-explicit-date-and-two-native-parties",
+      "passed": true
+    },
+    {
+      "name": "explicit-native-activation-frozen-parties-and-reopen-zero-write",
+      "passed": true
+    },
+    {
+      "name": "active-original-form-intention-and-explicit-adjustment-confirmation",
+      "passed": true
+    },
+    {
+      "name": "active-original-form-intention-and-explicit-revision-confirmation",
+      "passed": true
+    },
+    {
+      "name": "active-original-form-intention-and-explicit-no_amount_change-confirmation",
+      "passed": true
+    },
+    {
+      "name": "formal-amendment-reopen-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-amendment-uploader-and-owner-reference",
+      "passed": true
+    },
+    {
+      "name": "original-finalization-uploader-and-owner-reference",
+      "passed": true
+    },
+    {
+      "name": "owned-file-version-preview-and-byte-exact-download",
+      "passed": true
+    },
+    {
+      "name": "remove-owner-reference-keeps-three-files-and-history",
+      "passed": true
+    },
+    {
+      "name": "material-unknown-reply-reload-same-command-no-reupload",
+      "passed": true
+    },
+    {
+      "name": "explicit-progress-final-settlement-and-unknown-reply-same-command-frozen-reopen",
+      "passed": true
+    },
+    {
+      "name": "settlement-and-material-readonly-zero-write",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "8bd8d617333f8b7101a162d33467811ebd2e361da346b978c4e8dca7150f3bb5",
+  "file_facts": {
+    "uploads": 4,
+    "completes": 4,
+    "access": 2,
+    "deletes": 0
+  },
+  "business_command_count": 32,
+  "page_errors": []
+}

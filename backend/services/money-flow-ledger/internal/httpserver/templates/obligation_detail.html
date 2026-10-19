@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Obligation.Title}} · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/obligations">← 返回义务列表</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations" aria-current="page">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>{{.Obligation.Title}}</h1>
+    {{if .Created}}<p role="status">义务草稿已建立。</p>{{end}}
+    {{if .Confirmed}}<p role="status">义务已确认并形成 revision 1。</p>{{end}}
+    {{if .Adjusted}}<p role="status">义务金额已调整并形成新的 revision。</p>{{end}}
+    {{if .Remitted}}<p role="status">义务减免已记录，原 revision 保持不变。</p>{{end}}
+    {{if .Closed}}<p role="status">零余额义务已受控关闭，关闭事实与终态已一并保存。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    {{if eq .Obligation.Status "draft"}}
+    <p>当前记录仍是草稿，不进入余额、账龄、实际资金或核销。</p>
+    {{else if eq .Obligation.Status "closed"}}
+    <p>该义务已受控关闭。关闭时的 revision、余额事实序号与结清构成已经冻结；当前版本不支持重开或继续调额、减免、分配、反向。</p>
+    {{else}}
+    <p>当前义务已正式形成；当前有效金额来自 current revision，已分配、已减免与剩余金额由不可变 Allocation／Reversal 和 Remission 计算。</p>
+    {{end}}
+
+    {{if ne .Obligation.Status "draft"}}
+    <p><a href="{{basePath}}/obligations/{{.Obligation.ID}}/history">按系统记录时刻查询历史余额</a></p>
+    {{end}}
+
+    <dl>
+      <dt>方向</dt><dd>{{.Obligation.Direction.Label}}</dd>
+      <dt>状态</dt><dd>{{.Obligation.Status}}</dd>
+      <dt>Draft version</dt><dd>{{.Obligation.DraftVersion}}</dd>
+      <dt>Current revision</dt><dd>{{if .Obligation.CurrentRevision}}{{.Obligation.CurrentRevision}}{{else}}—{{end}}</dd>
+      <dt>原始金额</dt><dd>{{.Obligation.OriginalAmount}} {{.Obligation.Currency}}</dd>
+      {{if or (eq .Obligation.Status "open") (eq .Obligation.Status "closed")}}
+      <dt>当前有效金额</dt><dd>{{.Obligation.EffectiveAmount}} {{.Obligation.Currency}}</dd>
+      <dt>已分配金额</dt><dd>{{.Obligation.AllocatedAmount}} {{.Obligation.Currency}}</dd>
+      <dt>已减免金额</dt><dd>{{.Obligation.RemittedAmount}} {{.Obligation.Currency}}</dd>
+      <dt>剩余金额</dt><dd>{{.Obligation.OutstandingAmount}} {{.Obligation.Currency}}</dd>
+      <dt>余额事实序号</dt><dd>{{.Obligation.BalanceSequence}}</dd>
+      {{end}}
+      <dt>到期日</dt><dd>{{.Obligation.DueOn}}</dd>
+      <dt>来源类型</dt><dd>{{.Obligation.SourceKind}}</dd>
+      <dt>人工来源依据</dt><dd>{{.Obligation.ManualSourceReference}}</dd>
+    </dl>
+
+    <h2>创建时主体快照</h2>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">角色</th>
+          <th scope="col">是否本方</th>
+          <th scope="col">类型</th>
+          <th scope="col">法定名称或姓名</th>
+          <th scope="col">登记标识</th>
+          <th scope="col">Party revision</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>债权方 creditor</td>
+          <td>{{if eq .Obligation.Creditor.PartyID .Obligation.LedgerOwnerPartyID}}是{{else}}否{{end}}</td>
+          <td>{{.Obligation.Creditor.Kind}}</td>
+          <td>{{.Obligation.Creditor.LegalName}}</td>
+          <td>{{if .Obligation.Creditor.RegistrationIdentifier}}{{.Obligation.Creditor.RegistrationIdentifier}}{{else}}—{{end}}</td>
+          <td>{{.Obligation.Creditor.PartyRevision}}</td>
+        </tr>
+        <tr>
+          <td>债务方 debtor</td>
+          <td>{{if eq .Obligation.Debtor.PartyID .Obligation.LedgerOwnerPartyID}}是{{else}}否{{end}}</td>
+          <td>{{.Obligation.Debtor.Kind}}</td>
+          <td>{{.Obligation.Debtor.LegalName}}</td>
+          <td>{{if .Obligation.Debtor.RegistrationIdentifier}}{{.Obligation.Debtor.RegistrationIdentifier}}{{else}}—{{end}}</td>
+          <td>{{.Obligation.Debtor.PartyRevision}}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {{if eq .Obligation.Status "draft"}}
+    <section aria-labelledby="confirm-obligation-heading">
+      <h2 id="confirm-obligation-heading">确认义务</h2>
+      <p>确认后会冻结上述事实为不可变 revision 1，并将状态推进为 open。确认不代表已经收款、付款或核销。</p>
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/obligations/{{.Obligation.ID}}/confirm">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ConfirmationCommand}}">
+        <input type="hidden" name="expected_draft_version" value="{{.Obligation.DraftVersion}}">
+        <button type="submit">确认并形成 revision 1</button>
+      </form>{{end}}
+    </section>
+    {{end}}
+
+    {{if .CanAdjust}}
+    <section aria-labelledby="adjust-obligation-heading">
+      <h2 id="adjust-obligation-heading">调整义务金额</h2>
+      <p>调整会从 current revision 连续形成新的不可变 revision。减少后的金额必须大于 0，且不能低于当前已分配净额与已减免金额之和；余额归零不会自动关闭义务。</p>
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/obligations/{{.Obligation.ID}}/adjust-amount">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.AdjustmentCommand}}">
+        <input type="hidden" name="expected_current_revision" value="{{.Obligation.CurrentRevision}}">
+
+        <label for="adjustment_type">调整方向</label>
+        <select id="adjustment_type" name="adjustment_type" required>
+          <option value="increase" {{if eq .AdjustmentType "increase"}}selected{{end}}>增加</option>
+          <option value="decrease" {{if eq .AdjustmentType "decrease"}}selected{{end}}>减少</option>
+        </select>
+
+        <label for="adjustment_amount">调整金额</label>
+        <input id="adjustment_amount" name="adjustment_amount" inputmode="decimal" value="{{.AdjustmentAmount}}" required>
+
+        <label for="adjustment_reason">调整原因</label>
+        <input id="adjustment_reason" name="adjustment_reason" value="{{.AdjustmentReason}}" maxlength="200" required>
+
+        <button type="submit">确认调整并形成 revision {{.Obligation.CurrentRevision}}+1</button>
+      </form>{{end}}
+    </section>
+    {{end}}
+
+    {{if .CanRemit}}
+    <section aria-labelledby="remit-obligation-heading">
+      <h2 id="remit-obligation-heading">记录义务减免</h2>
+      <p>减免是独立处置事实，不修改 current revision 或当前有效金额。金额不能超过当前剩余金额；余额归零后还需执行独立的受控关闭。</p>
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/obligations/{{.Obligation.ID}}/remissions">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.RemissionCommand}}">
+        <input type="hidden" name="expected_current_revision" value="{{.Obligation.CurrentRevision}}">
+
+        <label for="remission_amount">减免金额</label>
+        <input id="remission_amount" name="remission_amount" inputmode="decimal" value="{{.RemissionAmount}}" required>
+
+        <label for="remission_reason">减免原因</label>
+        <input id="remission_reason" name="remission_reason" value="{{.RemissionReason}}" maxlength="200" required>
+
+        <label for="remission_source">人工来源依据</label>
+        <input id="remission_source" name="manual_source_reference" value="{{.RemissionSource}}" maxlength="200" required>
+
+        <button type="submit">记录减免</button>
+      </form>{{end}}
+    </section>
+    {{end}}
+
+    {{if .CanClose}}
+    <section aria-labelledby="close-obligation-heading">
+      <h2 id="close-obligation-heading">受控关闭零余额义务</h2>
+      <p>关闭不会再改变金额，而是冻结当前 revision、余额事实序号、资金分配净额与减免合计。关闭后当前版本不支持重开，也不再允许调额、减免、分配或反向。</p>
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/obligations/{{.Obligation.ID}}/close">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ClosureCommand}}">
+        <input type="hidden" name="expected_current_revision" value="{{.Obligation.CurrentRevision}}">
+        <input type="hidden" name="expected_balance_sequence" value="{{.Obligation.BalanceSequence}}">
+
+        <label for="closure_reason">关闭原因</label>
+        <input id="closure_reason" name="closure_reason" value="{{.ClosureReason}}" maxlength="200" required>
+
+        <button type="submit">确认关闭义务</button>
+      </form>{{end}}
+    </section>
+    {{end}}
+
+    {{if .Closure}}
+    <section aria-labelledby="closure-fact-heading">
+      <h2 id="closure-fact-heading">关闭事实</h2>
+      <dl>
+        <dt>Closure ID</dt><dd>{{.Closure.ID}}</dd>
+        <dt>冻结 revision</dt><dd>{{.Closure.ObligationRevision}}</dd>
+        <dt>冻结余额事实序号</dt><dd>{{.Closure.BalanceSequence}}</dd>
+        <dt>记录有效金额</dt><dd>{{.Closure.RecordedEffectiveAmount}} {{.Closure.Currency}}</dd>
+        <dt>资金分配净额</dt><dd>{{.Closure.NetAllocatedAmount}} {{.Closure.Currency}}</dd>
+        <dt>减免合计</dt><dd>{{.Closure.RemittedAmount}} {{.Closure.Currency}}</dd>
+        <dt>结清构成</dt><dd>{{.Closure.SettlementBasis.Label}}</dd>
+        <dt>关闭原因</dt><dd>{{.Closure.Reason}}</dd>
+        <dt>操作人</dt><dd>{{.Closure.ClosedBy.DisplayName}}（{{.Closure.ClosedBy.Kind}} / {{.Closure.ClosedBy.ID}}）</dd>
+        <dt>关闭时间</dt><dd>{{.Closure.ClosedAt}}</dd>
+      </dl>
+    </section>
+    {{end}}
+
+    {{if .Revisions}}
+    <section aria-labelledby="revision-history-heading">
+      <h2 id="revision-history-heading">义务 revision 历史</h2>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Revision</th>
+            <th scope="col">类型</th>
+            <th scope="col">来源</th>
+            <th scope="col">有效金额</th>
+            <th scope="col">记录人</th>
+            <th scope="col">记录时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Revisions}}
+          <tr>
+            <td>{{.Revision}}</td>
+            <td>{{.RevisionKind}}</td>
+            <td>{{if .SourceDraftVersion}}draft {{.SourceDraftVersion}}{{else}}revision {{.SourceRevision}}{{end}}</td>
+            <td>{{.EffectiveAmount}} {{.Currency}}</td>
+            <td>{{.RecordedBy.DisplayName}}（{{.RecordedBy.Kind}} / {{.RecordedBy.ID}}）</td>
+            <td>{{.RecordedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+    {{end}}
+
+    <section aria-labelledby="adjustment-history-heading">
+      <h2 id="adjustment-history-heading">金额调整历史</h2>
+      {{if .Adjustments}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Revision</th>
+            <th scope="col">方向</th>
+            <th scope="col">前值</th>
+            <th scope="col">调整额</th>
+            <th scope="col">结果</th>
+            <th scope="col">原因</th>
+            <th scope="col">操作人</th>
+            <th scope="col">时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Adjustments}}
+          <tr>
+            <td>{{.SourceRevision}} → {{.ResultingRevision}}</td>
+            <td>{{.Type.Label}}</td>
+            <td>{{.PreviousEffectiveAmount}} {{.Currency}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.ResultingEffectiveAmount}} {{.Currency}}</td>
+            <td>{{.Reason}}</td>
+            <td>{{.AdjustedBy.DisplayName}}（{{.AdjustedBy.Kind}} / {{.AdjustedBy.ID}}）</td>
+            <td>{{.AdjustedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>该义务尚无金额调整。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="remission-history-heading">
+      <h2 id="remission-history-heading">减免历史</h2>
+      {{if .Remissions}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Obligation revision</th>
+            <th scope="col">记录时有效金额</th>
+            <th scope="col">减免金额</th>
+            <th scope="col">原因</th>
+            <th scope="col">人工来源依据</th>
+            <th scope="col">记录人</th>
+            <th scope="col">记录时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Remissions}}
+          <tr>
+            <td>{{.ObligationRevision}}</td>
+            <td>{{.RecordedEffectiveAmount}} {{.Currency}}</td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.Reason}}</td>
+            <td>{{.ManualSourceReference}}</td>
+            <td>{{.RecordedBy.DisplayName}}（{{.RecordedBy.Kind}} / {{.RecordedBy.ID}}）</td>
+            <td>{{.RecordedAt}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>该义务尚无减免。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="allocation-history-heading">
+      <h2 id="allocation-history-heading">资金分配历史</h2>
+      {{if .Allocations}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Allocation</th>
+            <th scope="col">状态</th>
+            <th scope="col">来源资金</th>
+            <th scope="col">分配金额</th>
+            <th scope="col">人工分配依据</th>
+            <th scope="col">操作人</th>
+            <th scope="col">生效时间</th>
+            <th scope="col">反向核销</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Allocations}}
+          <tr>
+            <td><a href="{{basePath}}/allocations/{{.ID}}">{{.ID}}</a></td>
+            <td>{{.Status}}</td>
+            <td><a href="{{basePath}}/cash-transactions/{{.CashTransactionID}}">{{.CashDescription}}</a></td>
+            <td>{{.Amount}} {{.Currency}}</td>
+            <td>{{.ManualSourceReference}}</td>
+            <td>{{.AppliedBy.DisplayName}}（{{.AppliedBy.Kind}} / {{.AppliedBy.ID}}）</td>
+            <td>{{.AppliedAt}}</td>
+            <td>{{if .Reversal}}{{.Reversal.Reason}} · {{.Reversal.ReversedBy.DisplayName}} · {{.Reversal.ReversedAt}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>该义务尚未形成任何资金分配。</p>
+      {{end}}
+    </section>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "policy_id": "business-engagement-project-access",
+  "policy_version": "1.0.0",
+  "audience": "business-engagement",
+  "roles": {
+    "business_owner": [
+      "business-engagement.create",
+      "business-engagement.read",
+      "business-engagement.applicability.manage",
+      "business-engagement.method.select",
+      "business-engagement.evidence.manage",
+      "business-engagement.history.read"
+    ],
+    "production_owner": [
+      "business-engagement.read",
+      "business-engagement.history.read"
+    ],
+    "participant": [
+      "business-engagement.read"
+    ]
+  }
+}

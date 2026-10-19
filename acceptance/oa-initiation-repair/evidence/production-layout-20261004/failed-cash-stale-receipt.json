@@ -1,0 +1,23 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "7df15d8a63a0ac31a308401631aaedba38cbb2f73ba5d1334c4d9e88ed41c357",
+  "scenarios": [
+    {
+      "name": "original-two-list-render-zero-write",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "create-设计费",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible') to be hidden\u001b[22m\n\u001b[2m    63 × locator resolved to visible <div tabindex=\"-1\" class=\"ant-drawer ant-drawer-right css-ac2jek ant-drawer-open\">…</div>\u001b[22m\n"
+  },
+  "business_command_count": 2,
+  "native_receipts": 1,
+  "page_errors": []
+}

@@ -1,0 +1,27 @@
+# People Person 与 IAM Subject 映射策略事实读取 API 契约
+metadata: {path: "tech/_shared/contracts/people-person-policy-fact-get.yaml", domain: "people-groups", owner: "People & Groups", version: "1.0", created: "2026-09-26", updated: "2026-09-26"}
+endpoint: {method: GET, path: "/api/v1/policy-facts/persons/{person_id}", summary: "向可信 IAM／Policy Provider 提供 Person 到 IAM Subject 的版本化映射", auth_required: true, audience: "people-groups", capability: "people-groups.policy-fact.read"}
+request:
+  path_params: [{name: person_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: person, id_from: person_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, fact_kind, id, tenant_id, status, revision, iam_subject_id]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: people-groups}
+        fact_kind: {type: string, const: person-iam-subject-link}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        status: {type: string, enum: [active, inactive]}
+        revision: {type: integer, minimum: 1}
+        iam_subject_id: {type: string, format: uuid}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PERSON_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受精确 Person scope 的短期可信凭证。", "IAM 仅把 active 且 revision 匹配的 Person 映射用于策略。", "不返回人员名册、Group、Membership 或客户岗位。"]

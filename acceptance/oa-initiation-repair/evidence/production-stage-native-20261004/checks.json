@@ -1,0 +1,51 @@
+{
+  "checks": [
+    {
+      "name": "full-frontend-and-workbench-runtime",
+      "passed": true
+    },
+    {
+      "name": "production-go",
+      "passed": true
+    },
+    {
+      "name": "production-targeted-race",
+      "passed": true
+    },
+    {
+      "name": "workbench-go",
+      "passed": true
+    },
+    {
+      "name": "production-workbench-vet",
+      "passed": true
+    },
+    {
+      "name": "typescript",
+      "passed": true
+    },
+    {
+      "name": "d1-shell-syntax",
+      "passed": true
+    },
+    {
+      "name": "d1-upgrade-selection-mock",
+      "passed": true
+    },
+    {
+      "name": "architecture-boundary-and-negative-selftest",
+      "passed": true
+    },
+    {
+      "name": "formal-IAM-manifest-and-exact-workload-policy-preflight",
+      "passed": true
+    }
+  ],
+  "node_tests": 377,
+  "node_pass": 377,
+  "node_skip": 0,
+  "d1_profile_guard_tests": 37,
+  "real_d1_stage_restore": false,
+  "main_deployed": false,
+  "full_oa_accepted": false
+}

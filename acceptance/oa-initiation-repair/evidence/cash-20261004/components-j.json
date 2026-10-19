@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "f716e1cc6de47984272582de5055b1900c87941afe79f2259f611e22a1e0cfb6",
+  "scenarios": [
+    {
+      "name": "original-two-list-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--client-设计费",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--client-勘察费",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--client-咨询费",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--income-设计费",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--income-勘察费",
+      "passed": true
+    },
+    {
+      "name": "native-receipt-original-form-.transaction-panel__group--income-咨询费",
+      "passed": true
+    },
+    {
+      "name": "all-six-classifications-reopen-zero-write",
+      "passed": true
+    },
+    {
+      "name": "immutable-detail-exact-money-and-disabled-invoice-no-edit",
+      "passed": true
+    },
+    {
+      "name": "unknown-cash-reload-original-command-no-duplicate",
+      "passed": true
+    },
+    {
+      "name": "unknown-link-reload-original-command-no-duplicate",
+      "passed": true
+    },
+    {
+      "name": "explicit-reversal-unknown-reply-keeps-original-history",
+      "passed": true
+    },
+    {
+      "name": "readonly-no-create-no-reversal-zero-write",
+      "passed": true
+    },
+    {
+      "name": "amount-redacted-no-blind-write",
+      "passed": true
+    }
+  ],
+  "business_command_count": 20,
+  "native_receipts": 8,
+  "page_errors": []
+}

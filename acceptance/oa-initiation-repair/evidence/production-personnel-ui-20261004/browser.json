@@ -1,0 +1,82 @@
+{
+  "passed": true,
+  "ui_only": true,
+  "component_test_ports": true,
+  "native_project": false,
+  "production_iam": false,
+  "postgresql": false,
+  "native_business_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "98a8bf7fc0fa3e9bf727860fbb94e7342133ff1ee9c47a9d97879fe7b90ab84f",
+  "scenarios": [
+    {
+      "name": "original-empty-layout-no-write-no-hidden-candidates",
+      "passed": true
+    },
+    {
+      "name": "original-600px-drawer-required-discipline-and-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-multi-design-same-person-multi-role-test-save",
+      "passed": true
+    },
+    {
+      "name": "original-edit-and-change-discipline-explicit-test-port",
+      "passed": true
+    },
+    {
+      "name": "original-separate-approver-estimator-and-dirty-cancel",
+      "passed": true
+    },
+    {
+      "name": "not-applicable-disabled-field-preserves-participant-intention",
+      "passed": true
+    },
+    {
+      "name": "candidate-failure-disabled-save-retry-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "catalog-failure-disabled-save-retry-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "save-rejection-keeps-original-form-and-explicit-test-port-retry",
+      "passed": true
+    },
+    {
+      "name": "original-nested-discipline-drawer-and-selection",
+      "passed": true
+    },
+    {
+      "name": "end-rejection-retains-group-no-unhandled-promise",
+      "passed": true
+    },
+    {
+      "name": "normal-group-end-preserves-hidden-participants-and-global-reviewers",
+      "passed": true
+    },
+    {
+      "name": "not-applicable-off-reveals-kept-participant-before-explicit-end",
+      "passed": true
+    },
+    {
+      "name": "test-permission-refresh-closes-drawer-hidden-actions-and-reload-zero-write",
+      "passed": true
+    },
+    {
+      "name": "member-failure-not-empty-and-normal-retry",
+      "passed": true
+    },
+    {
+      "name": "original-small-viewport-cancel-reachable",
+      "passed": true
+    }
+  ],
+  "test_port_commands": 8,
+  "test_port_member_rows": 20,
+  "test_port_ended_rows": 18,
+  "page_errors": []
+}

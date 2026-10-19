@@ -1,0 +1,24 @@
+# 标记登记无效 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-invalidate.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/invoice-registrations/{invoice_registration_id}/invalidation", summary: "标记系统登记无效", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.registration.invalidate"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 409, code: REGISTRATION_INVALIDATED, retryable: false}
+business_logic:
+  flow: ["锁定当前投影并校验 revision。", "原子追加 registration_invalidated revision 并从有效汇总排除。"]
+  semantic_warning: "只否定系统登记，不表示现实票据已红冲、作废、退票、换票或撤销。"

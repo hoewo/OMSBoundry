@@ -1,0 +1,33 @@
+{
+  "source_commit": "826e0fc65aa09947fc4f64f62a2644fa5d11a302",
+  "files": [
+    {
+      "path": "acceptance/oa-initiation-repair/verify-professional-d1-restore.mjs",
+      "sha256": "06f84b193d3f8947a1751be5a19bf31cf4e0184108f14ddbeb4a9bf75377b436"
+    },
+    {
+      "path": "deployments/d1/ops/d1",
+      "sha256": "b0479a9b3501ff59ed47c045fe79c27f27400f3f8bd4b92f4122e16de45a17dd"
+    },
+    {
+      "path": "deployments/d1/compose.yaml",
+      "sha256": "93a22ca6ff63ffa1b61cb83f3e0208b0bbe43b991dbfa0325ce5a83247a11f12"
+    },
+    {
+      "path": "deployments/d1/ops/render-suite-manifest",
+      "sha256": "661c7cada4fcc2b302e33bbc45110e67452be8fd22afd0aea6ee7446161e7b8e"
+    },
+    {
+      "path": "frontend/oms-workbench/internal/server/reference_oa_react_bidding.js",
+      "sha256": "8dfcbaf1f98bc3d828557d78715526bf8675a37409cc90f2b694c5eba0ec44ea"
+    },
+    {
+      "path": "frontend/oms-workbench/internal/server/reference_oa_initiation_runtime.js",
+      "sha256": "0265758bcf3e988a1ac54fb370a48fd40f1f23e874b43af87c757206b54f87dd"
+    }
+  ],
+  "private_backup_copied": false,
+  "private_configuration_copied": false,
+  "fixture_mode": "Actual D1 script, selected composition, local HTTP/build mode. Native APIs seed facts; readonly per-owner SQL computes digests. No Main or registry push.",
+  "runtime_stopped": true
+}

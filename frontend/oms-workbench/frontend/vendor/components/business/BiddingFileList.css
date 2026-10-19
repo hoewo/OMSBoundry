@@ -1,0 +1,462 @@
+.bidding-files {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 8px 22px;
+}
+
+.bidding-files__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bidding-files__summary {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bidding-files__overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bidding-files__overview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background: #fff;
+}
+
+.bidding-files__overview-item--action {
+  background: #fbfdff;
+}
+
+.bidding-files__overview-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bidding-files__overview-value {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.bidding-files__overview-note {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.bidding-files__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bidding-file-slot {
+  --bidding-slot-accent: #2563eb;
+  --bidding-slot-accent-text: #1d4ed8;
+  --bidding-slot-soft: rgba(37, 99, 235, 0.1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 154px;
+  padding: 13px 14px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-top: 2px solid var(--bidding-slot-accent);
+  border-radius: 6px;
+  background: #fff;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.bidding-file-slot--filled {
+  border-color: color-mix(in srgb, var(--bidding-slot-accent) 24%, #dbe4f0);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bidding-slot-soft) 42%, #ffffff) 0%,
+      #ffffff 68%
+    ),
+    #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+}
+
+.bidding-file-slot--empty {
+  border-color: rgba(203, 213, 225, 0.82);
+  border-style: dashed;
+  border-top-color: rgba(148, 163, 184, 0.78);
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+}
+
+.bidding-file-slot--not-required {
+  border-color: rgba(148, 163, 184, 0.82);
+  border-top-color: #94a3b8;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 72%);
+}
+
+.bidding-file-slot__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bidding-file-slot__title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bidding-file-slot__title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bidding-file-slot__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bidding-slot-accent);
+  box-shadow: 0 0 0 3px var(--bidding-slot-soft);
+  flex-shrink: 0;
+}
+
+.bidding-file-slot--empty .bidding-file-slot__dot {
+  background: #cbd5e1;
+  box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.28);
+}
+
+.bidding-file-slot--not-required .bidding-file-slot__dot {
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.22);
+}
+
+.bidding-file-slot__title {
+  margin: 0;
+  color: var(--bidding-slot-accent-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.bidding-file-slot--empty .bidding-file-slot__title {
+  color: #475569;
+}
+
+.bidding-file-slot--not-required .bidding-file-slot__title {
+  color: #475569;
+}
+
+.bidding-file-slot__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--bidding-slot-accent) 20%, #dbe4f0);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bidding-slot-soft) 56%, #ffffff);
+  color: var(--bidding-slot-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bidding-file-slot__status--filled {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.bidding-file-slot--empty .bidding-file-slot__status {
+  border-color: rgba(203, 213, 225, 0.92);
+  background: #ffffff;
+  color: #64748b;
+}
+
+.bidding-file-slot__status--not-required {
+  border-color: rgba(148, 163, 184, 0.36);
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.bidding-file-slot__status .anticon {
+  font-size: 12px;
+}
+
+.bidding-file-slot__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  min-height: 58px;
+}
+
+.bidding-file-slot__body--filled {
+  padding: 0;
+}
+
+.bidding-file-slot__body--empty {
+  margin-top: 12px;
+  min-height: 66px;
+  padding: 11px 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  background: rgba(248, 250, 252, 0.94);
+}
+
+.bidding-file-slot__body--not-required {
+  margin-top: 12px;
+  min-height: 66px;
+  padding: 11px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.75);
+  background: #f8fafc;
+}
+
+.bidding-file-slot__file-mark {
+  width: 48px;
+  height: 56px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 6px;
+  background: var(--bidding-slot-soft);
+  color: var(--bidding-slot-accent);
+  flex: 0 0 auto;
+}
+
+.bidding-file-slot--filled .bidding-file-slot__file-mark {
+  border-color: color-mix(in srgb, var(--bidding-slot-accent) 16%, #dbe4f0);
+  background: color-mix(in srgb, var(--bidding-slot-soft) 72%, #ffffff);
+}
+
+.bidding-file-slot--empty .bidding-file-slot__file-mark {
+  width: 42px;
+  height: 46px;
+  border-color: rgba(203, 213, 225, 0.9);
+  background: #ffffff;
+  color: #94a3b8;
+}
+
+.bidding-file-slot--not-required .bidding-file-slot__file-mark {
+  width: 42px;
+  height: 46px;
+  border-color: rgba(148, 163, 184, 0.62);
+  background: #ffffff;
+  color: #64748b;
+}
+
+.bidding-file-slot__file-mark .anticon {
+  font-size: 18px;
+}
+
+.bidding-file-slot__file-mark span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.bidding-file-slot__content {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bidding-file-slot__name {
+  max-width: 100%;
+  color: var(--bidding-slot-accent-text);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bidding-file-slot__meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: color-mix(in srgb, var(--bidding-slot-accent-text) 62%, #64748b);
+  font-size: 12px;
+}
+
+.bidding-file-slot__meta-separator {
+  opacity: 0.6;
+}
+
+.bidding-file-slot__empty-title {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.bidding-file-slot__empty-text {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bidding-file-slot__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(226, 232, 240, 0.82);
+}
+
+.bidding-file-slot__actions-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.bidding-file-slot--empty .bidding-file-slot__actions {
+  border-top-color: rgba(226, 232, 240, 0.72);
+}
+
+.bidding-file-slot--not-required .bidding-file-slot__actions {
+  border-top-color: rgba(226, 232, 240, 0.78);
+}
+
+.bidding-file-slot--empty .bidding-file-slot__actions .ant-upload {
+  flex: 1;
+}
+
+.bidding-file-slot--empty .bidding-file-slot__actions-secondary,
+.bidding-file-slot--not-required .bidding-file-slot__actions-secondary {
+  flex: 0 0 auto;
+}
+
+.bidding-file-slot__action-button {
+  color: var(--bidding-slot-accent-text);
+  border-radius: 5px;
+  font-weight: 600;
+}
+
+.bidding-file-slot__action-button--primary {
+  border-color: color-mix(in srgb, var(--bidding-slot-accent) 28%, #dbe4f0);
+  background: color-mix(in srgb, var(--bidding-slot-soft) 46%, #ffffff);
+}
+
+.bidding-file-slot--empty .bidding-file-slot__action-button--primary {
+  width: 100%;
+  min-width: 126px;
+  border-color: color-mix(in srgb, var(--bidding-slot-accent) 32%, #dbe4f0);
+  background: #ffffff;
+}
+
+.bidding-file-slot__action-button--secondary {
+  border-color: rgba(203, 213, 225, 0.9);
+  background: #fff;
+}
+
+.bidding-file-slot__action-button--primary:hover,
+.bidding-file-slot__action-button--primary:focus,
+.bidding-file-slot__action-button--secondary:hover,
+.bidding-file-slot__action-button--secondary:focus,
+.bidding-file-slot__action-button--delete:hover,
+.bidding-file-slot__action-button--delete:focus {
+  color: var(--bidding-slot-accent-text);
+  border-color: color-mix(in srgb, var(--bidding-slot-accent) 38%, #dbe4f0);
+  background: color-mix(in srgb, var(--bidding-slot-soft) 56%, #ffffff);
+}
+
+.bidding-file-slot__action-button.ant-btn[disabled],
+.bidding-file-slot__action-button.ant-btn[disabled]:hover {
+  color: rgba(148, 163, 184, 0.82);
+  background: transparent;
+  border-color: rgba(226, 232, 240, 0.9);
+}
+
+@media (max-width: 1100px) {
+  .bidding-files__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .bidding-files {
+    padding-inline: 2px;
+    padding-bottom: 18px;
+  }
+
+  .bidding-files__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .bidding-files__overview {
+    grid-template-columns: 1fr;
+  }
+
+  .bidding-files__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bidding-file-slot {
+    min-height: 0;
+  }
+
+  .bidding-file-slot__head,
+  .bidding-file-slot__body {
+    align-items: flex-start;
+  }
+
+  .bidding-file-slot__head {
+    flex-direction: row;
+  }
+
+  .bidding-file-slot__body {
+    flex-direction: row;
+  }
+
+  .bidding-file-slot__actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .bidding-file-slot__actions-secondary {
+    flex: 1;
+  }
+}
+.bidding-file-slot__file-entry + .bidding-file-slot__file-entry {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.bidding-file-slot__file-entry .bidding-file-slot__name {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}

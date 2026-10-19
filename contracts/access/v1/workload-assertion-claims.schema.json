@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omsbizfoundry.local/contracts/access/v1/workload-assertion-claims.schema.json",
+  "title": "OMSBizFoundry Workload Assertion JWT Claims v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ver",
+    "iss",
+    "sub",
+    "tid",
+    "aud",
+    "purpose",
+    "request_sha256",
+    "iat",
+    "nbf",
+    "exp",
+    "jti"
+  ],
+  "properties": {
+    "ver": { "const": "1" },
+    "iss": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "sub": { "type": "string", "format": "uuid" },
+    "tid": { "type": "string", "format": "uuid" },
+    "aud": { "const": "identity-access" },
+    "purpose": { "const": "capability-exchange" },
+    "request_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "iat": { "type": "integer", "minimum": 0 },
+    "nbf": { "type": "integer", "minimum": 0 },
+    "exp": { "type": "integer", "minimum": 0 },
+    "jti": { "type": "string", "format": "uuid" }
+  }
+}

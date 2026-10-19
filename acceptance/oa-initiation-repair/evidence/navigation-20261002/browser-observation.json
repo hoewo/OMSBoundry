@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-02",
+  "surface": "native Google Chrome",
+  "entry": "https://oatest.antuinfo.cn/workbench/",
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "fixture_number": "OA-VERIFY-20261002-C",
+  "user_project_writes": 0,
+  "grant_writes": 0,
+  "before_fix": [
+    {"operation": "I01", "result": "Created labelled virtual fixture from name and existing D1 Person; automatically opened its completion drawer; no formal number required at dispatch."},
+    {"operation": "I02 blank number", "result": "Visible error asks for a valid formal number; native readback remains draft revision 1, one assignment and one history event."},
+    {"operation": "I02 blank types", "result": "Visible error asks for at least one type; native readback remains draft revision 1."},
+    {"operation": "refresh completion drawer", "passed": false, "visible_project_id_before_refresh": "70edead7-9dc9-44a3-9b35-b9d41b83264e", "address_project_id_before_refresh": "5db2eb3f-7125-4190-bbb0-59ce0beab79d", "result": "Refresh reopened previous fixture B active detail, not fixture C completion. No saved facts were lost; only unsaved form input was discarded. Reproduced stale navigation URL."}
+  ],
+  "after_fix": [
+    {"operation": "initiation navigation", "passed": true, "result": "Project initiation menu clears the previous project and tab; URL contains view=initiation."},
+    {"operation": "refresh completion drawer", "passed": true, "result": "Fixture C completion URL identifies fixture C; browser refresh restores the same drawer and saved draft. Cancel clears project_id and stays on initiation; reopening resumes C without a duplicate project."},
+    {"operation": "I03 complete without production owner", "passed": true, "result": "Explicitly filled formal number and selected design plus consultation. Production owner left blank; completion opened the same OA project detail, active revision 3, one business assignment, three history events."},
+    {"operation": "cancel active basic-info edit", "passed": true, "result": "Changed summary, cancelled and reopened. Original summary and native revision 3, assignments, history and receipt count unchanged."},
+    {"operation": "reject empty project types", "passed": true, "result": "Removing both types and saving showed a visible validation error. Native facts and receipt count remained identical to completed revision 3."},
+    {"operation": "I04 later production owner and basic-info save", "passed": true, "result": "Explicitly set a different existing virtual D1 Person, updated summary and date to 2026-10-02, retained design plus consultation and saved once. Native revision 4, two current owners, four history events; same OA detail shows the saved date, summary and owners."},
+    {"operation": "no-change save", "passed": true, "result": "Reopened and saved without editing. Native project, assignments and history unchanged at revision 4; exactly one additional idempotent command receipt, no business revision or event added."},
+    {"operation": "production owner clear attempt 1", "passed": false, "result": "Attempted native dropdown blank selection then save without separately confirming the selection. UI and native readback retained production owner, revision 4, history count 4; receipt count advanced from 5 to 6. Cause unresolved; not counted as a successful clear. Raw observation preserved as production-clear-attempt1.json."}
+  ],
+  "continuation_blocker": "Mac locked; automatic unlock failed. Asked user to unlock. No subsequent native clicks performed.",
+  "pending_native_browser_checks": ["Confirm blank owner selection before saving, clear each owner and explicitly restore both with historical readback.", "Return to project directory, search formal number, reopen, refresh and exercise browser Back/Forward."],
+  "continuous_browser_journey_finished": false,
+  "screenshots_inspected_inline_not_archived": true,
+  "original_oa_live_browser_comparison": false,
+  "full_oa_accepted": false
+}

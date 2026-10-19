@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+VERIFY="$ROOT_DIR/acceptance/architecture-boundary-static-audit/verify"
+TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-architecture-audit-test.XXXXXX")
+trap 'rm -rf "$TEST_ROOT"' EXIT
+
+mkdir -p "$TEST_ROOT/backend/services/app-a" "$TEST_ROOT/backend/services/app-b/pkg" "$TEST_ROOT/backend/platform" "$TEST_ROOT/frontend" "$TEST_ROOT/deployments" "$TEST_ROOT/acceptance"
+
+cat >"$TEST_ROOT/backend/services/app-a/go.mod" <<'EOF'
+module omsbizfoundry/app-a
+
+go 1.26.0
+EOF
+cat >"$TEST_ROOT/backend/services/app-a/main.go" <<'EOF'
+package main
+
+func main() {}
+EOF
+cat >"$TEST_ROOT/backend/services/app-b/go.mod" <<'EOF'
+module omsbizfoundry/app-b
+
+go 1.26.0
+EOF
+cat >"$TEST_ROOT/backend/services/app-b/pkg/pkg.go" <<'EOF'
+package pkg
+
+const Value = "owned-by-app-b"
+EOF
+
+ARCHITECTURE_AUDIT_ROOT="$TEST_ROOT" "$VERIFY" >/dev/null
+
+cat >"$TEST_ROOT/backend/services/app-a/go.mod" <<'EOF'
+module omsbizfoundry/app-a
+
+go 1.26.0
+
+require omsbizfoundry/app-b v0.0.0
+
+replace omsbizfoundry/app-b => ../app-b
+EOF
+cat >"$TEST_ROOT/backend/services/app-a/main.go" <<'EOF'
+package main
+
+import "omsbizfoundry/app-b/pkg"
+
+func main() { _ = pkg.Value }
+EOF
+
+if ARCHITECTURE_AUDIT_ROOT="$TEST_ROOT" "$VERIFY" >/dev/null 2>&1; then
+  echo "self-test: cross-application dependency was not rejected" >&2
+  exit 1
+fi
+
+cat >"$TEST_ROOT/backend/services/app-a/go.mod" <<'EOF'
+module omsbizfoundry/app-a
+
+go 1.26.0
+EOF
+cat >"$TEST_ROOT/backend/services/app-a/main.go" <<'EOF'
+package main
+
+func main() {}
+EOF
+cat >"$TEST_ROOT/backend/services/app-a/cross_database.sql" <<'EOF'
+SELECT * FROM dblink('forbidden', 'SELECT 1') AS t(value integer);
+EOF
+
+if ARCHITECTURE_AUDIT_ROOT="$TEST_ROOT" "$VERIFY" >/dev/null 2>&1; then
+  echo "self-test: cross-database SQL mechanism was not rejected" >&2
+  exit 1
+fi
+
+echo "architecture-boundary-static-audit self-test: passed"

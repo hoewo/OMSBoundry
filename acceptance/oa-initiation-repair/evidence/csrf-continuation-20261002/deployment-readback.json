@@ -1,0 +1,94 @@
+{
+  "manifest": {
+    "version": "v0.1.0-oa.20261002.4",
+    "platform": "linux/amd64",
+    "official_release": false,
+    "commit": "unknown",
+    "source_archive_sha256": "002228663c3b843fb9394f88ad6967250dcb459cea981e0e0b494dcc5452a5b6",
+    "applications": {
+      "unified-workbench": {
+        "Dockerfile": "67cfaf74008175c3884e0df4022f2a5914314ea8e9a89246583561d388620b5c",
+        "server": "c0e2f6dc7e2c2781cfee3e0415dee9d4be391eadd44c56392b6a506e7e8a33d9"
+      }
+    },
+    "contracts": {
+      "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+      "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb"
+    },
+    "assets": {
+      "reference-oa-initiation-runtime.js": "67000acd9195c07010251f31ec2cf8d66533b7d9fa8ab47d0ae698a39db8add9"
+    }
+  },
+  "publication": {
+    "passed": true,
+    "official_release": false,
+    "images": {
+      "unified-workbench": {
+        "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:838de9698c9c64d06bbaccd04efb097a2def8bf247db4845549bc7d5012fac5d",
+        "image_id": "sha256:838de9698c9c64d06bbaccd04efb097a2def8bf247db4845549bc7d5012fac5d",
+        "binary_sha256": {
+          "server": "c0e2f6dc7e2c2781cfee3e0415dee9d4be391eadd44c56392b6a506e7e8a33d9"
+        }
+      }
+    },
+    "main_unchanged": true
+  },
+  "preflight": {
+    "passed": true,
+    "iam_contracts_unchanged": true,
+    "project_schema_before": "000010_initial_dispatch_draft.sql",
+    "closure": [
+      "Workbench"
+    ],
+    "gateway_suite_manifest_unchanged": true,
+    "other_business_images_unchanged": true,
+    "official_release": false
+  },
+  "restore": {
+    "passed": true,
+    "empty_databases": 13,
+    "facts_and_sequences_equal": true,
+    "files_and_iam_key_bytes_equal": true,
+    "schema_7_to_10": false,
+    "schema_10_unchanged": true,
+    "existing_project_facts_unchanged": true,
+    "full_suite_restore_runtime": false
+  },
+  "rollout": {
+    "passed": true,
+    "schema": 10,
+    "changed_containers": [
+      "unified-workbench"
+    ],
+    "other_container_ids_unchanged": 16,
+    "project_facts_preserved": true,
+    "d1_check": true,
+    "official_release": false
+  },
+  "private_postgres_running": false,
+  "restore20_running_count": 0,
+  "d1_check_after_browser": true,
+  "offhost_backup": {
+    "path": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-csrf-backup-20261002.XSyHke/oa-public-20261002d-backup.tar.gz",
+    "bytes": 217351,
+    "directory_mode": "0700",
+    "archive_mode": "0600",
+    "sha256": "c9cf429927ab070cca49b79c0d7387af24973c7920a07751329f6b2737a0b614",
+    "private_contents_not_committed": true
+  },
+  "local_checks": {
+    "node_runtime": 37,
+    "node_directory": 7,
+    "node_csrf": 8,
+    "node_skips": 0,
+    "workbench_go_test": true,
+    "workbench_go_vet": true,
+    "gateway_existing_http_safety_regression": true,
+    "javascript_syntax": true,
+    "python_compile": true,
+    "python_pure_phase_gate_tests": 6,
+    "git_diff_check": true,
+    "synthetic_opt_in_browser_probe_run": false
+  },
+  "full_oa_accepted": false
+}

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "closure": [
+    "cost-outsourcing",
+    "unified-workbench",
+    "IAM/Gateway same binaries, expanded typed Cost scopes; Cost workload exact metadata policy"
+  ],
+  "grant_writes": 0,
+  "assignment_policy_unchanged": true,
+  "other_workload_permissions_unchanged": true,
+  "old_binary_direct_rollback_forbidden": true,
+  "official_release": false
+}

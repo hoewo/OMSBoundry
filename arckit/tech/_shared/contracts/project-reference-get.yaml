@@ -1,0 +1,43 @@
+# Project 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/project-reference-get.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.2", created: "2026-09-25", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/projects/{project_id}", summary: "向类型化业务应用提供 Project 最小稳定投影", auth_required: true, audience: "project-workspace", capability: "project-workspace.read"}
+request:
+  path_params: [{name: project_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: project, id_from: project_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, resource_type, project_number, display_summary, status, revision, project_type_keys, node_type, resource_links]
+      properties:
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: project}
+        project_number: {type: string, minLength: 1}
+        display_summary: {type: string, minLength: 1, description: "Project 自有且随 revision 读取的稳定项目名称。"}
+        status: {type: string, enum: [draft, pending_completion, active, cancelled]}
+        revision: {type: integer, minimum: 1}
+        project_type_keys: {type: array, items: {type: string}}
+        node_type: {type: string, enum: [project, package]}
+        parent_project_id: {type: string, format: uuid}
+        resource_links:
+          type: array
+          description: "仅包含当前活动链接，用于受信消费端证明来源资源属于该 Project。"
+          items:
+            type: object
+            additionalProperties: false
+            required: [target_service, resource_type, resource_id, relation_key]
+            properties:
+              target_service: {type: string, minLength: 1}
+              resource_type: {type: string, minLength: 1}
+              resource_id: {type: string, format: uuid}
+              source_revision: {type: integer, minimum: 1}
+              relation_key: {type: string, minLength: 1}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受 audience、project-workspace.read 与精确 Project Scope 均匹配的短期凭证。", "从 Project 自有事实生成含稳定名称、项目编号和活动 Resource Link 的最小投影。", "不返回 Assignment、链接备注、已解除链接或外部资源当前状态。"]

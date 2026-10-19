@@ -1,0 +1,386 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C4_EVIDENCE_DIR:-"$d1_dir/.runtime/c4-evidence"}
+
+for command in curl jq openssl docker awk; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1
+  fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  if [ -n "${D1_COMPOSE_OVERRIDE_FILE:-}" ]; then
+    set -- --file "$D1_COMPOSE_OVERRIDE_FILE" "$@"
+  fi
+  set -- --file "$d1_dir/compose.yaml" "$@"
+  docker compose --project-name "$compose_project" --env-file "$env_file" \
+    --profile people --profile project --profile evidence --profile production "$@"
+}
+
+expect_status() {
+  [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+cookie_value() {
+  awk -F '\t' -v name="$2" '$6 == name {value=$7} END {print value}' "$1"
+}
+
+decode_jwt_payload() {
+  part=$(printf '%s' "$1" | cut -d. -f2)
+  case $((${#part} % 4)) in 0) padding='' ;; 2) padding='==' ;; 3) padding='=' ;; *) return 1 ;; esac
+  printf '%s%s' "$part" "$padding" | tr '_-' '/+' | openssl base64 -d -A
+}
+
+fetch_csrf() {
+  result=$(curl --silent --show-error --output "$2" --write-out '%{http_code} %{time_total}' --cookie-jar "$1" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"
+  expect_status 200 "$actual" 'fetch csrf'
+  jq -er .csrf_token "$2"
+}
+
+auth_json() {
+  path=$1; cookie=$2; csrf=$3; payload=$4; output=$5; expected=$6
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+    --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  [ "$actual" = "$expected" ] || { [ "$output" = /dev/null ] || cat "$output" >&2; }
+  expect_status "$expected" "$actual" "POST /auth$path"
+}
+
+login() {
+  payload=$(jq -cn --arg username "$3" --arg password "$4" '{username:$username,password:$password}')
+  auth_json /api/v1/login "$1" "$2" "$payload" "$5" 200
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; resource_type=$4; resource_id=$5; fact_id=$6; fact_revision=$7; expected=$8; output=$9
+  if [ -n "$fact_id" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      --data-urlencode "resource_type=$resource_type" --data-urlencode "resource_id=$resource_id" \
+      --data-urlencode business_fact_kind=project_assignment --data-urlencode business_fact_source=project-workspace \
+      --data-urlencode "business_fact_id=$fact_id" --data-urlencode "business_fact_revision=$fact_revision" \
+      "$base_url/gateway/authorize/$app")
+  elif [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      --data-urlencode "resource_type=$resource_type" --data-urlencode "resource_id=$resource_id" \
+      "$base_url/gateway/authorize/$app")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" "$base_url/gateway/authorize/$app")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" "$expected" "$actual" "$duration"
+  [ "$actual" = "$expected" ] || cat "$output" >&2
+  expect_status "$expected" "$actual" "authorize $app"
+}
+
+app_json() {
+  method=$1; prefix=$2; path=$3; cookie=$4; payload=$5; output=$6; expected=$7
+  if [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' \
+      -H "Idempotency-Key: $(new_uuid)" \
+      --data "$payload" "$base_url$prefix$path")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" "$base_url$prefix$path")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$method $prefix$path" "$expected" "$actual" "$duration"
+  [ "$actual" = "$expected" ] || { [ "$output" = /dev/null ] || cat "$output" >&2; }
+  expect_status "$expected" "$actual" "$method $prefix$path"
+}
+
+wait_healthy() {
+  container=$(compose ps -q "$1")
+  [ -n "$container" ] || { echo "$1 container is missing" >&2; exit 1; }
+  for _attempt in $(seq 1 60); do
+    [ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$1 did not recover" >&2
+  exit 1
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c4.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+mkdir -p "$evidence_dir"
+identity_stopped=false
+evidence_stopped=false
+cleanup() {
+  [ "$identity_stopped" != true ] || compose start identity-access >/dev/null 2>&1 || true
+  [ "$evidence_stopped" != true ] || compose start evidence-service >/dev/null 2>&1 || true
+  cp "$http_evidence" "$evidence_dir/http-evidence.tsv" 2>/dev/null || true
+  rm -rf "$workspace"
+}
+trap cleanup EXIT HUP INT TERM
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" "$workspace/admin-login.json"
+for app in people-groups project-workspace evidence-service production-operations; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$app" '' '' '' '' 303 "$workspace/admin-$app.out"
+done
+
+curl --fail --silent --show-error --cookie "$admin_cookies" "$base_url/workbench/" >"$workspace/workbench.html"
+grep -Fq '/gateway/authorize/production-operations' "$workspace/workbench.html"
+for absent in contract-ledger money-flow-ledger party-directory business-engagement billing-invoice; do
+  ! grep -Fq "/gateway/authorize/$absent" "$workspace/workbench.html" || { echo "$absent unexpectedly appears in Workbench" >&2; exit 1; }
+done
+for absent_path in contract money party business billing; do
+  result=$(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" "$base_url/$absent_path/")
+  actual=${result%% *}; duration=${result#* }
+  record_http "GET /$absent_path/" 404 "$actual" "$duration"
+  expect_status 404 "$actual" "disabled route /$absent_path"
+done
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+create_actor() {
+  role=$1; display=$2; username="c4-$(printf '%s' "$role" | tr '_' '-')-$stamp"; password="C4-${role}-${stamp}!Aa7"
+  payload=$(jq -cn --arg username "$username" --arg display_name "$display" '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/$role-invitation.json" 201
+  subject=$(jq -er .subject.id "$workspace/$role-invitation.json")
+  token=$(jq -er .token "$workspace/$role-invitation.json")
+  cookies="$workspace/$role.cookies"
+  csrf=$(fetch_csrf "$cookies" "$workspace/$role-csrf.json")
+  payload=$(jq -cn --arg token "$token" --arg password "$password" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$cookies" "$csrf" "$payload" "$workspace/$role-activation.json" 200
+  login "$cookies" "$csrf" "$username" "$password" "$workspace/$role-login.json"
+  jq -cn --arg subject_id "$subject" --arg username "$username" --arg password "$password" --arg csrf "$csrf" \
+    '{subject_id:$subject_id,username:$username,password:$password,csrf:$csrf}' >"$workspace/$role-meta.json"
+}
+create_actor business_owner 'C4 项目经营负责人'
+create_actor production_owner 'C4 项目生产负责人'
+create_actor browser_operator 'C4 浏览器生产操作者'
+
+browser_subject=$(jq -er .subject_id "$workspace/browser_operator-meta.json")
+capability_manifest="$repo_dir/contracts/access/v1/examples/production-operations-capabilities.json"
+jq -r '.capabilities[].id' "$capability_manifest" |
+while IFS= read -r action; do
+  payload=$(jq -cn --arg subject_id "$browser_subject" --arg action "$action" '{subject_id:$subject_id,audience:"production-operations",action:$action}')
+  auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+done
+
+create_person() {
+  role=$1; display=$2; subject=$(jq -er .subject_id "$workspace/$role-meta.json")
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$display" --arg iam_subject_id "$subject" '{command_id:$command_id,display_name:$display_name,iam_subject_id:$iam_subject_id}')
+  app_json POST /people /api/v1/persons "$admin_cookies" "$payload" "$workspace/$role-person.json" 201
+}
+create_person business_owner 'C4 项目经营负责人'
+create_person production_owner 'C4 项目生产负责人'
+business_person=$(jq -er .id "$workspace/business_owner-person.json")
+business_person_revision=$(jq -er .revision "$workspace/business_owner-person.json")
+production_person=$(jq -er .id "$workspace/production_owner-person.json")
+production_person_revision=$(jq -er .revision "$workspace/production_owner-person.json")
+
+create_active_project() {
+  label=$1; project_key=$2
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg number "C4-$label-$stamp" --arg name "C4 Project $label $stamp" \
+    '{command_id:$command_id,project_number:$number,name:$name,summary:"C4 production authorization",planned_start_date:null,planned_end_date:null,project_type_keys:["design","consultation"]}')
+  app_json POST /project /api/v1/projects "$admin_cookies" "$payload" "$workspace/$project_key-project.json" 201
+  project_id=$(jq -er .id "$workspace/$project_key-project.json")
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$business_person" --argjson source_revision "$business_person_revision" \
+    '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"business_owner"}')
+  app_json POST /project "/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/$project_key-business-assignment.json" 200
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$production_person" --argjson source_revision "$production_person_revision" \
+    '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"production_owner"}')
+  app_json POST /project "/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/$project_key-production-assignment.json" 200
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3}')
+  app_json POST /project "/api/v1/projects/$project_id/complete-initiation" "$admin_cookies" "$payload" "$workspace/$project_key-active.json" 200
+}
+create_active_project A a
+create_active_project B b
+project_a=$(jq -er .id "$workspace/a-project.json")
+project_b=$(jq -er .id "$workspace/b-project.json")
+project_a_revision=$(jq -er .revision "$workspace/a-active.json")
+project_b_revision=$(jq -er .revision "$workspace/b-active.json")
+production_assignment=$(jq -er .assignment.id "$workspace/a-production-assignment.json")
+production_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/a-production-assignment.json")
+business_assignment=$(jq -er .assignment.id "$workspace/a-business-assignment.json")
+business_assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/a-business-assignment.json")
+
+evidence_content="$workspace/c4-report.txt"
+printf 'C4 production evidence %s\n' "$stamp" >"$evidence_content"
+evidence_size=$(wc -c <"$evidence_content" | tr -d ' ')
+evidence_sha=$(openssl dgst -sha256 "$evidence_content" | awk '{print $2}')
+payload=$(jq -cn --arg file_name "c4-report-$stamp.txt" --argjson size "$evidence_size" --arg sha "$evidence_sha" '{file_name:$file_name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:"c4-production-proof"}}')
+app_json POST /evidence /v1/upload-sessions "$admin_cookies" "$payload" "$workspace/upload-session.json" 201
+upload_url=$(jq -er .authorization.upload_url "$workspace/upload-session.json")
+upload_session=$(jq -er .session_id "$workspace/upload-session.json")
+evidence_file=$(jq -er .file_id "$workspace/upload-session.json")
+expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --request PUT -H 'Content-Type: text/plain' --data-binary "@$evidence_content" "$upload_url")" 'upload Evidence bytes'
+payload=$(jq -cn --argjson size "$evidence_size" --arg sha "$evidence_sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+app_json POST /evidence "/v1/upload-sessions/$upload_session/complete" "$admin_cookies" "$payload" "$workspace/evidence-version.json" 200
+app_json GET /evidence "/v1/references/files/$evidence_file/versions/1" "$admin_cookies" '' "$workspace/evidence-reference.json" 200
+evidence_revision=$(jq -er .revision "$workspace/evidence-reference.json")
+
+production_cookies="$workspace/production_owner.cookies"
+production_csrf=$(jq -er .csrf "$workspace/production_owner-meta.json")
+business_cookies="$workspace/business_owner.cookies"
+business_csrf=$(jq -er .csrf "$workspace/business_owner-meta.json")
+authorize_app "$production_cookies" "$production_csrf" production-operations project "$project_a" "$production_assignment" "$production_assignment_revision" 303 "$workspace/production-owner-authorize.out"
+authorize_app "$business_cookies" "$business_csrf" production-operations project "$project_a" "$business_assignment" "$business_assignment_revision" 403 "$workspace/business-owner-denied.json"
+production_credential=$(cookie_value "$production_cookies" oms_cap_production_operations)
+[ -n "$production_credential" ] || { echo 'production credential is missing' >&2; exit 1; }
+decode_jwt_payload "$production_credential" >"$workspace/production-claims.json"
+jq -e --arg project "$project_a" '.aud == "production-operations" and (.actions | length) == 7 and .scope == {kind:"resources",resources:[{type:"project",id:$project}]}' "$workspace/production-claims.json" >/dev/null
+
+expect_status 200 "$(curl --silent --show-error --output "$workspace/production.html" --write-out '%{http_code}' --cookie "$production_cookies" "$base_url/production/")" 'open Production workspace'
+grep -Fq 'Production Operations' "$workspace/production.html"
+grep -Fq 'consultation-v1' "$workspace/production.html"
+expect_status 200 "$(curl --silent --show-error --output "$workspace/production.js" --write-out '%{http_code}' --cookie "$production_cookies" "$base_url/production/assets/demo.js")" 'load Production browser script'
+grep -Fq 'api/v1/production-work-items' "$workspace/production.js"
+grep -Fq 'refreshPermissions' "$workspace/production.js"
+grep -Fq 'allowed_actions' "$workspace/production.js"
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project "$project_a" --argjson revision "$project_a_revision" '{command_id:$command_id,project_id:$project,project_source_revision:$revision,type_key:"design-v1"}')
+app_json POST /production /api/v1/production-work-items "$production_cookies" "$payload" "$workspace/design-created.json" 201
+design_item=$(jq -er .work_item.id "$workspace/design-created.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project "$project_a" --argjson revision "$project_a_revision" '{command_id:$command_id,project_id:$project,project_source_revision:$revision,type_key:"consultation-v1"}')
+app_json POST /production /api/v1/production-work-items "$production_cookies" "$payload" "$workspace/consultation-created.json" 201
+consultation_item=$(jq -er .work_item.id "$workspace/consultation-created.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment "$production_assignment" --argjson assignment_revision "$production_assignment_revision" '{command_id:$command_id,expected_revision:1,assignment_id:$assignment,assignment_source_revision:$assignment_revision}')
+app_json POST /production "/api/v1/production-work-items/$consultation_item/owner" "$production_cookies" "$payload" "$workspace/consultation-owner.json" 200
+payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:2,operation:"set-not-applicable",reason:"本咨询项目不单独交付方案"}')
+app_json POST /production "/api/v1/production-work-items/$consultation_item/stages/scheme/applicability" "$production_cookies" "$payload" "$workspace/consultation-scheme.json" 200
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg file "$evidence_file" --argjson evidence_revision "$evidence_revision" '{command_id:$command_id,expected_revision:3,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$evidence_revision}')
+app_json POST /production "/api/v1/production-work-items/$consultation_item/stages/report/deliverables" "$production_cookies" "$payload" "$workspace/consultation-deliverable.json" 200
+payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:4}')
+app_json POST /production "/api/v1/production-work-items/$consultation_item/stages/report/complete" "$production_cookies" "$payload" "$workspace/consultation-completed.json" 200
+jq -e '.work_item.status == "completed" and .work_item.type_key == "consultation-v1" and .work_item.revision == 5' "$workspace/consultation-completed.json" >/dev/null
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment "$production_assignment" --argjson assignment_revision "$production_assignment_revision" '{command_id:$command_id,expected_revision:1,assignment_id:$assignment,assignment_source_revision:$assignment_revision}')
+app_json POST /production "/api/v1/production-work-items/$design_item/owner" "$production_cookies" "$payload" "$workspace/design-owner.json" 200
+deliverable_command=$(new_uuid)
+design_deliverable_payload=$(jq -cn --arg command_id "$deliverable_command" --arg file "$evidence_file" --argjson evidence_revision "$evidence_revision" '{command_id:$command_id,expected_revision:2,requirement_key:"primary-output",evidence_file_id:$file,evidence_version:1,evidence_source_revision:$evidence_revision}')
+compose stop evidence-service >/dev/null 2>&1
+evidence_stopped=true
+app_json POST /production "/api/v1/production-work-items/$design_item/stages/scheme/deliverables" "$production_cookies" "$design_deliverable_payload" "$workspace/design-evidence-down.json" 503
+app_json GET /production "/api/v1/production-work-items/$design_item" "$production_cookies" '' "$workspace/design-after-failure.json" 200
+jq -e '.work_item.revision == 2 and (.deliverables | length) == 0' "$workspace/design-after-failure.json" >/dev/null
+compose start evidence-service >/dev/null 2>&1
+wait_healthy evidence-service
+evidence_stopped=false
+app_json POST /production "/api/v1/production-work-items/$design_item/stages/scheme/deliverables" "$production_cookies" "$design_deliverable_payload" "$workspace/design-evidence-retry.json" 200
+app_json GET /production "/api/v1/production-work-items/$design_item" "$production_cookies" '' "$workspace/design-after-retry.json" 200
+jq -e '.work_item.revision == 3 and (.deliverables | length) == 1' "$workspace/design-after-retry.json" >/dev/null
+
+project_b_command=$(new_uuid)
+payload=$(jq -cn --arg command_id "$project_b_command" --arg project "$project_b" --argjson revision "$project_b_revision" '{command_id:$command_id,project_id:$project,project_source_revision:$revision,type_key:"consultation-v1"}')
+compose stop identity-access >/dev/null 2>&1
+identity_stopped=true
+app_json POST /production /api/v1/production-work-items "$admin_cookies" "$payload" "$workspace/project-b-iam-down.json" 503
+compose start identity-access >/dev/null 2>&1
+wait_healthy identity-access
+identity_stopped=false
+app_json POST /production /api/v1/production-work-items "$admin_cookies" "$payload" "$workspace/project-b-retry.json" 201
+project_b_item=$(jq -er .work_item.id "$workspace/project-b-retry.json")
+app_json GET /production "/api/v1/production-work-items/$project_b_item" "$production_cookies" '' "$workspace/project-b-owner-denied.json" 403
+
+# A dedicated, non-administrator browser actor proves that the Production page
+# converges on newly issued credentials. An already-issued credential remains
+# usable only inside its signed residual window; explicit refresh removes the
+# revoked action, while account disable invalidates Suite Session and issuance.
+browser_cookies="$workspace/browser_operator.cookies"
+browser_csrf=$(jq -er .csrf "$workspace/browser_operator-meta.json")
+authorize_app "$browser_cookies" "$browser_csrf" production-operations '' '' '' '' 303 "$workspace/browser-authorize.out"
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$browser_cookies" '' "$workspace/browser-before-revoke.json" 200
+jq -e '(.allowed_actions | index("production-work-item.stage.manage")) != null' "$workspace/browser-before-revoke.json" >/dev/null
+
+stage_grant=$(jq -cn --arg subject_id "$browser_subject" '{subject_id:$subject_id,audience:"production-operations",action:"production-work-item.stage.manage"}')
+auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$stage_grant" /dev/null 204
+app_json POST /production "/api/v1/production-work-items/$consultation_item/stages/report/complete" "$browser_cookies" '{}' "$workspace/browser-old-stage-credential.json" 400
+authorize_app "$browser_cookies" "$browser_csrf" production-operations '' '' '' '' 303 "$workspace/browser-refresh-after-revoke.out"
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$browser_cookies" '' "$workspace/browser-after-revoke.json" 200
+jq -e '(.allowed_actions | index("production-work-item.stage.manage")) == null' "$workspace/browser-after-revoke.json" >/dev/null
+app_json POST /production "/api/v1/production-work-items/$consultation_item/stages/report/complete" "$browser_cookies" '{}' "$workspace/browser-stage-after-revoke-denied.json" 403
+
+auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$stage_grant" /dev/null 204
+authorize_app "$browser_cookies" "$browser_csrf" production-operations '' '' '' '' 303 "$workspace/browser-refresh-after-restore.out"
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$browser_cookies" '' "$workspace/browser-after-restore.json" 200
+jq -e '(.allowed_actions | index("production-work-item.stage.manage")) != null' "$workspace/browser-after-restore.json" >/dev/null
+
+browser_status=$(jq -cn --arg subject_id "$browser_subject" '{subject_id:$subject_id,status:"disabled"}')
+auth_json /api/v1/admin/status "$admin_cookies" "$admin_csrf" "$browser_status" /dev/null 204
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$browser_cookies" '' "$workspace/browser-disabled-residual-read.json" 200
+result=$(curl --silent --show-error --output "$workspace/browser-disabled-session.json" --write-out '%{http_code} %{time_total}' \
+  --cookie "$browser_cookies" "$base_url/auth/api/v1/session")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /auth/api/v1/session browser actor disabled' 401 "$actual" "$duration"
+expect_status 401 "$actual" 'disabled browser actor session'
+authorize_app "$browser_cookies" "$browser_csrf" production-operations '' '' '' '' 401 "$workspace/browser-disabled-authorize.json"
+[ -z "$(cookie_value "$browser_cookies" oms_cap_production_operations)" ] || { echo 'disabled browser actor retained Production cookie after refresh' >&2; exit 1; }
+disabled_login=$(jq -cn --arg username "$(jq -er .username "$workspace/browser_operator-meta.json")" --arg password "$(jq -er .password "$workspace/browser_operator-meta.json")" '{username:$username,password:$password}')
+auth_json /api/v1/login "$browser_cookies" "$browser_csrf" "$disabled_login" "$workspace/browser-disabled-login.json" 401
+
+browser_status=$(jq -cn --arg subject_id "$browser_subject" '{subject_id:$subject_id,status:"active"}')
+auth_json /api/v1/admin/status "$admin_cookies" "$admin_csrf" "$browser_status" /dev/null 204
+browser_restored_cookies="$workspace/browser-restored.cookies"
+browser_restored_csrf=$(fetch_csrf "$browser_restored_cookies" "$workspace/browser-restored-csrf.json")
+login "$browser_restored_cookies" "$browser_restored_csrf" "$(jq -er .username "$workspace/browser_operator-meta.json")" "$(jq -er .password "$workspace/browser_operator-meta.json")" "$workspace/browser-restored-login.json"
+authorize_app "$browser_restored_cookies" "$browser_restored_csrf" production-operations '' '' '' '' 303 "$workspace/browser-restored-authorize.out"
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$browser_restored_cookies" '' "$workspace/browser-restored-details.json" 200
+jq -e '(.allowed_actions | index("production-work-item.stage.manage")) != null' "$workspace/browser-restored-details.json" >/dev/null
+
+# Ending the Project Assignment prevents a new policy credential while the old
+# Production credential remains bounded by its <=300 second signed lifetime.
+fresh_production_cookies="$workspace/production-owner-fresh.cookies"
+fresh_production_csrf=$(fetch_csrf "$fresh_production_cookies" "$workspace/production-owner-fresh-csrf.json")
+login "$fresh_production_cookies" "$fresh_production_csrf" "$(jq -er .username "$workspace/production_owner-meta.json")" "$(jq -er .password "$workspace/production_owner-meta.json")" "$workspace/production-owner-fresh-login.json"
+end_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment_id "$production_assignment" --argjson expected_revision "$project_a_revision" '{command_id:$command_id,expected_revision:$expected_revision,operation:"end",assignment_id:$assignment_id,end_reason:"C4 Production responsibility handoff"}')
+app_json POST /project "/api/v1/projects/$project_a/assignments" "$admin_cookies" "$end_payload" "$workspace/production-assignment-ended.json" 200
+authorize_app "$fresh_production_cookies" "$fresh_production_csrf" production-operations project "$project_a" "$production_assignment" "$production_assignment_revision" 403 "$workspace/ended-production-assignment-denied.json"
+app_json GET /production "/api/v1/production-work-items/$consultation_item" "$production_cookies" '' "$workspace/old-production-credential-residual.json" 200
+
+app_json GET /production "/api/v1/production-work-items/$consultation_item/history?limit=50" "$production_cookies" '' "$workspace/consultation-history.json" 200
+jq -e '.items | length == 5' "$workspace/consultation-history.json" >/dev/null
+audit_counts=$(compose exec -T postgres sh -eu -c 'psql -U "$POSTGRES_USER" -d identity_access -At -F"," -c "SELECT count(*) FILTER (WHERE action='"'"'iam_capability_revoked'"'"' AND details->>'"'"'audience'"'"'='"'"'production-operations'"'"'),count(*) FILTER (WHERE action='"'"'iam_subject_status_changed'"'"' AND details->>'"'"'status'"'"'='"'"'disabled'"'"'),count(*) FILTER (WHERE action='"'"'iam_subject_status_changed'"'"' AND details->>'"'"'status'"'"'='"'"'active'"'"') FROM iam_audit_entries"')
+revocation_audits=$(printf '%s' "$audit_counts" | cut -d, -f1)
+disable_audits=$(printf '%s' "$audit_counts" | cut -d, -f2)
+restore_audits=$(printf '%s' "$audit_counts" | cut -d, -f3)
+[ "$revocation_audits" -ge 1 ] && [ "$disable_audits" -ge 1 ] && [ "$restore_audits" -ge 1 ] || { echo "expected Production revoke/disable/restore audits, got $audit_counts" >&2; exit 1; }
+state_sha=$(jq -Sc '{work_item:.work_item,stages:.stages,deliverables:.deliverables}' "$workspace/consultation-completed.json" | openssl dgst -sha256 -r | awk '{print $1}')
+mkdir -p "$evidence_dir"
+jq -n --arg project_a "$project_a" --arg project_b "$project_b" --arg design_item "$design_item" \
+  --arg consultation_item "$consultation_item" --arg project_b_item "$project_b_item" --arg state_sha256 "$state_sha" \
+  '{project_a:$project_a,project_b:$project_b,design_item:$design_item,consultation_item:$consultation_item,project_b_item:$project_b_item,state_sha256:$state_sha256}' >"$evidence_dir/state.json"
+jq -n --arg username "$(jq -er .username "$workspace/browser_operator-meta.json")" \
+  --arg password "$(jq -er .password "$workspace/browser_operator-meta.json")" \
+  --arg subject_id "$browser_subject" --arg project_id "$project_a" --arg work_item_id "$consultation_item" \
+  '{username:$username,password:$password,subject_id:$subject_id,project_id:$project_id,work_item_id:$work_item_id}' >"$evidence_dir/browser-fixture.json"
+chmod 600 "$evidence_dir/browser-fixture.json"
+cp "$http_evidence" "$evidence_dir/http-evidence.tsv"
+
+assertions=$(awk 'NR > 1 {count++} END {print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR > 1 && $2 != $3 {count++} END {print count+0}' "$http_evidence")
+printf 'PASS D1 C4 minimum composition and permission lifecycle: %s HTTP assertions, %s mismatches, consultation=%s, design=%s, revoke/disable/restore audits=%s\n' "$assertions" "$mismatches" "$consultation_item" "$design_item" "$audit_counts"

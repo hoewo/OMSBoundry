@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>历史义务余额 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/obligations/{{.ObligationID}}">← 返回当前义务</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations" aria-current="page">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>历史 Obligation 余额</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>本页按系统记录时间重放不可变事实。它不是到期日、收付款发生日、会计期间或法律生效日，也不提供未来预测。</p>
+
+    <form method="get" action="{{basePath}}/obligations/{{.ObligationID}}/history">
+      <label for="as_of">截至时刻（带时区的 RFC3339）</label>
+      <input id="as_of" name="as_of" value="{{.AsOfInput}}" placeholder="2026-09-20T12:00:00Z" required>
+      <button type="submit">重放余额</button>
+    </form>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    {{if .HasSnapshot}}
+    <section aria-labelledby="historical-summary-heading">
+      <h2 id="historical-summary-heading">{{.Snapshot.Title}}</h2>
+      <p>截至：{{.Snapshot.AsOf}}（包含该时刻已记录的事实）</p>
+      <dl>
+        <dt>Obligation ID</dt><dd>{{.Snapshot.ObligationID}}</dd>
+        <dt>状态</dt><dd>{{.Snapshot.Status}}</dd>
+        <dt>Revision</dt><dd>{{.Snapshot.Revision}}</dd>
+        <dt>Revision 记录时间</dt><dd>{{.Snapshot.RevisionRecordedAt}}</dd>
+        <dt>方向</dt><dd>{{.Snapshot.Direction.Label}}</dd>
+        <dt>本方</dt><dd>{{.Snapshot.LedgerOwner.LegalName}}（Party revision {{.Snapshot.LedgerOwner.PartyRevision}}）</dd>
+        <dt>往来方</dt><dd>{{.Snapshot.Counterparty.LegalName}}（Party revision {{.Snapshot.Counterparty.PartyRevision}}）</dd>
+        <dt>到期日</dt><dd>{{.Snapshot.DueOn}}</dd>
+        <dt>历史余额事实序号</dt><dd>{{.Snapshot.BalanceSequence}}</dd>
+      </dl>
+    </section>
+
+    <section aria-labelledby="historical-formula-heading">
+      <h2 id="historical-formula-heading">余额组成</h2>
+      <p>{{.Snapshot.EffectiveAmount}} − {{.Snapshot.NetAllocatedAmount}} − {{.Snapshot.RemittedAmount}} = {{.Snapshot.OutstandingAmount}} {{.Snapshot.Currency}}</p>
+      <dl>
+        <dt>当时有效金额</dt><dd>{{.Snapshot.EffectiveAmount}} {{.Snapshot.Currency}}</dd>
+        <dt>当时资金分配净额</dt><dd>{{.Snapshot.NetAllocatedAmount}} {{.Snapshot.Currency}}</dd>
+        <dt>当时减免合计</dt><dd>{{.Snapshot.RemittedAmount}} {{.Snapshot.Currency}}</dd>
+        <dt>当时剩余金额</dt><dd>{{.Snapshot.OutstandingAmount}} {{.Snapshot.Currency}}</dd>
+      </dl>
+    </section>
+
+    {{if .Snapshot.Closure}}
+    <section aria-labelledby="historical-closure-heading">
+      <h2 id="historical-closure-heading">截至时点的关闭事实</h2>
+      <dl>
+        <dt>Closure ID</dt><dd>{{.Snapshot.Closure.ID}}</dd>
+        <dt>结清构成</dt><dd>{{.Snapshot.Closure.SettlementBasis.Label}}</dd>
+        <dt>关闭时间</dt><dd>{{.Snapshot.Closure.ClosedAt}}</dd>
+      </dl>
+    </section>
+    {{else}}
+    <p>截至该时刻尚未记录关闭事实。</p>
+    {{end}}
+    {{end}}
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "d1_check_exit": 0,
+  "healthy_main_services": 17,
+  "workbench_reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:fb097ceae605cd771e4106934d235472992c1749a67556c41139f32c0140bd3c",
+  "active_wrapper": "/opt/omsbizfoundry/acceptance/oa-projection-visibility-20261003a/d1-active",
+  "schemas": {
+    "project_workspace": "000011_commercial_contributors.sql",
+    "contract_ledger": "000018_party_migration_mappings.sql",
+    "business_engagement": "000002_material_collections.sql"
+  },
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "fixture_revision": 13,
+  "ownership_after_passed": true,
+  "business_writes": 0,
+  "restore20_and_all_probes_stopped": true,
+  "evidence_provider": "local",
+  "static_frontend": "ECS",
+  "full_suite_runtime_restore": false,
+  "full_oa_accepted": false
+}

@@ -1,0 +1,35 @@
+contract: project-basic-info-change
+version: "1.0"
+owner: project-workspace
+method: POST
+path: /api/v1/projects/{project_id}/basic-info-changes
+scope: project
+request:
+  command_id: uuid
+  expected_revision: positive-integer
+  reason: trimmed-text-1-to-500
+  profile:
+    optional: true
+    fields: [project_number, name, summary, planned_start_date, planned_end_date, project_type_keys]
+    authorization: project-workspace.profile.correct
+    validation: existing-project-profile-invariants
+  owners:
+    optional: true
+    max_items: 2
+    distinct_role_keys: [business_owner, production_owner]
+    operations:
+      set: {person_id: uuid, source_revision: positive-integer}
+      clear: {person: forbidden}
+    authorization: corresponding-owner-manage-or-assignment-manage
+  empty_command: rejected
+response:
+  project: owned-project-after-command
+  owners: [role_key, changed, previous-ended-assignment, current-assignment]
+guarantees:
+  - Every included capability is required before any mutation.
+  - One own-database transaction; old assignment history is preserved.
+  - A changed command advances one Project revision and one explicit history event.
+  - Unchanged fields and same person do not rewrite snapshot or create history.
+  - Identical replay precedes People validation; different payload conflicts.
+  - Future-effective owner cannot be implicitly ended by this immediate action.
+  - Existing profile-correction and assignment contracts remain unchanged.

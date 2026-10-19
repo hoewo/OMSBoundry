@@ -1,0 +1,188 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: build-release VERSION [OUTPUT_DIRECTORY]" >&2
+  exit 2
+fi
+
+version=$1
+output=${2:-dist}
+if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+  echo "VERSION must look like v1.2.3 or v1.2.3-demo.1" >&2
+  exit 2
+fi
+
+target=${LOCAL_OA_TARGET_PLATFORM:-linux/amd64}
+case "$target" in
+  linux/amd64) goarch=amd64; target_suffix=linux_amd64 ;;
+  linux/arm64) goarch=arm64; target_suffix=linux_arm64 ;;
+  *) echo "LOCAL_OA_TARGET_PLATFORM must be linux/amd64 or linux/arm64" >&2; exit 2 ;;
+esac
+use_existing=${LOCAL_OA_USE_EXISTING_IMAGES:-false}
+case "$use_existing" in true|false) ;; *) echo "LOCAL_OA_USE_EXISTING_IMAGES must be true or false" >&2; exit 2 ;; esac
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+deployment_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$deployment_dir/../.." && pwd)
+provenance=$("$repo_dir/ops/resolve-release-provenance" "$repo_dir")
+commit=$(printf '%s\n' "$provenance" | sed -n '1p')
+built_at=$(printf '%s\n' "$provenance" | sed -n '2p')
+prefix=${LOCAL_OA_IMAGE_PREFIX:-omsbizfoundry/local-oa}
+
+postgres_image="$prefix/postgres:$version"
+contract_image="$prefix/contract-ledger:$version"
+money_image="$prefix/money-flow-ledger:$version"
+people_image="$prefix/people-groups:$version"
+evidence_image="$prefix/evidence-service:$version"
+project_image="$prefix/project-workspace:$version"
+design_image="$prefix/design-operations:$version"
+project_stub_image="$prefix/project-reference-stub:$version"
+design_stub_image="$prefix/design-reference-stub:$version"
+images="$postgres_image $contract_image $money_image $people_image $evidence_image $project_image $design_image $project_stub_image $design_stub_image"
+
+build_image() {
+  image=$1
+  dockerfile=$2
+  shift 2
+  docker buildx build --platform "$target" --load --tag "$image" --file "$dockerfile" "$@" "$repo_dir"
+}
+
+if [ "$use_existing" = false ]; then
+  build_image "$postgres_image" "$deployment_dir/Dockerfile.postgres"
+  build_image "$contract_image" "$deployment_dir/Dockerfile.app" --build-arg APP=contract-ledger
+  build_image "$money_image" "$deployment_dir/Dockerfile.app" --build-arg APP=money-flow-ledger
+  build_image "$people_image" "$deployment_dir/Dockerfile.app" --build-arg APP=people-groups
+  build_image "$evidence_image" "$deployment_dir/Dockerfile.app" --build-arg APP=evidence-service
+  build_image "$project_image" "$deployment_dir/Dockerfile.app" --build-arg APP=project-workspace
+  build_image "$design_image" "$deployment_dir/Dockerfile.app" --build-arg APP=design-operations
+  build_image "$project_stub_image" "$repo_dir/deployments/demos/project-workspace/Dockerfile.reference-stub"
+  build_image "$design_stub_image" "$repo_dir/deployments/demos/design-operations/Dockerfile.reference-stub"
+fi
+
+for image in $images; do
+  actual=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null) || {
+    echo "required release image does not exist: $image" >&2
+    exit 1
+  }
+  [ "$actual" = "$target" ] || { echo "$image targets $actual, expected $target" >&2; exit 1; }
+done
+
+mkdir -p "$output"
+output=$(CDPATH= cd -- "$output" && pwd)
+bundle_name="omsbizfoundry-local-oa_${version}_${target_suffix}"
+archive="$output/$bundle_name.tar.gz"
+checksum="$archive.sha256"
+if [ -e "$archive" ] || [ -e "$checksum" ]; then
+  echo "release output already exists: $archive" >&2
+  exit 1
+fi
+
+digest_file() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'
+  else echo "sha256sum or shasum is required" >&2; exit 1
+  fi
+}
+
+umask 077
+stage=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-local-oa-release.XXXXXX")
+temporary_archive="$output/.$bundle_name.tar.gz.tmp.$$"
+temporary_checksum="$output/.$bundle_name.tar.gz.sha256.tmp.$$"
+cleanup() {
+  rm -rf "$stage"
+  rm -f "$temporary_archive" "$temporary_checksum"
+}
+trap cleanup EXIT HUP INT TERM
+
+root="$stage/$bundle_name"
+mkdir -p "$root/deployments/local-oa/ops" "$root/deployments/demos/ops" "$root/acceptance/reference-oa-demo" "$root/bin" "$root/docs/operations"
+cp "$deployment_dir/compose.yaml" "$root/deployments/local-oa/compose.yaml"
+cp "$deployment_dir/README.md" "$root/deployments/local-oa/README.md"
+cp "$deployment_dir/RELEASE.md" "$root/deployments/local-oa/RELEASE.md"
+cp "$deployment_dir/ops/local-oa" "$root/deployments/local-oa/ops/local-oa"
+cp "$deployment_dir/ops/verify-release" "$root/deployments/local-oa/ops/verify-release"
+cp "$deployment_dir/ops/preflight-host" "$root/deployments/local-oa/ops/preflight-host"
+cp "$repo_dir/acceptance/reference-oa-demo/verify-running" "$root/acceptance/reference-oa-demo/verify-running"
+cp "$repo_dir/docs/operations/local-oa-ubuntu-demo.md" "$root/docs/operations/local-oa-ubuntu-demo.md"
+cp "$repo_dir/deployments/demos/README.md" "$root/deployments/demos/README.md"
+cp "$repo_dir/deployments/demos/level-a-capabilities.tsv" "$root/deployments/demos/level-a-capabilities.tsv"
+cp "$repo_dir/deployments/demos/ops/level-a" "$root/deployments/demos/ops/level-a"
+cp "$repo_dir/deployments/demos/ops/release-runtime" "$root/deployments/demos/ops/release-runtime"
+for demo in contract-ledger money-flow-ledger people-groups evidence-service project-workspace design-operations; do
+  mkdir -p "$root/deployments/demos/$demo/ops"
+  cp "$repo_dir/deployments/demos/$demo/README.md" "$root/deployments/demos/$demo/README.md"
+  cp "$repo_dir/deployments/demos/$demo/compose.yaml" "$root/deployments/demos/$demo/compose.yaml"
+  cp "$repo_dir/deployments/demos/$demo/ops/demo" "$root/deployments/demos/$demo/ops/demo"
+done
+
+{
+  cat "$deployment_dir/.env.example"
+  printf 'LOCAL_OA_POSTGRES_IMAGE=%s\n' "$postgres_image"
+  printf 'LOCAL_OA_CONTRACT_IMAGE=%s\n' "$contract_image"
+  printf 'LOCAL_OA_MONEY_IMAGE=%s\n' "$money_image"
+  printf 'LOCAL_OA_PEOPLE_IMAGE=%s\n' "$people_image"
+  printf 'LOCAL_OA_EVIDENCE_IMAGE=%s\n' "$evidence_image"
+  printf 'LOCAL_OA_PROJECT_IMAGE=%s\n' "$project_image"
+  printf 'LOCAL_OA_DESIGN_IMAGE=%s\n' "$design_image"
+} > "$root/deployments/local-oa/.env.example"
+
+{
+  printf 'version=%s\n' "$version"
+  printf 'commit=%s\n' "$commit"
+  printf 'built_at=%s\n' "$built_at"
+  printf 'target=%s\n' "$target"
+} > "$root/RELEASE-METADATA"
+{
+  printf 'version=%s\n' "$version"
+  printf 'target=%s\n' "$target"
+  printf 'LOCAL_OA_POSTGRES_IMAGE=%s\n' "$postgres_image"
+  printf 'LOCAL_OA_CONTRACT_IMAGE=%s\n' "$contract_image"
+  printf 'LOCAL_OA_MONEY_IMAGE=%s\n' "$money_image"
+  printf 'LOCAL_OA_PEOPLE_IMAGE=%s\n' "$people_image"
+  printf 'LOCAL_OA_EVIDENCE_IMAGE=%s\n' "$evidence_image"
+  printf 'LOCAL_OA_PROJECT_IMAGE=%s\n' "$project_image"
+  printf 'LOCAL_OA_DESIGN_IMAGE=%s\n' "$design_image"
+} > "$root/deployments/local-oa/.release-bundle"
+
+{
+  printf 'version=%s\n' "$version"
+  printf 'target=%s\n' "$target"
+  printf 'LEVEL_A_POSTGRES_IMAGE=%s\n' "$postgres_image"
+  printf 'LEVEL_A_CONTRACT_IMAGE=%s\n' "$contract_image"
+  printf 'LEVEL_A_MONEY_IMAGE=%s\n' "$money_image"
+  printf 'LEVEL_A_PEOPLE_IMAGE=%s\n' "$people_image"
+  printf 'LEVEL_A_EVIDENCE_IMAGE=%s\n' "$evidence_image"
+  printf 'LEVEL_A_PROJECT_IMAGE=%s\n' "$project_image"
+  printf 'LEVEL_A_DESIGN_IMAGE=%s\n' "$design_image"
+  printf 'LEVEL_A_PROJECT_STUB_IMAGE=%s\n' "$project_stub_image"
+  printf 'LEVEL_A_DESIGN_STUB_IMAGE=%s\n' "$design_stub_image"
+} > "$root/deployments/demos/.release-bundle"
+
+(cd "$repo_dir/acceptance/reference-oa-demo" && GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags='-s -w' -o "$root/bin/reference-oa-demo" .)
+for driver in contract-ledger-demo money-flow-demo people-groups-demo evidence-service-demo project-workspace-demo design-operations-demo; do
+  (cd "$repo_dir/acceptance/$driver" && GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags='-s -w' -o "$root/bin/$driver" .)
+done
+docker save --output "$root/images.tar" $images
+
+chmod 0755 "$root/deployments/local-oa/ops/local-oa" "$root/deployments/local-oa/ops/verify-release" "$root/deployments/local-oa/ops/preflight-host" "$root/acceptance/reference-oa-demo/verify-running" "$root/bin/reference-oa-demo" "$root/deployments/demos/ops/level-a" "$root/deployments/demos/ops/release-runtime"
+for demo in contract-ledger money-flow-ledger people-groups evidence-service project-workspace design-operations; do
+  chmod 0755 "$root/deployments/demos/$demo/ops/demo"
+done
+chmod 0755 "$root/bin/"*
+chmod 0600 "$root/deployments/local-oa/.env.example" "$root/deployments/local-oa/.release-bundle" "$root/deployments/demos/.release-bundle" "$root/RELEASE-METADATA" "$root/images.tar"
+
+inner_manifest="$root/RELEASE-CHECKSUMS.sha256"
+find "$root" -type f ! -name RELEASE-CHECKSUMS.sha256 -print | sed "s|^$root/||" | LC_ALL=C sort | while IFS= read -r relative; do
+  printf '%s  %s\n' "$(digest_file "$root/$relative")" "$relative"
+done > "$inner_manifest"
+chmod 0600 "$inner_manifest"
+
+COPYFILE_DISABLE=1 tar -czf "$temporary_archive" -C "$stage" "$bundle_name"
+chmod 0600 "$temporary_archive"
+printf '%s  %s\n' "$(digest_file "$temporary_archive")" "$(basename "$archive")" > "$temporary_checksum"
+chmod 0600 "$temporary_checksum"
+ln "$temporary_archive" "$archive"
+if ! ln "$temporary_checksum" "$checksum"; then rm -f "$archive"; exit 1; fi
+rm -f "$temporary_archive" "$temporary_checksum"
+printf '%s\n%s\n' "$archive" "$checksum"

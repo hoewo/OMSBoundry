@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "twelve_business_databases_and_sequences_unchanged": true,
+  "both_grant_tables_unchanged": true,
+  "project_revision": 18,
+  "main_healthy": 17,
+  "business_mutations": 0,
+  "full_oa_accepted": false
+}

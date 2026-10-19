@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>奖金分配工作台 - 线框图</title>
+  <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+  <header>
+    <h1>奖金分配工作台</h1>
+    <div class="meta-info"><div>View: <code>BonusDistributionWorkspace</code></div><div>平台: <strong>Web Desktop</strong></div></div>
+  </header>
+
+  <details open>
+    <summary>1. 入口与读取中</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>用户从统一工作台进入，或提交 Project ID 后读取奖池。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop" data-kit="NavigationSplitView">
+        <div class="nav-bar"><div class="nav-title">奖金分配</div><div class="nav-button">Gateway / IAM 已保护</div></div>
+        <div class="split-h"><aside class="sidebar"><div class="sidebar-section">C7 人工作台</div><div class="list-item">使用说明</div><div class="list-item active">奖池工作区</div></aside><section class="panel">
+          <div class="toolbar"><div class="input-field">Project ID</div><div class="toolbar-button">读取当前事实</div></div>
+          <div class="content-area"><div class="placeholder-box"><div class="spinner"></div><p>正在读取奖池与服务端允许动作……</p></div></div>
+        </section></div>
+      </div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>统一入口状态、Project 范围输入、加载提示</li><li>不在页面中声明静态角色或动作</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>读取当前事实</code> → 携带 IAM 凭证读取 Project 范围奖池与 collection allowed_actions。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. 已读取的经营与生产奖池</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>读取成功且存在至少一条奖池。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop" data-kit="NavigationSplitView">
+        <div class="toolbar"><div class="toolbar-button">全部</div><div class="toolbar-button">经营奖金</div><div class="toolbar-button">生产奖金</div><div class="toolbar-spacer"></div><div class="toolbar-button">建立经营草稿</div><div class="toolbar-button">建立生产草稿</div></div>
+        <div class="split-h"><section class="panel"><div class="panel-header">奖池列表 · Project P-2609</div><div class="content-area">
+          <div class="list-item"><div class="list-item-text"><div class="list-item-title">经营奖金 · published · r2</div><div class="list-item-subtitle">Contract Settlement · r1 · 100.00 CNY</div></div><span class="badge active">已发布</span></div>
+          <div class="list-item"><div class="list-item-text"><div class="list-item-title">生产奖金 · draft · r1</div><div class="list-item-subtitle">Money Receipt Set · r1 · 100.00 CNY</div></div><span class="badge">草稿</span></div>
+        </div></section><div class="split-divider-h"></div><aside class="panel"><div class="panel-header">详情、历史与恢复</div><div class="content-area">
+          <div class="card"><div class="card-title">经营奖金 · published</div><div class="card-grid"><div>奖金总额<br><strong>100.00 CNY</strong></div><div>未分配<br><strong>0.00 CNY</strong></div><div>Project revision<br><strong>r1</strong></div><div>奖池 revision<br><strong>r2</strong></div></div></div>
+          <div class="group-box"><div class="group-box-title">冻结来源与策略</div><p>Settlement S-001 · r1 · digest</p><p>reference-oa-bonus-v1 · 1000 bp · half_up</p></div>
+          <div class="group-box"><div class="group-box-title">动态动作</div><button class="button">读取历史</button> <button class="button primary">替代纠错</button> <button class="button destructive">撤回</button></div>
+        </div></aside></div>
+      </div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>类型筛选、状态／revision、金额、冻结来源与策略</li><li>服务端 allowed_actions 生成的发布、替代、撤回和历史动作</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>选择奖池</code> → 展示精确来源、策略、参与人、关系和允许动作。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. 空 Project</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>读取成功、Project 有效且奖池集合为空。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="panel-header">奖池列表 · 0 条</div><div class="content-area"><div class="empty-state"><div class="icon-placeholder">0</div><h3>尚未建立奖金池</h3><p>有 calculate 权限时建立第一条经营或生产草稿。</p><button class="button primary">建立经营草稿</button></div></div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>真实空状态与按权限出现的首个动作</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>建立草稿</code> → 进入来源和参与人填写，不把空集合当作权限证明。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. 建立草稿并校验来源</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>用户具有对应 calculate、allocation.manage 和 amount.read 权限。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="modal-overlay" data-kit="Sheet"><div class="modal-content" data-label="建立奖金草稿">
+        <h2>建立经营奖金草稿</h2><div class="card-grid"><div class="input-field">Project revision</div><div class="input-field">Settlement ID</div><div class="input-field">来源 revision</div><div class="input-field">reference-oa-bonus-v1 / 1.0.0</div></div>
+        <div class="group-box"><div class="group-box-title">参与人分配 · 合计 10000 bp</div><div class="card-grid"><div class="input-field">Person ID / revision</div><div class="input-field">Assignment ID / revision</div><div class="input-field">比例 basis points</div><div class="input-field">参与原因</div></div><button class="button small">增加参与人</button></div>
+        <button class="button">取消</button> <button class="button primary">计算并保存草稿</button>
+      </div></div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>Project、来源、固定策略和可重复参与人行</li><li>比例合计与精确 revision 的客户端提示；服务端仍作最终校验</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>计算并保存草稿</code> → 目标应用获取精确工作负载凭证，顺序读取真实 Project／来源／Person／Assignment；全部成功才写入。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. 草稿核对与发布完成</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>草稿建立成功，用户核对冻结来源、策略和分配后发布。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="panel-header">经营奖金草稿 · r1</div><div class="content-area">
+        <div class="card-grid"><div class="card"><div class="card-title">来源</div><p>Settlement S-001 · r1<br>1065.00 CNY · digest</p></div><div class="card"><div class="card-title">计算结果</div><p>100.00 CNY<br>未分配 0.00 CNY</p></div></div>
+        <div class="group-box"><div class="group-box-title">人员分配</div><div class="list-item"><div class="list-item-text"><div class="list-item-title">张三 · 100%</div><div class="list-item-subtitle">Person r5 / Assignment r4 / 经营参与</div></div><strong>100.00 CNY</strong></div></div>
+        <div class="state-description"><strong>完成反馈：</strong>发布后状态为 published r2；来源快照与 revision 不再静默改变。</div><button class="button">读取历史</button> <button class="button primary">发布草稿</button>
+      </div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>发布前可核对的来源、公式、金额与参与人</li><li>发布成功状态与可读取历史</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>发布草稿</code> → 携带 expected_revision；成功后重读并显示 published r2。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>6. 替代纠错</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>已发布奖池需要纠错，且已经建立并核对同类型替代草稿。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="modal-overlay" data-kit="ConfirmationDialog"><div class="modal-content" data-label="替代纠错">
+        <h2>用新草稿替代已发布奖池</h2><p>旧奖池将变为 superseded；新草稿将原子发布。不存在覆盖编辑。</p><div class="picker">替代草稿 BD-NEW · r1 · 100.00 CNY</div><div class="input-field">纠错原因</div><button class="button">取消</button> <button class="button primary">确认原子替代</button>
+        <div class="group-box"><div class="group-box-title">完成后关系</div><p>旧奖池 r3 → superseded_by BD-NEW r2<br>新奖池 r2 → supersedes BD-OLD r3</p></div>
+      </div></div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>同类型草稿选择、双 expected revision、必填原因</li><li>旧新奖池双向关系和追加历史</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>确认原子替代</code> → 单事务改变两个奖池；任一 revision 不匹配则全部不写。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>7. 依赖失败与冲突恢复</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>Project／Contract／Money／People 不可用，来源不匹配，或 expected revision 过期。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="panel-header">建立经营奖金草稿</div><div class="content-area">
+        <div class="group-box"><div class="group-box-title">来源应用暂不可用 · 503</div><p>本次没有产生部分奖池、分配或历史。依赖恢复后可显式重试。</p><button class="button primary">使用同一输入重试</button></div>
+        <div class="group-box"><div class="group-box-title">revision／状态冲突 · 409</div><p>当前页面已过期；先重新读取最新事实，再决定发布、替代或撤回。</p><button class="button">重新读取</button></div>
+        <div class="group-box"><div class="group-box-title">来源或策略不合法 · 422</div><p>核对 Project、来源、Person 与 Assignment 的精确 revision；不会写入部分事实。</p></div>
+      </div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>可区分的 503、409、422 反馈和恢复动作</li><li>零部分写入说明</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>重新读取／重试</code> → 不绕过来源校验；恢复后重新执行完整命令。</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>8. 权限变化与金额脱敏</summary>
+    <div class="state-content">
+      <div class="state-description"><strong>触发条件：</strong>凭证过期、Project scope 不匹配、动作被撤销，或缺少 amount.read。</div>
+      <div class="wireframe-canvas"><div class="device-frame desktop"><div class="panel-header">权限恢复</div><div class="content-area">
+        <div class="card"><div class="card-title">奖池可读，金额未授权</div><div class="card-grid"><div>奖金总额<br><strong>金额未授权</strong></div><div>来源金额<br><strong>金额未授权</strong></div></div><p>状态、来源 ID、revision 和历史仍按授权展示；页面不从旧状态缓存金额。</p></div>
+        <div class="group-box"><div class="group-box-title">403 / 401</div><p>清空旧 allowed_actions；返回统一工作台重新授权，或在本地更新当前标签页凭证。</p><button class="button primary">重新授权后读取</button></div>
+      </div></div></div>
+      <div class="component-list"><h3>组件清单</h3><ul><li>金额 null 的明确文案、动作收敛、重新授权入口</li></ul></div>
+      <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>权限变化</code> → 不沿用旧按钮或旧金额；以目标应用最新响应重新投影。</div></div>
+    </div>
+  </details>
+</div>
+</body>
+</html>

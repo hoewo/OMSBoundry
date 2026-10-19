@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+deployment_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+bundle_root=$(CDPATH= cd -- "$deployment_dir/../.." && pwd)
+checksums="$bundle_root/RELEASE-CHECKSUMS.sha256"
+marker="$deployment_dir/.release-bundle"
+level_a_marker="$bundle_root/deployments/demos/.release-bundle"
+
+[ -f "$checksums" ] || { echo "release checksums are missing: $checksums" >&2; exit 1; }
+[ -f "$marker" ] || { echo "release marker is missing: $marker" >&2; exit 1; }
+[ -f "$level_a_marker" ] || { echo "Level A release marker is missing: $level_a_marker" >&2; exit 1; }
+[ -f "$bundle_root/images.tar" ] || { echo "release image archive is missing" >&2; exit 1; }
+[ -x "$bundle_root/bin/reference-oa-demo" ] || { echo "release demo binary is missing or not executable" >&2; exit 1; }
+[ -x "$script_dir/preflight-host" ] || { echo "target-host preflight is missing or not executable" >&2; exit 1; }
+for driver in contract-ledger-demo money-flow-demo people-groups-demo evidence-service-demo project-workspace-demo design-operations-demo; do
+  [ -x "$bundle_root/bin/$driver" ] || { echo "Level A release driver is missing or not executable: $driver" >&2; exit 1; }
+done
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$bundle_root" && sha256sum -c RELEASE-CHECKSUMS.sha256)
+elif command -v shasum >/dev/null 2>&1; then
+  (cd "$bundle_root" && shasum -a 256 -c RELEASE-CHECKSUMS.sha256)
+else
+  echo "sha256sum or shasum is required" >&2
+  exit 1
+fi
+
+[ "$(grep -Ec '^LOCAL_OA_[A-Z_]+_IMAGE=' "$marker")" -eq 7 ] || {
+  echo "release marker must contain exactly seven image references" >&2
+  exit 1
+}
+[ "$(grep -Ec '^LEVEL_A_[A-Z_]+_IMAGE=' "$level_a_marker")" -eq 9 ] || {
+  echo "Level A release marker must contain exactly nine image references" >&2
+  exit 1
+}
+target=$(awk -F= '$1 == "target" {print $2}' "$marker")
+case "$target" in linux/amd64|linux/arm64) ;; *) echo "unsupported release target: ${target:-missing}" >&2; exit 1 ;; esac
+[ "$(awk -F= '$1 == "target" {print $2}' "$level_a_marker")" = "$target" ] || {
+  echo "Level A release target does not match the local OA target" >&2
+  exit 1
+}
+
+if find "$bundle_root" -type f \( -name '.env' -o -name '*.key' -o -name '*.pem' -o -name 'demo-state.json' \) -print | grep -q .; then
+  echo "release contains a runtime environment, private key, certificate key or demo state" >&2
+  exit 1
+fi
+if [ -e "$bundle_root/apps" ] || [ -e "$bundle_root/deployments/local-oa/Dockerfile.app" ]; then
+  echo "release contains application source or a target-build Dockerfile" >&2
+  exit 1
+fi
+
+echo "PASS local OA release integrity ($target)"

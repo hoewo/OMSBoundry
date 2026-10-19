@@ -1,0 +1,37 @@
+{
+  "passed": false,
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "project_number": "OA-VERIFY-20261002-C",
+  "public_real_owners": true,
+  "production_iam": true,
+  "administrator_only": true,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "grant_writes": 0,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries",
+      "command_id": "80b688c9-cf9e-4be6-8031-45231cfbd5be"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "same-project-original-business-cost-native-save",
+      "passed": true
+    }
+  ],
+  "page_errors": [],
+  "native_records": [],
+  "project_revision_before": 15,
+  "business_id": "eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c",
+  "current_fault": {
+    "path": "/cost-outsourcing/api/v1/reference-oa/cost-entries/eeafb4ff-4374-4fbe-a4e4-25ece6e29e4c/corrections",
+    "committed": false
+  },
+  "failure": {
+    "stage": "open-business",
+    "type": "AssertionError",
+    "message": "The expression evaluated to a falsy value:\n\n  assert(result.current_fault.committed)\n"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "2009876b37da8ea5bb4e3e5738beb4ce78d18de26cc81b019f1d556f896a5a88",
+  "failure": {
+    "stage": "create-UI-CLIENT",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.contract-panel__group--client').getByRole('button', { name: '新增合同', exact: true })\u001b[22m\n"
+  },
+  "business_command_count": 0,
+  "page_errors": []
+}

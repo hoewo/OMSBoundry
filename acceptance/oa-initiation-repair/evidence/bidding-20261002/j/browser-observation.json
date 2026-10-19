@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-02",
+  "version": "v0.1.0-oa.20261002.10",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "observation_method": "native Chrome screenshot and accessibility via cua_repl; business command by native select click",
+  "failed_comparison_click": true,
+  "visible_error": "承接记录已存在；后续操作未完成：外部引用服务暂不可用。继续原操作不会重复新建；重新读取不自动提交。",
+  "native_readonly_diagnostic": {
+    "project_revision": 3,
+    "engagement_revision": 1,
+    "engagement_applicability": "undetermined",
+    "engagement_method": null,
+    "project_business_engagement_base_url": null,
+    "project_identity_provider": "iam",
+    "existing_workload_permission": {
+      "audience": "business-engagement",
+      "action": "business-engagement.material-reference.read",
+      "resource_types": ["business-engagement"]
+    }
+  },
+  "checker_v1_failure": "The transcribed source ID was wrong; the failed baseline remains immutable. Checker v2 uses the actual immutable i receipt ID, with a new result directory.",
+  "checker_v2_baseline_passed": true,
+  "checker_v2_completed_passed": true,
+  "checker_v2_comparison_passed": false,
+  "business_api_writes_by_diagnostic": 0,
+  "credentials_or_grants_changed": false,
+  "full_oa_accepted": false
+}

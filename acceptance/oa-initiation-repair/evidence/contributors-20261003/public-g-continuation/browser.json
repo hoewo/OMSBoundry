@@ -1,0 +1,26 @@
+{
+  "passed": false,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "continued_from": "public-d/public-e-readonly",
+  "real_iam_gateway_postgresql": true,
+  "full_oa_accepted": false,
+  "commands": [],
+  "errors": [],
+  "responses": [],
+  "scenarios": [
+    {
+      "name": "prior-end-confirmed-history-refresh-zero-write",
+      "passed": true
+    }
+  ],
+  "grant_writes": 0,
+  "served_assets": {
+    "js": "dbea8568ef4714a21bfa53ca38da0cf5b3deefce785a553cda68a55a8fb6b769",
+    "css": "ca0a66f13e939296c6f0bd1ba0b0b59b2f41986fb42ee61d5f3bcb11707fd72f"
+  },
+  "failure": {
+    "type": "Error",
+    "stage": "committed-response-loss",
+    "message": "locator.click: Error: strict mode violation: locator('.ant-select-item-option').filter({ hasText: 'C8 当前生产负责人' }) resolved to 4 elements:\n    1) <div title=\"C8 当前生产负责人\" aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\">…</div> aka getByTitle('C8 当前生产负责人').first()\n    2) <div title=\"C8 当前生产负责人\" aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\">…</div> aka getByTitle('C8 当前生产负责人').nth(1)\n    3) <div title=\"C8 当前生产负责人\" aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\">…</div> aka getByTitle('C8 当前生产负责人').nth(2)\n    4) <div title=\"C8 当前生产负责人\" aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\">…</div> aka getByTitle('C8 当前生产负责人').nth(3)\n\nCall log:\n\u001b[2m  - waiting for locator('.ant-select-item-option').filter({ hasText: 'C8 当前生产负责人' })\u001b[22m\n"
+  }
+}

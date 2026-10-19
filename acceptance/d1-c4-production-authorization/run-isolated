@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+project=${D1_PROJECT_NAME:-omsd1c4}
+base_url=${D1_PUBLIC_URL:-http://127.0.0.1:18140}
+evidence_dir=${C4_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c4-evidence"}
+override=${D1_COMPOSE_OVERRIDE_FILE:-"$script_dir/compose.override.yaml"}
+
+export D1_ENV_FILE="$env_file"
+export D1_PROJECT_NAME="$project"
+export D1_PUBLIC_URL="$base_url"
+export D1_COMPOSE_OVERRIDE_FILE="$override"
+export C4_EVIDENCE_DIR="$evidence_dir"
+
+case "${1:-run}" in
+  up)
+    "$repo_dir/deployments/d1/ops/d1" up
+    ;;
+  verify)
+    "$script_dir/verify-running"
+    ;;
+  verify-restored)
+    "$script_dir/verify-restored"
+    ;;
+  run)
+    "$repo_dir/deployments/d1/ops/d1" up
+    "$script_dir/verify-running"
+    ;;
+  down)
+    "$repo_dir/deployments/d1/ops/d1" down
+    ;;
+  *)
+    echo "usage: $0 up|verify|verify-restored|run|down" >&2
+    exit 2
+    ;;
+esac

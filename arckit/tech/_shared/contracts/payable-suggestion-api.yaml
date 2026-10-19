@@ -1,0 +1,168 @@
+# C6 与 Money 应付建议版本化 API 契约
+metadata:
+  path: tech/_shared/contracts/payable-suggestion-api.yaml
+  domain: cost-outsourcing
+  owner: Cost & Outsourcing / Money Flow Ledger
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+security_contexts:
+  c6_user:
+    audience: cost-outsourcing
+    capabilities: [outsourcing-payable-suggestion.create, outsourcing-payable-suggestion.read, outsourcing-payable-suggestion.withdraw]
+    scope_types: [project, payable_suggestion]
+  money_connector:
+    audience: money-flow-ledger
+    capabilities: [payable-suggestion.submit, payable-suggestion.read, payable-suggestion.withdraw]
+    scope_types: [payable_suggestion]
+  money_decider:
+    audience: money-flow-ledger
+    capabilities: [payable-suggestion.decide, payable-suggestion.read]
+    scope_types: [tenant, payable_suggestion]
+operations:
+  - method: POST
+    path: /api/v1/payable-suggestions
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.create
+    resource_scope: {type: project, id_from: resolved_source.project.id}
+    request: {$ref: "#/components/propose_request"}
+    success: {status: 201, schema: {$ref: "../models/PayableSuggestion.yaml"}}
+  - method: GET
+    path: /api/v1/payable-suggestions
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.read
+    resource_scope: {type: project, id_from: query.project_id}
+    success: {status: 200, schema: {type: object, properties: {items: {type: array, items: {$ref: "../models/PayableSuggestion.yaml"}}, allowed_actions: {type: array, items: {type: string}}}}}
+  - method: GET
+    path: /api/v1/payable-suggestions/{suggestion_id}
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.read
+    resource_scope: {any_of: [{type: payable_suggestion, id_from: suggestion_id}, {type: project, id_from: stored_suggestion.project.id}]}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestion.yaml"}}
+  - method: GET
+    path: /api/v1/payable-suggestions/{suggestion_id}/history
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.read
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    success: {status: 200, schema: {$ref: "#/components/history"}}
+  - method: POST
+    path: /api/v1/payable-suggestions/{suggestion_id}/synchronization
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.create
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    request: {$ref: "#/components/state_command"}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestion.yaml"}}
+  - method: POST
+    path: /api/v1/payable-suggestions/{suggestion_id}/withdrawal
+    owner: cost-outsourcing
+    security: c6_user
+    capability: outsourcing-payable-suggestion.withdraw
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    request: {$ref: "#/components/state_command"}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestion.yaml"}}
+  - method: POST
+    path: /api/v1/payable-suggestion-intakes
+    owner: money-flow-ledger
+    security: money_connector
+    capability: payable-suggestion.submit
+    resource_scope: {type: payable_suggestion, id_from: body.suggestion_id}
+    request: {$ref: "#/components/submission"}
+    success: {status: 201, schema: {$ref: "../models/PayableSuggestionIntake.yaml"}}
+  - method: GET
+    path: /api/v1/payable-suggestion-intakes/{suggestion_id}
+    owner: money-flow-ledger
+    security: money_connector
+    capability: payable-suggestion.read
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestionIntake.yaml"}}
+  - method: POST
+    path: /api/v1/payable-suggestion-intakes/{suggestion_id}/decisions
+    owner: money-flow-ledger
+    security: money_decider
+    capability: payable-suggestion.decide
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    request: {$ref: "#/components/decision"}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestionIntake.yaml"}}
+  - method: POST
+    path: /api/v1/payable-suggestion-intakes/{suggestion_id}/withdrawal
+    owner: money-flow-ledger
+    security: money_connector
+    capability: payable-suggestion.withdraw
+    resource_scope: {type: payable_suggestion, id_from: suggestion_id}
+    request: {$ref: "#/components/state_command"}
+    success: {status: 200, schema: {$ref: "../models/PayableSuggestionIntake.yaml"}}
+components:
+  party_ref:
+    type: object
+    additionalProperties: false
+    required: [id, revision]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+  propose_request:
+    type: object
+    additionalProperties: false
+    required: [command_id, source_type, source_id, source_revision, ledger_owner_ref, due_on, purpose]
+    properties:
+      command_id: {type: string, format: uuid}
+      source_type: {type: string, enum: [cost_entry, outsourcing_engagement]}
+      source_id: {type: string, format: uuid}
+      source_revision: {type: integer, minimum: 1}
+      ledger_owner_ref: {$ref: "#/components/party_ref"}
+      counterparty_ref: {oneOf: [{$ref: "#/components/party_ref"}, {type: "null"}]}
+      due_on: {type: string, format: date}
+      purpose: {type: string, minLength: 1, maxLength: 1000}
+  state_command:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, maxLength: 1000}
+  decision:
+    allOf:
+      - {$ref: "#/components/state_command"}
+      - {type: object, required: [decision], properties: {decision: {type: string, enum: [accept, reject]}}}
+  submission:
+    type: object
+    additionalProperties: false
+    required: [schema_version, suggestion_id, tenant_id, project_id, source, ledger_owner, counterparty, amount_minor, currency, due_on, purpose, request_digest]
+    properties:
+      schema_version: {type: string, const: "1"}
+      suggestion_id: {type: string, format: uuid}
+      tenant_id: {type: string, format: uuid}
+      project_id: {type: string, format: uuid}
+      source: {type: object, description: "cost-outsourcing 来源 application、type、ID、revision 与 SHA-256 digest。"}
+      ledger_owner: {type: object, description: "Directory Party ID、revision、kind 与 legal name 快照。"}
+      counterparty: {type: object, description: "Directory Party ID、revision、kind 与 legal name 快照。"}
+      amount_minor: {type: integer, minimum: 1}
+      currency: {type: string, pattern: "^[A-Z]{3}$"}
+      due_on: {type: string, format: date}
+      purpose: {type: string, minLength: 1, maxLength: 1000}
+      request_digest: {type: string, pattern: "^sha256:[0-9a-f]{64}$"}
+  history:
+    type: object
+    required: [items]
+    properties:
+      items: {type: array, items: {type: object, description: "不可变 revision、事件、Command、Actor、理由、目标 revision 与完整快照。"}}
+errors:
+  - {status: 400, code: INVALID_REQUEST, retryable: false}
+  - {status: 401, code: UNAUTHENTICATED, retryable: false}
+  - {status: 403, code: CAPABILITY_OR_SCOPE_DENIED, retryable: false}
+  - {status: 404, code: SUGGESTION_NOT_FOUND, retryable: false}
+  - {status: 409, code: REVISION_STATE_OR_COMMAND_CONFLICT, retryable: false}
+  - {status: 422, code: SOURCE_OR_PARTY_MAPPING_INVALID, retryable: false}
+  - {status: 503, code: TARGET_UNAVAILABLE, retryable: true}
+business_logic:
+  flow:
+    - "C6 先在本地提交 target_unavailable revision，再尝试向 Money 提交同一版本化 submission。"
+    - "Money 根据来源自有 Party 转换账解析双方主体并独立持久化 pending intake。"
+    - "Money Actor 独立 accept 或 reject；accept 创建并确认唯一 Money Obligation，reject 保持 Obligation 为空。"
+    - "C6 显式同步目标 revision，目标不可用不回滚或改写已有 C6 事实。"
+    - "相同 Command 与摘要重放返回同一结果；部分失败使用确定性子命令恢复，不依赖分布式事务。"

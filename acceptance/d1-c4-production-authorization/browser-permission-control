@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+base_url=${D1_PUBLIC_URL:-http://127.0.0.1:18140}
+fixture=${C4_BROWSER_FIXTURE:-"$repo_dir/deployments/d1/.runtime/c4-evidence/browser-fixture.json"}
+operation=${1:-}
+
+case "$operation" in
+  revoke-stage|restore-stage|disable-account|enable-account) ;;
+  *) echo "usage: $0 revoke-stage|restore-stage|disable-account|enable-account" >&2; exit 2 ;;
+esac
+
+for command in curl jq awk; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$fixture" ] || { echo "browser fixture not found; run the C4 verifier first" >&2; exit 2; }
+
+env_value() {
+  key=$1
+  fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-c4-browser-control.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/admin.cookies"
+
+status=$(curl --silent --show-error --output "$workspace/csrf.json" --write-out '%{http_code}' \
+  --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf")
+[ "$status" = 200 ] || { echo "fetch CSRF failed: HTTP $status" >&2; exit 1; }
+csrf=$(jq -er .csrf_token "$workspace/csrf.json")
+login=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" \
+  --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+status=$(curl --silent --show-error --output "$workspace/login.json" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data "$login" "$base_url/auth/api/v1/login")
+[ "$status" = 200 ] || { echo "administrator login failed: HTTP $status" >&2; exit 1; }
+
+subject_id=$(jq -er .subject_id "$fixture")
+case "$operation" in
+  revoke-stage)
+    path=/api/v1/admin/grants/revoke
+    payload=$(jq -cn --arg subject_id "$subject_id" '{subject_id:$subject_id,audience:"production-operations",action:"production-work-item.stage.manage"}')
+    ;;
+  restore-stage)
+    path=/api/v1/admin/grants
+    payload=$(jq -cn --arg subject_id "$subject_id" '{subject_id:$subject_id,audience:"production-operations",action:"production-work-item.stage.manage"}')
+    ;;
+  disable-account)
+    path=/api/v1/admin/status
+    payload=$(jq -cn --arg subject_id "$subject_id" '{subject_id:$subject_id,status:"disabled"}')
+    ;;
+  enable-account)
+    path=/api/v1/admin/status
+    payload=$(jq -cn --arg subject_id "$subject_id" '{subject_id:$subject_id,status:"active"}')
+    ;;
+esac
+
+status=$(curl --silent --show-error --output "$workspace/result.json" --write-out '%{http_code}' \
+  --cookie "$cookies" --cookie-jar "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+  --data "$payload" "$base_url/auth$path")
+[ "$status" = 204 ] || { cat "$workspace/result.json" >&2; echo "$operation failed: HTTP $status" >&2; exit 1; }
+printf 'PASS C4 browser control: %s\n' "$operation"

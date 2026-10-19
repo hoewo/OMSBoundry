@@ -1,0 +1,16 @@
+{
+  "version": "v0.1.0-oa.20261003.4",
+  "official_release": false,
+  "source_kind": "saved dirty-worktree route repair",
+  "source_archive_sha256": "4e97c880b9e046aedf12ed21d93bd7ebb13ae8cd445e065362cb142b2934f336",
+  "schema_change": false,
+  "closure": [
+    "unified-workbench"
+  ],
+  "applications": {
+    "unified-workbench": {
+      "server": "04c7f6442ac6645291d4c5a912ee16801a7952f887de6e8f0fad3bd5f0cbfcca"
+    }
+  },
+  "full_oa_accepted": false
+}

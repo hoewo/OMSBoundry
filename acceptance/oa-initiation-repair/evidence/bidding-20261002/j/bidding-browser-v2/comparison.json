@@ -1,0 +1,39 @@
+{
+  "passed": false,
+  "phase": "comparison",
+  "checker_version": 2,
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "business_api_writes": 0,
+  "grant_writes": 0,
+  "full_oa_accepted": false,
+  "browser_click_observation_recorded_separately": true,
+  "existing_rows": {
+    "project_workspace": {
+      "project_assignments": "33:31e6e150eb93ecf98cce6a2c65375284",
+      "project_commands": "91:97a81269cff0b1a783159a2d7e32581b",
+      "project_completion_confirmations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "project_history_events": "89:a7603850507f66fff55ca1f944697849",
+      "project_package_conversions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "project_resource_links": "2:ac0351ed62e3b4ea299a89bb991ea575",
+      "projects": "25:f1b558bfec05c3c1e192ed8b078a9711",
+      "schema_migrations": "10:2f9864a8eb721fd0bf49d0812b9a3c3c"
+    },
+    "business_engagement": {
+      "business_engagement_commands": "23:b20b600294bcf89c18122f4af1b4268c",
+      "business_engagement_history_events": "23:6647f86089e8ada0ecba080bb913e306",
+      "business_engagement_materials": "6:9ff8260e58da7a5ce038261b3f1a0a99",
+      "business_engagements": "5:9d6506acb908b46fb768fdd86f95ee31",
+      "schema_migrations": "1:58461a427de2e08f42921d66ca493a0f"
+    }
+  },
+  "other_business_databases": null,
+  "grants_digest": "160:2c84c86c92abbae95769f43ef25dea42",
+  "user_facts_sha256": "0a4e0880aceda9db4075ade7012141b9049f335f0c01742ff31d52c9f8e536a8",
+  "version": "v0.1.0-oa.20261002.10",
+  "assets": {
+    "reference-oa-initiation-runtime.js": "ddbdfa1fc5dc51652b18b03dff2c845e6458a6631f1f67d20340695a7d83434f",
+    "reference-oa-business-runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference-oa-bidding-runtime.js": "4caa47c9b00bc3db629ad9589f2486c9b3e7f5c3f4261f58f6f233fb70a247f8"
+  },
+  "project_revision": 3
+}

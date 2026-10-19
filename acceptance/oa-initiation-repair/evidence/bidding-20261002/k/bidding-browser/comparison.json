@@ -1,0 +1,116 @@
+{
+  "passed": true,
+  "phase": "comparison",
+  "checker_version": 2,
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "business_api_writes": 0,
+  "grant_writes": 0,
+  "full_oa_accepted": false,
+  "browser_click_observation_recorded_separately": true,
+  "existing_rows": {
+    "project_workspace": {
+      "project_assignments": "33:31e6e150eb93ecf98cce6a2c65375284",
+      "project_commands": "91:97a81269cff0b1a783159a2d7e32581b",
+      "project_completion_confirmations": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "project_history_events": "89:a7603850507f66fff55ca1f944697849",
+      "project_package_conversions": "0:d41d8cd98f00b204e9800998ecf8427e",
+      "project_resource_links": "2:ac0351ed62e3b4ea299a89bb991ea575",
+      "projects": "25:f1b558bfec05c3c1e192ed8b078a9711",
+      "schema_migrations": "10:2f9864a8eb721fd0bf49d0812b9a3c3c"
+    },
+    "business_engagement": {
+      "business_engagement_commands": "23:b20b600294bcf89c18122f4af1b4268c",
+      "business_engagement_history_events": "23:6647f86089e8ada0ecba080bb913e306",
+      "business_engagement_materials": "6:9ff8260e58da7a5ce038261b3f1a0a99",
+      "business_engagements": "5:9d6506acb908b46fb768fdd86f95ee31",
+      "schema_migrations": "1:58461a427de2e08f42921d66ca493a0f"
+    }
+  },
+  "other_business_databases": null,
+  "grants_digest": "160:2c84c86c92abbae95769f43ef25dea42",
+  "user_facts_sha256": "0a4e0880aceda9db4075ade7012141b9049f335f0c01742ff31d52c9f8e536a8",
+  "version": "v0.1.0-oa.20261002.11",
+  "assets": {
+    "reference-oa-initiation-runtime.js": "ddbdfa1fc5dc51652b18b03dff2c845e6458a6631f1f67d20340695a7d83434f",
+    "reference-oa-business-runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference-oa-bidding-runtime.js": "ea4f33e0b87a5b34d56784329f700ace6a4e615644a0d637e9938ad18f500f8a"
+  },
+  "project_revision": 4,
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "engagement_revision": 3,
+  "method": "comparison",
+  "applicability": "applicable",
+  "native_history": [
+    {
+      "id": "e8dacae0-bfdb-4cc9-9f8b-21c912f94884",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+      "engagement_revision": 1,
+      "event_sequence": 1,
+      "event_type": "engagement_created",
+      "command_id": "9a8e578b-46a8-4b97-a935-899c1b07e675",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T14:02:05.372159Z",
+      "payload": {
+        "project_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+        "project_source_revision": 3
+      }
+    },
+    {
+      "id": "009b5408-2ce4-40ee-b0fc-d39caa97697d",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+      "engagement_revision": 2,
+      "event_sequence": 2,
+      "event_type": "applicability_changed",
+      "command_id": "b42689d8-296e-4a6a-8fff-f0acce23c116",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T15:27:12.654968Z",
+      "payload": {
+        "applicability": "applicable",
+        "reason": ""
+      }
+    },
+    {
+      "id": "15e0430b-e9a4-4b34-81af-a55ddc2d95e9",
+      "tenant_id": "6539cd13-7190-40f1-8bd5-57f9e7c9b968",
+      "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+      "engagement_revision": 3,
+      "event_sequence": 3,
+      "event_type": "method_selected",
+      "command_id": "9dce28f0-47f0-46f6-8bec-298c125e6171",
+      "actor_subject": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "occurred_at": "2026-10-02T15:27:12.993885Z",
+      "payload": {
+        "method": "comparison",
+        "missing_requirements": [
+          "bid_document",
+          "award_document"
+        ]
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "key": "tender_document",
+      "required": false,
+      "satisfied": true
+    },
+    {
+      "key": "bid_document",
+      "required": true,
+      "satisfied": false
+    },
+    {
+      "key": "award_document",
+      "required": true,
+      "satisfied": false
+    }
+  ],
+  "single_source_single_link": true,
+  "no_fake_material": true,
+  "same_failed_fixture_continued": true,
+  "all_existing_rows_preserved": true,
+  "healthy": 17,
+  "other_container_ids_unchanged": 15
+}

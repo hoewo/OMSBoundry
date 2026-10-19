@@ -1,0 +1,27 @@
+# Project 完成检查显式确认契约
+metadata: {path: "tech/_shared/contracts/project-completion-confirm.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.0", created: "2026-09-28", updated: "2026-09-28"}
+endpoint: {method: POST, path: "/api/v1/projects/{project_id}/completion-confirmations", summary: "显式确认当前 C5 Completion Profile 精确来源集合", auth_required: true, audience: "project-workspace", capability: "project-workspace.completion.confirm"}
+request:
+  path_params: [{name: project_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, profile_key, expected_sources]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      profile_key: {type: string, const: reference-oa-c5-v1}
+      expected_sources: {type: array, minItems: 2, maxItems: 2, description: "必须与本次服务端评估的精确 result ID/kind/revision/digest 相同。"}
+responses:
+  success: {status: 200, schema: {$ref: "../models/ProjectCompletionConfirmation.yaml"}}
+  errors:
+    - {status: 401, code: credential_required, retryable: false}
+    - {status: 403, code: capability_denied, retryable: false}
+    - {status: 409, code: revision_conflict, retryable: false}
+    - {status: 409, code: completion_sources_changed, retryable: false}
+    - {status: 422, code: completion_incomplete, retryable: false}
+    - {status: 503, code: reference_unavailable, retryable: true}
+business_logic:
+  - "确认锁定 Project expected revision，复验当前 Results 来源并只追加 Project confirmation、history、command 和新 revision。"
+  - "Project 保持 active；该动作不等于完整 OA 完成，也不调用 Results 写接口。"
+  - "成功 Command 回放先于外部调用返回原确认；同 ID 不同载荷冲突。"

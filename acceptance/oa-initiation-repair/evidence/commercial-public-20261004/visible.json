@@ -1,0 +1,65 @@
+{
+  "passed": true,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "read_only_business": true,
+  "commands": [
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/contract-ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/contract-ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/contract-ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/contract-ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/contract-ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/evidence-service"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/v1/files/7cba8faf-b963-4145-a289-2e565e9b069d/versions/1/access-grants"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "method": "POST",
+      "path": "/gateway/authorize/billing-invoice"
+    }
+  ],
+  "page_errors": [],
+  "full_oa_accepted": false,
+  "frozen_settlements": 2,
+  "confirmed_amendments": 3,
+  "actual_image_preview": {
+    "width": 640,
+    "height": 400
+  },
+  "billing_registration_buttons": 0,
+  "project_revision": 18
+}

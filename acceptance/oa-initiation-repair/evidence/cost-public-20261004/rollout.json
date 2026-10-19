@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "version": "v0.1.0-oa.20261004.5",
+  "healthy": 17,
+  "changed_containers": [
+    "identity-access",
+    "gateway",
+    "cost-outsourcing",
+    "unified-workbench"
+  ],
+  "old_business_facts_preserved": true,
+  "grants_unchanged": true,
+  "d1_check": true,
+  "public_business_journey_verified": false,
+  "full_oa_accepted": false
+}

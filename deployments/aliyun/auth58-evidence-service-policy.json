@@ -1,0 +1,24 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": [
+        "<UPLOAD_ROLE_ARN>"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "oss:GetObject",
+        "oss:DeleteObject"
+      ],
+      "Resource": [
+        "acs:oss:*:*:oatest-auth58-files-1/tenants/*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1",
+  "application_id": "evidence-service",
+  "application_version": "0.1.0",
+  "audience": "evidence-service",
+  "capabilities": [
+    {
+      "id": "evidence-service.view",
+      "description": "兼容旧客户端的文件查看与短期访问授权；新集成必须使用 metadata.read 或 download",
+      "risk": "read",
+      "resource_types": ["file", "file_version"]
+    },
+    {
+      "id": "evidence-service.metadata.read",
+      "description": "读取精确文件版本的显示元数据、状态与摘要，不生成访问授权",
+      "risk": "read",
+      "resource_types": ["file", "file_version"]
+    },
+    {
+      "id": "evidence-service.download",
+      "description": "为精确文件版本生成短期下载或预览授权",
+      "risk": "read",
+      "resource_types": ["file", "file_version"]
+    },
+    {
+      "id": "evidence-service.upload",
+      "description": "创建、完成和取消受控上传会话",
+      "risk": "write",
+      "resource_types": ["upload_session", "file_version"]
+    }
+  ]
+}

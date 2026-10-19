@@ -1,0 +1,213 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-c6-money.XXXXXX")
+container="oms-c6-money-pg18-$$"
+evidence_dir=${C6_MONEY_EVIDENCE_DIR:-"$repo_dir/deployments/d1/.runtime/c6-money-payable-evidence"}
+service_pids=''
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv engagement.json suggestion.json intake.json accepted.json synchronized.json money-source.tsv rejected-engagement.json rejected-suggestion.json rejected-intake.json rejected.json rejected-synchronized.json rejected-source.tsv result.md processes.txt cost-outsourcing.log money.log project.log party.log contract.log evidence.log; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command in go docker curl jq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+(cd "$repo_dir" && go build -o "$runtime/fixture" ./acceptance/c6-cost-outsourcing-composition/cmd/fixture)
+(cd "$repo_dir" && go build -o "$runtime/cost-outsourcing" ./backend/services/cost-outsourcing/cmd/server)
+(cd "$repo_dir" && go build -o "$runtime/money-flow-ledger" ./backend/services/money-flow-ledger/cmd/server)
+
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55467:5432 postgres:18.6 >/dev/null
+for attempt in $(seq 1 60); do
+  docker exec "$container" pg_isready -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { echo "PostgreSQL did not become ready" >&2; exit 1; }
+  sleep 1
+done
+create_database() {
+  database=$1
+  for attempt in $(seq 1 30); do
+    docker exec "$container" createdb -U postgres "$database" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 30 ] || { echo "could not create PostgreSQL database $database" >&2; exit 1; }
+    sleep 1
+  done
+}
+create_database c6
+create_database money
+
+start_fixture() {
+  name=$1
+  mode=$2
+  port=$3
+  "$runtime/fixture" -mode "$mode" -address "127.0.0.1:$port" >"$runtime/$name.log" 2>&1 &
+  fixture_pid=$!
+  service_pids="$service_pids $fixture_pid"
+  eval "${name}_pid=$fixture_pid"
+}
+
+wait_http() {
+  url=$1
+  for attempt in $(seq 1 60); do
+    curl --silent --fail "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 60 ] || { echo "$url did not become ready" >&2; exit 1; }
+    sleep 1
+  done
+}
+
+start_money() {
+  HTTP_ADDR=127.0.0.1:19186 \
+  DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55467/money?sslmode=disable' \
+  MIGRATION_MODE=auto \
+  IDENTITY_PROVIDER=local \
+  BOOTSTRAP_ADMIN_USERNAME=money-admin \
+  BOOTSTRAP_ADMIN_DISPLAY_NAME='资金管理员' \
+  BOOTSTRAP_ADMIN_PASSWORD='money-acceptance-password-2026' \
+  REFERENCE_TENANT_ID=11111111-1111-4111-8111-111111111111 \
+  REFERENCE_ACCESS_TOKEN=money-reference-token-1234567890 \
+  "$runtime/money-flow-ledger" >"$runtime/money.log" 2>&1 &
+  money_pid=$!
+  service_pids="$service_pids $money_pid"
+  wait_http http://127.0.0.1:19186/health/ready
+}
+
+start_fixture project project 19181
+start_fixture party party 19182
+start_fixture contract contract 19183
+start_fixture evidence evidence 19184
+for port in 19181 19182 19183 19184; do wait_http "http://127.0.0.1:$port/health"; done
+start_money
+
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d money <<'SQL'
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at) VALUES
+  ('71000000-0000-4000-8000-000000000001','organization','Money 本方',1,now(),now()),
+  ('71000000-0000-4000-8000-000000000002','organization','Money 协作方',1,now(),now());
+INSERT INTO party_migration_mappings(tenant_id,migration_batch_id,command_id,source_application,local_party_id,local_party_revision,local_snapshot_sha256,decision,target_party_id,target_party_revision,target_kind,target_legal_name,reviewed_by_subject_id,reviewed_by_display_name,review_reason,target_verified_at,recorded_at,request_sha256) VALUES
+  ('11111111-1111-4111-8111-111111111111','71000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000004','money-flow-ledger','71000000-0000-4000-8000-000000000001',1,repeat('a',64),'map_existing_directory_party','44444444-4444-4444-8444-444444444445',2,'organization','C6 设计单位','22222222-2222-4222-8222-222222222222','验收人','跨进程验收映射',now(),now(),repeat('b',64)),
+  ('11111111-1111-4111-8111-111111111111','71000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000005','money-flow-ledger','71000000-0000-4000-8000-000000000002',1,repeat('c',64),'map_existing_directory_party','44444444-4444-4444-8444-444444444444',5,'organization','C6 协作单位','22222222-2222-4222-8222-222222222222','验收人','跨进程验收映射',now(),now(),repeat('d',64));
+INSERT INTO party_runtime_transitions(tenant_id,command_id,action,migration_batch_id,reviewed_by_subject_id,reviewed_by_display_name,reason,mapped_party_count,referenced_party_count,request_sha256,created_at) VALUES
+  ('11111111-1111-4111-8111-111111111111','71000000-0000-4000-8000-000000000006','cutover','71000000-0000-4000-8000-000000000003','22222222-2222-4222-8222-222222222222','验收人','跨进程验收切换',2,0,repeat('e',64),now());
+SQL
+
+HTTP_ADDR=127.0.0.1:19185 \
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55467/c6?sslmode=disable' \
+IDENTITY_PROVIDER=template \
+TEMPLATE_TENANT_ID=11111111-1111-4111-8111-111111111111 \
+TEMPLATE_SUBJECT_ID=22222222-2222-4222-8222-222222222222 \
+TEMPLATE_DISPLAY_NAME='C6 验收人' \
+TEMPLATE_ACCESS_TOKEN=c6-user-token-123456789012345 \
+PROJECT_BASE_URL=http://127.0.0.1:19181 PROJECT_ACCESS_TOKEN=reference-token-1234567890 \
+PARTY_BASE_URL=http://127.0.0.1:19182 PARTY_ACCESS_TOKEN=reference-token-1234567890 \
+CONTRACT_BASE_URL=http://127.0.0.1:19183 CONTRACT_ACCESS_TOKEN=reference-token-1234567890 \
+EVIDENCE_BASE_URL=http://127.0.0.1:19184 EVIDENCE_ACCESS_TOKEN=reference-token-1234567890 \
+MONEY_BASE_URL=http://127.0.0.1:19186 MONEY_ACCESS_TOKEN=money-reference-token-1234567890 \
+"$runtime/cost-outsourcing" >"$runtime/cost-outsourcing.log" 2>&1 &
+c6_pid=$!
+service_pids="$service_pids $c6_pid"
+wait_http http://127.0.0.1:19185/health/ready
+
+printf 'service\tpid\tport\tdatabase\n' >"$runtime/processes.txt"
+printf 'project\t%s\t19181\t-\nparty\t%s\t19182\t-\ncontract\t%s\t19183\t-\nevidence\t%s\t19184\t-\ncost-outsourcing\t%s\t19185\tc6\nmoney-flow-ledger\t%s\t19186\tmoney\npostgresql\tdocker:%s\t55467\tc6,money\n' "$project_pid" "$party_pid" "$contract_pid" "$evidence_pid" "$c6_pid" "$money_pid" "$container" >>"$runtime/processes.txt"
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+
+request() {
+  method=$1
+  url=$2
+  token=$3
+  payload=$4
+  output=$5
+  expected=$6
+  if [ -n "$payload" ]; then
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data "$payload" "$url")
+  else
+    actual=$(curl --silent --show-error --output "$output" --write-out '%{http_code}' --request "$method" -H "Authorization: Bearer $token" "$url")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { cat "$output" >&2; echo "expected HTTP $expected, got $actual" >&2; exit 1; }
+}
+
+project_id=33333333-3333-4333-8333-333333333333
+party_id=44444444-4444-4444-8444-444444444444
+owner_id=44444444-4444-4444-8444-444444444445
+engagement_payload=$(jq -cn --arg project "$project_id" --arg party "$party_id" '{command_id:"72000000-0000-4000-8000-000000000001",project_ref:{id:$project,revision:7},provider_ref:{id:$party,revision:5},scope:"桥梁测量外协",currency:"CNY",amount_minor:885000,note:"C6 → Money 验收"}')
+request POST http://127.0.0.1:19185/api/v1/outsourcing-engagements c6-user-token-123456789012345 "$engagement_payload" "$runtime/engagement.json" 201
+engagement_id=$(jq -er .id "$runtime/engagement.json")
+
+suggestion_payload=$(jq -cn --arg source "$engagement_id" --arg owner "$owner_id" '{command_id:"72000000-0000-4000-8000-000000000002",source_type:"outsourcing_engagement",source_id:$source,source_revision:1,ledger_owner_ref:{id:$owner,revision:2},due_on:"2026-10-31",purpose:"桥梁测量外协成果付款"}')
+request POST http://127.0.0.1:19185/api/v1/payable-suggestions c6-user-token-123456789012345 "$suggestion_payload" "$runtime/suggestion.json" 201
+jq -e '.state == "proposed" and .target_revision == 1 and .amount_minor == 885000 and .source.revision == 1' "$runtime/suggestion.json" >/dev/null
+suggestion_id=$(jq -er .id "$runtime/suggestion.json")
+suggestion_revision=$(jq -er .revision "$runtime/suggestion.json")
+
+request GET "http://127.0.0.1:19186/api/v1/payable-suggestion-intakes/$suggestion_id" money-reference-token-1234567890 '' "$runtime/intake.json" 200
+jq -e '.status == "pending" and .revision == 1 and .submission.amount_minor == 885000' "$runtime/intake.json" >/dev/null
+
+kill "$money_pid"
+wait "$money_pid" 2>/dev/null || true
+sync_down=$(jq -cn --argjson revision "$suggestion_revision" '{command_id:"72000000-0000-4000-8000-000000000003",expected_revision:$revision,reason:"Money 停机恢复测试"}')
+request POST "http://127.0.0.1:19185/api/v1/payable-suggestions/$suggestion_id/synchronization" c6-user-token-123456789012345 "$sync_down" "$runtime/sync-down.json" 503
+request GET "http://127.0.0.1:19185/api/v1/payable-suggestions/$suggestion_id" c6-user-token-123456789012345 '' "$runtime/suggestion-after-down.json" 200
+jq -e --argjson revision "$suggestion_revision" '.state == "proposed" and .revision == $revision' "$runtime/suggestion-after-down.json" >/dev/null
+start_money
+
+decision_payload=$(jq -cn '{command_id:"72000000-0000-4000-8000-000000000004",expected_revision:1,decision:"accept",reason:"资金负责人核验来源、主体和金额通过"}')
+request POST "http://127.0.0.1:19186/api/v1/payable-suggestion-intakes/$suggestion_id/decisions" money-reference-token-1234567890 "$decision_payload" "$runtime/accepted.json" 200
+jq -e '.intake.status == "accepted" and .intake.revision == 2 and .intake.obligation.revision == 1' "$runtime/accepted.json" >/dev/null
+
+sync_payload=$(jq -cn --argjson revision "$suggestion_revision" '{command_id:"72000000-0000-4000-8000-000000000005",expected_revision:$revision,reason:"同步 Money 独立决定"}')
+request POST "http://127.0.0.1:19185/api/v1/payable-suggestions/$suggestion_id/synchronization" c6-user-token-123456789012345 "$sync_payload" "$runtime/synchronized.json" 200
+jq -e '.state == "accepted" and .target_revision == 2 and .obligation.revision == 1' "$runtime/synchronized.json" >/dev/null
+request POST "http://127.0.0.1:19185/api/v1/payable-suggestions/$suggestion_id/synchronization" c6-user-token-123456789012345 "$sync_payload" "$runtime/synchronized-replay.json" 200
+jq -e --slurpfile original "$runtime/synchronized.json" '.id == $original[0].id and .revision == $original[0].revision and .obligation.id == $original[0].obligation.id' "$runtime/synchronized-replay.json" >/dev/null
+
+docker exec "$container" psql -U postgres -d money -AtF '|' -c "SELECT count(*),min(direction),min(status),min(source_kind),min(source_application),min(source_resource_type),min(source_resource_id::text),min(source_revision::text) FROM obligations WHERE source_resource_id='$engagement_id'" >"$runtime/money-source.tsv"
+grep -Eq '^1\|payable\|open\|cost_outsourcing_payable_suggestion\|cost-outsourcing\|outsourcing_engagement\|[0-9a-f-]+\|1$' "$runtime/money-source.tsv"
+
+rejected_engagement_payload=$(jq -cn --arg project "$project_id" --arg party "$party_id" '{command_id:"72000000-0000-4000-8000-000000000006",project_ref:{id:$project,revision:7},provider_ref:{id:$party,revision:5},scope:"现场踏勘协作",currency:"CNY",amount_minor:330000,note:"Money 独立拒绝验收"}')
+request POST http://127.0.0.1:19185/api/v1/outsourcing-engagements c6-user-token-123456789012345 "$rejected_engagement_payload" "$runtime/rejected-engagement.json" 201
+rejected_engagement_id=$(jq -er .id "$runtime/rejected-engagement.json")
+
+rejected_suggestion_payload=$(jq -cn --arg source "$rejected_engagement_id" --arg owner "$owner_id" '{command_id:"72000000-0000-4000-8000-000000000007",source_type:"outsourcing_engagement",source_id:$source,source_revision:1,ledger_owner_ref:{id:$owner,revision:2},due_on:"2026-11-15",purpose:"现场踏勘协作应付款"}')
+request POST http://127.0.0.1:19185/api/v1/payable-suggestions c6-user-token-123456789012345 "$rejected_suggestion_payload" "$runtime/rejected-suggestion.json" 201
+jq -e '.state == "proposed" and .target_revision == 1 and .amount_minor == 330000 and .source.revision == 1' "$runtime/rejected-suggestion.json" >/dev/null
+rejected_suggestion_id=$(jq -er .id "$runtime/rejected-suggestion.json")
+rejected_suggestion_revision=$(jq -er .revision "$runtime/rejected-suggestion.json")
+
+request GET "http://127.0.0.1:19186/api/v1/payable-suggestion-intakes/$rejected_suggestion_id" money-reference-token-1234567890 '' "$runtime/rejected-intake.json" 200
+jq -e '.status == "pending" and .revision == 1 and .obligation == null' "$runtime/rejected-intake.json" >/dev/null
+
+rejection_payload=$(jq -cn '{command_id:"72000000-0000-4000-8000-000000000008",expected_revision:1,decision:"reject",reason:"资金负责人确认不属于本账套承担范围"}')
+request POST "http://127.0.0.1:19186/api/v1/payable-suggestion-intakes/$rejected_suggestion_id/decisions" money-reference-token-1234567890 "$rejection_payload" "$runtime/rejected.json" 200
+jq -e '.intake.status == "rejected" and .intake.revision == 2 and .intake.obligation == null' "$runtime/rejected.json" >/dev/null
+request POST "http://127.0.0.1:19186/api/v1/payable-suggestion-intakes/$rejected_suggestion_id/decisions" money-reference-token-1234567890 "$rejection_payload" "$runtime/rejected-replay.json" 200
+jq -e '.replayed == true and .intake.status == "rejected" and .intake.obligation == null' "$runtime/rejected-replay.json" >/dev/null
+
+rejected_sync_payload=$(jq -cn --argjson revision "$rejected_suggestion_revision" '{command_id:"72000000-0000-4000-8000-000000000009",expected_revision:$revision,reason:"同步 Money 独立拒绝决定"}')
+request POST "http://127.0.0.1:19185/api/v1/payable-suggestions/$rejected_suggestion_id/synchronization" c6-user-token-123456789012345 "$rejected_sync_payload" "$runtime/rejected-synchronized.json" 200
+jq -e '.state == "rejected" and .target_revision == 2 and .obligation == null and .decision_reason == "资金负责人确认不属于本账套承担范围"' "$runtime/rejected-synchronized.json" >/dev/null
+request POST "http://127.0.0.1:19185/api/v1/payable-suggestions/$rejected_suggestion_id/synchronization" c6-user-token-123456789012345 "$rejected_sync_payload" "$runtime/rejected-synchronized-replay.json" 200
+jq -e --slurpfile original "$runtime/rejected-synchronized.json" '.id == $original[0].id and .revision == $original[0].revision and .state == "rejected" and .obligation == null' "$runtime/rejected-synchronized-replay.json" >/dev/null
+
+docker exec "$container" psql -U postgres -d money -AtF '|' -c "SELECT (SELECT count(*) FROM obligations WHERE source_resource_id='$rejected_engagement_id'),(SELECT count(*) FROM payable_suggestion_intake_revisions WHERE suggestion_id='$rejected_suggestion_id')" >"$runtime/rejected-source.tsv"
+grep -Eq '^0\|2$' "$runtime/rejected-source.tsv"
+
+printf '%s\n' \
+  '# C6 → Money 跨进程应付建议结果' \
+  '' \
+  '- C6 与 Money 使用独立进程、独立数据库，并通过版本化 HTTP 契约通信。' \
+  '- C6 冻结外协 revision、主体快照、精确金额和用途后提出建议；Money 独立接受时创建唯一应付义务，独立拒绝时不创建义务。' \
+  '- Money 停机时 C6 当前事实保持不变；恢复后显式同步成功，同命令重放未生成重复义务。' \
+  '- C6 最终只保存 Money 的决定及 Obligation ID/revision，没有写 Money 表或接管其事实。' >"$runtime/result.md"
+cat "$runtime/result.md"

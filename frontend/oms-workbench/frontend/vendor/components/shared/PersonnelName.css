@@ -1,0 +1,30 @@
+.personnel-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.personnel-name__text {
+  min-width: 0;
+}
+
+.personnel-name--resigned .personnel-name__text {
+  color: #b45309;
+  font-weight: 650;
+}
+
+.personnel-name__status {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid #f5c77a;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #ad4e00;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}

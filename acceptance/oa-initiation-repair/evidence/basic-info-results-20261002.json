@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-087",
+  "candidate_only": true,
+  "postgresql": {
+    "run": "j",
+    "passed": true,
+    "projects_pass_records": 104,
+    "httpserver_pass_records": 66,
+    "records_include_subtests": true,
+    "atomic_history_clear_noop_rollback_concurrency_future_and_offline_replay": true,
+    "projects_test_sha256": "7e7df0b45082114f5121a3ce204edc599a19aad682d0b1ac64f4da9adcbfcf45",
+    "httpserver_test_sha256": "9958d9607c160f9e4ba91c9065cea78df830093ece69aa1d1b16b3d00c95e78c",
+    "main_unchanged": true
+  },
+  "additional_http_postgresql": {
+    "failed_run": "l",
+    "failure": "test wrongly expected ended assignment history in default current-only GET; corrected to check both default and include_inactive=true views",
+    "failed_test_sha256": "2806383cbea939692f0e4288f77179c647d1ea084b5816c8ba7c4470b84ac916",
+    "final_run": "m",
+    "passed": true,
+    "httpserver_pass_records": 66,
+    "httpserver_test_sha256": "23adc4318c50a85a05e06f5aab8090e670400b8b08570a75644a166915919d99",
+    "real_http_service_pg_atomic_clear_history_people_503_recovery_and_offline_replay": true,
+    "formal_iam_or_public": false,
+    "main_unchanged": true
+  },
+  "independent_startup": {
+    "run": "k",
+    "passed": true,
+    "schema": 10,
+    "private_database": "oa_initiation_startup_20261002k",
+    "anonymous_native_routes_denied": 5,
+    "restart_facts_unchanged": true,
+    "server_sha256": "3b3a4a9d8818d0b4c77b99bd7aeed3df0dee7586ffc57af09c40fa6bb2f98837",
+    "formal_iam_or_full_suite": false,
+    "main_unchanged": true
+  },
+  "local": {
+    "project_and_workbench_go_test_and_vet": true,
+    "node_pass": 24,
+    "node_skip": 0,
+    "js_syntax": true,
+    "original_oa_worktree_clean": true,
+    "local_docker_started": false
+  },
+  "remote_root_prefix": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002",
+  "runner_plus_pg_limits": {"cpu": 0.45, "memory_mib": 448},
+  "startup_plus_pg_limits": {"cpu": 0.4, "memory_mib": 352},
+  "all_probes_and_pg_stopped_no_oom": true,
+  "failed_l_exit_code": 1,
+  "other_probes_exit_code": 0,
+  "main_13_database_digests_and_17_container_ids_unchanged": true,
+  "main_deployed": false,
+  "full_oa_accepted": false
+}

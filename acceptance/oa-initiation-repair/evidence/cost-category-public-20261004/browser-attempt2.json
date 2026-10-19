@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "project_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "administrator_only": true,
+  "grant_writes": 0,
+  "commands": [],
+  "page_errors": [],
+  "scenarios": [],
+  "native_records": [],
+  "failure": {
+    "stage": "open-business",
+    "type": "AssertionError",
+    "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ []\n- [\n-   '用车',\n-   '住宿',\n-   '交通',\n-   '评标专家费',\n-   '投标报名费',\n-   '中标服务费',\n-   '其他'\n- ]\n"
+  }
+}

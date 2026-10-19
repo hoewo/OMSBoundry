@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "archive_sha256": "513e6ecb6b34a3b97c5b9ca1a2705f9053125750a9d933d34a6aa0fa5d1570ff",
+  "bytes": 222258,
+  "local_mode": "0600",
+  "copied_via": "existing-authorized-ssh",
+  "archive_stored_outside_git": true,
+  "contains_private_database_and_runtime_backup": true,
+  "full_suite_restore_runtime": false
+}

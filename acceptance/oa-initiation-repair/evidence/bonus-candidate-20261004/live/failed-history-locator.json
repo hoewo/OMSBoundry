@@ -1,0 +1,142 @@
+{
+  "passed": false,
+  "original_oa_components": true,
+  "native_bonus_http": true,
+  "postgresql_18": true,
+  "project_people_test_ports": false,
+  "identity_template": false,
+  "native_iam_project_people": true,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f",
+  "scenarios": [
+    {
+      "name": "native-anonymous-denied",
+      "passed": true
+    },
+    {
+      "name": "real-iam-scope-amount-revoke-candidates-and-people-failure-zero-bonus-write",
+      "passed": true
+    },
+    {
+      "name": "original-two-side-visible-ui-zero-write",
+      "passed": true
+    },
+    {
+      "name": "native-business-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-production-mixed-exact-rounding-same-person-different-assignments",
+      "passed": true
+    },
+    {
+      "name": "native-reload-retains-two-sides-without-write",
+      "passed": true
+    },
+    {
+      "name": "normal-withdraw-modal-click-retains-record-and-two-revisions",
+      "passed": true
+    },
+    {
+      "name": "native-cold-empty-target-pg18-restore-identical-head-history-command-audit",
+      "passed": true
+    },
+    {
+      "name": "restored-native-pending-replay-one-batch-not-duplicate",
+      "passed": true
+    },
+    {
+      "name": "restored-independent-server-continues-write-and-refresh",
+      "passed": true
+    }
+  ],
+  "native_preflight": {
+    "legacy_scope_denied": true,
+    "side_scope_denied": true,
+    "native_candidate_roles": true,
+    "formal_amount_revoke_hides_record": true,
+    "real_people_outage_zero_source_write": true
+  },
+  "backup_sha256": "8ba4cdb5427053330578ddc3b545b257a4b1b3c72f61c6d488b9dbd2a5f3fd2e",
+  "native_facts": {
+    "heads": 6,
+    "revisions": 7,
+    "commands": 5,
+    "audits": 7,
+    "pools": 0,
+    "suggestions": 0,
+    "digest": "57f40e49cd707a33ae78829f8dc02505"
+  },
+  "native_afterflight": {
+    "native_current_and_history_five_amount_fields_absent": true,
+    "revoked_amount_record_denied": true
+  },
+  "failure": {
+    "stage": "formal-amount-revoke",
+    "type": "TimeoutError",
+    "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').locator('.bonus-allocation__item').nth(1) to be visible\u001b[22m\n"
+  },
+  "post_attempt_count": 6,
+  "page_errors": [],
+  "source_digest": {
+    "project": "19aaf2a80b048c52f2cabe403d7a6b7cfacf40e2222774fa71d79240179c0582",
+    "people": "88b4a048055a32117780bbd6690cfc875c320c24c211211d5bc9aed354a43e3a",
+    "contract_count": "0"
+  },
+  "workload_exchanges": [
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "project-workspace",
+      "action": "project-workspace.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "project",
+            "id": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "audience": "people-groups",
+      "action": "people-groups.person.reference.read",
+      "scope": {
+        "kind": "resources",
+        "resources": [
+          {
+            "type": "person",
+            "id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    }
+  ],
+  "native_sources_unchanged_and_stopped": true
+}

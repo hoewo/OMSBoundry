@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Allocation.ObligationTitle}} · 资金分配 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <p><a href="{{basePath}}/allocations">← 返回核销列表</a> · <a href="{{basePath}}/obligations/{{.Allocation.ObligationID}}">查看义务</a> · <a href="{{basePath}}/cash-transactions/{{.Allocation.CashTransactionID}}">查看实际资金</a></p>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations" aria-current="page">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>资金分配详情</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    {{if .Created}}<p role="status">资金分配已经生效。</p>{{end}}
+    {{if .Reversed}}<p role="status">资金分配已经完成反向核销，相关余额已释放。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <dl>
+      <dt>Allocation ID</dt><dd>{{.Allocation.ID}}</dd>
+      <dt>状态</dt><dd>{{.Allocation.Status}}</dd>
+      <dt>义务</dt><dd><a href="{{basePath}}/obligations/{{.Allocation.ObligationID}}">{{.Allocation.ObligationTitle}}</a>（{{.Allocation.ObligationDirection}} / revision {{.Allocation.ObligationRevision}}）</dd>
+      <dt>实际资金</dt><dd><a href="{{basePath}}/cash-transactions/{{.Allocation.CashTransactionID}}">{{.Allocation.CashDescription}}</a>（{{.Allocation.CashType}}）</dd>
+      <dt>本方账簿主体</dt><dd>{{.Allocation.LedgerOwnerLegalName}}（{{.Allocation.LedgerOwnerPartyID}}）</dd>
+      <dt>往来主体</dt><dd>{{.Allocation.CounterpartyLegalName}}（{{.Allocation.CounterpartyPartyID}}）</dd>
+      <dt>分配金额</dt><dd>{{.Allocation.Amount}} {{.Allocation.Currency}}</dd>
+      <dt>来源</dt><dd>{{.Allocation.SourceKind}} / {{.Allocation.ManualSourceReference}}</dd>
+      <dt>操作人</dt><dd>{{.Allocation.AppliedBy}}</dd>
+      <dt>生效时间</dt><dd>{{.Allocation.AppliedAt}}</dd>
+    </dl>
+
+    {{if .Allocation.Reversal}}
+    <section aria-labelledby="reversal-heading">
+      <h2 id="reversal-heading">反向核销事实</h2>
+      <dl>
+        <dt>Reversal ID</dt><dd>{{.Allocation.Reversal.ID}}</dd>
+        <dt>反向金额</dt><dd>{{.Allocation.Reversal.Amount}} {{.Allocation.Reversal.Currency}}</dd>
+        <dt>原因</dt><dd>{{.Allocation.Reversal.Reason}}</dd>
+        <dt>操作人</dt><dd>{{.Allocation.Reversal.ReversedBy.DisplayName}}（{{.Allocation.Reversal.ReversedBy.Kind}} / {{.Allocation.Reversal.ReversedBy.ID}}）</dd>
+        <dt>反向时间</dt><dd>{{.Allocation.Reversal.ReversedAt}}</dd>
+      </dl>
+    </section>
+    {{end}}
+
+    {{if .CanReverse}}
+    <section aria-labelledby="reverse-allocation-heading">
+      <h2 id="reverse-allocation-heading">反向核销这条资金分配</h2>
+      <p>该操作会完整释放 {{.Allocation.Amount}} {{.Allocation.Currency}} 的资金可分配额和义务余额。原 Allocation 会永久保留，且反向事实不能撤回、编辑或删除。</p>
+      {{if can .Principal "allocation.manage"}}<form method="post" action="{{basePath}}/allocations/{{.Allocation.ID}}/reverse">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.ReverseCommandID}}">
+        <p>
+          <label for="reason">反向核销原因</label>
+          <input id="reason" name="reason" value="{{.ReversalReason}}" maxlength="200" required>
+        </p>
+        <button type="submit">确认完整反向核销</button>
+      </form>{{end}}
+    </section>
+    {{end}}
+
+    <p>Allocation 与 Reversal 都是不可编辑、不可删除的事实。金额纠正应先完整反向，再建立一条正确的新 Allocation。</p>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

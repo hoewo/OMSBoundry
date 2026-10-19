@@ -1,0 +1,18 @@
+{
+  "services": {
+    "identity-access": {
+      "environment": {
+        "PROJECT_ASSIGNMENT_POLICY_PATHS": "/config/project-assignment-policy-v1.2.json,/config/business-engagement-project-assignment-policy.json,/config/production-operations-project-assignment-policy.json"
+      },
+      "volumes": [
+        "/opt/omsbizfoundry/acceptance/oa-public-release-20261002a/artifacts/contracts/project-workspace-capabilities.json:/config/project-workspace-capabilities.json:ro",
+        "/opt/omsbizfoundry/acceptance/oa-public-release-20261002a/artifacts/contracts/project-assignment-policy-v1.2.json:/config/project-assignment-policy-v1.2.json:ro"
+      ]
+    },
+    "project-workspace": {
+      "environment": {
+        "BUSINESS_ENGAGEMENT_BASE_URL": "http://business-engagement:8089"
+      }
+    }
+  }
+}

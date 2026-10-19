@@ -1,0 +1,543 @@
+{
+  "passed": true,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "project_revision": 18,
+  "contract_ids": [
+    "beb67167-60a8-446b-a6ca-744bb2ddfde9",
+    "dd3a4a04-abde-4a2e-8023-c007aac470a1"
+  ],
+  "confirmed_amendments": 3,
+  "formal_contract_revision": 4,
+  "confirmed_settlements": 2,
+  "frozen_settlement_parties": 4,
+  "cash_ids": [
+    "023c24f5-36de-42f0-a8a9-702e82d3e793",
+    "e3120f76-abad-49c4-82e8-49513702ecd8"
+  ],
+  "cash_original_amounts_preserved": true,
+  "cash_reversal_count": 1,
+  "invoice_ids": [],
+  "cost_records": 4,
+  "cost_native_commands": 8,
+  "evidence_files": [
+    "7cba8faf-b963-4145-a289-2e565e9b069d",
+    "00d82436-4c2c-4026-a6ce-03b417cba80f"
+  ],
+  "other_business_databases_unchanged": [
+    "people_groups",
+    "party_directory",
+    "business_engagement",
+    "design_operations",
+    "approval_audit_results",
+    "bonus_distribution"
+  ],
+  "other_owner_rows_unchanged": [
+    {
+      "database": "contract_ledger",
+      "table": "parties",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contracts",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "local_users",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "app_metadata",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "audit_entries",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "local_sessions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_closures",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_relations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_revisions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_instruments",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_settlements",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_audit_entries",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_draft_parties",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "reference_oa_materials",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_change_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "party_migration_mappings",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_closure_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_revision_parties",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "party_runtime_transitions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_evidence_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_evidence_versions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_relation_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_evidence_documents",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_restore_operations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_settlement_parties",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_activation_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_correction_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_settlement_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "local_user_iam_subject_links",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "reference_oa_contract_drafts",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_draft_party_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_termination_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "contract_draft_change_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "reference_oa_material_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "reference_oa_amendment_confirmations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "contract_ledger",
+      "table": "reference_oa_contract_draft_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "parties",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "allocations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "local_users",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "app_metadata",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "receipt_sets",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "audit_entries",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "local_sessions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "cash_transactions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "receipt_set_items",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "internal_transfers",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_closures",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "allocation_reversals",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_revisions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_remissions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "party_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "party_migration_mappings",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "allocation_apply_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "party_runtime_transitions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "cash_transaction_reversals",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "payable_suggestion_intakes",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_closure_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "local_user_iam_subject_links",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_cash_expectations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "receipt_set_confirm_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_amount_adjustments",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_remission_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "payable_party_source_mappings",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "cash_transaction_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_confirmation_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "internal_transfer_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "allocation_reversal_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "party_directory_runtime_projections",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "payable_suggestion_intake_revisions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_cash_expectation_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "obligation_amount_adjustment_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "money_flow",
+      "table": "cash_transaction_reversal_create_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "billing_invoice",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "billing_invoice",
+      "table": "invoice_registrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "billing_invoice",
+      "table": "invoice_registration_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "billing_invoice",
+      "table": "invoice_registration_revisions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "billing_invoice",
+      "table": "invoice_registration_audit_events",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "projects",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_assignments",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_history_events",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_resource_links",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_package_conversions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "project_workspace",
+      "table": "project_completion_confirmations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "identity_access",
+      "table": "tenants",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "identity_access",
+      "table": "activation_tokens",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "identity_access",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "files",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "file_versions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "upload_sessions",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "schema_migrations",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "idempotency_commands",
+      "other_rows_unchanged": true
+    },
+    {
+      "database": "evidence_service",
+      "table": "evidence_audit_entries",
+      "other_rows_unchanged": true
+    }
+  ],
+  "other_project_assignments_and_user101_unchanged": true,
+  "identity_differences": [
+    {
+      "subject_id": "12e800ac-00bf-4516-8748-b45c5623493a",
+      "changed_fields": [
+        "updated_at"
+      ],
+      "native_successful_login_timestamp_only": true
+    }
+  ],
+  "only_approved_cost_resource_grants_added": 14,
+  "tenant_grants_unchanged": true,
+  "old_three_file_trees_preserved": true,
+  "main_healthy": 17,
+  "full_role_acceptance": false,
+  "full_oa_accepted": false,
+  "full_suite_runtime_restore": false
+}

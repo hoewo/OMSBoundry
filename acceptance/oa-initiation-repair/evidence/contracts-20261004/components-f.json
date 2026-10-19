@@ -1,0 +1,26 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "812e387d8d099eb61d639e03a7b3954d27c37f84ba85ff4e84e946886c1d69ff",
+  "failure": {
+    "stage": "amendment",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-modal:visible').getByRole('button', { name: /^保\\s*存$/ })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"submit\" class=\"ant-btn css-ac2jek ant-btn-primary ant-btn-color-primary ant-btn-variant-solid\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not stable\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - wait"
+  },
+  "business_command_count": 7,
+  "page_errors": []
+}

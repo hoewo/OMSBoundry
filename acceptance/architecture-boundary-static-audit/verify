@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEFAULT_ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOT_DIR=${ARCHITECTURE_AUDIT_ROOT:-$DEFAULT_ROOT_DIR}
+cd "$ROOT_DIR"
+
+AUDIT_TMP=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-architecture-audit.XXXXXX")
+MODULES_FILE="$AUDIT_TMP/app-modules.tsv"
+VIOLATIONS_FILE="$AUDIT_TMP/violations.txt"
+trap 'rm -rf "$AUDIT_TMP"' EXIT
+
+: >"$MODULES_FILE"
+: >"$VIOLATIONS_FILE"
+
+report_failure() {
+  printf '%s\n' "$1" >>"$VIOLATIONS_FILE"
+}
+
+for mod_file in backend/services/*/go.mod backend/platform/*/go.mod frontend/*/go.mod; do
+  [[ -f "$mod_file" ]] || continue
+  app_path=$(dirname "$mod_file")
+  app_name=$(basename "$(dirname "$mod_file")")
+  module_name=$(awk '$1 == "module" { print $2; exit }' "$mod_file")
+  if [[ -z "$module_name" ]]; then
+    report_failure "$app_path/go.mod has no module declaration"
+    continue
+  fi
+  printf '%s\t%s\n' "$app_path" "$module_name" >>"$MODULES_FILE"
+done
+sort -o "$MODULES_FILE" "$MODULES_FILE"
+
+app_count=$(wc -l <"$MODULES_FILE" | tr -d ' ')
+if [[ "$app_count" -eq 0 ]]; then
+  report_failure "no application modules found"
+fi
+
+# Applications may share explicitly versioned wire/mechanism packages, but they
+# must never import another application's source or internal domain packages.
+# GOWORK=off also proves each application resolves without the root workspace.
+while IFS=$'\t' read -r owner_path owner_module; do
+  if ! dependencies=$(cd "$owner_path" && GOWORK=off go list -deps -test ./...); then
+    report_failure "$owner_path is not independently resolvable with GOWORK=off"
+    continue
+  fi
+  while IFS= read -r import_path; do
+    [[ -n "$import_path" ]] || continue
+    while IFS=$'\t' read -r candidate_path candidate_module; do
+      if [[ "$import_path" == "$candidate_module" || "$import_path" == "$candidate_module/"* ]]; then
+        if [[ "$candidate_module" != "$owner_module" ]]; then
+          report_failure "$owner_path depends on application module $candidate_module"
+        fi
+        break
+      fi
+    done <"$MODULES_FILE"
+  done <<<"$dependencies"
+done <"$MODULES_FILE"
+
+# Local replacements may point only to deliberately shared packages. A direct
+# replacement to another app would make a supposedly independent module depend
+# on that application's source checkout.
+while IFS= read -r replacement; do
+  [[ -n "$replacement" ]] || continue
+  replacement_path=${replacement#*=>}
+  replacement_path=${replacement_path//[[:space:]]/}
+  case "$replacement_path" in
+    ../../../packages/*) ;;
+    *) report_failure "application go.mod uses non-package local replacement: $replacement" ;;
+  esac
+done < <(
+  find backend/services backend/platform frontend -mindepth 2 -maxdepth 2 -name go.mod -print0 2>/dev/null \
+    | xargs -0 grep -HnE '=>[[:space:]]+\.\./' 2>/dev/null || true
+)
+
+# These PostgreSQL mechanisms would permit a migration to reach another
+# application's tables. Ordinary foreign keys inside one owned database remain
+# valid and are intentionally not rejected.
+while IFS= read -r sql_hit; do
+  [[ -n "$sql_hit" ]] || continue
+  report_failure "cross-database SQL mechanism detected: $sql_hit"
+done < <(
+  grep -RInE --include='*.sql' \
+    '(dblink|postgres_fdw|foreign[[:space:]]+table|create[[:space:]]+server)' \
+    backend frontend deployments acceptance 2>/dev/null || true
+)
+
+failures=$(wc -l <"$VIOLATIONS_FILE" | tr -d ' ')
+if [[ "$failures" -gt 0 ]]; then
+  while IFS= read -r failure; do
+    printf 'architecture-boundary-static-audit: %s\n' "$failure" >&2
+  done <"$VIOLATIONS_FILE"
+  printf 'architecture-boundary-static-audit: failed (%d violation(s))\n' "$failures" >&2
+  exit 1
+fi
+
+printf 'architecture-boundary-static-audit: passed (apps=%d, cross-app imports=0, cross-app replaces=0, cross-database SQL mechanisms=0)\n' \
+  "$app_count"

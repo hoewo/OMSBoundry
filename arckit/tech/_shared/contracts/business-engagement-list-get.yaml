@@ -1,0 +1,13 @@
+# 查询 Business Engagement API 契约
+metadata: {path: "tech/_shared/contracts/business-engagement-list-get.yaml", domain: "business-engagement", owner: "Business Engagement", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoints:
+  - {method: GET, path: "/api/v1/business-engagements", summary: "列出凭证范围内的经营承接记录", capability: "business-engagement.read", query: {limit: {type: integer, minimum: 1, maximum: 100, default: 50}}, success_status: 200}
+  - {method: GET, path: "/api/v1/business-engagements/{engagement_id}", summary: "读取经营承接当前投影、材料和缺口", capability: "business-engagement.read", path_params: [{name: engagement_id, type: string, format: uuid, required: true}], success_status: 200}
+auth: {required: true, audience: "business-engagement", scope: [tenant, project, business-engagement]}
+response_schema: {$ref: "../models/BusinessEngagementDetails.yaml"}
+errors:
+  - {status: 401, code: UNAUTHENTICATED, retryable: false}
+  - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+  - {status: 403, code: SCOPE_DENIED, retryable: false}
+  - {status: 404, code: BUSINESS_ENGAGEMENT_NOT_FOUND, retryable: false}
+business_logic: {flow: ["列表先按 tenant 查询，再按 Credential Resource Scope 过滤。", "读取不调用 Project、Evidence、Contract 或 Money。"]}

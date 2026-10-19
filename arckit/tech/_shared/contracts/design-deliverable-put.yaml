@@ -1,0 +1,28 @@
+# Design Deliverable 登记 API 契约
+metadata: {path: "tech/_shared/contracts/design-deliverable-put.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: POST, path: "/api/v1/design-work-items/{work_item_id}/stages/{stage_key}/deliverables", summary: "登记或替换 Evidence File Version 引用", auth_required: true, audience: "design-operations", capability: "design-work-item.deliverable.manage"}
+request:
+  path_params:
+    - {name: work_item_id, type: string, format: uuid, required: true}
+    - {name: stage_key, type: string, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, requirement_key, evidence_file_id, evidence_version, evidence_source_revision]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      requirement_key: {type: string, const: primary-output}
+      evidence_file_id: {type: string, format: uuid}
+      evidence_version: {type: integer, minimum: 1}
+      evidence_source_revision: {type: integer, minimum: 1}
+responses:
+  success: {status: 200, schema: {$ref: "../models/DesignDeliverable.yaml"}}
+  errors:
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 422, code: STAGE_STATE_INVALID, retryable: false}
+    - {status: 422, code: EVIDENCE_REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: EVIDENCE_REFERENCE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["验证同 tenant Evidence File Version 可用且 revision 匹配。", "新引用追加写入；同槽位旧引用原子 supersede。", "completed Stage 必须先 reopen。"]
+  side_effects: ["只读调用 Evidence v1；不写文件、不删除旧文件"]

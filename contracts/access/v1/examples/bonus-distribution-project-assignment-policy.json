@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "policy_id": "bonus-distribution-project-access",
+  "policy_version": "1.0.0",
+  "audience": "bonus-distribution",
+  "roles": {
+    "business_owner": [
+      "bonus-pool.business.calculate",
+      "bonus-pool.business.publish",
+      "bonus-pool.business.supersede",
+      "bonus-pool.business.withdraw",
+      "bonus-pool.read",
+      "bonus-pool.history.read",
+      "bonus-allocation.manage",
+      "bonus-allocation.read",
+      "bonus-allocation.amount.read",
+      "bonus-payable-suggestion.create",
+      "bonus-payable-suggestion.read",
+      "bonus-payable-suggestion.withdraw"
+    ],
+    "production_owner": [
+      "bonus-pool.production.calculate",
+      "bonus-pool.production.publish",
+      "bonus-pool.production.supersede",
+      "bonus-pool.production.withdraw",
+      "bonus-pool.read",
+      "bonus-pool.history.read",
+      "bonus-allocation.manage",
+      "bonus-allocation.read",
+      "bonus-allocation.amount.read",
+      "bonus-payable-suggestion.create",
+      "bonus-payable-suggestion.read",
+      "bonus-payable-suggestion.withdraw"
+    ],
+    "participant": [
+      "bonus-pool.read",
+      "bonus-pool.history.read",
+      "bonus-allocation.read"
+    ]
+  }
+}

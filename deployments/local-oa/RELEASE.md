@@ -1,0 +1,9 @@
+# Local OA demonstration release
+
+This archive is the target-build-free form of the local reference OA business Demo. It contains seven `linux/amd64` or `linux/arm64` Docker images in `images.tar`, one static journey driver, Compose/runtime scripts, a read-only target-host preflight, documentation, release metadata and inner checksums. On a matching Linux host the driver runs directly; on a different-architecture verification host it runs temporarily inside one of the already bundled target images.
+
+It intentionally contains no Nginx, Gateway, central IAM, Workbench, TLS, public DNS, `.env`, database data, private key or application source. Those full-entry concerns remain a separate deployment acceptance.
+
+Release evidence is version-specific. Development bundle `v0.1.0-demo.11` carries six individual Level A drivers, the current high-fidelity Level B driver, two public-contract-only reference stubs and a read-only Ubuntu target-host preflight. It passed archive integrity, offline image loading, all six isolated product audits, fresh-secret initialization, both isolated subset composition audits, two idempotent J1-J4 runs, five-source isolation, final readiness and resource cleanup on 2026-09-25. Its development provenance is `commit=unknown`, so it is an accepted development Demo artifact, not an official traceable release. An official handoff must be rebuilt from a clean Git HEAD with official provenance.
+
+Follow `docs/operations/local-oa-ubuntu-demo.md`. Always verify the external archive checksum before extraction, then run `./deployments/local-oa/ops/local-oa preflight` and `./deployments/local-oa/ops/local-oa verify-release` before loading images. Preflight only reads host and Docker state; it never mutates the host or validates the deferred Nginx/Gateway/IAM entry chain.

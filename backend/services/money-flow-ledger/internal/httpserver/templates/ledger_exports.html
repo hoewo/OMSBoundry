@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本方主体台账导出 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <h1>本方主体可校验台账导出</h1>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports" aria-current="page">台账导出</a></nav>
+    <p>一次只导出一个本方账簿主体。归档包含该主体的义务、资金、核销、反向、减免、关闭、内部转账和范围内审计，不包含其他本方主体、身份凭证或 Contract Ledger 数据。</p>
+    <p>ZIP 内含固定 CSV 和 manifest；manifest 记录每张 CSV 的行数、字节数与 SHA-256。它是业务数据移交物，不是数据库备份、恢复包、会计报表或数字签名。</p>
+    <p><strong>安全提醒：</strong>CSV 保留原始文本。请在电子表格软件中按文本导入，把全部列设为文本；不要直接双击执行可能以 <code>=</code>、<code>+</code>、<code>-</code> 或 <code>@</code> 开头的单元格。</p>
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    {{if .Parties}}
+    {{if can .Principal "export"}}<form method="post" action="{{basePath}}/ledger-exports">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label>本方账簿主体
+        <select name="ledger_owner_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.LedgerOwnerPartyID .ID}}selected{{end}}>{{.LegalName}}（{{if eq .Kind "organization"}}组织{{else}}个人{{end}} · {{.ID}}）</option>
+          {{end}}
+        </select>
+      </label>
+      <button type="submit">生成并下载 ZIP</button>
+    </form>{{end}}
+    {{else}}
+    <p>当前还没有主体。请先在主体目录登记本方主体。</p>
+    {{end}}
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

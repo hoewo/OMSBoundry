@@ -1,0 +1,74 @@
+{
+  "schema_version": "1",
+  "overlay_id": "reference-oa-c4",
+  "overlay_version": "1.0.0",
+  "application_id": "production-operations",
+  "audience": "production-operations",
+  "site_roles": {
+    "identity_super_admin": {
+      "display_name": "身份超级管理员",
+      "scope_kind": "tenant",
+      "actions": []
+    },
+    "oa_business_admin": {
+      "display_name": "OA 业务管理员",
+      "scope_kind": "tenant",
+      "actions": [
+        "production-work-item.create",
+        "production-work-item.read",
+        "production-work-item.owner.manage",
+        "production-work-item.deliverable.manage",
+        "production-work-item.stage.manage",
+        "production-work-item.cancel",
+        "production-work-item.history.read",
+        "production-work-item.reference.read",
+        "production-work-item.work-items.read",
+        "production-work-item.stage-material.read",
+        "production-work-item.stage-material.register",
+        "production-work-item.stage-material.withdraw",
+        "production-work-item.stage-material.history.read"
+      ]
+    },
+    "production_manager": {
+      "display_name": "生产经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "production-work-item.create",
+        "production-work-item.read",
+        "production-work-item.owner.manage",
+        "production-work-item.deliverable.manage",
+        "production-work-item.stage.manage",
+        "production-work-item.cancel",
+        "production-work-item.history.read",
+        "production-work-item.reference.read",
+        "production-work-item.work-items.read",
+        "production-work-item.stage-material.read",
+        "production-work-item.stage-material.register",
+        "production-work-item.stage-material.withdraw",
+        "production-work-item.stage-material.history.read"
+      ]
+    },
+    "general_manager": {
+      "display_name": "总经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "production-work-item.read",
+        "production-work-item.history.read"
+      ]
+    },
+    "business_manager": {
+      "display_name": "经营经理",
+      "scope_kind": "tenant",
+      "actions": []
+    },
+    "finance": {
+      "display_name": "财务",
+      "scope_kind": "tenant",
+      "actions": []
+    }
+  },
+  "assignment_policy": {
+    "policy_id": "production-operations-project-access",
+    "policy_version": "1.0.0"
+  }
+}

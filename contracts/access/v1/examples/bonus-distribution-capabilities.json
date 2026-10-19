@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "application_id": "bonus-distribution",
+  "application_version": "0.2.0",
+  "audience": "bonus-distribution",
+  "capability_namespaces": ["bonus-pool", "bonus-allocation", "bonus-payable-suggestion", "bonus-manual-allocation"],
+  "capabilities": [
+    { "id": "bonus-manual-allocation.read", "description": "读取显式选装手工奖金分配的非金额事实", "risk": "read", "resource_types": ["business_bonus_project", "production_bonus_project", "reference_oa_bonus_allocation"] },
+    { "id": "bonus-manual-allocation.amount.read", "description": "读取手工分配基数、输入比例、固定额和精确分配金额", "risk": "privileged", "resource_types": ["business_bonus_project", "production_bonus_project", "reference_oa_bonus_allocation"] },
+    { "id": "bonus-manual-allocation.record", "description": "复验人员与有效分工后原子登记手工奖金分配，不代表付款", "risk": "write", "resource_types": ["business_bonus_project", "production_bonus_project"] },
+    { "id": "bonus-manual-allocation.withdraw", "description": "留史撤回手工奖金分配，不删除事实或撤销实际付款", "risk": "privileged", "resource_types": ["business_bonus_project", "production_bonus_project", "reference_oa_bonus_allocation"] },
+    { "id": "bonus-manual-allocation.history.read", "description": "读取手工奖金分配不可变历史，金额另验", "risk": "read", "resource_types": ["business_bonus_project", "production_bonus_project", "reference_oa_bonus_allocation"] },
+    { "id": "bonus-pool.business.calculate", "description": "按精确 Contract Settlement 和经营策略建立经营奖金草稿", "risk": "write", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.business.publish", "description": "发布经营奖金并冻结来源、策略和人员分配", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.business.supersede", "description": "用显式新发布结果取代既有经营奖金", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.business.withdraw", "description": "撤回经营奖金并保留不可变历史", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.production.calculate", "description": "按精确 Money Receipt Set 和生产策略建立生产奖金草稿", "risk": "write", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.production.publish", "description": "发布生产奖金并冻结来源、策略和人员分配", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.production.supersede", "description": "用显式新发布结果取代既有生产奖金", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.production.withdraw", "description": "撤回生产奖金并保留不可变历史", "risk": "privileged", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.read", "description": "读取凭证范围内奖池的非敏感当前事实", "risk": "read", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-pool.history.read", "description": "读取奖池不可变 revision 历史", "risk": "read", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-allocation.manage", "description": "在奖金计算中提交精确 Person 和 Assignment 比例分配", "risk": "write", "resource_types": ["project", "bonus_pool"] },
+    { "id": "bonus-allocation.read", "description": "读取奖金人员分配的非金额事实和历史", "risk": "read", "resource_types": ["project", "bonus_pool", "bonus_allocation"] },
+    { "id": "bonus-allocation.amount.read", "description": "读取奖池来源金额、奖池金额和人员分配金额", "risk": "privileged", "resource_types": ["project", "bonus_pool", "bonus_allocation"] },
+    { "id": "bonus-payable-suggestion.create", "description": "从精确已发布 Allocation revision 提出 Money 应付建议并支持恢复重试", "risk": "write", "resource_types": ["project", "bonus_pool", "bonus_allocation", "bonus_payable_suggestion"] },
+    { "id": "bonus-payable-suggestion.read", "description": "读取奖金应付建议、Money 独立决定和不可变历史", "risk": "read", "resource_types": ["project", "bonus_pool", "bonus_allocation", "bonus_payable_suggestion"] },
+    { "id": "bonus-payable-suggestion.withdraw", "description": "在 Money 决定前撤回奖金应付建议", "risk": "privileged", "resource_types": ["project", "bonus_pool", "bonus_allocation", "bonus_payable_suggestion"] }
+  ]
+}

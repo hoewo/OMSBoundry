@@ -1,0 +1,71 @@
+{
+  "passed": false,
+  "mode": "exercise",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "native_IAM": true,
+  "grant_writes": 0,
+  "project_writes": 0,
+  "physical_file_deletes": 0,
+  "full_oa_accepted": false,
+  "evidence_provider": "local-http",
+  "browser_errors": [],
+  "network_failures": [
+    {
+      "path": "/evidence/v1/local-uploads/1b655580-5b5d-40e0-833a-31df1531ad76",
+      "method": "PUT",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/evidence/v1/local-uploads/11416cea-ffec-42ae-a2b9-109613876307",
+      "method": "PUT",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/evidence/v1/local-uploads/8ce2c46f-7aab-4af2-abf4-231462f5b41b",
+      "method": "PUT",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/evidence/v1/local-uploads/1e86f13d-28f2-4a2a-a4b8-4885717a3524",
+      "method": "PUT",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "assets": {
+    "reference_oa_react_bidding.js": "0763af8b8257cc9a34bd358f3fd368159f95e28e6c7bbd4183b208f7eac8e20e",
+    "reference_oa_react_bidding.css": "a4fccb70a59235f5dce088af6cca467f943efd93953cec304f35cda3a807484a",
+    "reference_oa_bidding_runtime.js": "e2722dc970486cec274242310ee430b1684698ab5f1d00ad2de858808960ae67",
+    "reference_oa_initiation_runtime.js": "9f3da47d3994a0f69d274b798c2953a755bc967317282b17d4df1072f3d304d1",
+    "reference_oa_business_runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference_oa_architecture_lens.js": "d18fd5a6dff937c148e692d629d69b10d6bae853d945d9fdb69b45c128d54006"
+  },
+  "phases": [
+    "Two Evidence uploads + two native BE append commands"
+  ],
+  "entry_exchanges": 2,
+  "before": {
+    "project_revision": 4,
+    "engagement_revision": 7,
+    "materials": [],
+    "requirements": [
+      {
+        "key": "tender_document",
+        "required": true,
+        "satisfied": false
+      },
+      {
+        "key": "bid_document",
+        "required": true,
+        "satisfied": false
+      },
+      {
+        "key": "award_document",
+        "required": true,
+        "satisfied": false
+      }
+    ]
+  },
+  "error": "Native GET failed: /business/api/v1/business-engagements/231f2977-79d4-4b36-a178-f19a0d8d3119 status 429\n\n429 !== 200\n"
+}

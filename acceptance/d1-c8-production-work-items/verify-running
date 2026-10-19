@@ -1,0 +1,366 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C8_WORK_ITEMS_EVIDENCE_DIR:-"$d1_dir/.runtime/c8-production-work-items-evidence"}
+
+[ "${D1_C8_WORK_ITEMS_CONFIRM:-}" = yes ] || {
+  echo 'set D1_C8_WORK_ITEMS_CONFIRM=yes to authorize temporary IAM and business fixture mutations' >&2
+  exit 2
+}
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" --file "$d1_dir/compose.yaml" \
+    --profile contract --profile money --profile people --profile party --profile project --profile evidence \
+    --profile business-engagement --profile billing --profile production --profile approval-audit-results \
+    --profile cost-outsourcing --profile bonus-distribution "$@"
+}
+
+digest_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+fetch_csrf() {
+  cookie_file=$1; output_file=$2
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"
+  expect_status 200 "$actual" 'fetch IAM csrf'
+  jq -er .csrf_token "$output_file"
+}
+
+auth_json() {
+  path=$1; cookie_file=$2; csrf_token=$3; payload=$4; output_file=$5; expected=$6
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then cat "$output_file" >&2; fi
+  expect_status "$expected" "$actual" "POST /auth$path"
+}
+
+app_json() {
+  method=$1; prefix=$2; path=$3; cookie_file=$4; payload=$5; output_file=$6; expected=$7
+  if [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+      -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+      --data "$payload" "$base_url$prefix$path")
+  else
+    result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url$prefix$path")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$method $prefix$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then cat "$output_file" >&2; fi
+  expect_status "$expected" "$actual" "$method $prefix$path"
+}
+
+authorize_app() {
+  cookie_file=$1; csrf_token=$2; app=$3; output_file=$4
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" --data-urlencode "csrf_token=$csrf_token" \
+    "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "authorize $app"
+}
+
+projection_get() {
+  cookie_file=$1; output_file=$2; expected=$3; label=$4
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/production/api/v1/work-items")
+  actual=${result%% *}; duration=${result#* }
+  record_http "GET /production/api/v1/work-items ($label)" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "$label"
+}
+
+grant_action() {
+  subject=$1; action=$2
+  payload=$(jq -cn --arg subject_id "$subject" --arg action "$action" \
+    '{subject_id:$subject_id,audience:"production-operations",action:$action}')
+  auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+}
+
+revoke_action() {
+  subject=$1; action=$2
+  payload=$(jq -cn --arg subject_id "$subject" --arg action "$action" \
+    '{subject_id:$subject_id,audience:"production-operations",action:$action}')
+  auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+}
+
+create_actor() {
+  actor=$1; display=$2
+  username="c8-work-$actor-$stamp"
+  password="C8-Work-${actor}-${stamp}!Aa7"
+  payload=$(jq -cn --arg username "$username" --arg display_name "$display" \
+    '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/$actor-invitation.json" 201
+  subject=$(jq -er .subject.id "$workspace/$actor-invitation.json")
+  token=$(jq -er .token "$workspace/$actor-invitation.json")
+  cookies="$workspace/$actor.cookies"
+  csrf=$(fetch_csrf "$cookies" "$workspace/$actor-csrf.json")
+  payload=$(jq -cn --arg token "$token" --arg password "$password" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$cookies" "$csrf" "$payload" "$workspace/$actor-activation.json" 200
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  auth_json /api/v1/login "$cookies" "$csrf" "$payload" "$workspace/$actor-login.json" 200
+  jq -n --arg subject_id "$subject" --arg username "$username" --arg csrf "$csrf" \
+    '{subject_id:$subject_id,username:$username,csrf:$csrf}' >"$workspace/$actor-meta.json"
+}
+
+capture_production_facts() {
+  rows_file=$1; counts_file=$2; digest_output=$3
+  compose exec -T postgres psql --quiet --tuples-only --no-align --field-separator="$(printf '\t')" \
+    --set=ON_ERROR_STOP=1 --username "$(env_value POSTGRES_SUPERUSER oms_admin)" --dbname design_operations >"$rows_file" <<'SQL'
+CREATE TEMP TABLE c8_fact_snapshot(table_name text NOT NULL, row_value text NOT NULL);
+DO $$
+DECLARE item record;
+BEGIN
+  FOR item IN
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      AND table_name NOT IN ('app_metadata','audit_entries','schema_migrations')
+    ORDER BY table_name
+  LOOP
+    EXECUTE format(
+      'INSERT INTO c8_fact_snapshot(table_name,row_value) SELECT %L,to_jsonb(value)::text FROM %I AS value',
+      item.table_name, item.table_name
+    );
+  END LOOP;
+END $$;
+SELECT table_name,row_value FROM c8_fact_snapshot ORDER BY table_name,row_value;
+SQL
+  awk -F '\t' '{count[$1]++} END {for (table_name in count) print table_name "\t" count[table_name]}' "$rows_file" | LC_ALL=C sort >"$counts_file"
+  digest_file "$rows_file" >"$digest_output"
+}
+
+wait_healthy() {
+  container=$(compose ps -q "$1")
+  [ -n "$container" ] || { echo "$1 container is missing" >&2; exit 1; }
+  for _attempt in $(seq 1 60); do
+    [ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$1 did not recover" >&2
+  exit 1
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c8-work-items.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+actor_subject=''; neighbor_subject=''; production_stopped=false
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$production_stopped" = true ]; then compose start production-operations >/dev/null 2>&1 || true; fi
+  if [ -f "${admin_cookies:-/nonexistent}" ]; then
+    for subject in "$actor_subject" "$neighbor_subject"; do
+      [ -n "$subject" ] || continue
+      for action in production-work-item.stage.manage production-work-item.work-items.read production-work-item.read; do
+        payload=$(jq -cn --arg subject_id "$subject" --arg action "$action" \
+          '{subject_id:$subject_id,audience:"production-operations",action:$action}')
+        curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+          -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/grants/revoke" || true
+      done
+      payload=$(jq -cn --arg subject_id "$subject" '{subject_id:$subject_id,status:"disabled"}')
+      curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+        -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/status" || true
+    done
+  fi
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv actor-person.json project.json business-assignment.json assignment.json \
+    project-active.json work-item-created.json work-item-owned.json \
+    actor-visible.json neighbor-empty.json actor-stale-after-revoke.json \
+    actor-empty-after-refresh.json actor-restored.json actor-stale-after-work-items-revoke.json \
+    actor-work-items-denied.body workbench.html workbench-source-down.html actor-recovered.json \
+    fact-counts-before.tsv fact-counts-after.tsv fact-digest-before.txt fact-digest-after.txt ids.json result.md; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+echo '[1/7] 登录正式 IAM，加载当前选装应用权限清单'
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+# Bootstrap provisioning deliberately sends one request per selected
+# capability through the real Gateway. Keep that legitimate setup burst out
+# of the measured C8 matrix without restarting Gateway or weakening its
+# production limit. The limiter uses a fixed one-minute client window.
+echo '      等待 Gateway 的一分钟引导授权窗口结束（保持正式限流配置不变）'
+sleep 60
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" \
+  --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+auth_json /api/v1/login "$admin_cookies" "$admin_csrf" "$payload" "$workspace/admin-login.json" 200
+for app in people-groups project-workspace production-operations; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$app" "$workspace/admin-$app-authorize.out"
+done
+result=$(curl --silent --show-error --output "$workspace/workbench.html" --write-out '%{http_code} %{time_total}' \
+  --cookie "$admin_cookies" "$base_url/workbench/")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /workbench/' 200 "$actual" "$duration"
+expect_status 200 "$actual" 'open Workbench'
+grep -Fq 'data-source-application="production-operations"' "$workspace/workbench.html"
+grep -Fq 'data-projection-path="/api/v1/work-items"' "$workspace/workbench.html"
+
+echo '[2/7] 通过正式 IAM 建立当前 Subject 与相邻 Subject'
+create_actor actor 'C8 当前生产负责人'
+create_actor neighbor 'C8 相邻验证账号'
+actor_subject=$(jq -er .subject_id "$workspace/actor-meta.json")
+neighbor_subject=$(jq -er .subject_id "$workspace/neighbor-meta.json")
+for subject in "$actor_subject" "$neighbor_subject"; do
+  grant_action "$subject" production-work-item.read
+  grant_action "$subject" production-work-item.work-items.read
+  grant_action "$subject" production-work-item.stage.manage
+done
+
+echo '[3/7] 通过 People／Project／Production 正式 API 建立最小测试事实'
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name 'C8 当前生产负责人' \
+  --arg iam_subject_id "$actor_subject" '{command_id:$command_id,display_name:$display_name,iam_subject_id:$iam_subject_id}')
+app_json POST /people /api/v1/persons "$admin_cookies" "$payload" "$workspace/actor-person.json" 201
+person_id=$(jq -er .id "$workspace/actor-person.json")
+person_revision=$(jq -er .revision "$workspace/actor-person.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg number "C8-WORK-$stamp" --arg name "C8 Work Items $stamp" \
+  '{command_id:$command_id,project_number:$number,name:$name,summary:"C8 personal work projection",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+app_json POST /project /api/v1/projects "$admin_cookies" "$payload" "$workspace/project.json" 201
+project_id=$(jq -er .id "$workspace/project.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$person_id" --argjson source_revision "$person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"business_owner"}')
+app_json POST /project "/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/business-assignment.json" 200
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$person_id" --argjson source_revision "$person_revision" \
+  '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"production_owner"}')
+app_json POST /project "/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/assignment.json" 200
+assignment_id=$(jq -er .assignment.id "$workspace/assignment.json")
+assignment_revision=$(jq -er .assignment.created_project_revision "$workspace/assignment.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3}')
+app_json POST /project "/api/v1/projects/$project_id/complete-initiation" "$admin_cookies" "$payload" "$workspace/project-active.json" 200
+project_revision=$(jq -er .revision "$workspace/project-active.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project "$project_id" --argjson revision "$project_revision" \
+  '{command_id:$command_id,project_id:$project,project_source_revision:$revision,type_key:"design-v1"}')
+app_json POST /production /api/v1/production-work-items "$admin_cookies" "$payload" "$workspace/work-item-created.json" 201
+work_item_id=$(jq -er .work_item.id "$workspace/work-item-created.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg assignment "$assignment_id" --argjson assignment_revision "$assignment_revision" \
+  '{command_id:$command_id,expected_revision:1,assignment_id:$assignment,assignment_source_revision:$assignment_revision}')
+app_json POST /production "/api/v1/production-work-items/$work_item_id/owner" "$admin_cookies" "$payload" "$workspace/work-item-owned.json" 200
+capture_production_facts "$workspace/facts-before.raw" "$workspace/fact-counts-before.tsv" "$workspace/fact-digest-before.txt"
+
+echo '[4/7] 当前 Subject 可见精确工作项；相邻 Subject 只能得到空集合'
+actor_cookies="$workspace/actor.cookies"; actor_csrf=$(jq -er .csrf "$workspace/actor-meta.json")
+neighbor_cookies="$workspace/neighbor.cookies"; neighbor_csrf=$(jq -er .csrf "$workspace/neighbor-meta.json")
+authorize_app "$actor_cookies" "$actor_csrf" production-operations "$workspace/actor-authorize.out"
+authorize_app "$neighbor_cookies" "$neighbor_csrf" production-operations "$workspace/neighbor-authorize.out"
+projection_get "$actor_cookies" "$workspace/actor-visible.json" 200 actor-visible
+jq -e --arg subject "$actor_subject" --arg item "$work_item_id" --arg project "$project_id" '
+  .schema_version == "1" and .source_application == "production-operations" and .subject_id == $subject and
+  (.items | length) == 1 and .items[0].work_item_id == $item and .items[0].project_id == $project and
+  .items[0].resource_scope == {type:"production-work-item",id:$item} and
+  (.items[0].allowed_actions | index("production-work-item.stage.manage")) != null and
+  .items[0].deep_link == ("/?work_item_id=" + $item)
+' "$workspace/actor-visible.json" >/dev/null
+projection_get "$neighbor_cookies" "$workspace/neighbor-empty.json" 200 neighbor-empty
+jq -e --arg subject "$neighbor_subject" '.subject_id == $subject and .items == []' "$workspace/neighbor-empty.json" >/dev/null
+
+echo '[5/7] 撤销可执行动作；旧凭证保留短窗口，刷新后工作项消失，恢复后重新出现'
+revoke_action "$actor_subject" production-work-item.stage.manage
+projection_get "$actor_cookies" "$workspace/actor-stale-after-revoke.json" 200 stale-after-action-revoke
+jq -e --arg item "$work_item_id" '.items[0].work_item_id == $item' "$workspace/actor-stale-after-revoke.json" >/dev/null
+authorize_app "$actor_cookies" "$actor_csrf" production-operations "$workspace/actor-refresh-after-action-revoke.out"
+projection_get "$actor_cookies" "$workspace/actor-empty-after-refresh.json" 200 fresh-after-action-revoke
+jq -e '.items == []' "$workspace/actor-empty-after-refresh.json" >/dev/null
+grant_action "$actor_subject" production-work-item.stage.manage
+authorize_app "$actor_cookies" "$actor_csrf" production-operations "$workspace/actor-refresh-after-action-restore.out"
+projection_get "$actor_cookies" "$workspace/actor-restored.json" 200 action-restored
+jq -e --arg item "$work_item_id" '.items[0].work_item_id == $item' "$workspace/actor-restored.json" >/dev/null
+
+echo '[6/7] 撤销投影读取；旧凭证短暂可读，刷新后端点 403'
+revoke_action "$actor_subject" production-work-item.work-items.read
+projection_get "$actor_cookies" "$workspace/actor-stale-after-work-items-revoke.json" 200 stale-after-read-revoke
+authorize_app "$actor_cookies" "$actor_csrf" production-operations "$workspace/actor-refresh-after-read-revoke.out"
+projection_get "$actor_cookies" "$workspace/actor-work-items-denied.body" 403 fresh-after-read-revoke
+grant_action "$actor_subject" production-work-item.work-items.read
+authorize_app "$actor_cookies" "$actor_csrf" production-operations "$workspace/actor-refresh-after-read-restore.out"
+
+echo '[7/7] Production 来源停机不拖垮 Workbench；恢复后事实摘要保持不变'
+compose stop production-operations >/dev/null
+production_stopped=true
+result=$(curl --silent --show-error --output "$workspace/workbench-source-down.html" --write-out '%{http_code} %{time_total}' \
+  --cookie "$actor_cookies" "$base_url/workbench/")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /workbench/ (production down)' 200 "$actual" "$duration"
+expect_status 200 "$actual" 'Workbench while Production is down'
+result=$(curl --silent --show-error --output "$workspace/production-down.body" --write-out '%{http_code} %{time_total}' \
+  --cookie "$actor_cookies" "$base_url/production/api/v1/work-items")
+actual=${result%% *}; duration=${result#* }
+record_http 'GET /production/api/v1/work-items (source down)' '502-or-503' "$actual" "$duration"
+case "$actual" in 502|503) : ;; *) echo "Production outage returned HTTP $actual, expected 502 or 503" >&2; exit 1 ;; esac
+compose start production-operations >/dev/null
+production_stopped=false
+wait_healthy production-operations
+projection_get "$actor_cookies" "$workspace/actor-recovered.json" 200 source-recovered
+jq -e --arg item "$work_item_id" '.items[0].work_item_id == $item' "$workspace/actor-recovered.json" >/dev/null
+capture_production_facts "$workspace/facts-after.raw" "$workspace/fact-counts-after.tsv" "$workspace/fact-digest-after.txt"
+cmp -s "$workspace/fact-counts-before.tsv" "$workspace/fact-counts-after.tsv" || { echo 'Production fact row counts changed during projection reads' >&2; exit 1; }
+cmp -s "$workspace/fact-digest-before.txt" "$workspace/fact-digest-after.txt" || { echo 'Production fact digest changed during projection reads' >&2; exit 1; }
+
+jq -n --arg actor_subject "$actor_subject" --arg neighbor_subject "$neighbor_subject" \
+  --arg person_id "$person_id" --arg project_id "$project_id" --arg assignment_id "$assignment_id" \
+  --arg work_item_id "$work_item_id" \
+  '{temporary_actor_subject_id:$actor_subject,temporary_neighbor_subject_id:$neighbor_subject,
+    person_id:$person_id,project_id:$project_id,assignment_id:$assignment_id,work_item_id:$work_item_id}' >"$workspace/ids.json"
+cat >"$workspace/result.md" <<EOF
+# D1 C8 Production personal work result
+
+- result: pass
+- formal fixture path: IAM → People → Project → Production
+- current Subject: exactly one owned WorkItemProjection
+- adjacent Subject: empty projection
+- executable-action revoke: old credential retained bounded visibility; refreshed credential returned an empty projection
+- projection-read revoke: old credential retained bounded visibility; refreshed credential returned HTTP 403
+- Production outage: Workbench remained HTTP 200; source failed independently and recovered
+- Production fact digest before/after: $(cat "$workspace/fact-digest-before.txt")
+- source business writes during reads and outage: none detected
+- temporary IAM accounts: grants revoked and accounts disabled during cleanup
+EOF
+printf 'D1 C8 Production personal work passed: item=%s facts=%s\n' \
+  "$work_item_id" "$(cat "$workspace/fact-digest-before.txt")"

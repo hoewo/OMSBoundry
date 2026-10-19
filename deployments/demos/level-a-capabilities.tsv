@@ -1,0 +1,6 @@
+contract-ledger	complete	Demo Validation 2 规定的 Contract 能力簇已有直接证据；本地 Evidence 明确为待迁移遗留实现
+money-flow-ledger	complete	Demo Validation 2 规定的 Money 能力簇已有直接证据；坏账、票据、真实退款与通用导入按既有审计结论延期
+people-groups	complete	Demo Validation 2 规定的 People 能力簇已有直接证据；IAM Subject 保持外部引用且不进入名册快照
+evidence-service	complete	Demo Validation 2 规定的 Local Provider 能力簇已有直接证据
+project-workspace	complete	Demo Validation 2 规定的 Project 能力簇已有直接证据
+design-operations	complete	Demo Validation 2 规定的 Design 能力簇已有直接证据

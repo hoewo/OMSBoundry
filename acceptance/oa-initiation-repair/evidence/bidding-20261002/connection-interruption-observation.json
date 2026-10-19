@@ -1,0 +1,27 @@
+{
+  "record_kind": "operator_observation_not_remote_completion_receipt",
+  "observed_at_utc": "2026-10-02T13:03:42Z",
+  "candidate_version": "v0.1.0-oa.20261002.8",
+  "apply_invoked": false,
+  "browser_fixture_created": false,
+  "user_project_business_writes": 0,
+  "restore_phase_outputs_received": [
+    "identity_access",
+    "evidence_service",
+    "project_workspace",
+    "people_groups",
+    "party_directory",
+    "contract_ledger"
+  ],
+  "received_database_outputs_facts_and_sequences_equal": true,
+  "restore_completion_receipt_received": false,
+  "restore_remote_terminal_state": "unknown",
+  "private_postgres_running_state": "unknown",
+  "new_ssh_connections": "TCP 22 Operation timed out",
+  "direct_public_workbench_http_status": 200,
+  "candidate_bidding_runtime_public_http_status": 404,
+  "cloud_console_session": "expired_login_required",
+  "ecs_restarted": false,
+  "security_group_changed": false,
+  "full_oa_accepted": false
+}

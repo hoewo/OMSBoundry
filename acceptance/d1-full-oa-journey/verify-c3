@@ -1,0 +1,496 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running isolated D1 stack}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c3"}
+c2_dir=${OA_JOURNEY_C2_DIR:-"$(dirname "$evidence_dir")/c2"}
+c1_dir=${OA_JOURNEY_C1_DIR:-"$(dirname "$evidence_dir")/c1"}
+c2_state=${OA_JOURNEY_C2_STATE:-"$c2_dir/state-after-c2.json"}
+c1_private_state=${OA_JOURNEY_C1_PRIVATE_STATE:-"$c1_dir/state-private-c1.json"}
+plan_state="$evidence_dir/state-plan-c3.json"
+party_state="$evidence_dir/state-partial-c3-after-party-cutover.json"
+fact_state="$evidence_dir/state-partial-c3-after-facts.json"
+fault_state="$evidence_dir/state-partial-c3-after-fault.json"
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -f "$c2_state" ] || { echo "C2 state not found: $c2_state" >&2; exit 2; }
+[ -f "$c1_private_state" ] || { echo "C1 private state not found: $c1_private_state" >&2; exit 2; }
+for command in curl jq openssl docker awk sed base64; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+json_request() {
+  method=$1; url=$2; cookie=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8
+  set -- --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --request "$method" --cookie "$cookie" --cookie-jar "$cookie"
+  [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"
+  if [ -n "$payload" ]; then set -- "$@" -H 'Content-Type: application/json' --data "$payload"; fi
+  result=$(curl "$@" "$url")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ] && [ -s "$output" ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  json_request GET "$base_url/auth/api/v1/csrf" "$cookie" '' '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  json_request POST "$base_url/auth/api/v1/login" "$cookie" "$csrf" "$payload" "$output" 200 "POST login $username"
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; output=$4
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/$app")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" 303 "$actual" "$duration"
+  [ "$actual" = 303 ] || { [ ! -s "$output" ] || cat "$output" >&2; }
+  expect_status 303 "$actual" "authorize $app"
+}
+
+hidden_value() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$2" | head -1; }
+
+form_hidden_value() {
+  action=$1; name=$2; file=$3
+  awk -v action="$action" -v name="$name" '
+    index($0,"<form") && index($0,"action=\"" action "\"") {inside=1}
+    inside && index($0,"name=\"" name "\"") {line=$0; sub(".*name=\"" name "\" value=\"","",line); sub("\".*","",line); print line; exit}
+    inside && index($0,"</form>") {inside=0}
+  ' "$file"
+}
+
+form_request() {
+  path=$1; output=$2; expected=$3; label=$4; shift 4
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ -s "$output.body" ]; then cat "$output.body" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+location_value() { sed -n "s/.*[?&]$1=\([^&[:space:]]*\).*/\1/p" "$2" | tr -d '\r' | head -1; }
+location_resource_id() { sed -n "s#^[Ll]ocation: .*\/$1\/\([0-9a-f-]*\).*#\1#p" "$2" | tr -d '\r' | head -1; }
+
+service_container() {
+  container=$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1")
+  [ -n "$container" ] || { echo "$1 container is missing from $project" >&2; exit 1; }
+  [ "$(printf '%s\n' "$container" | wc -l | tr -d ' ')" = 1 ] || { echo "$1 is not unique in $project" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+wait_healthy() {
+  service=$1; container=$(service_container "$service")
+  for _attempt in $(seq 1 90); do
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")
+    [ "$status" = healthy ] && return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+postgres_json() {
+  database=$1; sql=$2; container=$(service_container postgres)
+  docker exec "$container" sh -eu -c 'psql -U "$POSTGRES_USER" -d "$1" -At -c "$2"' sh "$database" "$sql"
+}
+
+run_money_party_operation() {
+  input=$1; operation=$2; container=$(service_container money-flow-ledger)
+  docker exec -i "$container" sh -eu -c "temporary=\$(mktemp); trap 'rm -f \"\$temporary\"' EXIT; cat >\"\$temporary\"; /app/ops $operation --input \"\$temporary\"" <"$input"
+}
+
+capture_counts() {
+  output=$1
+  party=$(postgres_json party_directory "SELECT jsonb_build_object('parties',(SELECT count(*) FROM parties),'revisions',(SELECT count(*) FROM party_revisions));")
+  money=$(postgres_json money_flow "SELECT jsonb_build_object('parties',(SELECT count(*) FROM parties),'party_commands',(SELECT count(*) FROM party_create_commands),'party_mappings',(SELECT count(*) FROM party_migration_mappings),'runtime_transitions',(SELECT count(*) FROM party_runtime_transitions),'obligations',(SELECT count(*) FROM obligations),'obligation_revisions',(SELECT count(*) FROM obligation_revisions),'obligation_create_commands',(SELECT count(*) FROM obligation_create_commands),'obligation_confirmation_commands',(SELECT count(*) FROM obligation_confirmation_commands),'transactions',(SELECT count(*) FROM cash_transactions),'transaction_commands',(SELECT count(*) FROM cash_transaction_create_commands),'allocations',(SELECT count(*) FROM allocations),'allocation_commands',(SELECT count(*) FROM allocation_apply_commands),'receipt_sets',(SELECT count(*) FROM receipt_sets),'receipt_set_items',(SELECT count(*) FROM receipt_set_items),'receipt_set_commands',(SELECT count(*) FROM receipt_set_confirm_commands));")
+  billing=$(postgres_json billing_invoice "SELECT jsonb_build_object('registrations',(SELECT count(*) FROM invoice_registrations),'revisions',(SELECT count(*) FROM invoice_registration_revisions),'commands',(SELECT count(*) FROM invoice_registration_commands),'audit_events',(SELECT count(*) FROM invoice_registration_audit_events));")
+  project_counts=$(postgres_json project_workspace "SELECT jsonb_build_object('projects',(SELECT count(*) FROM projects),'resource_links',(SELECT count(*) FROM project_resource_links));")
+  jq -n --argjson party "$party" --argjson money "$money" --argjson billing "$billing" --argjson project "$project_counts" \
+    '{party_directory:$party,money_flow_ledger:$money,billing_invoice:$billing,project_workspace:$project}' >"$output"
+}
+
+assert_summary() {
+  file=$1
+  jq -e --arg project "$project_id" --arg contract "$contract_id" --arg obligation "$obligation_id" \
+    --arg transaction "$transaction_id" --arg invoice "$invoice_id" '
+    .project_id == $project and .project_revision == 10 and (.segments | length) == 4 and
+    any(.segments[]; .resource_type == "contract" and .resource_id == $contract and .state == "available" and .source_revision == 1 and .linked_revision == 1) and
+    any(.segments[]; .resource_type == "obligation" and .resource_id == $obligation and .state == "available" and .source_revision == 1 and .linked_revision == 1 and .obligation.direction == "receivable" and (.obligation.effective_amount|tonumber) == 50000 and (.obligation.allocated_amount|tonumber) == 25000 and (.obligation.outstanding_amount|tonumber) == 25000) and
+    any(.segments[]; .resource_type == "transaction" and .resource_id == $transaction and .state == "available" and .source_revision == 1 and .linked_revision == 1 and .transaction.transaction_type == "receipt" and (.transaction.effective_amount|tonumber) == 25000 and (.transaction.allocated_amount|tonumber) == 25000 and (.transaction.unallocated_amount|tonumber) == 0) and
+    any(.segments[]; .resource_type == "invoice_registration" and .resource_id == $invoice and .state == "available" and .source_revision == 2 and .linked_revision == 2 and .invoice_registration.amount_minor == 3200000 and .invoice_registration.currency == "CNY")
+  ' "$file" >/dev/null || { echo 'C3 Project commercial summary is not the exact typed composition' >&2; cat "$file" >&2; exit 1; }
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-full-oa-c3.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+billing_stopped=false
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$billing_stopped" = true ]; then docker start "$(service_container billing-invoice)" >/dev/null 2>&1 || true; fi
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv ownership-before.json ownership-after.json ownership-delta.json \
+    state-plan-c3.json state-partial-c3-after-party-cutover.json state-partial-c3-after-facts.json \
+    state-partial-c3-after-fault.json state-after-c3.json c3-summary.md money-party-preflight-before.json \
+    money-party-preflight-after.json money-party-map.json money-party-cutover.json billing-history.json \
+    project-commercial-summary.json project-commercial-billing-outage.json project-commercial-recovered.json \
+    billing-redacted.json; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+tenant_id=$(env_value TENANT_ID)
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+[ -n "$tenant_id" ] && [ -n "$admin_password" ] || { echo 'TENANT_ID and BOOTSTRAP_ADMIN_PASSWORD are required' >&2; exit 2; }
+c2_sha=$(openssl dgst -sha256 "$c2_state" | awk '{print $2}')
+jq -e --arg tenant "$tenant_id" '
+  .phase == "C2" and .result == "pass" and .tenant_id == $tenant and
+  .project.status == "active" and .project.revision == 7 and .contract.status == "active" and
+  .contract.revision == 1 and .settlement.revision == 1
+' "$c2_state" >/dev/null || { echo 'C2 state is not the required passing continuous checkpoint' >&2; exit 1; }
+[ "$(stat -c '%a' "$c1_private_state" 2>/dev/null || stat -f '%Lp' "$c1_private_state")" = 600 ] || { echo 'C1 private state must have mode 0600' >&2; exit 1; }
+
+project_id=$(jq -er .project.id "$c2_state")
+contract_id=$(jq -er .contract.id "$c2_state")
+settlement_id=$(jq -er .settlement.id "$c2_state")
+client_party_id=$(jq -er .parties.client.id "$c2_state")
+client_party_revision=$(jq -er .parties.client.revision "$c2_state")
+supplier_party_id=$(jq -er .parties.supplier.id "$c2_state")
+supplier_party_revision=$(jq -er .parties.supplier.revision "$c2_state")
+
+echo '[1/10] Revalidate C2, login through IAM and capture the C3 ownership baseline'
+skip_bootstrap_grants=${OA_JOURNEY_SKIP_BOOTSTRAP_GRANTS:-false}
+case "$skip_bootstrap_grants" in true|false) ;; *) echo 'OA_JOURNEY_SKIP_BOOTSTRAP_GRANTS must be true or false' >&2; exit 2 ;; esac
+if [ "$skip_bootstrap_grants" != true ]; then D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null; fi
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+admin_subject=$(jq -er .principal.subject_id "$workspace/admin-login.json")
+admin_name=$(jq -er .principal.display_name "$workspace/admin-login.json")
+for app in party-directory money-flow-ledger billing-invoice project-workspace; do authorize_app "$admin_cookies" "$admin_csrf" "$app" "$workspace/admin-authorize-$app.out"; done
+json_request GET "$base_url/project/api/v1/projects/$project_id" "$admin_cookies" "$admin_csrf" '' "$workspace/project-before.json" 200 'GET C2 Project before C3'
+if [ -f "$fact_state" ]; then
+  jq -e --arg id "$project_id" '.project.id == $id and .project.revision == 10 and .project.status == "active"' "$workspace/project-before.json" >/dev/null
+else
+  jq -e --arg id "$project_id" '.project.id == $id and .project.revision == 7 and .project.status == "active"' "$workspace/project-before.json" >/dev/null
+fi
+json_request GET "$base_url/party/api/v1/parties/$client_party_id" "$admin_cookies" "$admin_csrf" '' "$workspace/client-party.json" 200 'GET C1 client Party before C3'
+json_request GET "$base_url/party/api/v1/parties/$supplier_party_id" "$admin_cookies" "$admin_csrf" '' "$workspace/supplier-party.json" 200 'GET C2 supplier Party before C3'
+if [ -f "$evidence_dir/ownership-before.json" ]; then cp "$evidence_dir/ownership-before.json" "$workspace/ownership-before.json"; else capture_counts "$workspace/ownership-before.json"; fi
+
+money_container=$(service_container money-flow-ledger)
+docker exec "$money_container" /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/money-party-preflight-before.json"
+
+if [ ! -f "$plan_state" ]; then
+  stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$(openssl rand -hex 3)"
+  : >"$workspace/legacy-plan.ndjson"
+  jq -c '.items[] | select((.usage.obligations + .usage.obligation_revisions + .usage.cash_transactions + .usage.internal_transfers) > 0)' "$workspace/money-party-preflight-before.json" | while IFS= read -r item; do
+    jq -cn --argjson item "$item" --arg create_command "$(new_uuid)" --arg map_command "$(new_uuid)" \
+      '{local_party_id:$item.local_party_id,local_snapshot_sha256:$item.local_snapshot_sha256,kind:$item.kind,legal_name:$item.legal_name,registration_identifier:$item.registration_identifier,target_create_command:$create_command,map_command:$map_command}' >>"$workspace/legacy-plan.ndjson"
+  done
+  mkdir -p "$evidence_dir"
+  jq -n --slurpfile legacy "$workspace/legacy-plan.ndjson" --arg c2_sha "$c2_sha" --arg tenant "$tenant_id" --arg project "$project_id" --arg stamp "$stamp" \
+    --arg owner_create "$(new_uuid)" --arg client_create "$(new_uuid)" --arg owner_map "$(new_uuid)" --arg client_map "$(new_uuid)" \
+    --arg migration_batch "$(new_uuid)" --arg cutover "$(new_uuid)" --arg billing_create "$(new_uuid)" --arg billing_correct "$(new_uuid)" \
+    --arg billing_stale "$(new_uuid)" --arg obligation_create "$(new_uuid)" --arg obligation_confirm "$(new_uuid)" \
+    --arg transaction_create "$(new_uuid)" --arg allocation_apply "$(new_uuid)" --arg receipt_set "$(new_uuid)" \
+    --arg obligation_link "$(new_uuid)" --arg transaction_link "$(new_uuid)" --arg invoice_link "$(new_uuid)" \
+    '{schema_version:"1",phase:"C3-plan",tenant_id:$tenant,project_id:$project,c2_state_sha256:$c2_sha,stamp:$stamp,legacy_migrations:$legacy,commands:{money_owner_create:$owner_create,money_client_create:$client_create,money_owner_map:$owner_map,money_client_map:$client_map,migration_batch:$migration_batch,money_cutover:$cutover,billing_create:$billing_create,billing_correct:$billing_correct,billing_stale:$billing_stale,obligation_create:$obligation_create,obligation_confirm:$obligation_confirm,transaction_create:$transaction_create,allocation_apply:$allocation_apply,receipt_set:$receipt_set,obligation_link:$obligation_link,transaction_link:$transaction_link,invoice_link:$invoice_link}}' >"$plan_state"
+fi
+cp "$plan_state" "$workspace/state-plan-c3.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c2 "$c2_sha" '.phase == "C3-plan" and .tenant_id == $tenant and .project_id == $project and .c2_state_sha256 == $c2' "$plan_state" >/dev/null || { echo 'C3 plan does not match C2' >&2; exit 1; }
+stamp=$(jq -er .stamp "$plan_state")
+
+if [ ! -f "$party_state" ]; then
+  echo '[2/10] Create two Money compatibility snapshots and explicit Directory targets for referenced legacy facts'
+  money_page="$workspace/money-parties.html"
+  json_request GET "$base_url/money/parties" "$admin_cookies" "$admin_csrf" '' "$money_page" 200 'GET Money Party form'
+  money_csrf=$(hidden_value csrf_token "$money_page")
+  create_money_party() {
+    slug=$1; command_path=$2; source_file=$3
+    command_id=$(jq -er "$command_path" "$plan_state")
+    name=$(jq -er .legal_name "$source_file")
+    registration=$(jq -er .registration_identifier "$source_file")
+    form_request /money/parties "$workspace/money-$slug-create" 303 "POST Money $slug Party compatibility snapshot" \
+      --data-urlencode "csrf_token=$money_csrf" --data-urlencode "command_id=$command_id" --data-urlencode kind=organization \
+      --data-urlencode "legal_name=$name" --data-urlencode "registration_identifier=$registration"
+    location_value party_id "$workspace/money-$slug-create.headers"
+  }
+  money_owner_id=$(create_money_party owner '.commands.money_owner_create' "$workspace/supplier-party.json")
+  money_client_id=$(create_money_party client '.commands.money_client_create' "$workspace/client-party.json")
+  [ -n "$money_owner_id" ] && [ -n "$money_client_id" ] || { echo 'Money compatibility Party IDs are missing' >&2; exit 1; }
+
+  : >"$workspace/legacy-targets.ndjson"
+  jq -r '.legacy_migrations[] | @base64' "$plan_state" | while IFS= read -r encoded; do
+    item=$(printf '%s' "$encoded" | base64 -d)
+    local_id=$(printf '%s' "$item" | jq -er .local_party_id)
+    payload=$(printf '%s' "$item" | jq -c --arg stamp "$stamp" '{command_id:.target_create_command,kind:.kind,legal_name:(.legal_name+"（C3 显式迁移）"),registration_identifier:.registration_identifier}')
+    json_request POST "$base_url/party/api/v1/parties" "$admin_cookies" "$admin_csrf" "$payload" "$workspace/legacy-target-$local_id.json" 201 "POST Directory migration target $local_id"
+    jq -cn --argjson plan "$item" --slurpfile target "$workspace/legacy-target-$local_id.json" '{plan:$plan,target:{id:$target[0].id,revision:$target[0].revision}}' >>"$workspace/legacy-targets.ndjson"
+  done
+
+  echo '[3/10] Map every referenced Money Party and cut over read authority to Party Directory'
+  docker exec "$money_container" /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/money-party-preflight-after.json"
+  owner_sha=$(jq -er --arg id "$money_owner_id" '.items[] | select(.local_party_id == $id) | .local_snapshot_sha256' "$workspace/money-party-preflight-after.json")
+  client_sha=$(jq -er --arg id "$money_client_id" '.items[] | select(.local_party_id == $id) | .local_snapshot_sha256' "$workspace/money-party-preflight-after.json")
+  jq -s '[.[] | {command_id:.plan.map_command,local_party_id:.plan.local_party_id,local_snapshot_sha256:.plan.local_snapshot_sha256,decision:"create_directory_party",target_party_id:.target.id,target_party_revision:.target.revision,reason:"C3 explicit review of a pre-existing referenced Money Party"}]' "$workspace/legacy-targets.ndjson" >"$workspace/legacy-mappings.json"
+  jq -n --slurpfile legacy "$workspace/legacy-mappings.json" --arg tenant "$tenant_id" --arg batch "$(jq -er .commands.migration_batch "$plan_state")" \
+    --arg reviewer "$admin_subject" --arg reviewer_name "$admin_name" --arg owner_command "$(jq -er .commands.money_owner_map "$plan_state")" \
+    --arg owner "$money_owner_id" --arg owner_sha "$owner_sha" --arg owner_target "$supplier_party_id" --argjson owner_revision "$supplier_party_revision" \
+    --arg client_command "$(jq -er .commands.money_client_map "$plan_state")" --arg client "$money_client_id" --arg client_sha "$client_sha" \
+    --arg client_target "$client_party_id" --argjson client_revision "$client_party_revision" \
+    '{format:"omsbizfoundry.money-flow-party-mapping-review/v1",tenant_id:$tenant,migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,mappings:($legacy[0]+[{command_id:$owner_command,local_party_id:$owner,local_snapshot_sha256:$owner_sha,decision:"map_existing_directory_party",target_party_id:$owner_target,target_party_revision:$owner_revision,reason:"C3 supplier snapshot maps to the exact C2 Directory Party"},{command_id:$client_command,local_party_id:$client,local_snapshot_sha256:$client_sha,decision:"map_existing_directory_party",target_party_id:$client_target,target_party_revision:$client_revision,reason:"C3 client snapshot maps to the exact C1 Directory Party"}])}' >"$workspace/money-party-map-request.json"
+  run_money_party_operation "$workspace/money-party-map-request.json" party-migration-map >"$workspace/money-party-map.json"
+  mapping_count=$(jq '.mappings|length' "$workspace/money-party-map-request.json")
+  jq -e --argjson count "$mapping_count" '(.recorded + .replayed) == $count' "$workspace/money-party-map.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg command "$(jq -er .commands.money_cutover "$plan_state")" --arg batch "$(jq -er .commands.migration_batch "$plan_state")" \
+    --arg reviewer "$admin_subject" --arg reviewer_name "$admin_name" '{format:"omsbizfoundry.money-flow-party-runtime-transition/v1",tenant_id:$tenant,command_id:$command,action:"cutover",migration_batch_id:$batch,reviewed_by_subject_id:$reviewer,reviewed_by_display_name:$reviewer_name,reason:"C3 all pre-existing referenced and journey Party snapshots have explicit reviewed Directory mappings"}' >"$workspace/money-party-cutover-request.json"
+  run_money_party_operation "$workspace/money-party-cutover-request.json" party-runtime-transition >"$workspace/money-party-cutover.json"
+  jq -e --argjson mapped "$mapping_count" '.state.mode == "directory" and .mapped_party_count == $mapped and .referenced_party_count == 2' "$workspace/money-party-cutover.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c2 "$c2_sha" --arg project "$project_id" --arg owner "$money_owner_id" --arg client "$money_client_id" \
+    --arg batch "$(jq -er .commands.migration_batch "$plan_state")" --argjson mapped "$mapping_count" \
+    '{schema_version:"1",phase:"C3-partial-after-party-cutover",result:"resumable",tenant_id:$tenant,c2_state_sha256:$c2,project_id:$project,money_parties:{owner_local_id:$owner,client_local_id:$client},migration_batch_id:$batch,mapped_party_count:$mapped,runtime_mode:"directory"}' >"$party_state"
+fi
+cp "$party_state" "$workspace/state-partial-c3-after-party-cutover.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c2 "$c2_sha" '.phase == "C3-partial-after-party-cutover" and .tenant_id == $tenant and .project_id == $project and .c2_state_sha256 == $c2 and .runtime_mode == "directory"' "$party_state" >/dev/null
+money_owner_id=$(jq -er .money_parties.owner_local_id "$party_state")
+money_client_id=$(jq -er .money_parties.client_local_id "$party_state")
+
+if [ ! -f "$fact_state" ]; then
+  echo '[4/10] Record and append-correct Billing against exact Project, Contract, Settlement and Party snapshots'
+  billing_payload=$(jq -cn --arg command "$(jq -er .commands.billing_create "$plan_state")" --arg issued "$(date -u '+%Y-%m-%d')" \
+    --arg issuer "$supplier_party_id" --argjson issuer_revision "$supplier_party_revision" --arg recipient "$client_party_id" --argjson recipient_revision "$client_party_revision" \
+    --arg project "$project_id" --arg contract "$contract_id" --arg settlement "$settlement_id" \
+    '{command_id:$command,issued_on:$issued,amount_minor:3000000,currency:"CNY",issuer_party_ref:{id:$issuer,revision:$issuer_revision},recipient_party_ref:{id:$recipient,revision:$recipient_revision},source_refs:[{kind:"project",resource_id:$project,source_revision:7},{kind:"contract",resource_id:$contract,source_revision:1},{kind:"settlement",resource_id:$settlement,source_revision:1}],note:"C3 initial invoice registration"}')
+  json_request POST "$base_url/billing/api/v1/invoice-registrations" "$admin_cookies" "$admin_csrf" "$billing_payload" "$workspace/billing-created.json" 201 'POST Billing invoice registration'
+  invoice_id=$(jq -er .id "$workspace/billing-created.json")
+  correction=$(jq -cn --arg command "$(jq -er .commands.billing_correct "$plan_state")" '{command_id:$command,expected_revision:1,reason:"C3 verified invoice amount correction",patch:{amount_minor:3200000,note:"C3 corrected invoice registration"}}')
+  json_request POST "$base_url/billing/api/v1/invoice-registrations/$invoice_id/corrections" "$admin_cookies" "$admin_csrf" "$correction" "$workspace/billing-corrected.json" 200 'POST Billing append correction'
+  jq -e '.revision == 2 and .amount_visible == true and .amount_minor == 3200000 and .currency == "CNY"' "$workspace/billing-corrected.json" >/dev/null
+  stale=$(jq -cn --arg command "$(jq -er .commands.billing_stale "$plan_state")" '{command_id:$command,expected_revision:1,reason:"C3 stale correction must fail",patch:{note:"must not commit"}}')
+  json_request POST "$base_url/billing/api/v1/invoice-registrations/$invoice_id/corrections" "$admin_cookies" "$admin_csrf" "$stale" "$workspace/billing-stale.json" 409 'POST stale Billing correction'
+  json_request GET "$base_url/billing/api/v1/invoice-registrations/$invoice_id/history" "$admin_cookies" "$admin_csrf" '' "$workspace/billing-history.json" 200 'GET Billing immutable history'
+  jq -e '(.items|length)==2 and ([.items[].revision]|sort)==[1,2] and ([.items[].event_kind]|sort)==["details_corrected","recorded"]' "$workspace/billing-history.json" >/dev/null
+
+  echo '[5/10] Confirm receivable, receipt, allocation and Receipt Set in Money after Party cutover'
+  json_request GET "$base_url/money/obligations" "$admin_cookies" "$admin_csrf" '' "$workspace/money-obligations.html" 200 'GET Money obligation form'
+  money_csrf=$(hidden_value csrf_token "$workspace/money-obligations.html")
+  due_on=$(date -u -v+30d '+%Y-%m-%d' 2>/dev/null || date -u -d '+30 days' '+%Y-%m-%d')
+  form_request /money/obligations "$workspace/obligation-create" 303 'POST Money receivable draft' \
+    --data-urlencode "csrf_token=$money_csrf" --data-urlencode "command_id=$(jq -er .commands.obligation_create "$plan_state")" \
+    --data-urlencode direction=receivable --data-urlencode "ledger_owner_party_id=$money_owner_id" --data-urlencode "counterparty_party_id=$money_client_id" \
+    --data-urlencode "title=连续旅程阶段应收 $stamp" --data-urlencode original_amount=50000.00 --data-urlencode currency=CNY \
+    --data-urlencode "due_on=$due_on" --data-urlencode "manual_source_reference=Settlement $settlement_id revision 1"
+  obligation_id=$(location_resource_id obligations "$workspace/obligation-create.headers")
+  [ -n "$obligation_id" ] || { echo 'Money obligation ID is missing' >&2; exit 1; }
+  json_request GET "$base_url/money/obligations/$obligation_id" "$admin_cookies" "$admin_csrf" '' "$workspace/obligation-detail.html" 200 'GET Money obligation draft'
+  expected_draft=$(form_hidden_value "/money/obligations/$obligation_id/confirm" expected_draft_version "$workspace/obligation-detail.html")
+  confirm_csrf=$(form_hidden_value "/money/obligations/$obligation_id/confirm" csrf_token "$workspace/obligation-detail.html")
+  form_request "/money/obligations/$obligation_id/confirm" "$workspace/obligation-confirm" 303 'POST Money receivable confirmation' \
+    --data-urlencode "csrf_token=$confirm_csrf" --data-urlencode "command_id=$(jq -er .commands.obligation_confirm "$plan_state")" --data-urlencode "expected_draft_version=$expected_draft"
+
+  json_request GET "$base_url/money/cash-transactions" "$admin_cookies" "$admin_csrf" '' "$workspace/money-transactions.html" 200 'GET Money transaction form'
+  transaction_csrf=$(hidden_value csrf_token "$workspace/money-transactions.html")
+  form_request /money/cash-transactions "$workspace/transaction-create" 303 'POST Money receipt' \
+    --data-urlencode "csrf_token=$transaction_csrf" --data-urlencode "command_id=$(jq -er .commands.transaction_create "$plan_state")" \
+    --data-urlencode type=receipt --data-urlencode "ledger_owner_party_id=$money_owner_id" --data-urlencode "counterparty_party_id=$money_client_id" \
+    --data-urlencode "description=连续旅程首期回款 $stamp" --data-urlencode amount=25000.00 --data-urlencode currency=CNY \
+    --data-urlencode "occurred_on=$(date -u '+%Y-%m-%d')" --data-urlencode account_reference=OA-C3-CNY \
+    --data-urlencode "manual_source_reference=Settlement $settlement_id revision 1" --data-urlencode "external_transaction_reference=OA-C3-$stamp"
+  transaction_id=$(location_resource_id cash-transactions "$workspace/transaction-create.headers")
+  [ -n "$transaction_id" ] || { echo 'Money transaction ID is missing' >&2; exit 1; }
+
+  json_request GET "$base_url/money/allocations" "$admin_cookies" "$admin_csrf" '' "$workspace/money-allocations.html" 200 'GET Money allocation form'
+  allocation_csrf=$(hidden_value csrf_token "$workspace/money-allocations.html")
+  allocation_command=$(jq -er .commands.allocation_apply "$plan_state")
+  form_request /money/allocations "$workspace/allocation-create" 303 'POST Money allocation' \
+    --data-urlencode "csrf_token=$allocation_csrf" --data-urlencode "command_id=$allocation_command" \
+    --data-urlencode "cash_transaction_id=$transaction_id" --data-urlencode "obligation_selection=$obligation_id:1" \
+    --data-urlencode amount=25000.00 --data-urlencode "manual_source_reference=C3 bank receipt allocation"
+  allocation_id=$(location_resource_id allocations "$workspace/allocation-create.headers")
+  form_request /money/allocations "$workspace/allocation-replay" 303 'REPLAY same Money allocation command' \
+    --data-urlencode "csrf_token=$allocation_csrf" --data-urlencode "command_id=$allocation_command" \
+    --data-urlencode "cash_transaction_id=$transaction_id" --data-urlencode "obligation_selection=$obligation_id:1" \
+    --data-urlencode amount=25000.00 --data-urlencode "manual_source_reference=C3 bank receipt allocation"
+  replayed_allocation=$(location_resource_id allocations "$workspace/allocation-replay.headers")
+  [ -n "$allocation_id" ] && [ "$replayed_allocation" = "$allocation_id" ] || { echo 'Money allocation replay changed business identity' >&2; exit 1; }
+
+  receipt_payload=$(jq -cn --arg command "$(jq -er .commands.receipt_set "$plan_state")" --arg project "$project_id" --arg allocation "$allocation_id" '{command_id:$command,project_id:$project,allocation_ids:[$allocation]}')
+  json_request POST "$base_url/money/api/v1/receipt-sets" "$admin_cookies" "$admin_csrf" "$receipt_payload" "$workspace/receipt-set.json" 201 'POST Money Receipt Set'
+  json_request POST "$base_url/money/api/v1/receipt-sets" "$admin_cookies" "$admin_csrf" "$receipt_payload" "$workspace/receipt-set-replay.json" 200 'REPLAY Money Receipt Set'
+  receipt_set_id=$(jq -er .receipt_set.id "$workspace/receipt-set.json")
+  jq -e --arg id "$receipt_set_id" '.replayed == true and .receipt_set.id == $id and .receipt_set.revision == 1 and .receipt_set.total_amount_minor == 2500000' "$workspace/receipt-set-replay.json" >/dev/null
+  jq -n --arg tenant "$tenant_id" --arg c2 "$c2_sha" --arg project "$project_id" --arg invoice "$invoice_id" \
+    --arg obligation "$obligation_id" --arg transaction "$transaction_id" --arg allocation "$allocation_id" --arg receipt "$receipt_set_id" \
+    '{schema_version:"1",phase:"C3-partial-after-facts",result:"resumable",tenant_id:$tenant,c2_state_sha256:$c2,project_id:$project,invoice:{id:$invoice,revision:2,amount_minor:3200000},obligation:{id:$obligation,revision:1},cash_transaction:{id:$transaction,revision:1},allocation:{id:$allocation,revision:1},receipt_set:{id:$receipt,revision:1,total_amount_minor:2500000}}' >"$fact_state"
+fi
+cp "$fact_state" "$workspace/state-partial-c3-after-facts.json"
+jq -e --arg tenant "$tenant_id" --arg project "$project_id" --arg c2 "$c2_sha" '.phase == "C3-partial-after-facts" and .tenant_id == $tenant and .project_id == $project and .c2_state_sha256 == $c2 and .invoice.revision == 2 and .receipt_set.revision == 1' "$fact_state" >/dev/null
+invoice_id=$(jq -er .invoice.id "$fact_state")
+obligation_id=$(jq -er .obligation.id "$fact_state")
+transaction_id=$(jq -er .cash_transaction.id "$fact_state")
+allocation_id=$(jq -er .allocation.id "$fact_state")
+receipt_set_id=$(jq -er .receipt_set.id "$fact_state")
+
+echo '[6/10] Prove Billing amount denial is redaction, never a fabricated zero'
+participant_subject=$(jq -er '.actors[]|select(.role=="participant")|.subject_id' "$c1_private_state")
+participant_username=$(jq -er '.actors[]|select(.role=="participant")|.username' "$c1_private_state")
+participant_password=$(jq -er '.actors[]|select(.role=="participant")|.password' "$c1_private_state")
+billing_read_grants=$(postgres_json identity_access "SELECT count(*) FROM capability_grants WHERE subject_id='$participant_subject' AND audience='billing-invoice' AND action='billing-invoice.read' AND revoked_at IS NULL;")
+case "$billing_read_grants" in
+  0)
+    grant_payload=$(jq -cn --arg subject "$participant_subject" '{subject_id:$subject,audience:"billing-invoice",action:"billing-invoice.read"}')
+    json_request POST "$base_url/auth/api/v1/admin/grants" "$admin_cookies" "$admin_csrf" "$grant_payload" /dev/null 204 'GRANT Billing read without amount'
+    ;;
+  1) ;;
+  *) echo "participant has an unexpected number of active Billing read grants: $billing_read_grants" >&2; exit 1 ;;
+esac
+participant_cookies="$workspace/participant.cookies"
+participant_csrf=$(fetch_csrf "$participant_cookies" "$workspace/participant-csrf.json")
+login "$participant_cookies" "$participant_csrf" "$participant_username" "$participant_password" "$workspace/participant-login.json"
+authorize_app "$participant_cookies" "$participant_csrf" billing-invoice "$workspace/participant-authorize-billing.out"
+json_request GET "$base_url/billing/api/v1/invoice-registrations/$invoice_id" "$participant_cookies" "$participant_csrf" '' "$workspace/billing-redacted.json" 200 'GET Billing without amount capability'
+jq -e '.amount_visible == false and .amount_minor == null and .currency == null and .revision == 2 and (.allowed_actions|sort)==["read"]' "$workspace/billing-redacted.json" >/dev/null || { echo 'Billing amount was leaked or replaced with a fake zero' >&2; exit 1; }
+
+echo '[7/10] Link only C3 source identities to the same Project and compose typed commercial facts'
+link_resource() {
+  expected=$1; service=$2; type=$3; id=$4; revision=$5; relation=$6; command_path=$7; output=$8
+  payload=$(jq -cn --arg command "$(jq -er "$command_path" "$plan_state")" --argjson expected "$expected" --arg service "$service" --arg type "$type" --arg id "$id" --argjson revision "$revision" --arg relation "$relation" '{command_id:$command,expected_revision:$expected,operation:"link",target_service:$service,resource_type:$type,resource_id:$id,source_revision:$revision,relation_key:$relation,note:"C3 exact source reference"}')
+  json_request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$admin_csrf" "$payload" "$output" 200 "POST Project $type link"
+}
+link_resource 7 money-flow-ledger obligation "$obligation_id" 1 receivable '.commands.obligation_link' "$workspace/project-obligation-link.json"
+link_resource 8 money-flow-ledger transaction "$transaction_id" 1 receipt '.commands.transaction_link' "$workspace/project-transaction-link.json"
+link_resource 9 billing-invoice invoice_registration "$invoice_id" 2 invoice-registration '.commands.invoice_link' "$workspace/project-invoice-link.json"
+json_request GET "$base_url/project/api/v1/projects/$project_id/commercial-summary" "$admin_cookies" "$admin_csrf" '' "$workspace/project-commercial-summary.json" 200 'GET Project C3 commercial summary'
+assert_summary "$workspace/project-commercial-summary.json"
+
+echo '[8/10] Stop only Billing, prove segment-only degradation, recover and re-read'
+if [ ! -f "$fault_state" ]; then
+  billing_container=$(service_container billing-invoice)
+  docker stop "$billing_container" >/dev/null
+  billing_stopped=true
+  json_request GET "$base_url/project/api/v1/projects/$project_id/commercial-summary" "$admin_cookies" "$admin_csrf" '' "$workspace/project-commercial-billing-outage.json" 200 'GET commercial summary with Billing down'
+  jq -e '
+    any(.segments[];.resource_type=="invoice_registration" and .state=="unavailable") and
+    all(.segments[]|select(.resource_type!="invoice_registration");.state=="available")
+  ' "$workspace/project-commercial-billing-outage.json" >/dev/null || { echo 'Billing outage degraded more than the Billing segment' >&2; exit 1; }
+  docker start "$billing_container" >/dev/null
+  wait_healthy billing-invoice
+  billing_stopped=false
+  json_request GET "$base_url/project/api/v1/projects/$project_id/commercial-summary" "$admin_cookies" "$admin_csrf" '' "$workspace/project-commercial-recovered.json" 200 'GET commercial summary after Billing recovery'
+  assert_summary "$workspace/project-commercial-recovered.json"
+  jq -n --arg tenant "$tenant_id" --arg project "$project_id" --arg invoice "$invoice_id" '{schema_version:"1",phase:"C3-partial-after-fault",result:"pass",tenant_id:$tenant,project_id:$project,stopped_source:"billing-invoice",unavailable_resource_id:$invoice,recovered:true}' >"$fault_state"
+else
+  json_request GET "$base_url/project/api/v1/projects/$project_id/commercial-summary" "$admin_cookies" "$admin_csrf" '' "$workspace/project-commercial-recovered.json" 200 'REVALIDATE commercial summary after recorded fault'
+  assert_summary "$workspace/project-commercial-recovered.json"
+fi
+cp "$fault_state" "$workspace/state-partial-c3-after-fault.json"
+
+echo '[9/10] Verify exact workload credentials and application-owned row deltas'
+for expectation in \
+  "contract-ledger|contract-ledger.reference.read|contract|$contract_id" \
+  "money-flow-ledger|money-flow-ledger.reference.read|obligation|$obligation_id" \
+  "money-flow-ledger|money-flow-ledger.reference.read|transaction|$transaction_id" \
+  "billing-invoice|billing-invoice.reference.read|invoice_registration|$invoice_id"
+do
+  IFS='|' read -r audience action type id <<EOF
+$expectation
+EOF
+  count=$(postgres_json identity_access "SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='$audience' AND details->'actions' @> '[\"$action\"]'::jsonb AND details->'scope'->'resources' @> '[{\"type\":\"$type\",\"id\":\"$id\"}]'::jsonb;")
+  [ "$count" -ge 1 ] || { echo "missing exact workload credential audit: $expectation" >&2; exit 1; }
+done
+
+capture_counts "$workspace/ownership-after.json"
+jq -n --slurpfile before "$workspace/ownership-before.json" --slurpfile after "$workspace/ownership-after.json" '
+  $after[0] as $a | $before[0] as $b |
+  reduce ($a|keys[]) as $app ({};.[$app]=reduce ($a[$app]|keys[]) as $key ({};.[$key]=($a[$app][$key]-$b[$app][$key])))
+' >"$workspace/ownership-delta.json"
+legacy_count=$(jq '.legacy_migrations|length' "$plan_state")
+mapping_count=$(jq -er .mapped_party_count "$party_state")
+jq -e --argjson legacy "$legacy_count" --argjson mappings "$mapping_count" '
+  .party_directory.parties == $legacy and .party_directory.revisions == $legacy and
+  .money_flow_ledger.parties == 2 and .money_flow_ledger.party_commands == 2 and
+  .money_flow_ledger.party_mappings == $mappings and .money_flow_ledger.runtime_transitions == 1 and
+  .money_flow_ledger.obligations == 1 and .money_flow_ledger.obligation_revisions == 1 and
+  .money_flow_ledger.obligation_create_commands == 1 and .money_flow_ledger.obligation_confirmation_commands == 1 and
+  .money_flow_ledger.transactions == 1 and .money_flow_ledger.transaction_commands == 1 and
+  .money_flow_ledger.allocations == 1 and .money_flow_ledger.allocation_commands == 1 and
+  .money_flow_ledger.receipt_sets == 1 and .money_flow_ledger.receipt_set_items == 1 and .money_flow_ledger.receipt_set_commands == 1 and
+  .billing_invoice.registrations == 1 and .billing_invoice.revisions == 2 and .billing_invoice.commands == 2 and .billing_invoice.audit_events == 2 and
+  .project_workspace.projects == 0 and .project_workspace.resource_links == 3
+' "$workspace/ownership-delta.json" >/dev/null || { echo 'C3 ownership delta is unexpected' >&2; cat "$workspace/ownership-delta.json" >&2; exit 1; }
+
+echo '[10/10] Persist the continuous C3 state and leave the isolated stack healthy'
+running=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.ID}}' | wc -l | tr -d ' ')
+healthy=$(docker ps --filter "label=com.docker.compose.project=$project" --format '{{.Status}}' | awk '/healthy/{count++} END{print count+0}')
+[ "$running" = 17 ] && [ "$healthy" = 17 ] || { echo "isolated stack ended $running/$healthy, expected 17/17" >&2; exit 1; }
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --arg captured "$captured_at" --arg tenant "$tenant_id" --arg c2 "$c2_sha" --arg project "$project_id" \
+  --arg invoice "$invoice_id" --arg obligation "$obligation_id" --arg transaction "$transaction_id" --arg allocation "$allocation_id" --arg receipt "$receipt_set_id" \
+  --arg owner "$supplier_party_id" --arg client "$client_party_id" --slurpfile delta "$workspace/ownership-delta.json" \
+  '{schema_version:"1",scenario_id:"reference-oa-full-suite-continuous-v1",phase:"C3",result:"pass",captured_at:$captured,tenant_id:$tenant,c2_state_sha256:$c2,project:{id:$project,revision:10,status:"active"},parties:{ledger_owner:{id:$owner,revision:1},counterparty:{id:$client,revision:1}},invoice:{id:$invoice,revision:2,amount_minor:3200000,currency:"CNY"},obligation:{id:$obligation,revision:1,amount:"50000.000000",allocated:"25000.000000",outstanding:"25000.000000"},cash_transaction:{id:$transaction,revision:1,amount:"25000.000000",allocated:"25000.000000"},allocation:{id:$allocation,revision:1},receipt_set:{id:$receipt,revision:1,total_amount_minor:2500000},checks:{same_tenant_and_project:"pass",billing_append_correction:"pass",stale_billing_revision_zero_write:"pass",money_command_replay_single_commit:"pass",amount_without_capability_redacted_not_zero:"pass",money_party_directory_cutover:"pass",source_outage_segment_only:"pass",exact_workload_credentials:"pass",ownership_delta_exact:"pass",isolated_stack_health:"17/17"},ownership_delta:$delta[0]}' >"$workspace/state-after-c3.json"
+
+assertions=$(awk -F '\t' 'NR>1{count++} END{print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3{count++} END{print count+0}' "$http_evidence")
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat >"$workspace/c3-summary.md" <<EOF
+# C3 continuous journey result
+
+- Result: pass
+- Tenant: \`$tenant_id\`
+- Project: \`$project_id\` revision 10; no second Project was created
+- Invoice: \`$invoice_id\` revision 2 after append-only correction
+- Receivable: \`$obligation_id\` revision 1; receipt \`$transaction_id\`; allocation \`$allocation_id\`
+- Receipt Set: \`$receipt_set_id\` revision 1; identical command replay kept one set
+- Party authority: Money reference projection cut over to exact Party Directory identities after explicit legacy review
+- Redaction: Billing read without amount capability returned null amount/currency, never zero
+- Fault: only Billing stopped; only invoice segment became unavailable; recovery returned the exact four segments
+- HTTP assertions: $assertions; mismatches: 0
+- Isolated stack health: 17/17
+EOF
+mkdir -p "$evidence_dir"
+for artifact in http-evidence.tsv ownership-before.json ownership-after.json ownership-delta.json state-after-c3.json c3-summary.md \
+  money-party-preflight-before.json money-party-preflight-after.json money-party-map.json money-party-cutover.json billing-history.json \
+  project-commercial-summary.json project-commercial-billing-outage.json project-commercial-recovered.json billing-redacted.json; do
+  [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+done
+echo "PASS C3: tenant=$tenant_id project=$project_id@10 invoice=$invoice_id@2 obligation=$obligation_id@1 receipt_set=$receipt_set_id@1"

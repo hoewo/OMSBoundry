@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omsbizfoundry.local/contracts/access/v1/capability-manifest.schema.json",
+  "title": "OMSBizFoundry Capability Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "application_id", "application_version", "audience", "capabilities"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "application_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "application_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+    "audience": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "capability_namespace": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "capability_namespaces": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "risk", "resource_types"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "risk": { "enum": ["read", "write", "privileged"] },
+          "resource_types": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+          }
+        }
+      }
+    }
+  },
+  "not": { "required": ["capability_namespace", "capability_namespaces"] }
+}

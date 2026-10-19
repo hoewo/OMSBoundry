@@ -1,0 +1,40 @@
+# 查询 Evidence File Version 列表 API 契约
+metadata: {path: "tech/_shared/contracts/evidence-file-list.yaml", domain: "evidence-service", owner: "Evidence Service", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/v1/files", summary: "按租户读取最近创建的文件版本", auth_required: true, audience: "evidence-service", capability: "evidence-service.view"}
+request:
+  query_params:
+    - {name: limit, type: integer, minimum: 1, maximum: 100, required: false, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [file_id, version, status, file_name, size_bytes, media_type, sha256, created_at]
+            properties:
+              file_id: {type: string, format: uuid}
+              version: {type: integer, minimum: 1}
+              status: {type: string, enum: [available]}
+              file_name: {type: string, minLength: 1}
+              size_bytes: {type: integer, minimum: 0}
+              media_type: {type: string}
+              sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+              created_at: {type: string, format: date-time}
+  errors:
+    - {status: 422, code: invalid_request, retryable: false}
+    - {status: 401, code: credential_required, retryable: false}
+    - {status: 403, code: capability_denied, retryable: false}
+business_logic:
+  flow:
+    - "只返回访问凭证 tenant 内已经完成校验的不可变 File Version。"
+    - "按 created_at 与 file_id 倒序返回。"
+    - "不返回 bucket、object key、STS、签名 URL 或其他存储实现细节。"
+  state_transitions: []
+  side_effects: []

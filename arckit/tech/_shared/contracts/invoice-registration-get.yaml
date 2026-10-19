@@ -1,0 +1,15 @@
+# 获取已开票登记 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-get.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/invoice-registrations/{invoice_registration_id}", summary: "读取登记当前投影和动态允许动作", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.read"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  credential_scope: {kinds: [tenant, project, invoice_registration], resource_id_from: invoice_registration_id}
+responses:
+  success: {status: 200, schema: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: INVOICE_REGISTRATION_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["复验 tenant 与 scope。", "按金额和文件权限收敛字段及 allowed_actions；无 amount.read 时 amount_visible=false 且金额和币种均为 null。", "不在线读取来源来改写历史快照。"]

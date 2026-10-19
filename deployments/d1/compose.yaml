@@ -1,0 +1,1161 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-oms_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: postgres
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?set IDENTITY_DB_PASSWORD}
+      CONTRACT_DB_PASSWORD: ${CONTRACT_DB_PASSWORD:?set CONTRACT_DB_PASSWORD}
+      MONEY_DB_PASSWORD: ${MONEY_DB_PASSWORD:?set MONEY_DB_PASSWORD}
+      PEOPLE_DB_PASSWORD: ${PEOPLE_DB_PASSWORD:?set PEOPLE_DB_PASSWORD}
+      PARTY_DB_PASSWORD: ${PARTY_DB_PASSWORD:?set PARTY_DB_PASSWORD}
+      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?set PROJECT_DB_PASSWORD}
+      EVIDENCE_DB_PASSWORD: ${EVIDENCE_DB_PASSWORD:?set EVIDENCE_DB_PASSWORD}
+      BUSINESS_ENGAGEMENT_DB_PASSWORD: ${BUSINESS_ENGAGEMENT_DB_PASSWORD:?set BUSINESS_ENGAGEMENT_DB_PASSWORD}
+      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD:?set BILLING_DB_PASSWORD}
+      PRODUCTION_DB_PASSWORD: ${PRODUCTION_DB_PASSWORD:?set PRODUCTION_DB_PASSWORD}
+      APPROVAL_AUDIT_RESULTS_DB_PASSWORD: ${APPROVAL_AUDIT_RESULTS_DB_PASSWORD:?set APPROVAL_AUDIT_RESULTS_DB_PASSWORD}
+      COST_OUTSOURCING_DB_PASSWORD: ${COST_OUTSOURCING_DB_PASSWORD:?set COST_OUTSOURCING_DB_PASSWORD}
+      BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/01-create-app-databases.sh:/docker-entrypoint-initdb.d/01-create-app-databases.sh:ro
+    networks: [data]
+    restart: unless-stopped
+
+  postgres-provision:
+    image: postgres:18.6-alpine
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-oms_admin}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?set IDENTITY_DB_PASSWORD}
+      CONTRACT_DB_PASSWORD: ${CONTRACT_DB_PASSWORD:?set CONTRACT_DB_PASSWORD}
+      MONEY_DB_PASSWORD: ${MONEY_DB_PASSWORD:?set MONEY_DB_PASSWORD}
+      PEOPLE_DB_PASSWORD: ${PEOPLE_DB_PASSWORD:?set PEOPLE_DB_PASSWORD}
+      PARTY_DB_PASSWORD: ${PARTY_DB_PASSWORD:?set PARTY_DB_PASSWORD}
+      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?set PROJECT_DB_PASSWORD}
+      EVIDENCE_DB_PASSWORD: ${EVIDENCE_DB_PASSWORD:?set EVIDENCE_DB_PASSWORD}
+      BUSINESS_ENGAGEMENT_DB_PASSWORD: ${BUSINESS_ENGAGEMENT_DB_PASSWORD:?set BUSINESS_ENGAGEMENT_DB_PASSWORD}
+      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD:?set BILLING_DB_PASSWORD}
+      PRODUCTION_DB_PASSWORD: ${PRODUCTION_DB_PASSWORD:?set PRODUCTION_DB_PASSWORD}
+      APPROVAL_AUDIT_RESULTS_DB_PASSWORD: ${APPROVAL_AUDIT_RESULTS_DB_PASSWORD:?set APPROVAL_AUDIT_RESULTS_DB_PASSWORD}
+      COST_OUTSOURCING_DB_PASSWORD: ${COST_OUTSOURCING_DB_PASSWORD:?set COST_OUTSOURCING_DB_PASSWORD}
+      BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
+    command: ["/provision.sh"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    volumes:
+      - ./postgres/01-create-app-databases.sh:/provision.sh:ro
+    networks: [data]
+    restart: "no"
+
+  project-workload-key-permissions:
+    profiles: [project]
+    image: omsbizfoundry/project-workspace:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - project-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  project-workload-keys:
+    profiles: [project]
+    image: omsbizfoundry/project-workspace:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment: &project-workload-key-environment
+      WORKLOAD_ID: project-workspace
+      WORKLOAD_SUBJECT_ID: ${PROJECT_WORKLOAD_SUBJECT_ID:-44444444-4444-4444-8444-444444444444}
+      WORKLOAD_KEY_FILE: /workload-private/project-workspace.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/project-workspace.json
+    depends_on:
+      project-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - project-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  business-engagement-workload-key-permissions:
+    profiles: [business-engagement]
+    image: omsbizfoundry/business-engagement:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - business-engagement-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  business-engagement-workload-keys:
+    profiles: [business-engagement]
+    image: omsbizfoundry/business-engagement:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: business-engagement
+      WORKLOAD_SUBJECT_ID: ${BUSINESS_ENGAGEMENT_WORKLOAD_SUBJECT_ID:-55555555-5555-4555-8555-555555555555}
+      WORKLOAD_KEY_FILE: /workload-private/business-engagement.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/business-engagement.json
+    depends_on:
+      business-engagement-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - business-engagement-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  production-workload-key-permissions:
+    profiles: [production]
+    image: omsbizfoundry/production-operations:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - production-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  production-workload-keys:
+    profiles: [production]
+    image: omsbizfoundry/production-operations:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: production-operations
+      WORKLOAD_SUBJECT_ID: ${PRODUCTION_WORKLOAD_SUBJECT_ID:-99999999-9999-4999-8999-999999999999}
+      WORKLOAD_KEY_FILE: /workload-private/production-operations.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/production-operations.json
+    depends_on:
+      production-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - production-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  approval-audit-results-workload-key-permissions:
+    profiles: [approval-audit-results]
+    image: omsbizfoundry/approval-audit-results:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - approval-audit-results-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  approval-audit-results-workload-keys:
+    profiles: [approval-audit-results]
+    image: omsbizfoundry/approval-audit-results:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: approval-audit-results
+      WORKLOAD_SUBJECT_ID: ${APPROVAL_AUDIT_RESULTS_WORKLOAD_SUBJECT_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
+      WORKLOAD_KEY_FILE: /workload-private/approval-audit-results.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/approval-audit-results.json
+    depends_on:
+      approval-audit-results-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - approval-audit-results-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  cost-outsourcing-workload-key-permissions:
+    profiles: [cost-outsourcing]
+    image: omsbizfoundry/cost-outsourcing:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - cost-outsourcing-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  cost-outsourcing-workload-keys:
+    profiles: [cost-outsourcing]
+    image: omsbizfoundry/cost-outsourcing:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: cost-outsourcing
+      WORKLOAD_SUBJECT_ID: ${COST_OUTSOURCING_WORKLOAD_SUBJECT_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
+      WORKLOAD_KEY_FILE: /workload-private/cost-outsourcing.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/cost-outsourcing.json
+    depends_on:
+      cost-outsourcing-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - cost-outsourcing-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  bonus-distribution-workload-key-permissions:
+    profiles: [bonus-distribution]
+    image: omsbizfoundry/bonus-distribution:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - bonus-distribution-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  bonus-distribution-workload-keys:
+    profiles: [bonus-distribution]
+    image: omsbizfoundry/bonus-distribution:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: bonus-distribution
+      WORKLOAD_SUBJECT_ID: ${BONUS_DISTRIBUTION_WORKLOAD_SUBJECT_ID:-cccccccc-cccc-4ccc-8ccc-cccccccccccc}
+      WORKLOAD_KEY_FILE: /workload-private/bonus-distribution.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/bonus-distribution.json
+    depends_on:
+      bonus-distribution-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - bonus-distribution-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  billing-workload-key-permissions:
+    profiles: [billing]
+    image: omsbizfoundry/billing-invoice:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - billing-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  billing-workload-keys:
+    profiles: [billing]
+    image: omsbizfoundry/billing-invoice:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: billing-invoice
+      WORKLOAD_SUBJECT_ID: ${BILLING_WORKLOAD_SUBJECT_ID:-88888888-8888-4888-8888-888888888888}
+      WORKLOAD_KEY_FILE: /workload-private/billing-invoice.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/billing-invoice.json
+    depends_on:
+      billing-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - billing-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  contract-workload-key-permissions:
+    profiles: [contract]
+    image: omsbizfoundry/contract-ledger:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - contract-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  contract-workload-keys:
+    profiles: [contract]
+    image: omsbizfoundry/contract-ledger:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: contract-ledger
+      WORKLOAD_SUBJECT_ID: ${CONTRACT_WORKLOAD_SUBJECT_ID:-66666666-6666-4666-8666-666666666666}
+      WORKLOAD_KEY_FILE: /workload-private/contract-ledger.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/contract-ledger.json
+    depends_on:
+      contract-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - contract-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  money-workload-key-permissions:
+    profiles: [money]
+    image: omsbizfoundry/money-flow-ledger:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - money-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  money-workload-keys:
+    profiles: [money]
+    image: omsbizfoundry/money-flow-ledger:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: money-flow-ledger
+      WORKLOAD_SUBJECT_ID: ${MONEY_WORKLOAD_SUBJECT_ID:-77777777-7777-4777-8777-777777777778}
+      WORKLOAD_KEY_FILE: /workload-private/money-flow-ledger.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/money-flow-ledger.json
+    depends_on:
+      money-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - money-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  identity-migrate:
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.identity
+    image: omsbizfoundry/identity-access:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &identity-environment
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://identity_access:${IDENTITY_DB_PASSWORD}@postgres:5432/identity_access?sslmode=disable
+      MIGRATION_MODE: verify
+      TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      TENANT_NAME: ${TENANT_NAME:-OMSBizFoundry}
+      PUBLIC_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      SIGNING_KEY_FILE: /data/iam/signing-keys.json
+      CAPABILITY_MANIFEST_PATHS: /config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
+      SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
+      BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-系统管理员}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?set BOOTSTRAP_ADMIN_PASSWORD}
+      PROJECT_POLICY_BASE_URL: http://project-workspace:8086
+      PEOPLE_POLICY_BASE_URL: http://people-groups:8084
+      POLICY_SERVICE_SUBJECT_ID: ${POLICY_SERVICE_SUBJECT_ID:-33333333-3333-4333-8333-333333333333}
+      PROJECT_ASSIGNMENT_POLICY_PATHS: /config/project-assignment-policy.json,/config/business-engagement-project-assignment-policy.json,/config/production-operations-project-assignment-policy.json
+      POLICY_TIMEOUT: ${POLICY_TIMEOUT:-3s}
+      WORKLOAD_IDENTITY_POLICY_PATH: /config/workload-identity-policy.json
+      WORKLOAD_CREDENTIAL_TTL: ${WORKLOAD_CREDENTIAL_TTL:-1m}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-keys:/data/iam
+      - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
+      - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
+      - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro
+      - ../../contracts/access/v1/examples/party-directory-capabilities.json:/config/party-directory-capabilities.json:ro
+      - ../../contracts/access/v1/examples/project-workspace-capabilities.json:/config/project-workspace-capabilities.json:ro
+      - ../../contracts/access/v1/examples/evidence-service-capabilities.json:/config/evidence-service-capabilities.json:ro
+      - ../../contracts/access/v1/examples/business-engagement-capabilities.json:/config/business-engagement-capabilities.json:ro
+      - ../../contracts/access/v1/examples/billing-invoice-capabilities.json:/config/billing-invoice-capabilities.json:ro
+      - ../../contracts/access/v1/examples/production-operations-capabilities.json:/config/production-operations-capabilities.json:ro
+      - ../../contracts/access/v1/examples/approval-audit-results-capabilities.json:/config/approval-audit-results-capabilities.json:ro
+      - ../../contracts/access/v1/examples/cost-outsourcing-capabilities.json:/config/cost-outsourcing-capabilities.json:ro
+      - ../../contracts/access/v1/examples/bonus-distribution-capabilities.json:/config/bonus-distribution-capabilities.json:ro
+      - ../../contracts/access/v1/examples/project-assignment-policy.json:/config/project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/business-engagement-project-assignment-policy.json:/config/business-engagement-project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/production-operations-project-assignment-policy.json:/config/production-operations-project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/workload-identity-policy.json:/config/workload-identity-policy.json:ro
+    networks: [data]
+    restart: "no"
+
+  identity-access:
+    image: omsbizfoundry/identity-access:${SUITE_VERSION:-dev}
+    pull_policy: never
+    environment: *identity-environment
+    command: ["/app/server"]
+    depends_on:
+      identity-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-keys:/data/iam
+      - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
+      - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
+      - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro
+      - ../../contracts/access/v1/examples/party-directory-capabilities.json:/config/party-directory-capabilities.json:ro
+      - ../../contracts/access/v1/examples/project-workspace-capabilities.json:/config/project-workspace-capabilities.json:ro
+      - ../../contracts/access/v1/examples/evidence-service-capabilities.json:/config/evidence-service-capabilities.json:ro
+      - ../../contracts/access/v1/examples/business-engagement-capabilities.json:/config/business-engagement-capabilities.json:ro
+      - ../../contracts/access/v1/examples/billing-invoice-capabilities.json:/config/billing-invoice-capabilities.json:ro
+      - ../../contracts/access/v1/examples/production-operations-capabilities.json:/config/production-operations-capabilities.json:ro
+      - ../../contracts/access/v1/examples/approval-audit-results-capabilities.json:/config/approval-audit-results-capabilities.json:ro
+      - ../../contracts/access/v1/examples/cost-outsourcing-capabilities.json:/config/cost-outsourcing-capabilities.json:ro
+      - ../../contracts/access/v1/examples/bonus-distribution-capabilities.json:/config/bonus-distribution-capabilities.json:ro
+      - ../../contracts/access/v1/examples/project-assignment-policy.json:/config/project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/business-engagement-project-assignment-policy.json:/config/business-engagement-project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/production-operations-project-assignment-policy.json:/config/production-operations-project-assignment-policy.json:ro
+      - ../../contracts/access/v1/examples/workload-identity-policy.json:/config/workload-identity-policy.json:ro
+      - iam-workload-public:/workload-public:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  public-keys-permissions:
+    image: omsbizfoundry/identity-access:${SUITE_VERSION:-dev}
+    pull_policy: never
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /public && chmod 0755 /public"]
+    volumes:
+      - iam-public-keys:/public
+    networks: [app]
+    restart: "no"
+
+  public-keys:
+    image: omsbizfoundry/identity-access:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/keyctl", "public", "/public/public-keys.json"]
+    environment:
+      SIGNING_KEY_FILE: /data/iam/signing-keys.json
+    depends_on:
+      identity-access: {condition: service_healthy}
+      public-keys-permissions: {condition: service_completed_successfully}
+    volumes:
+      - iam-keys:/data/iam:ro
+      - iam-public-keys:/public
+    networks: [app]
+    restart: "no"
+
+  contract-migrate:
+    profiles: [contract]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.ledger
+      args: {APP: contract-ledger}
+    image: omsbizfoundry/contract-ledger:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &contract-environment
+      HTTP_ADDR: :8081
+      DATABASE_URL: postgres://contract_ledger:${CONTRACT_DB_PASSWORD}@postgres:5432/contract_ledger?sslmode=disable
+      POSTGRES_CLIENT_DATABASE_URL: postgres://contract_ledger:${CONTRACT_DB_PASSWORD}@postgres:5432/contract_ledger?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PUBLIC_BASE_PATH: /contract
+      SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      EVIDENCE_STORAGE_DIR: /data/evidence/store
+      EXTERNAL_EVIDENCE_BASE_URL: http://evidence-service:8085
+      PARTY_BASE_URL: http://party-directory:8090
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: contract-ledger
+      WORKLOAD_SUBJECT_ID: ${CONTRACT_WORKLOAD_SUBJECT_ID:-66666666-6666-4666-8666-666666666666}
+      WORKLOAD_KEY_FILE: /workload-private/contract-ledger.json
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - contract-evidence:/data/evidence
+      - iam-public-keys:/public:ro
+      - contract-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  contract-ledger:
+    profiles: [contract]
+    image: omsbizfoundry/contract-ledger:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *contract-environment
+    depends_on:
+      contract-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      contract-workload-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - contract-evidence:/data/evidence
+      - iam-public-keys:/public:ro
+      - contract-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  money-migrate:
+    profiles: [money]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.ledger
+      args: {APP: money-flow-ledger}
+    image: omsbizfoundry/money-flow-ledger:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &money-environment
+      HTTP_ADDR: :8083
+      DATABASE_URL: postgres://money_flow:${MONEY_DB_PASSWORD}@postgres:5432/money_flow?sslmode=disable
+      POSTGRES_CLIENT_DATABASE_URL: postgres://money_flow:${MONEY_DB_PASSWORD}@postgres:5432/money_flow?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PUBLIC_BASE_PATH: /money
+      SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PARTY_BASE_URL: http://party-directory:8090
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: money-flow-ledger
+      WORKLOAD_SUBJECT_ID: ${MONEY_WORKLOAD_SUBJECT_ID:-77777777-7777-4777-8777-777777777778}
+      WORKLOAD_KEY_FILE: /workload-private/money-flow-ledger.json
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - money-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  money-flow-ledger:
+    profiles: [money]
+    image: omsbizfoundry/money-flow-ledger:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *money-environment
+    depends_on:
+      money-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      money-workload-keys: {condition: service_completed_successfully}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8083/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - money-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  people-migrate:
+    profiles: [people]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.people
+    image: omsbizfoundry/people-groups:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &people-environment
+      HTTP_ADDR: :8084
+      DATABASE_URL: postgres://people_groups:${PEOPLE_DB_PASSWORD}@postgres:5432/people_groups?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PUBLIC_BASE_PATH: /people
+      SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+    networks: [data]
+    restart: "no"
+
+  people-groups:
+    profiles: [people]
+    image: omsbizfoundry/people-groups:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *people-environment
+    depends_on:
+      people-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8084/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  party-migrate:
+    profiles: [party]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.party
+    image: omsbizfoundry/party-directory:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &party-environment
+      HTTP_ADDR: :8090
+      DATABASE_URL: postgres://party_directory:${PARTY_DB_PASSWORD}@postgres:5432/party_directory?sslmode=disable
+      POSTGRES_CLIENT_DATABASE_URL: postgres://party_directory:${PARTY_DB_PASSWORD}@postgres:5432/party_directory?sslmode=disable
+      MIGRATION_MODE: verify
+      CURSOR_HMAC_KEY: ${PARTY_CURSOR_HMAC_KEY:?set PARTY_CURSOR_HMAC_KEY}
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+    networks: [data]
+    restart: "no"
+
+  party-directory:
+    profiles: [party]
+    image: omsbizfoundry/party-directory:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *party-environment
+    depends_on:
+      party-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  project-migrate:
+    profiles: [project]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.project
+    image: omsbizfoundry/project-workspace:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &project-environment
+      HTTP_ADDR: :8086
+      REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE: ${REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE:-}
+      DATABASE_URL: postgres://project_workspace:${PROJECT_DB_PASSWORD}@postgres:5432/project_workspace?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PEOPLE_BASE_URL: ${PROJECT_PEOPLE_BASE_URL:-}
+      PARTY_BASE_URL: ${PROJECT_PARTY_BASE_URL:-}
+      CONTRACT_BASE_URL: http://contract-ledger:8081
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      BILLING_BASE_URL: http://billing-invoice:8091
+      BUSINESS_ENGAGEMENT_BASE_URL: http://business-engagement:8089
+      PRODUCTION_BASE_URL: ${PROJECT_PRODUCTION_BASE_URL:-}
+      COST_BASE_URL: ${PROJECT_COST_BASE_URL:-}
+      RESULTS_BASE_URL: http://approval-audit-results:8095
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: project-workspace
+      WORKLOAD_SUBJECT_ID: ${PROJECT_WORKLOAD_SUBJECT_ID:-44444444-4444-4444-8444-444444444444}
+      WORKLOAD_KEY_FILE: /workload-private/project-workspace.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - project-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  project-workspace:
+    profiles: [project]
+    image: omsbizfoundry/project-workspace:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *project-environment
+    depends_on:
+      project-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      project-workload-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - project-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  evidence-migrate:
+    profiles: [evidence]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.evidence
+    image: omsbizfoundry/evidence-service:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &evidence-environment
+      HTTP_ADDR: :8085
+      DATABASE_URL: postgres://evidence_service:${EVIDENCE_DB_PASSWORD}@postgres:5432/evidence_service?sslmode=disable
+      POSTGRES_CLIENT_DATABASE_URL: postgres://evidence_service:${EVIDENCE_DB_PASSWORD}@postgres:5432/evidence_service?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      STORAGE_PROVIDER: local
+      PUBLIC_BASE_URL: ${EVIDENCE_PUBLIC_BASE_URL:?set EVIDENCE_PUBLIC_BASE_URL}
+      LOCAL_STORAGE_ROOT: /data/evidence/store
+      LOCAL_SIGNING_KEY: ${EVIDENCE_LOCAL_SIGNING_KEY:?set EVIDENCE_LOCAL_SIGNING_KEY}
+      MAX_UPLOAD_BYTES: ${EVIDENCE_MAX_UPLOAD_BYTES:-2147483648}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - evidence-data:/data/evidence
+      - iam-public-keys:/public:ro
+    networks: [data]
+    restart: "no"
+
+  evidence-service:
+    profiles: [evidence]
+    image: omsbizfoundry/evidence-service:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *evidence-environment
+    depends_on:
+      evidence-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8085/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - evidence-data:/data/evidence
+      - iam-public-keys:/public:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  business-engagement-migrate:
+    profiles: [business-engagement]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.business-engagement
+    image: omsbizfoundry/business-engagement:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &business-engagement-environment
+      HTTP_ADDR: :8089
+      DATABASE_URL: postgres://business_engagement:${BUSINESS_ENGAGEMENT_DB_PASSWORD}@postgres:5432/business_engagement?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PROJECT_BASE_URL: http://project-workspace:8086
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: business-engagement
+      WORKLOAD_SUBJECT_ID: ${BUSINESS_ENGAGEMENT_WORKLOAD_SUBJECT_ID:-55555555-5555-4555-8555-555555555555}
+      WORKLOAD_KEY_FILE: /workload-private/business-engagement.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - business-engagement-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  business-engagement:
+    profiles: [business-engagement]
+    image: omsbizfoundry/business-engagement:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *business-engagement-environment
+    depends_on:
+      business-engagement-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      business-engagement-workload-keys: {condition: service_completed_successfully}
+      project-workspace: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8089/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - business-engagement-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  production-migrate:
+    profiles: [production]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.production-operations
+    image: omsbizfoundry/production-operations:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &production-environment
+      HTTP_ADDR: :8087
+      REFERENCE_STAGE_MATERIAL_PROFILE: ${REFERENCE_OA_PRODUCTION_STAGE_PROFILE:-}
+      DATABASE_URL: postgres://design_operations:${PRODUCTION_DB_PASSWORD}@postgres:5432/design_operations?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PROJECT_BASE_URL: http://project-workspace:8086
+      PEOPLE_BASE_URL: http://people-groups:8084
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: production-operations
+      WORKLOAD_SUBJECT_ID: ${PRODUCTION_WORKLOAD_SUBJECT_ID:-99999999-9999-4999-8999-999999999999}
+      WORKLOAD_KEY_FILE: /workload-private/production-operations.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - production-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  production-operations:
+    profiles: [production]
+    image: omsbizfoundry/production-operations:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *production-environment
+    depends_on:
+      production-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      production-workload-keys: {condition: service_completed_successfully}
+      project-workspace: {condition: service_healthy}
+      people-groups: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8087/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - production-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  approval-audit-results-migrate:
+    profiles: [approval-audit-results]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.approval-audit-results
+    image: omsbizfoundry/approval-audit-results:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &approval-audit-results-environment
+      HTTP_ADDR: :8095
+      DATABASE_URL: postgres://approval_audit_results:${APPROVAL_AUDIT_RESULTS_DB_PASSWORD}@postgres:5432/approval_audit_results?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PROJECT_BASE_URL: http://project-workspace:8086
+      CONTRACT_BASE_URL: http://contract-ledger:8081
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: approval-audit-results
+      WORKLOAD_SUBJECT_ID: ${APPROVAL_AUDIT_RESULTS_WORKLOAD_SUBJECT_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
+      WORKLOAD_KEY_FILE: /workload-private/approval-audit-results.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - approval-audit-results-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  approval-audit-results:
+    profiles: [approval-audit-results]
+    image: omsbizfoundry/approval-audit-results:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *approval-audit-results-environment
+    depends_on:
+      approval-audit-results-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      approval-audit-results-workload-keys: {condition: service_completed_successfully}
+      project-workspace: {condition: service_healthy}
+      contract-ledger: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8095/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - approval-audit-results-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  cost-outsourcing-migrate:
+    profiles: [cost-outsourcing]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.cost-outsourcing
+    image: omsbizfoundry/cost-outsourcing:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &cost-outsourcing-environment
+      HTTP_ADDR: :8096
+      REFERENCE_OA_COST_PROFILE: ${REFERENCE_OA_COST_PROFILE:-}
+      DATABASE_URL: postgres://cost_outsourcing:${COST_OUTSOURCING_DB_PASSWORD}@postgres:5432/cost_outsourcing?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PROJECT_BASE_URL: http://project-workspace:8086
+      PARTY_BASE_URL: http://party-directory:8090
+      CONTRACT_BASE_URL: http://contract-ledger:8081
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: cost-outsourcing
+      WORKLOAD_SUBJECT_ID: ${COST_OUTSOURCING_WORKLOAD_SUBJECT_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
+      WORKLOAD_KEY_FILE: /workload-private/cost-outsourcing.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - cost-outsourcing-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  cost-outsourcing:
+    profiles: [cost-outsourcing]
+    image: omsbizfoundry/cost-outsourcing:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *cost-outsourcing-environment
+    depends_on:
+      cost-outsourcing-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      cost-outsourcing-workload-keys: {condition: service_completed_successfully}
+      project-workspace: {condition: service_healthy}
+      party-directory: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8096/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - cost-outsourcing-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  bonus-distribution-migrate:
+    profiles: [bonus-distribution]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.bonus-distribution
+    image: omsbizfoundry/bonus-distribution:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &bonus-distribution-environment
+      HTTP_ADDR: :8097
+      REFERENCE_OA_BONUS_PROFILE: ${REFERENCE_OA_BONUS_PROFILE:-}
+      REFERENCE_OA_PRODUCTION_STAGE_PROFILE: ${REFERENCE_OA_PRODUCTION_STAGE_PROFILE:-}
+      OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}
+      DATABASE_URL: postgres://bonus_distribution:${BONUS_DISTRIBUTION_DB_PASSWORD}@postgres:5432/bonus_distribution?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PROJECT_BASE_URL: http://project-workspace:8086
+      PEOPLE_BASE_URL: http://people-groups:8084
+      CONTRACT_BASE_URL: http://contract-ledger:8081
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: bonus-distribution
+      WORKLOAD_SUBJECT_ID: ${BONUS_DISTRIBUTION_WORKLOAD_SUBJECT_ID:-cccccccc-cccc-4ccc-8ccc-cccccccccccc}
+      WORKLOAD_KEY_FILE: /workload-private/bonus-distribution.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - bonus-distribution-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  bonus-distribution:
+    profiles: [bonus-distribution]
+    image: omsbizfoundry/bonus-distribution:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *bonus-distribution-environment
+    depends_on:
+      bonus-distribution-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      bonus-distribution-workload-keys: {condition: service_completed_successfully}
+      project-workspace: {condition: service_healthy}
+      people-groups: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8097/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - bonus-distribution-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  billing-migrate:
+    profiles: [billing]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.billing
+    image: omsbizfoundry/billing-invoice:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &billing-environment
+      HTTP_ADDR: :8091
+      DATABASE_URL: postgres://billing_invoice:${BILLING_DB_PASSWORD}@postgres:5432/billing_invoice?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PARTY_BASE_URL: http://party-directory:8090
+      PROJECT_BASE_URL: http://project-workspace:8086
+      CONTRACT_BASE_URL: http://contract-ledger:8081
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: billing-invoice
+      WORKLOAD_SUBJECT_ID: ${BILLING_WORKLOAD_SUBJECT_ID:-88888888-8888-4888-8888-888888888888}
+      WORKLOAD_KEY_FILE: /workload-private/billing-invoice.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      ALLOWED_CURRENCIES: ${BILLING_ALLOWED_CURRENCIES:-CNY}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - billing-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  billing-invoice:
+    profiles: [billing]
+    image: omsbizfoundry/billing-invoice:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *billing-environment
+    depends_on:
+      billing-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      billing-workload-keys: {condition: service_completed_successfully}
+      party-directory: {condition: service_healthy}
+      project-workspace: {condition: service_healthy}
+      contract-ledger: {condition: service_healthy}
+      money-flow-ledger: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8091/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - billing-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  unified-workbench:
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.edge
+      args: {APP_PATH: frontend/oms-workbench}
+    image: omsbizfoundry/unified-workbench:${SUITE_VERSION:-dev}
+    environment:
+      HTTP_ADDR: :8082
+      SUITE_MANIFEST_PATH: /config/suite-manifest.json
+      REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE: ${REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE:-}
+      REFERENCE_OA_BONUS_PROFILE: ${REFERENCE_OA_BONUS_PROFILE:-}
+      REFERENCE_OA_PRODUCTION_STAGE_PROFILE: ${REFERENCE_OA_PRODUCTION_STAGE_PROFILE:-}
+      OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ./.runtime/suite-manifest.json:/config/suite-manifest.json:ro
+    networks: [app]
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.edge
+      args: {APP_PATH: backend/platform/gateway}
+    image: omsbizfoundry/gateway:${SUITE_VERSION:-dev}
+    environment:
+      HTTP_ADDR: :8088
+      SUITE_MANIFEST_PATH: /config/suite-manifest.json
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY_CLIENT_IP: "true"
+      REQUESTS_PER_MINUTE: ${REQUESTS_PER_MINUTE:-120}
+    depends_on:
+      identity-access: {condition: service_healthy}
+      public-keys: {condition: service_completed_successfully}
+      unified-workbench: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8088/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ./.runtime/suite-manifest.json:/config/suite-manifest.json:ro
+      - iam-public-keys:/public:ro
+    networks: [edge, app]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.28-alpine
+    depends_on:
+      gateway: {condition: service_healthy}
+    ports:
+      - ${PUBLIC_BIND:-127.0.0.1}:${PUBLIC_PORT:-18000}:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ./.runtime/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [edge, app]
+    restart: unless-stopped
+
+networks:
+  edge:
+  app:
+    internal: true
+  data:
+    internal: true
+
+volumes:
+  postgres-data:
+  iam-keys:
+  iam-public-keys:
+  iam-workload-public:
+  project-workload-private:
+  business-engagement-workload-private:
+  billing-workload-private:
+  production-workload-private:
+  approval-audit-results-workload-private:
+  cost-outsourcing-workload-private:
+  bonus-distribution-workload-private:
+  contract-workload-private:
+  money-workload-private:
+  contract-evidence:
+  evidence-data:

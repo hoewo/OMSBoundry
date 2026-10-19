@@ -1,0 +1,12 @@
+{
+  "top_level_pass": 32,
+  "pass_including_subtests": 93,
+  "failed": [],
+  "skipped": [],
+  "no_test_packages": [
+    "omsbizfoundry/bonus-distribution/cmd/ops",
+    "omsbizfoundry/bonus-distribution/cmd/workload-keyctl",
+    "omsbizfoundry/bonus-distribution/internal/auth",
+    "omsbizfoundry/bonus-distribution/internal/database"
+  ]
+}

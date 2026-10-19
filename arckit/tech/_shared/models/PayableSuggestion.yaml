@@ -1,0 +1,86 @@
+# Cost & Outsourcing 应付建议当前投影
+metadata:
+  path: "tech/_shared/models/PayableSuggestion.yaml"
+  domain: "cost-outsourcing"
+  entity_name: "PayableSuggestion"
+  storage: "PostgreSQL"
+  owner: "Cost & Outsourcing"
+  version: "1.0"
+  created: "2026-09-28"
+  updated: "2026-09-28"
+
+type: object
+additionalProperties: false
+description: "C6 拥有的应付建议当前投影；它记录来源与目标决定引用，不是 Money Obligation 或付款事实。"
+required: [id, tenant_id, project, source, ledger_owner, counterparty, amount_minor, currency, due_on, purpose, state, revision, target_revision, request_digest, created_by, updated_by, created_at, updated_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  project: {$ref: "#/$defs/project_snapshot"}
+  source: {$ref: "#/$defs/source_snapshot"}
+  ledger_owner: {$ref: "#/$defs/party_snapshot"}
+  counterparty: {$ref: "#/$defs/party_snapshot"}
+  amount_minor: {type: integer, minimum: 1, readOnly: true}
+  currency: {type: string, pattern: "^[A-Z]{3}$", readOnly: true}
+  due_on: {type: string, format: date, readOnly: true}
+  purpose: {type: string, minLength: 1, maxLength: 1000, readOnly: true}
+  state: {type: string, enum: [target_unavailable, proposed, accepted, rejected, withdrawn], readOnly: true}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  target_revision: {type: integer, minimum: 0, readOnly: true}
+  request_digest: {type: string, pattern: "^sha256:[0-9a-f]{64}$", readOnly: true}
+  obligation: {oneOf: [{$ref: "#/$defs/obligation_ref"}, {type: "null"}], readOnly: true}
+  decision_reason: {type: string, maxLength: 1000, readOnly: true}
+  created_by: {type: string, format: uuid, readOnly: true}
+  updated_by: {type: string, format: uuid, readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  updated_at: {type: string, format: date-time, readOnly: true}
+$defs:
+  project_snapshot:
+    type: object
+    additionalProperties: false
+    required: [id, revision, code, display_name]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+      code: {type: string}
+      display_name: {type: string}
+  source_snapshot:
+    type: object
+    additionalProperties: false
+    required: [type, id, revision, digest]
+    properties:
+      type: {type: string, enum: [cost_entry, outsourcing_engagement]}
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+      digest: {type: string, pattern: "^sha256:[0-9a-f]{64}$"}
+  party_snapshot:
+    type: object
+    additionalProperties: false
+    required: [id, revision, kind, legal_name]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+  obligation_ref:
+    type: object
+    additionalProperties: false
+    required: [id, revision]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+
+state_machine:
+  initial: target_unavailable
+  transitions:
+    - {from: target_unavailable, to: proposed, trigger: money_submission_confirmed}
+    - {from: proposed, to: accepted, trigger: money_acceptance_synchronized}
+    - {from: proposed, to: rejected, trigger: money_rejection_synchronized}
+    - {from: proposed, to: withdrawn, trigger: target_withdrawal_confirmed}
+validation:
+  - "同一 Tenant、来源类型、来源 ID 和来源 revision 同时只存在一条非 withdrawn 建议。"
+  - "accepted 必须携带 Money Obligation ID／revision；rejected 和 withdrawn 不得携带 Obligation。"
+  - "target_unavailable 表示本地事实已经提交但目标尚未确认接收，不得显示为 proposed。"
+indexes:
+  - {name: payable_suggestions_project_idx, columns: [tenant_id, project.id, id]}
+  - {name: payable_suggestions_source_active_idx, columns: [tenant_id, source.type, source.id, source.revision], unique: true, where: "state <> withdrawn"}

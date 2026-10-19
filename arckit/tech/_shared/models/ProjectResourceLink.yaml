@@ -1,0 +1,98 @@
+# ProjectResourceLink 数据模型
+# 路径: arckit/tech/_shared/models/ProjectResourceLink.yaml
+
+metadata:
+  path: "tech/_shared/models/ProjectResourceLink.yaml"
+  domain: "project-workspace"
+  entity_name: "ProjectResourceLink"
+  storage: "PostgreSQL"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+type: object
+additionalProperties: false
+description: "Project 与外部业务资源之间的类型化关联；目标应用继续拥有目标事实。"
+
+required:
+  - id
+  - tenant_id
+  - project_id
+  - target_service
+  - resource_type
+  - resource_id
+  - relation_key
+  - created_project_revision
+  - linked_at
+
+properties:
+  id:
+    type: string
+    format: uuid
+    readOnly: true
+  tenant_id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    readOnly: true
+  project_id:
+    type: string
+    format: uuid
+    readOnly: true
+  target_service:
+    type: string
+    enum: [contract-ledger, money-flow-ledger, evidence-service, design-operations]
+  resource_type:
+    type: string
+    enum: [contract, obligation, transaction, evidence-file, design-work-item]
+  resource_id:
+    type: string
+    format: uuid
+  source_revision:
+    type: [integer, "null"]
+    minimum: 1
+    description: "目标公开契约提供 revision 时保存；不提供时为 null。"
+  relation_key:
+    type: string
+    pattern: "^[a-z][a-z0-9-]{0,63}$"
+    description: "Project 语境中的关系，如 primary-contract 或 initiation-evidence。"
+  note:
+    type: string
+    maxLength: 500
+    default: ""
+  created_project_revision:
+    type: integer
+    minimum: 1
+    readOnly: true
+  unlinked_project_revision:
+    type: [integer, "null"]
+    minimum: 1
+    readOnly: true
+  linked_at:
+    type: string
+    format: date-time
+    readOnly: true
+  unlinked_at:
+    type: [string, "null"]
+    format: date-time
+    readOnly: true
+
+relationships:
+  project:
+    type: many-to-one
+    target: Project
+    ownership: project-workspace
+  target:
+    type: external-reference
+    target: "target_service/resource_type/resource_id"
+    ownership: target-service
+
+indexes:
+  - name: uq_project_active_resource_link
+    columns: [tenant_id, project_id, target_service, resource_type, resource_id, relation_key]
+    unique: true
+    where: "unlinked_at IS NULL"
+  - name: ix_project_resource_target
+    columns: [tenant_id, target_service, resource_type, resource_id]
+

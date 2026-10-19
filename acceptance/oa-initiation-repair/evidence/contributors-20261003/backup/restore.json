@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "empty_databases": 13,
+  "all_old_facts_and_sequences_equal": true,
+  "evidence_and_iam_key_bytes_equal": true,
+  "project_10_to11_twice_preserves_facts": true,
+  "full_suite_restore_runtime": false,
+  "rollback_requires_empty_restore_original_release": true
+}

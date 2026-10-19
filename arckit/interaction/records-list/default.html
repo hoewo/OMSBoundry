@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>业务记录列表 - 线框图</title>
+    <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+    <header><h1>业务记录列表</h1><div class="meta-info"><div>页面角色：<code>RecordsListPage</code></div><div>适用：六类领域记录</div></div></header>
+
+    <details open>
+        <summary>内容</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前筛选返回至少一条领域记录。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">合同</div><div class="nav-button">演示环境</div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item">首页</div><div class="tab-item active">合同</div><div class="tab-item">审计</div></div>
+                    <div class="content-area">
+                        <div class="section-header">合同记录 <span class="badge">共 3 条</span></div>
+                        <p>这里显示 Contract Ledger 拥有的合同事实、当前状态和最近 revision。</p>
+                        <div class="toolbar">
+                            <div class="search-bar">搜索合同名称、编号或对方</div>
+                            <div class="picker">状态：全部</div>
+                            <div class="toolbar-spacer"></div>
+                            <div class="button primary">新建合同</div>
+                        </div>
+                        <div class="group-box">
+                            <div class="list-item"><div class="list-item-text"><div class="list-item-title">西豆设计服务合同</div><div class="list-item-subtitle">客户：示例建设公司 · ¥ 680,000 · 2026-09-25 09:10</div></div><span class="badge">已生效</span></div>
+                            <div class="list-item"><div class="list-item-text"><div class="list-item-title">补充咨询合同</div><div class="list-item-subtitle">客户：示例咨询公司 · ¥ 120,000 · 2026-09-25 08:42</div></div><span class="badge">待结算</span></div>
+                            <div class="list-item"><div class="list-item-text"><div class="list-item-title">历史迁移合同</div><div class="list-item-subtitle">客户：演示历史主体 · ¥ 90,000 · 2026-09-24 17:30</div></div><span class="badge">已关闭</span></div>
+                        </div>
+                        <div class="group-box"><div class="group-box-title">辅助信息</div>当前筛选：全部状态 · 排序：最近更新 · 数据范围：合成演示租户</div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>页面用途和结果数量</li><li>搜索、有限筛选与主操作</li><li>领域化记录行和文本状态</li><li>当前筛选与数据范围</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>点击记录行</code> → 进入该记录工作区</div><div class="interaction-item"><code>新建合同</code> → 进入合同创建工作区</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>加载中</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>首次加载或筛选刷新。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">项目</div><div class="nav-button">演示环境</div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item">首页</div><div class="tab-item active">项目</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">项目记录</div>
+                        <div class="toolbar"><div class="search-bar">搜索项目</div><div class="picker">状态：全部</div><div class="toolbar-spacer"></div><div class="button primary">新建项目</div></div>
+                        <div class="placeholder-box"><div class="spinner"></div><p>正在读取项目……</p></div>
+                        <div class="group-box"><div class="list-item">记录行占位</div><div class="list-item">记录行占位</div><div class="list-item">记录行占位</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>可用的筛选与主操作</li><li>轻量进行状态</li><li>记录行占位</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>筛选刷新</code> → 保留上次结果直到新结果到达</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>空状态</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>数据库为空或当前筛选没有结果。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">文件</div><div class="nav-button">演示环境</div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item">首页</div><div class="tab-item active">文件</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">文件记录 <span class="badge">0 条</span></div>
+                        <div class="toolbar"><div class="search-bar">搜索文件名</div><div class="picker">校验状态：全部</div><div class="toolbar-spacer"></div><div class="button primary">上传文件</div></div>
+                        <div class="empty-state" data-kit="ContentUnavailableView"><div class="icon-placeholder">文件</div><h2>还没有文件</h2><p>上传第一份文件后，这里会显示版本、媒体类型、摘要和校验状态。</p><div class="button primary">上传第一份文件</div><div class="button">生成演示场景</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>空状态原因</li><li>领域主操作</li><li>演示场景入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>上传第一份文件</code> → 进入上传工作区</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>错误恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前应用的记录查询失败。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">设计工作项</div><div class="nav-button">演示环境</div><div class="nav-button">帮助</div></div>
+                    <div class="tab-bar"><div class="tab-item">首页</div><div class="tab-item active">设计工作项</div><div class="tab-item">历史</div></div>
+                    <div class="content-area">
+                        <div class="section-header">设计工作项</div>
+                        <div class="toolbar"><div class="search-bar">施工图</div><div class="picker">阶段：全部</div><div class="toolbar-spacer"></div><div class="button primary">新建工作项</div></div>
+                        <div class="empty-state" data-kit="ContentUnavailableView"><div class="icon-placeholder">!</div><h2>无法读取设计工作项</h2><p>搜索条件已保留。当前应用查询失败，没有修改任何记录。</p><div class="button primary">重试</div><div class="button">查看健康检查</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>保留的筛选条件</li><li>失败范围</li><li>重试和诊断入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>重试</code> → 使用相同筛选重新查询</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>权限变化恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>列表权限刷新后创建能力被撤销，或 IAM 拒绝重新签发。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">项目与项目包</div><div class="nav-button">统一工作台</div><div class="nav-button">帮助</div></div>
+                    <div class="content-area">
+                        <div class="group-box"><div class="group-box-title">权限已更新</div><p>现有记录继续以只读方式显示；“新建项目”“新建项目包”等写入口已按 allowed_actions 隐藏。</p></div>
+                        <div class="list-item"><div class="list-item-text"><div class="list-item-title">华东项目包</div><div class="list-item-subtitle">Package · 顶层 · revision 3</div></div><span class="badge">只读</span></div>
+                        <div class="list-item"><div class="list-item-text"><div class="list-item-title">示范设计项目</div><div class="list-item-subtitle">Project · 属于华东项目包 · revision 5</div></div><span class="badge">active</span></div>
+                        <div class="toolbar"><div class="button">返回统一工作台</div><div class="toolbar-spacer"></div><div class="button primary">刷新权限</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>保留的可读记录</li><li>当前权限说明</li><li>刷新权限和工作台入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>刷新权限</code> → 重新读取列表和 allowed_actions</div></div>
+        </div>
+    </details>
+</div>
+</body>
+</html>

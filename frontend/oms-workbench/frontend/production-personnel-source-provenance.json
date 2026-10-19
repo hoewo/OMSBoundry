@@ -1,0 +1,40 @@
+{
+  "source": "user-owned RoadSystemOA frontend",
+  "source_commit": "826e0fc65aa09947fc4f64f62a2644fa5d11a302",
+  "copied_at": "2026-10-04",
+  "files": [
+    {
+      "path": "src/components/production/ProductionPersonnelManager.tsx",
+      "sha256": "910a15912777dc56f4d22f0295304d173564d4e63237ccdcfeeafca32d52c50e"
+    },
+    {
+      "path": "src/components/production/ProductionPersonnelManager.css",
+      "sha256": "0bc0b4c247c96487e58b2fd80762783a70070bdf2bad0b2411889723f0206db0"
+    },
+    {
+      "path": "src/components/production/DisciplinePersonnelModal.tsx",
+      "sha256": "0e719978e376407f1021db3bc0e4fb4eef113e0a4aceb78d38f29203e82db089"
+    },
+    {
+      "path": "src/components/production/ReviewerModal.tsx",
+      "sha256": "91cc19650b96253e06a10ada53949456129aece1c250d12da2e73b7c591bf2cf"
+    },
+    {
+      "path": "src/components/production/DisciplineSelector.tsx",
+      "sha256": "206d94dd5c025bbce8cb75280f7deb1fc48ab6d3c0c32684042034679240603e"
+    },
+    {
+      "path": "src/components/production/DisciplineManageModal.tsx",
+      "sha256": "7e2a27126ef6a2227c60abae583d15ac02d76195a8332928594ad92648d9c085"
+    }
+  ],
+  "css_verbatim": true,
+  "main_workbench_imported": false,
+  "native_business_accepted": false,
+  "adaptations": [
+    "Preserve original layout and controls; explicit presentation port replaces monolithic queries and eager mutation fanout.",
+    "Single group/reviewer intentions are presentation callbacks, not an implemented native owner API.",
+    "Forward Form id for discipline label/accessibility; candidate/catalogue failure disables save; not-applicable explicitly preserves hidden participants on both save and group end.",
+    "Pending/faulted member reads are not empty; permission refresh closes editing drawers; mutation callbacks handle rejected end promises."
+  ]
+}

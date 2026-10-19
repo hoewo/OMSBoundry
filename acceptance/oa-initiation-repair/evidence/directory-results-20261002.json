@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-02",
+  "decision": "BF-086",
+  "candidate_only": true,
+  "native_postgresql": {
+    "run": "h",
+    "remote_directory": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002h",
+    "passed": true,
+    "pass_records_include_subtests": true,
+    "projects_pass_records": 99,
+    "httpserver_pass_records": 56,
+    "directory_fixture_roots": 106,
+    "directory_fixture_active_projects": 107,
+    "directory_pages": [100, 6],
+    "tenant_resource_parent_child_scope_and_read_only": true,
+    "main_13_database_digests_and_17_container_ids_unchanged": true,
+    "max_cpu": 0.45,
+    "max_memory_mib": 448,
+    "projects_test_sha256": "c837cf202e2577ee3a7cc73226cae7ee1031903633b298620f42548a3e45db21",
+    "httpserver_test_sha256": "90d6aac3b7398cf38dae3b3cd432634ab14db24101a67a8265cc24ea873fa17c"
+  },
+  "independent_startup": {
+    "run": "i",
+    "remote_directory": "/opt/omsbizfoundry/acceptance/oa-initiation-repair-20261002i",
+    "passed": true,
+    "actual_server_startup": true,
+    "private_owned_database": "oa_initiation_startup_20261002i",
+    "schema": 10,
+    "anonymous_native_routes_denied": 4,
+    "restart_facts_unchanged": true,
+    "main_unchanged": true,
+    "max_cpu": 0.4,
+    "max_memory_mib": 352,
+    "server_sha256": "c9924cf9cbf5229bc04aba1b7e14710355b8d50498e78863714b546996196462",
+    "formal_iam_or_full_suite": false
+  },
+  "local": {
+    "project_and_workbench_go_test_and_vet": true,
+    "node_pass": 20,
+    "node_skip": 0,
+    "runtime_and_directory_js_syntax": true,
+    "original_oa_worktree_clean": true,
+    "local_docker_started": false
+  },
+  "main_deployed": false,
+  "full_oa_accepted": false
+}

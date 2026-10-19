@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>恢复单合同账簿 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/">Contract Ledger</a>
+    <h1>恢复单合同账簿</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties">主体</a> <a href="{{.BasePath}}/contracts">合同</a> <a href="{{.BasePath}}/audit">审计</a> <a href="{{.BasePath}}/admin/restore" aria-current="page">恢复账簿</a> {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销</button></form>
+  </header>
+  <main>
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+    <section aria-labelledby="restore-boundary-title">
+      <h2 id="restore-boundary-title">恢复边界</h2>
+      <p>只接受 Contract Ledger 导出的 v1 单合同 ZIP。恢复前会验证容器、摘要、生命周期与内部引用，全部写入在一个事务中完成。</p>
+      <p><strong>目标库不得已有任何合同或主体。</strong>含外部合同关系的单合同归档会被拒绝，不会创建占位合同。</p>
+      <p>归档不含 Evidence 文件字节；恢复后只保留文件名、大小和 SHA-256，页面会明确标为“文件内容待恢复”。</p>
+    </section>
+    <section aria-labelledby="restore-upload-title">
+      <h2 id="restore-upload-title">上传并恢复</h2>
+      <form method="post" action="{{.BasePath}}/admin/restore" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.CommandID}}">
+        <label for="archive">单合同账簿 ZIP</label>
+        <input id="archive" name="archive" type="file" accept=".zip,application/zip" required>
+        <label><input name="confirm_empty" type="checkbox" value="yes" required> 我已确认目标业务库为空，并允许写入已验证的合同事实。</label>
+        <button type="submit">验证并恢复</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Run only as root on Linux. Real iptables in a NEW netns, never host rules.
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+guard="$script_dir/evidence-imds-guard"
+[ "$(id -u)" = 0 ] || { echo 'root Linux network namespace test required' >&2; exit 2; }
+for tool in unshare iptables; do command -v "$tool" >/dev/null || exit 2; done
+export EVIDENCE_IMDS_BRIDGE=br-fixture-01
+export EVIDENCE_IMDS_SUBNET=172.29.0.0/24
+unshare --net sh -eu -c '
+  sh "$1" boot >/dev/null
+  sh "$1" boot >/dev/null
+  iptables -C BF_EVIDENCE_IMDS -i "$EVIDENCE_IMDS_BRIDGE" -s "$EVIDENCE_IMDS_SUBNET" -m comment --comment oms-evidence-imds-v1 -j RETURN
+  iptables -C BF_EVIDENCE_IMDS -m comment --comment oms-evidence-imds-v1 -j REJECT --reject-with icmp-admin-prohibited
+  iptables -I DOCKER-USER 1 -j RETURN
+  if sh "$1" boot >/dev/null 2>&1; then echo "bypass rule accepted" >&2; exit 1; fi
+' test "$guard"
+unshare --net sh -eu -c '
+  iptables -N DOCKER-USER
+  iptables -N BF_EVIDENCE_IMDS
+  iptables -A BF_EVIDENCE_IMDS -j ACCEPT
+  if sh "$1" boot >/dev/null 2>&1; then echo "foreign chain accepted" >&2; exit 1; fi
+  iptables -C BF_EVIDENCE_IMDS -j ACCEPT
+' test "$guard"
+unshare --net sh -eu -c '
+  if EVIDENCE_IMDS_SUBNET=0.0.0.0/0 sh "$1" boot >/dev/null 2>&1; then echo "broad subnet accepted" >&2; exit 1; fi
+  if EVIDENCE_IMDS_BRIDGE=docker0 sh "$1" boot >/dev/null 2>&1; then echo "non dedicated bridge accepted" >&2; exit 1; fi
+' test "$guard"
+echo 'PASS isolated netns boot/idempotence, bypass/foreign-chain refusal and invalid boundary refusal; NOT daemon/host restart'

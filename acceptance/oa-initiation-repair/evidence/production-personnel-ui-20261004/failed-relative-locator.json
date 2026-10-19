@@ -1,0 +1,31 @@
+{
+  "passed": false,
+  "ui_only": true,
+  "component_test_ports": true,
+  "native_project": false,
+  "production_iam": false,
+  "postgresql": false,
+  "native_business_accepted": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "698c82204bc00e3b67fbbaf3e71834212b7f9fd0301ee053e24b95dc6d32d7a6",
+  "scenarios": [
+    {
+      "name": "original-empty-layout-no-write-no-hidden-candidates",
+      "passed": true
+    },
+    {
+      "name": "original-600px-drawer-required-discipline-and-cancel-zero-write",
+      "passed": true
+    }
+  ],
+  "failure": {
+    "stage": "discipline-form",
+    "type": "TimeoutError",
+    "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').locator('.ant-select').filter({ has: locator('.ant-drawer:visible').getByLabel('专业', { exact: true }) }).locator('.ant-select-selector')\u001b[22m\n"
+  },
+  "test_port_commands": 0,
+  "test_port_member_rows": 0,
+  "test_port_ended_rows": 0,
+  "page_errors": []
+}

@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 20,
+  "exit_code": 1,
+  "test_started": true,
+  "test_pass": false,
+  "test_skipped": false,
+  "binary_sha256": "fe106a281a555c8e01b262a2fd6bd7b38b675a67fa260e5a91bd21bf974bb585",
+  "failure_type": "AssertionError",
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

@@ -1,0 +1,351 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1="$script_dir/d1"
+test_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-upgrade-selection.XXXXXX")
+trap 'rm -rf -- "$test_dir"' EXIT HUP INT TERM
+
+mock_bin="$test_dir/mock-bin"
+mkdir -p "$mock_bin"
+cat >"$mock_bin/docker" <<'MOCK'
+#!/bin/sh
+set -eu
+printf '%s\n' "$*" >>"$D1_DOCKER_MOCK_LOG"
+case " $* " in
+  *' bonus-distribution sh -c '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_BONUS_PROFILE:-}"
+    ;;
+  *' project-workspace sh -c '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_PERSONNEL_PROFILE:-}"
+    ;;
+  *' production-operations sh -c '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_STAGE_PROFILE:-}"
+    ;;
+  *' unified-workbench sh -c '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_STAGE_WORKBENCH_PROFILE-${D1_DOCKER_MOCK_STAGE_PROFILE-}}"
+    ;;
+  *' ps --all --services '*)
+    printf '%s\n' "$D1_DOCKER_MOCK_SELECTION"
+    ;;
+  *' identity-access /app/ops validate-contracts '*)
+    [ "${D1_DOCKER_MOCK_FAIL_CONTRACTS:-false}" != true ] || exit 43
+    ;;
+  *' up --detach '*)
+    [ "${D1_DOCKER_MOCK_FAIL_UP:-false}" != true ] || exit 42
+    ;;
+esac
+MOCK
+chmod +x "$mock_bin/docker"
+
+write_env() {
+  target=$1
+  backup_dir=$2
+  cat >"$target" <<ENV
+SUITE_VERSION=test
+D1_IMAGE_MODE=build
+D1_INGRESS_MODE=http
+PUBLIC_BIND=127.0.0.1
+PUBLIC_PORT=18000
+COOKIE_SECURE=false
+PUBLIC_ISSUER=https://oms.example.test/auth
+TENANT_ID=22222222-2222-4222-8222-222222222222
+POSTGRES_SUPERUSER_PASSWORD=AdminPassword_123
+IDENTITY_DB_PASSWORD=IdentityPassword_123
+CONTRACT_DB_PASSWORD=ContractPassword_123
+MONEY_DB_PASSWORD=MoneyPassword_123
+PEOPLE_DB_PASSWORD=PeoplePassword_123
+PARTY_DB_PASSWORD=PartyPassword_1234
+PROJECT_DB_PASSWORD=ProjectPassword_123
+EVIDENCE_DB_PASSWORD=EvidencePassword_123
+BUSINESS_ENGAGEMENT_DB_PASSWORD=BusinessEngagementPassword_123
+BILLING_DB_PASSWORD=BillingInvoicePassword_123
+PRODUCTION_DB_PASSWORD=ProductionPassword_123
+APPROVAL_AUDIT_RESULTS_DB_PASSWORD=ApprovalAuditResultsPassword_123
+COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123
+BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123
+BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
+ENABLE_CONTRACT=true
+ENABLE_MONEY=false
+ENABLE_PEOPLE=false
+ENABLE_PARTY=true
+ENABLE_PROJECT=false
+ENABLE_EVIDENCE=false
+ENABLE_BUSINESS_ENGAGEMENT=false
+ENABLE_BILLING=false
+ENABLE_PRODUCTION=false
+ENABLE_APPROVAL_AUDIT_RESULTS=false
+ENABLE_COST_OUTSOURCING=false
+ENABLE_BONUS_DISTRIBUTION=false
+PROJECT_PARTY_BASE_URL=
+PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
+EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
+EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE
+D1_BACKUP_DIR=$backup_dir
+ENV
+}
+
+running_selection='postgres
+identity-access
+contract-ledger
+unified-workbench
+gateway
+nginx'
+
+run_success_case() {
+  case_dir="$test_dir/success"
+  backup_dir="$case_dir/backups"
+  env_file="$case_dir/d1.env"
+  log="$case_dir/docker.log"
+  mkdir -p "$case_dir"
+  write_env "$env_file" "$backup_dir"
+  : >"$log"
+
+  PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$running_selection" \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-selection-success \
+    "$d1" upgrade >"$case_dir/stdout" 2>"$case_dir/stderr"
+
+  backup=$(find "$backup_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  [ -n "$backup" ] && [ -f "$backup/suite-selection.env" ] && [ -f "$backup/checksums.sha256" ]
+  grep -qx 'ENABLE_CONTRACT=true' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_PARTY=false' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_BILLING=false' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_PRODUCTION=false' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_APPROVAL_AUDIT_RESULTS=false' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_COST_OUTSOURCING=false' "$backup/suite-selection.env"
+  grep -qx 'ENABLE_BONUS_DISTRIBUTION=false' "$backup/suite-selection.env"
+  grep -q 'suite-selection.env' "$backup/checksums.sha256"
+  while read -r expected filename; do
+    actual=$(openssl dgst -sha256 -r "$backup/$filename" | awk '{print $1}')
+    [ "$actual" = "$expected" ] || {
+      echo "upgrade backup checksum verification failed: $filename" >&2
+      exit 1
+    }
+  done <"$backup/checksums.sha256"
+  backup_id=$(basename "$backup")
+  if PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$running_selection" \
+    D1_CONFIRM_EMPTY_RESTORE=yes \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-selection-success \
+    "$d1" restore "$backup_id" >"$case_dir/mismatch.out" 2>"$case_dir/mismatch.err"; then
+    echo 'restore accepted a configuration that enabled an application absent from the backup selection' >&2
+    exit 1
+  fi
+  grep -q 'selection mismatch for ENABLE_PARTY: backup=false configured=true' "$case_dir/mismatch.err"
+  grep -q 'contract-ledger /app/backup create' "$log"
+  contract_preflight_line=$(grep -n 'identity-access /app/ops validate-contracts' "$log" | head -n 1 | cut -d: -f1)
+  contract_backup_line=$(grep -n 'contract-ledger /app/backup create' "$log" | head -n 1 | cut -d: -f1)
+  [ -n "$contract_preflight_line" ] && [ -n "$contract_backup_line" ] && [ "$contract_preflight_line" -lt "$contract_backup_line" ] || {
+    echo 'candidate contract parser was not checked before the upgrade backup' >&2
+    exit 1
+  }
+  if grep -q 'party-directory /app/backup create' "$log"; then
+    echo 'upgrade tried to back up the newly enabled Party Directory before it existed' >&2
+    exit 1
+  fi
+  up_line=$(grep -n ' up --detach ' "$log" | head -n 1 | cut -d: -f1)
+  party_check_line=$(grep -n 'party-directory /app/ops check' "$log" | tail -n 1 | cut -d: -f1)
+  [ -n "$up_line" ] && [ -n "$party_check_line" ] && [ "$party_check_line" -gt "$up_line" ] || {
+    echo 'newly enabled Party Directory was not checked after the candidate selection started' >&2
+    exit 1
+  }
+}
+
+run_contract_preflight_failure_case() {
+  case_dir="$test_dir/contract-preflight-failure"
+  backup_dir="$case_dir/backups"
+  env_file="$case_dir/d1.env"
+  log="$case_dir/docker.log"
+  mkdir -p "$case_dir"
+  write_env "$env_file" "$backup_dir"
+  : >"$log"
+
+  if PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$running_selection" \
+    D1_DOCKER_MOCK_FAIL_CONTRACTS=true \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-contract-preflight-failure \
+    "$d1" upgrade >"$case_dir/stdout" 2>"$case_dir/stderr"; then
+    echo 'upgrade unexpectedly accepted an incompatible candidate contract parser' >&2
+    exit 1
+  fi
+
+  [ ! -d "$backup_dir" ] || [ -z "$(find "$backup_dir" -mindepth 1 -maxdepth 1 -type d -print -quit)" ] || {
+    echo 'contract preflight failure created a backup after the candidate had already been rejected' >&2
+    exit 1
+  }
+  if grep -q '/app/backup create' "$log"; then
+    echo 'contract preflight failure reached a stateful backup command' >&2
+    exit 1
+  fi
+}
+
+run_failure_case() {
+  case_dir="$test_dir/failure"
+  backup_dir="$case_dir/backups"
+  env_file="$case_dir/d1.env"
+  log="$case_dir/docker.log"
+  mkdir -p "$case_dir"
+  write_env "$env_file" "$backup_dir"
+  : >"$log"
+
+  if PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$running_selection" \
+    D1_DOCKER_MOCK_FAIL_UP=true \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-selection-failure \
+    "$d1" upgrade >"$case_dir/stdout" 2>"$case_dir/stderr"; then
+    echo 'upgrade unexpectedly succeeded after the candidate start failed' >&2
+    exit 1
+  fi
+
+  backup=$(find "$backup_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  [ -n "$backup" ] && [ -f "$backup/suite-selection.env" ] && [ -f "$backup/checksums.sha256" ] || {
+    echo 'candidate failure did not leave a recoverable pre-mutation backup' >&2
+    exit 1
+  }
+  grep -q 'backup created:' "$case_dir/stdout"
+  grep -qx 'ENABLE_PARTY=false' "$backup/suite-selection.env"
+}
+
+run_profile_capture_case() {
+  case_dir="$test_dir/profile-capture"
+  backup_dir="$case_dir/backups"
+  env_file="$case_dir/d1.env"
+  log="$case_dir/docker.log"
+  mkdir -p "$case_dir"
+  write_env "$env_file" "$backup_dir"
+  cat >>"$env_file" <<ENV
+ENABLE_PEOPLE=true
+ENABLE_PROJECT=true
+ENABLE_BONUS_DISTRIBUTION=true
+PROJECT_PARTY_BASE_URL=http://party-directory:8090
+REFERENCE_OA_BONUS_PROFILE=reference-oa-bonus-v3
+REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE=reference-oa-production-personnel-v1
+ENV
+  profile_selection="$running_selection
+party-directory
+people-groups
+project-workspace
+bonus-distribution"
+  : >"$log"
+  PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$profile_selection" \
+    D1_DOCKER_MOCK_BONUS_PROFILE=reference-oa-bonus-v2 \
+    D1_DOCKER_MOCK_PERSONNEL_PROFILE=reference-oa-production-personnel-v1 \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-profile-capture \
+    "$d1" upgrade >"$case_dir/stdout" 2>"$case_dir/stderr"
+  backup=$(find "$backup_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  [ -n "$backup" ] && [ -f "$backup/suite-selection.env" ]
+  grep -qx 'REFERENCE_OA_BONUS_PROFILE=reference-oa-bonus-v2' "$backup/suite-selection.env"
+  grep -qx 'REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE=reference-oa-production-personnel-v1' "$backup/suite-selection.env"
+  grep -q 'suite-selection.env' "$backup/checksums.sha256"
+
+  # A restore using the new v3 env must not destroy volumes from the v2
+  # checkpoint. Clear the mock log to assert this request in isolation.
+  : >"$log"
+  if PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$profile_selection" \
+    D1_CONFIRM_EMPTY_RESTORE=yes \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-profile-capture \
+    "$d1" restore "$(basename "$backup")" >"$case_dir/restore.out" 2>"$case_dir/restore.err"; then
+    echo 'restore accepted a v2 checkpoint with a v3 candidate profile' >&2
+    exit 1
+  fi
+  grep -q 'backup profile mismatch for REFERENCE_OA_BONUS_PROFILE' "$case_dir/restore.err"
+  if grep -q ' down --volumes ' "$log"; then
+    echo 'profile mismatch reached destructive restore cleanup' >&2
+    exit 1
+  fi
+
+  : >"$log"
+  if PATH="$mock_bin:$PATH" \
+    D1_DOCKER_MOCK_LOG="$log" \
+    D1_DOCKER_MOCK_SELECTION="$profile_selection" \
+    D1_DOCKER_MOCK_BONUS_PROFILE=unrecognized-live-profile \
+    D1_DOCKER_MOCK_PERSONNEL_PROFILE=reference-oa-production-personnel-v1 \
+    D1_ENV_FILE="$env_file" \
+    D1_PROJECT_NAME=omsbizfoundry-upgrade-profile-capture \
+    "$d1" upgrade >"$case_dir/invalid.out" 2>"$case_dir/invalid.err"; then
+    echo 'upgrade accepted an unrecognized running profile' >&2
+    exit 1
+  fi
+  grep -q 'running Bonus profile is unsupported' "$case_dir/invalid.err"
+  if grep -q '/app/backup create\| down ' "$log"; then
+    echo 'unknown running profile reached backup mutation or container stop' >&2
+    exit 1
+  fi
+}
+
+run_contract_preflight_failure_case
+run_success_case
+run_failure_case
+run_profile_capture_case
+
+run_stage_capture_case() {
+  case_dir="$test_dir/stage-capture"
+  backup_dir="$case_dir/backups"
+  env_file="$case_dir/d1.env"
+  log="$case_dir/docker.log"
+  mkdir -p "$case_dir"
+  write_env "$env_file" "$backup_dir"
+  cat >>"$env_file" <<ENV
+ENABLE_PEOPLE=true
+ENABLE_PROJECT=true
+ENABLE_EVIDENCE=true
+ENABLE_PRODUCTION=true
+PROJECT_PARTY_BASE_URL=http://party-directory:8090
+REFERENCE_OA_PRODUCTION_STAGE_PROFILE=reference-oa-stage-materials-v1
+ENV
+  stage_selection="$running_selection
+party-directory
+people-groups
+project-workspace
+evidence-service
+production-operations"
+  : >"$log"
+  PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$log" D1_DOCKER_MOCK_SELECTION="$stage_selection" D1_ENV_FILE="$env_file" "$d1" upgrade >"$case_dir/out" 2>"$case_dir/err"
+  backup=$(find "$backup_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  grep -qx 'REFERENCE_OA_PRODUCTION_STAGE_PROFILE=' "$backup/suite-selection.env"
+  : >"$log"
+  if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$log" D1_DOCKER_MOCK_SELECTION="$stage_selection" D1_ENV_FILE="$env_file" D1_CONFIRM_EMPTY_RESTORE=yes "$d1" restore "$(basename "$backup")" >"$case_dir/restore.out" 2>"$case_dir/restore.err"; then
+    echo 'restore accepted disabled-stage checkpoint with enabled candidate' >&2; exit 1
+  fi
+  grep -q 'backup profile mismatch for REFERENCE_OA_PRODUCTION_STAGE_PROFILE' "$case_dir/restore.err"
+  ! grep -q ' down --volumes ' "$log"
+  for bad in unknown mismatch; do
+    : >"$log"
+    live=unrecognized-live-stage; wb=$live
+    if [ "$bad" = mismatch ]; then live=reference-oa-stage-materials-v1; wb=''; fi
+    if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$log" D1_DOCKER_MOCK_SELECTION="$stage_selection" D1_DOCKER_MOCK_STAGE_PROFILE="$live" D1_DOCKER_MOCK_STAGE_WORKBENCH_PROFILE="$wb" D1_ENV_FILE="$env_file" "$d1" upgrade >"$case_dir/$bad.out" 2>"$case_dir/$bad.err"; then
+      echo 'upgrade accepted invalid or mismatched live stage profiles' >&2; exit 1
+    fi
+    ! grep -q '/app/backup create\| down ' "$log"
+  done
+  grep -q 'running stage profile is unsupported' "$case_dir/unknown.err"
+  grep -q 'running Production and Workbench stage profiles disagree' "$case_dir/mismatch.err"
+  # Before any Docker call, an enabled stage profile must have all owners.
+  cat >>"$env_file" <<ENV
+ENABLE_PRODUCTION=false
+ENV
+  : >"$log"
+  if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$log" D1_ENV_FILE="$env_file" "$d1" config >"$case_dir/missing.out" 2>"$case_dir/missing.err"; then
+    echo 'stage profile accepted missing Production' >&2; exit 1
+  fi
+  grep -q 'production stage requires' "$case_dir/missing.err"
+  [ ! -s "$log" ]
+}
+run_stage_capture_case
+
+echo 'PASS D1 upgrade selection test'

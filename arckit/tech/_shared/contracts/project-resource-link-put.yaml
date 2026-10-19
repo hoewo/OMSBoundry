@@ -1,0 +1,64 @@
+# Project Resource Link 命令 API 契约
+# 路径: arckit/tech/_shared/contracts/project-resource-link-put.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-resource-link-put.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+endpoint:
+  method: POST
+  path: "/api/v1/projects/{project_id}/resource-links"
+  summary: "建立或解除外部资源关联"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.resource-link.manage"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, operation]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      operation: {type: string, enum: [link, unlink]}
+      link_id: {type: [string, "null"], format: uuid, description: "unlink 时必填"}
+      target_service: {type: [string, "null"], enum: [contract-ledger, money-flow-ledger, evidence-service, design-operations, billing-invoice, null]}
+      resource_type: {type: [string, "null"], enum: [contract, obligation, transaction, evidence-file, design-work-item, invoice_registration, null]}
+      resource_id: {type: [string, "null"], format: uuid}
+      source_revision: {type: [integer, "null"], minimum: 1}
+      relation_key: {type: [string, "null"], pattern: "^[a-z][a-z0-9-]{0,63}$"}
+      note: {type: string, maxLength: 500, default: ""}
+
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [project, resource_link]
+      properties:
+        project: {$ref: "../models/Project.yaml"}
+        resource_link: {$ref: "../models/ProjectResourceLink.yaml"}
+  errors:
+    - {status: 400, code: INVALID_RESOURCE_LINK_COMMAND, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_OR_LINK_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: ACTIVE_LINK_CONFLICT, retryable: false}
+    - {status: 422, code: TARGET_REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: TARGET_REFERENCE_UNAVAILABLE, retryable: true}
+
+business_logic:
+  flow:
+    - "link 使用目标公开 API 验证 tenant、resource type、ID 与可选 revision。"
+    - "unlink 只结束本地 Link，不调用目标删除。"
+    - "原子递增 Project revision 并写 resource_linked 或 resource_unlinked 事件。"
+  state_transitions: ["link absent -> active", "link active -> unlinked"]
+  side_effects: ["只读调用目标应用；不写目标事实"]

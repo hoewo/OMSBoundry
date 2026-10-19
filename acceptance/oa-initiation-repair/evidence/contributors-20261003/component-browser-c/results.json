@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "fixture_ports": true,
+  "production_browser": false,
+  "original_components": true,
+  "scenarios": [
+    {
+      "name": "source-drawer-520-cancel-zero-write",
+      "passed": true
+    },
+    {
+      "name": "source-select-save-close-reread-refresh-zero-write",
+      "passed": true
+    },
+    {
+      "name": "source-confirmation-cancel-and-historical-end",
+      "passed": true
+    },
+    {
+      "name": "readonly-no-management-button-zero-write",
+      "passed": true
+    },
+    {
+      "name": "mobile-footer-and-selector-reachable",
+      "passed": true
+    }
+  ],
+  "page_errors": []
+}

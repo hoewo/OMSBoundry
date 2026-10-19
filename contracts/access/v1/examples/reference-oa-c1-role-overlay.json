@@ -1,0 +1,80 @@
+{
+  "schema_version": "1",
+  "overlay_id": "reference-oa-c1",
+  "overlay_version": "1.1.0",
+  "application_id": "project-workspace",
+  "audience": "project-workspace",
+  "site_roles": {
+    "identity_super_admin": {
+      "display_name": "身份超级管理员",
+      "scope_kind": "tenant",
+      "actions": []
+    },
+    "oa_business_admin": {
+      "display_name": "OA 业务管理员",
+      "scope_kind": "tenant",
+      "actions": [
+        "project-workspace.create",
+        "project-workspace.read",
+        "project-workspace.commercial-summary.read",
+        "project-workspace.materials.read",
+        "project-workspace.update",
+        "project-workspace.assignment.manage",
+        "project-workspace.resource-link.manage",
+        "project-workspace.hierarchy.manage",
+        "project-workspace.initiation.complete",
+        "project-workspace.cancel",
+        "project-workspace.history.read"
+        ,"project-workspace.completion.read"
+        ,"project-workspace.completion.confirm"
+      ]
+    },
+    "general_manager": {
+      "display_name": "总经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "project-workspace.read",
+        "project-workspace.commercial-summary.read",
+        "project-workspace.materials.read",
+        "project-workspace.history.read"
+        ,"project-workspace.completion.read"
+      ]
+    },
+    "business_manager": {
+      "display_name": "经营经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "project-workspace.read",
+        "project-workspace.commercial-summary.read",
+        "project-workspace.materials.read",
+        "project-workspace.history.read",
+        "project-workspace.assignment.business-owner.manage"
+        ,"project-workspace.completion.read"
+      ]
+    },
+    "production_manager": {
+      "display_name": "生产经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "project-workspace.read",
+        "project-workspace.materials.read",
+        "project-workspace.history.read",
+        "project-workspace.assignment.production-owner.manage"
+        ,"project-workspace.completion.read"
+      ]
+    },
+    "finance": {
+      "display_name": "财务",
+      "scope_kind": "tenant",
+      "actions": [
+        "project-workspace.read",
+        "project-workspace.commercial-summary.read",
+        "project-workspace.materials.read"
+      ]
+    }
+  },
+  "assignment_policy": {
+    "policy_id": "project-assignment-access",
+    "policy_version": "1.0.0"
+  }
+}

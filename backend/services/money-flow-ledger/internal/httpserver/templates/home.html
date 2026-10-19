@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark">MF</span><span>BizFoundry · Money Flow Ledger</span></div>
+    <div class="user-chip">{{.Principal.DisplayName}} · {{.Principal.Role}}</div>
+  </header>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/" aria-current="page">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">独立业务应用 · 资金事实</p>
+        <h1>资金流台账</h1>
+        <p class="hero-copy">分开记录“应该收付的义务”和“已经发生的资金”，再用不可变 Allocation 说明核销关系。这样余额、账龄和经营汇总都有可追溯依据。</p>
+      </div>
+      <span class="status-chip">{{.Status}}</span>
+    </section>
+
+    <section aria-labelledby="quick-start-title">
+      <p class="eyebrow">第一次使用</p>
+      <h2 id="quick-start-title">按这三步完成一条最小资金链</h2>
+      <div class="guide">
+        <div class="guide-step"><span>1</span><h3>登记本方与往来方</h3><p>先在主体目录建立公司、客户或供应商，后续义务和资金都引用稳定主体。</p></div>
+        <div class="guide-step"><span>2</span><h3>确认应收或应付</h3><p>建立义务并确认金额与到期日，它代表已经确认的经济责任，不等于资金已发生。</p></div>
+        <div class="guide-step"><span>3</span><h3>登记资金并核销</h3><p>录入实际收付款，再把资金分配给义务，查看剩余余额、账龄与汇总。</p></div>
+      </div>
+      <a class="button" href="{{basePath}}/parties">从登记主体开始</a>
+    </section>
+
+    <section aria-labelledby="daily-title">
+      <p class="eyebrow">日常记账</p>
+      <h2 id="daily-title">建立和核对业务事实</h2>
+      <div class="module-grid">
+        <a class="module-card" href="{{basePath}}/parties"><strong>主体目录</strong><small>管理本方账簿主体、客户和供应商。</small><span class="action">进入主体目录 →</span></a>
+        <a class="module-card" href="{{basePath}}/obligations"><strong>应收／应付义务</strong><small>登记、确认、调整、减免和关闭已确认义务。</small><span class="action">管理义务 →</span></a>
+        <a class="module-card" href="{{basePath}}/cash-transactions"><strong>实际收款／付款</strong><small>记录已经发生的真实资金事实及其来源依据。</small><span class="action">登记资金 →</span></a>
+        <a class="module-card" href="{{basePath}}/allocations"><strong>资金分配与余额</strong><small>把一笔资金分配到对应义务，明确已核销和未核销余额。</small><span class="action">处理核销 →</span></a>
+        <a class="module-card" href="{{basePath}}/internal-transfers"><strong>内部账户转账</strong><small>记录同一账簿主体内部账户之间的非经营性资金移动。</small><span class="action">登记内部转账 →</span></a>
+      </div>
+    </section>
+
+    <section aria-labelledby="insight-title">
+      <p class="eyebrow">经营观察</p>
+      <h2 id="insight-title">从事实生成当前视图</h2>
+      <div class="module-grid">
+        <a class="module-card" href="{{basePath}}/aging"><strong>逾期与账龄</strong><small>查看尚未核销义务的逾期情况和账龄分布。</small><span class="action">查看账龄 →</span></a>
+        <a class="module-card" href="{{basePath}}/cash-forecast"><strong>预计现金排期</strong><small>结合已确认义务查看当前预计收付款节奏。</small><span class="action">查看排期 →</span></a>
+        <a class="module-card" href="{{basePath}}/operating-summary"><strong>经营收支汇总</strong><small>聚合经营性收付款，不把内部转账混入经营结果。</small><span class="action">查看汇总 →</span></a>
+        <a class="module-card" href="{{basePath}}/ledger-exports"><strong>可校验台账导出</strong><small>按本方主体导出可核对、可留档的账簿结果。</small><span class="action">导出台账 →</span></a>
+      </div>
+    </section>
+
+    <p class="page-note">核心规则：义务和实际资金始终独立；只有 Allocation 说明哪部分资金核销了哪条义务。内部转账不计入经营收付款。</p>
+    <div class="quiet-actions"><form method="post" action="{{logoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销当前会话</button></form></div>
+  </main>
+</body>
+</html>

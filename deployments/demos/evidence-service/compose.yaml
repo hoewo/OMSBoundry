@@ -1,0 +1,61 @@
+name: ${EVIDENCE_DEMO_COMPOSE_PROJECT:-omsbizfoundry-evidence-service-demo}
+
+# Evidence Service Level A Demo only. It deliberately starts no Nginx,
+# Gateway, central IAM, Workbench, OSS, or neighboring business application.
+services:
+  db:
+    image: ${EVIDENCE_DEMO_POSTGRES_IMAGE:-postgres:18.6-alpine}
+    environment:
+      POSTGRES_DB: evidence_service
+      POSTGRES_USER: evidence_service
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./ops/demo init}
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(cat /proc/1/comm)\" = postgres && pg_isready -U evidence_service -d evidence_service"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes: [db:/var/lib/postgresql]
+    networks: [data]
+
+  evidence-service:
+    image: ${EVIDENCE_DEMO_IMAGE:-omsbizfoundry-evidence-service-demo:dev}
+    build:
+      context: ../../..
+      dockerfile: deployments/d1/docker/Dockerfile.evidence
+    environment:
+      HTTP_ADDR: :8085
+      DATABASE_URL: postgres://evidence_service:${POSTGRES_PASSWORD}@db:5432/evidence_service?sslmode=disable
+      MIGRATION_MODE: auto
+      IDENTITY_PROVIDER: template
+      TEMPLATE_TENANT_ID: 77777777-7777-4777-8777-777777777777
+      TEMPLATE_SUBJECT_ID: 88888888-8888-4888-8888-888888888888
+      TEMPLATE_DISPLAY_NAME: Evidence Demo 管理员
+      TEMPLATE_ACCESS_TOKEN: ${TEMPLATE_ACCESS_TOKEN:?run ./ops/demo init}
+      STORAGE_PROVIDER: local
+      PUBLIC_BASE_URL: ${EVIDENCE_PUBLIC_BASE_URL:-http://127.0.0.1:${EVIDENCE_DEMO_PORT:-28085}}
+      LOCAL_STORAGE_ROOT: /data/evidence/objects
+      LOCAL_SIGNING_KEY: ${LOCAL_SIGNING_KEY:?run ./ops/demo init}
+      MAX_UPLOAD_BYTES: "10485760"
+      UPLOAD_SESSION_TTL: 15m
+      ACCESS_GRANT_TTL: 5m
+      CLEANUP_STALE_AFTER: 30m
+      CLEANUP_BATCH_SIZE: "100"
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8085/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports: ["127.0.0.1:${EVIDENCE_DEMO_PORT:-28085}:8085"]
+    volumes: [objects:/data/evidence]
+    networks: [data, demo]
+
+volumes:
+  db:
+  objects:
+
+networks:
+  data:
+    internal: true
+  demo:

@@ -1,0 +1,72 @@
+# Billing / Invoice 当前登记投影
+metadata:
+  path: "tech/_shared/models/InvoiceRegistration.yaml"
+  domain: "billing-invoice"
+  entity_name: "InvoiceRegistration"
+  storage: "PostgreSQL"
+  owner: "Billing / Invoice"
+  version: "1.0"
+  created: "2026-09-27"
+  updated: "2026-09-27"
+
+type: object
+additionalProperties: false
+description: "已开具票据的系统登记完整当前投影；不是税务票据完整法律状态，也不是权限收敛后的 API 视图。"
+required: [id, tenant_id, status, issued_on, amount_minor, currency, issuer_party, recipient_party, source_refs, evidence_refs, revision, created_at, updated_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  status: {type: string, enum: [recorded, registration_invalidated], readOnly: true}
+  issued_on: {type: string, format: date}
+  amount_minor: {type: integer, minimum: 1}
+  currency: {type: string, pattern: "^[A-Z]{3}$"}
+  issuer_party: {$ref: "#/$defs/party_snapshot"}
+  recipient_party: {$ref: "#/$defs/party_snapshot"}
+  source_refs:
+    type: array
+    minItems: 1
+    items: {$ref: "#/$defs/source_snapshot"}
+  evidence_refs:
+    type: array
+    items: {$ref: "#/$defs/evidence_ref"}
+  note: {type: string, maxLength: 2000}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  updated_at: {type: string, format: date-time, readOnly: true}
+$defs:
+  party_snapshot:
+    type: object
+    additionalProperties: false
+    required: [id, revision, kind, legal_name]
+    properties:
+      id: {type: string, format: uuid}
+      revision: {type: integer, minimum: 1}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+      registration_identifier: {type: [string, "null"], minLength: 1, maxLength: 100}
+  source_snapshot:
+    type: object
+    additionalProperties: false
+    required: [kind, confirmed_by, confirmed_at]
+    properties:
+      kind: {type: string, enum: [manual_confirmation, project, contract, settlement, money_obligation]}
+      source_application: {type: [string, "null"], maxLength: 100}
+      resource_id: {type: [string, "null"], format: uuid}
+      source_revision: {type: [integer, "null"], minimum: 1}
+      display_summary: {type: string, minLength: 1, maxLength: 500}
+      confirmed_by: {type: string, minLength: 1, maxLength: 256}
+      confirmed_at: {type: string, format: date-time}
+  evidence_ref:
+    type: object
+    additionalProperties: false
+    required: [file_id, version, purpose]
+    properties:
+      file_id: {type: string, format: uuid}
+      version: {type: integer, minimum: 1}
+      purpose: {type: string, enum: [invoice_document, supporting_material]}
+      display_name: {type: string, minLength: 1, maxLength: 255}
+
+indexes:
+  - {name: invoice_registrations_tenant_id_idx, columns: [tenant_id, id], unique: true}
+  - {name: invoice_registrations_tenant_issued_idx, columns: [tenant_id, issued_on, id]}
+  - {name: invoice_registrations_tenant_status_idx, columns: [tenant_id, status, updated_at, id]}

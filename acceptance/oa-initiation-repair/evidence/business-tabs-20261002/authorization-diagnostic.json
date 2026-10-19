@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-02",
+  "environment": "Auth58 Main",
+  "method": "read-only Suite configuration and IAM effective Grant query",
+  "sources": [
+    {"id": "cost-outsourcing", "enabled": true, "entry_action": "cost-entry.read", "audience": "cost-outsourcing"},
+    {"id": "bonus-distribution", "enabled": true, "entry_action": "bonus-pool.read", "audience": "bonus-distribution"}
+  ],
+  "effective_grants_for_these_two_audiences": [],
+  "grant_writes": 0,
+  "business_writes": 0,
+  "permission_repair_completed": false
+}

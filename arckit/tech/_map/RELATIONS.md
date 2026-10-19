@@ -1,0 +1,29 @@
+# 技术关系
+
+- `project-workspace/solution.md` 实现 `spec/project-workspace/project-initiation.md`；Project Workspace 独占 `Project.yaml` 和 `ProjectPackageConversion.yaml` 的写入权。
+- `project-package-create.yaml`、`project-package-convert.yaml` 与 `project-package-rollback.yaml` 共同形成两级 Package 的创建、转换和安全撤销边界，`project-get.yaml` 暴露父子当前投影。
+- `assembly/oa-authorization-validation.md` 约束 Nginx → Gateway → IAM → 目标应用的权限路径；Gateway 不作最终授权，Project Workspace 复验 audience、action、tenant/resource scope 和业务状态。
+- `production-operations/decision.md` 实现 `spec/production-operations/multi-type-production.md` 的目标边界；现有 Design Operations 以 additive、单写事实的方式兼容演进，`design-v1` 旧入口不得授权 `consultation-v1`。
+- `production-operations/decision.md` 继续通过 Project／Assignment／Evidence 的版本化 reference-read 使用外部事实；Project 只拥有 `project_type_keys`，不复制 Stage Definition。
+- `approval-audit-results/decision.md` 与 `_shared/contracts/approval-audit-results-api.yaml` 实现 `spec/approval-audit-results/result-registration.md` 的目标边界；独立 Results 数据库冻结 Project、Contract／Settlement、前序批复和 Evidence 的精确 revision 快照，并以原生 Capability 作最终授权。
+- `approval-audit-project-results-reference.yaml` 向 Project 提供不含金额／Evidence 详情的两类当前结果最小引用；`project-completion-assessment-get.yaml` 纯读取评估，`project-completion-confirm.yaml` 只追加 `ProjectCompletionConfirmation.yaml` 和 Project revision。来源纠正／撤回显示 drift，不反向改写历史确认。
+- `cost-outsourcing/decision.md` 实现 `spec/cost-outsourcing/cost-outsourcing-lifecycle.md` 的目标边界；一个独立数据库内使用 Cost Entry 与 Outsourcing Engagement 两套聚合、revision 与历史，不建立兼容参考 OA `FinancialRecord` 的宽表。
+- Cost & Outsourcing 通过精确工作负载凭证读取 Project、Party、Contract 和 Evidence；`PayableSuggestion.yaml` 冻结来源 revision／digest，`payable-suggestion-api.yaml` 把建议幂等提交到 Money。Money 以 `PayableSuggestionIntake.yaml` 独立接受或拒绝：接受时创建且仅创建一个 Money 自有 Obligation，拒绝时不创建；C6 只显式同步目标决定和引用，目标不可用或部分失败不得改变来源事实。
+- C6 与 Money 使用独立数据库、独立事务和可重放命令，不共享业务表、ORM 或分布式事务；Money 以来源应用、来源类型、来源 ID 与 revision 形成稳定幂等键，并从来源快照建立自己拥有的 Party 映射。票据仍由 Billing 登记。
+- `bonus-distribution/decision.md` 实现 `spec/bonus-distribution/bonus-lifecycle.md` 的目标边界；Bonus Distribution 独占 Pool、Policy Snapshot、Input Snapshot、Allocation、revision、receipt 与 audit，经营／生产只作为来源和权限差异，不建立两套复制服务。
+- Bonus Distribution 通过请求绑定、单 action、精确资源的工作负载凭证读取 Contract／Settlement、Money receipt、People Person 与 Project Assignment；来源应用产生 revision／digest，C7 不读表、不导入 ORM，也不以姓名关联人员。
+- C7 发布后只生成带 Pool／Allocation revision 与 digest 的版本化 Payable Suggestion；Money 独立接受或拒绝并最终拥有 Obligation、支付、核销和余额。客户公式 `base * ratio / 1.065` 属于 `reference-oa-bonus-v1` Overlay，整数舍入与余数归属必须显式且可重放。
+- `bonus-distribution-api.yaml` 固化 C7 受保护入口和服务端金额收敛；`people-person-reference-get.yaml`、`project-assignment-reference-get.yaml` 与 `money-receipt-set-reference-get.yaml` 固化 Person、Assignment 和生产回款集合端口。Bonus 消费 adapter、People／Money 真实目标端、六进程组合、正式 D1、未选缺席和联合恢复已验证；C7→Money 建议仍待实现。
+- `business-engagement/decision.md` 实现 `spec/business-engagement/engagement-lifecycle.md` 的目标边界；Business Engagement 独占承接事实，Project／Evidence 提供版本化引用，项目客户关系由 Project 拥有；只有后续出现独立主体角色证据时才直接引用 Party，Contract／Money 独立确认建议。
+- `billing-invoice/solution.md` 实现 `spec/billing-invoice/invoice-registration.md` 的技术边界；Billing 独占已开票登记、精确金额、Party／来源快照、Evidence 引用和 revision，Money Flow 继续独占义务、现金、核销和余额。
+- `InvoiceRegistration.yaml` 与 `InvoiceRegistrationRevision.yaml` 定义 Billing 当前投影和不可变完整快照；`InvoiceRegistrationView.yaml` 与 `InvoiceRegistrationRevisionView.yaml` 定义服务端按 `amount.read` 收敛的 API 视图；`invoice-registration-*.yaml` 形成登记、查询、纠正、登记无效、Evidence 管理、历史和只读引用 Port。
+- Billing 通过请求绑定、单 action、精确资源的工作负载凭证读取 Party、Project、Contract、Money 和 Evidence reference API；Nginx／Gateway／IAM 不拥有或最终授权票据事实，C3 组合层只读聚合并下钻。
+- `assembly/c3-commercial-summary.md` 与 `project-commercial-summary-get.yaml` 由 Project Workspace 实现，消费 `contract-reference-get.yaml`、`money-obligation-reference-get.yaml`、`money-transaction-reference-get.yaml` 和 `invoice-registration-reference-get.yaml`；只返回即时分段，不建立共享财务模型。
+- `project-reference-get.yaml`、`contract-reference-get.yaml`、`contract-settlement-reference-get.yaml` 与 `money-obligation-reference-get.yaml` 共同提供 Billing 类型化来源所需的目标端兼容层；摘要由事实所有者产生，普通 Tenant `view` 不代替工作负载 reference action，Billing 消费侧交换与 resolver 仍须另行实现。
+- `party-directory/decision.md` 与 `party-directory/solution.md` 实现 `spec/party-directory/party-lifecycle.md`；Party Directory 独占当前档案和 revision，消费应用拥有角色与不可变业务快照。
+- `party-create.yaml`、`party-list.yaml`、`party-get.yaml`、`party-update.yaml`、`party-status-change.yaml` 与 `party-history-list.yaml` 形成 Party 人类管理闭环；`party-reference-get.yaml` 只接受精确 Party Scope 的工作负载凭证。
+- Project 创建可选通过 `party-reference-get.yaml` 验证精确 Party revision，并只冻结 ID、revision、kind 和 legal name；重放必须先于外部调用，Party 故障不得产生部分 Project。
+- `Party.yaml` 是当前投影，`PartyRevision.yaml` 是不可变历史；当前档案变化不得反向修改消费应用快照。
+- `customer-role-capability-overlay.yaml` 只把客户角色映射为稳定 Capability；Project Assignment Business Fact 继续表达资源责任事实。
+- `service-credential-exchange.yaml` 支持 Project 读取 People 引用和 IAM Policy 读取业务事实，不转移领域数据所有权。
+- `delivery/d1-environment-promotion.md` 将同一镜像、migration、契约和数据边界提升到目标环境。

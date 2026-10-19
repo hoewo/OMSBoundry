@@ -1,0 +1,14 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "RAM": [
+          "acs:ram::<ALIYUN_ACCOUNT_ID>:root"
+        ]
+      }
+    }
+  ]
+}

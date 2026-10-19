@@ -1,0 +1,34 @@
+# Project Assignment 策略事实读取 API 契约
+metadata: {path: "tech/_shared/contracts/project-assignment-policy-fact-get.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.0", created: "2026-09-26", updated: "2026-09-26"}
+endpoint: {method: GET, path: "/api/v1/policy-facts/projects/{project_id}/assignments/{assignment_id}", summary: "向可信 IAM／Policy Provider 提供 Assignment 版本化事实", auth_required: true, audience: "project-workspace", capability: "project-workspace.policy-fact.read"}
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+    - {name: assignment_id, type: string, format: uuid, required: true}
+  credential_scope: {kind: resources, exact_resource: {type: project, id_from: project_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, project_id, resource_type, subject_kind, subject_id, source_revision, role_key, status, revision, effective_from, display_name]
+      properties:
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        resource_type: {type: string, const: project-assignment}
+        subject_kind: {type: string, enum: [person, group]}
+        subject_id: {type: string, format: uuid}
+        source_revision: {type: integer, minimum: 1}
+        role_key: {type: string, enum: [business_owner, production_owner, participant, commercial_contributor]}
+        status: {type: string, enum: [active, ended]}
+        revision: {type: integer, minimum: 1, description: "活动时为创建 Project revision；结束后为结束 Project revision。"}
+        effective_from: {type: string, format: date-time}
+        ended_at: {type: [string, "null"], format: date-time}
+        display_name: {type: string, minLength: 1}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只接受精确 Project scope 的短期可信凭证。", "同一 Assignment ID 以 revision 和 status 显式表达结束，不静默改写历史。", "不返回 Project 内部表或其他 Assignment。"]

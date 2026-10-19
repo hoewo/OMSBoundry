@@ -1,0 +1,80 @@
+.create-action-button.ant-btn {
+  height: 34px;
+  padding: 0 15px;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(240, 253, 250, 0.92), rgba(255, 255, 255, 0.98) 48%),
+    #ffffff;
+  box-shadow:
+    0 6px 14px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  color: #134e4a;
+  font-weight: 820;
+  letter-spacing: 0.01em;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
+}
+
+.create-action-button.ant-btn-sm,
+.create-action-button--compact.ant-btn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.create-action-button--icon-only.ant-btn {
+  width: 30px;
+  padding: 0;
+}
+
+.create-action-button.ant-btn > .anticon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 4px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 11px;
+}
+
+.create-action-button.ant-btn:hover,
+.create-action-button.ant-btn:focus-visible {
+  border-color: rgba(15, 118, 110, 0.36) !important;
+  background:
+    linear-gradient(135deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 1) 54%) !important;
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.08),
+    0 0 0 3px rgba(15, 118, 110, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  color: #0f3f3b !important;
+}
+
+.create-action-button.ant-btn:active {
+  border-color: rgba(15, 118, 110, 0.3) !important;
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.94), #ffffff 70%) !important;
+  box-shadow:
+    0 4px 10px rgba(15, 23, 42, 0.05),
+    inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  color: #0f3f3b !important;
+}
+
+.create-action-button.ant-btn[disabled],
+.create-action-button.ant-btn[disabled]:hover {
+  border-color: rgba(148, 163, 184, 0.32) !important;
+  background: #e5e7eb !important;
+  box-shadow: none;
+  color: #94a3b8 !important;
+}
+
+.create-action-button.ant-btn[disabled] > .anticon {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}

@@ -1,0 +1,72 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: resolve-release-provenance REPOSITORY_DIRECTORY" >&2
+  exit 2
+fi
+
+repository_directory=$1
+if [ ! -d "$repository_directory" ]; then
+  echo "repository directory does not exist: $repository_directory" >&2
+  exit 2
+fi
+repository_directory=$(CDPATH= cd -- "$repository_directory" && pwd -P)
+
+provenance_mode=${RELEASE_PROVENANCE_MODE:-development}
+release_commit=${RELEASE_COMMIT:-}
+release_built_at=${RELEASE_BUILT_AT:-}
+
+case "$provenance_mode" in
+  development)
+    release_commit=${release_commit:-unknown}
+    release_built_at=${release_built_at:-$(date -u '+%Y-%m-%dT%H:%M:%SZ')}
+    ;;
+  official)
+    if ! command -v git >/dev/null 2>&1; then
+      echo "official release provenance requires git" >&2
+      exit 1
+    fi
+    git_root=$(git -C "$repository_directory" rev-parse --show-toplevel 2>/dev/null) || {
+      echo "official release provenance requires a Git repository" >&2
+      exit 1
+    }
+    git_root=$(CDPATH= cd -- "$git_root" && pwd -P)
+    if [ "$git_root" != "$repository_directory" ]; then
+      echo "official release repository must be the Git worktree root" >&2
+      exit 1
+    fi
+    head_commit=$(git -C "$repository_directory" rev-parse --verify HEAD 2>/dev/null) || {
+      echo "official release provenance requires an existing HEAD commit" >&2
+      exit 1
+    }
+    if [ -n "$(git -C "$repository_directory" status --porcelain --untracked-files=all)" ]; then
+      echo "official release provenance requires a clean worktree, including no untracked files" >&2
+      exit 1
+    fi
+    if [ -n "$release_commit" ] && [ "$release_commit" != "$head_commit" ]; then
+      echo "RELEASE_COMMIT must exactly match the current HEAD for an official release" >&2
+      exit 1
+    fi
+    if [ -z "$release_built_at" ]; then
+      echo "RELEASE_BUILT_AT is required for an official release" >&2
+      exit 1
+    fi
+    release_commit=$head_commit
+    ;;
+  *)
+    echo "RELEASE_PROVENANCE_MODE must be development or official" >&2
+    exit 2
+    ;;
+esac
+
+if ! printf '%s' "$release_commit" | grep -Eq '^[0-9A-Za-z._-]+$'; then
+  echo "RELEASE_COMMIT contains unsupported characters" >&2
+  exit 2
+fi
+if ! printf '%s' "$release_built_at" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+  echo "RELEASE_BUILT_AT must be an RFC3339 UTC timestamp without fractional seconds" >&2
+  exit 2
+fi
+
+printf '%s\n%s\n' "$release_commit" "$release_built_at"

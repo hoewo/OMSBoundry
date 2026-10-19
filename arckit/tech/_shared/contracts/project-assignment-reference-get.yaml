@@ -1,0 +1,33 @@
+# Project Assignment 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/project-assignment-reference-get.yaml", domain: "project-workspace", owner: "Project Workspace", version: "1.1", created: "2026-09-25", updated: "2026-09-28"}
+endpoint: {method: GET, path: "/api/v1/references/projects/{project_id}/assignments/{assignment_id}", summary: "向类型化业务应用提供 Assignment 生命周期投影", auth_required: true, audience: "project-workspace", capability: "project-workspace.read"}
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+    - {name: assignment_id, type: string, format: uuid, required: true}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, project_id, resource_type, subject_kind, subject_id, source_revision, role_key, status, revision, display_name, effective_from]
+      properties:
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        resource_type: {type: string, const: project-assignment}
+        subject_kind: {type: string, enum: [person, group]}
+        subject_id: {type: string, format: uuid}
+        source_revision: {type: integer, minimum: 1, description: "Person 或 Group 的精确来源 revision。"}
+        role_key: {type: string, enum: [business_owner, production_owner, participant, commercial_contributor]}
+        status: {type: string, enum: [active, ended]}
+        revision: {type: integer, minimum: 1, description: "Assignment 创建时的 Project revision。"}
+        display_name: {type: string, minLength: 1}
+        effective_from: {type: string, format: date-time}
+        ended_at: {type: [string, "null"], format: date-time}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只返回指定 Project 内的 Assignment。", "消费方必须同时核对 subject_kind、subject_id、source_revision 和自身允许的 role_key。", "结束后保留同一 ID 和创建 revision，并把 status 投影为 ended。"]

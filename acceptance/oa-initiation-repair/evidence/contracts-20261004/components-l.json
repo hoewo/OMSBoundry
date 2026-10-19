@@ -1,0 +1,50 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    },
+    {
+      "name": "reopen-original-form-and-save-amendment-intention",
+      "passed": true
+    },
+    {
+      "name": "original-amendment-edit-keeps-identity",
+      "passed": true
+    },
+    {
+      "name": "original-confirmation-cancels-intention-without-removing-history",
+      "passed": true
+    },
+    {
+      "name": "reload-zero-command-and-truthful-disabled-material-controls",
+      "passed": true
+    },
+    {
+      "name": "unknown-core-reply-reload-and-original-command-resume",
+      "passed": true
+    },
+    {
+      "name": "original-forms-readonly-zero-command",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "0a9de70c22e20d606d1e90259dc034268e8044683e34a6de4cdead4ca06e092f",
+  "failure": {
+    "stage": "native-preparation",
+    "type": "Error",
+    "message": "locator.click: Error: strict mode violation: locator('.ant-drawer:visible [data-native-contract-preparation]').getByLabel('选择合同签约主体') resolved to 2 elements:\n    1) <div aria-label=\"选择合同签约主体\" class=\"ant-select ant-select-outlined css-ac2jek ant-select-single ant-select-show-arrow ant-select-disabled\">…</div> aka getByLabel('选择合同签约主体').first()\n    2) <input readonly value=\"\" disabled type=\"search\" role=\"combobox\" id=\"rc_select_0\" unselectable=\"on\" autocomplete=\"off\" aria-expanded=\"false\" aria-lab"
+  },
+  "business_command_count": 14,
+  "page_errors": []
+}

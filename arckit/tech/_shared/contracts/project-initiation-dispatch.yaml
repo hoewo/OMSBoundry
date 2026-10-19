@@ -1,0 +1,59 @@
+# 名称与经营负责人先行派发；正式资料后补。
+metadata:
+  path: "tech/_shared/contracts/project-initiation-dispatch.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-10-02"
+  updated: "2026-10-02"
+
+endpoint:
+  method: POST
+  path: "/api/v1/initiation-dispatches"
+  summary: "原子建立待立项 Project／Package 与经营负责人"
+  auth_required: true
+  audience: "project-workspace"
+  capabilities:
+    - "project-workspace.create"
+    - "project-workspace.hierarchy.manage"
+    - "project-workspace.assignment.manage"
+    - "project-workspace.assignment.business-owner.manage"
+  capability_rule: "project 节点要求 create，package 节点要求 hierarchy.manage；二者都另要求 assignment.manage 或 assignment.business-owner.manage。"
+  scope: "tenant"
+
+request:
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, node_type, name, business_owner]
+    properties:
+      command_id: {type: string, format: uuid}
+      node_type: {type: string, enum: [project, package]}
+      name: {type: string, minLength: 1, maxLength: 200}
+      business_owner:
+        type: object
+        additionalProperties: false
+        required: [person_id, source_revision]
+        properties:
+          person_id: {type: string, format: uuid}
+          source_revision: {type: integer, minimum: 1}
+
+responses:
+  success: {status: 201, schema: {$ref: "../models/Project.yaml"}}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 422, code: REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: REFERENCE_UNAVAILABLE, retryable: true}
+
+business_logic:
+  flow:
+    - "标准化名称／节点类型／稳定 ID，先检查本地幂等重放。"
+    - "以 Project 工作负载精确验证同租户 active Person 与来源 revision。浏览器不能提交显示快照。"
+    - "在一次本应用事务内保存无正式编号、空类型的 draft revision 1、business_owner Assignment、命令与 project_created 历史（含负责人快照、business-owner-v1 门槛）。"
+    - "失败整笔回滚；成功命令在 People 故障后仍可本地重放；同 ID 不同内容拒绝。"
+    - "用户随后在同一客户界面补资料并使用 complete-initiation；不能直接把未编号普通项目或无类型项目激活。"
+  state_transitions: ["none -> draft"]
+  side_effects: ["只读验证 People；只写 Project 数据库，不创建 Production、Contract、Money 或 Evidence 事实"]

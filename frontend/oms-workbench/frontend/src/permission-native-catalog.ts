@@ -1,0 +1,13 @@
+import contract from '../../../../contracts/access/v1/examples/contract-ledger-capabilities.json'
+import money from '../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json'
+import people from '../../../../contracts/access/v1/examples/people-groups-capabilities.json'
+import evidence from '../../../../contracts/access/v1/examples/evidence-service-capabilities.json'
+import party from '../../../../contracts/access/v1/examples/party-directory-capabilities.json'
+import project from '../../../../contracts/access/v1/examples/project-workspace-capabilities.json'
+import engagement from '../../../../contracts/access/v1/examples/business-engagement-capabilities.json'
+import billing from '../../../../contracts/access/v1/examples/billing-invoice-capabilities.json'
+import production from '../../../../contracts/access/v1/examples/production-operations-capabilities.json'
+import results from '../../../../contracts/access/v1/examples/approval-audit-results-capabilities.json'
+import cost from '../../../../contracts/access/v1/examples/cost-outsourcing-capabilities.json'
+import bonus from '../../../../contracts/access/v1/examples/bonus-distribution-capabilities.json'
+export const nativeManifests=[contract,money,people,evidence,party,project,engagement,billing,production,results,cost,bonus]

@@ -1,0 +1,117 @@
+services:
+  postgres:
+    image: ${D1_POSTGRES_IMAGE:?set D1_POSTGRES_IMAGE to a digest-pinned image}
+  postgres-provision:
+    image: ${D1_POSTGRES_IMAGE:?set D1_POSTGRES_IMAGE to a digest-pinned image}
+
+  identity-migrate:
+    image: ${D1_IDENTITY_IMAGE:?set D1_IDENTITY_IMAGE to a digest-pinned image}
+  identity-access:
+    image: ${D1_IDENTITY_IMAGE:?set D1_IDENTITY_IMAGE to a digest-pinned image}
+  public-keys-permissions:
+    image: ${D1_IDENTITY_IMAGE:?set D1_IDENTITY_IMAGE to a digest-pinned image}
+  public-keys:
+    image: ${D1_IDENTITY_IMAGE:?set D1_IDENTITY_IMAGE to a digest-pinned image}
+
+  contract-migrate:
+    image: ${D1_CONTRACT_IMAGE:-omsbizfoundry/contract-ledger:disabled}
+  contract-ledger:
+    image: ${D1_CONTRACT_IMAGE:-omsbizfoundry/contract-ledger:disabled}
+  contract-workload-key-permissions:
+    image: ${D1_CONTRACT_IMAGE:-omsbizfoundry/contract-ledger:disabled}
+  contract-workload-keys:
+    image: ${D1_CONTRACT_IMAGE:-omsbizfoundry/contract-ledger:disabled}
+
+  money-migrate:
+    image: ${D1_MONEY_IMAGE:-omsbizfoundry/money-flow-ledger:disabled}
+  money-flow-ledger:
+    image: ${D1_MONEY_IMAGE:-omsbizfoundry/money-flow-ledger:disabled}
+  money-workload-key-permissions:
+    image: ${D1_MONEY_IMAGE:-omsbizfoundry/money-flow-ledger:disabled}
+  money-workload-keys:
+    image: ${D1_MONEY_IMAGE:-omsbizfoundry/money-flow-ledger:disabled}
+
+  people-migrate:
+    image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
+  people-groups:
+    image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
+
+  party-migrate:
+    image: ${D1_PARTY_IMAGE:-omsbizfoundry/party-directory:disabled}
+  party-directory:
+    image: ${D1_PARTY_IMAGE:-omsbizfoundry/party-directory:disabled}
+
+  project-migrate:
+    image: ${D1_PROJECT_IMAGE:-omsbizfoundry/project-workspace:disabled}
+  project-workspace:
+    image: ${D1_PROJECT_IMAGE:-omsbizfoundry/project-workspace:disabled}
+  project-workload-key-permissions:
+    image: ${D1_PROJECT_IMAGE:-omsbizfoundry/project-workspace:disabled}
+  project-workload-keys:
+    image: ${D1_PROJECT_IMAGE:-omsbizfoundry/project-workspace:disabled}
+
+  evidence-migrate:
+    image: ${D1_EVIDENCE_IMAGE:-omsbizfoundry/evidence-service:disabled}
+  evidence-service:
+    image: ${D1_EVIDENCE_IMAGE:-omsbizfoundry/evidence-service:disabled}
+
+  business-engagement-workload-key-permissions:
+    image: ${D1_BUSINESS_ENGAGEMENT_IMAGE:-omsbizfoundry/business-engagement:disabled}
+  business-engagement-workload-keys:
+    image: ${D1_BUSINESS_ENGAGEMENT_IMAGE:-omsbizfoundry/business-engagement:disabled}
+  business-engagement-migrate:
+    image: ${D1_BUSINESS_ENGAGEMENT_IMAGE:-omsbizfoundry/business-engagement:disabled}
+  business-engagement:
+    image: ${D1_BUSINESS_ENGAGEMENT_IMAGE:-omsbizfoundry/business-engagement:disabled}
+
+  billing-workload-key-permissions:
+    image: ${D1_BILLING_IMAGE:-omsbizfoundry/billing-invoice:disabled}
+  billing-workload-keys:
+    image: ${D1_BILLING_IMAGE:-omsbizfoundry/billing-invoice:disabled}
+  billing-migrate:
+    image: ${D1_BILLING_IMAGE:-omsbizfoundry/billing-invoice:disabled}
+  billing-invoice:
+    image: ${D1_BILLING_IMAGE:-omsbizfoundry/billing-invoice:disabled}
+
+  production-workload-key-permissions:
+    image: ${D1_PRODUCTION_IMAGE:-omsbizfoundry/production-operations:disabled}
+  production-workload-keys:
+    image: ${D1_PRODUCTION_IMAGE:-omsbizfoundry/production-operations:disabled}
+  production-migrate:
+    image: ${D1_PRODUCTION_IMAGE:-omsbizfoundry/production-operations:disabled}
+  production-operations:
+    image: ${D1_PRODUCTION_IMAGE:-omsbizfoundry/production-operations:disabled}
+
+  approval-audit-results-workload-key-permissions:
+    image: ${D1_APPROVAL_AUDIT_RESULTS_IMAGE:-omsbizfoundry/approval-audit-results:disabled}
+  approval-audit-results-workload-keys:
+    image: ${D1_APPROVAL_AUDIT_RESULTS_IMAGE:-omsbizfoundry/approval-audit-results:disabled}
+  approval-audit-results-migrate:
+    image: ${D1_APPROVAL_AUDIT_RESULTS_IMAGE:-omsbizfoundry/approval-audit-results:disabled}
+  approval-audit-results:
+    image: ${D1_APPROVAL_AUDIT_RESULTS_IMAGE:-omsbizfoundry/approval-audit-results:disabled}
+
+  cost-outsourcing-workload-key-permissions:
+    image: ${D1_COST_OUTSOURCING_IMAGE:-omsbizfoundry/cost-outsourcing:disabled}
+  cost-outsourcing-workload-keys:
+    image: ${D1_COST_OUTSOURCING_IMAGE:-omsbizfoundry/cost-outsourcing:disabled}
+  cost-outsourcing-migrate:
+    image: ${D1_COST_OUTSOURCING_IMAGE:-omsbizfoundry/cost-outsourcing:disabled}
+  cost-outsourcing:
+    image: ${D1_COST_OUTSOURCING_IMAGE:-omsbizfoundry/cost-outsourcing:disabled}
+
+  bonus-distribution-workload-key-permissions:
+    image: ${D1_BONUS_DISTRIBUTION_IMAGE:-omsbizfoundry/bonus-distribution:disabled}
+  bonus-distribution-workload-keys:
+    image: ${D1_BONUS_DISTRIBUTION_IMAGE:-omsbizfoundry/bonus-distribution:disabled}
+  bonus-distribution-migrate:
+    image: ${D1_BONUS_DISTRIBUTION_IMAGE:-omsbizfoundry/bonus-distribution:disabled}
+  bonus-distribution:
+    image: ${D1_BONUS_DISTRIBUTION_IMAGE:-omsbizfoundry/bonus-distribution:disabled}
+
+  unified-workbench:
+    image: ${D1_WORKBENCH_IMAGE:?set D1_WORKBENCH_IMAGE to a digest-pinned image}
+  gateway:
+    image: ${D1_GATEWAY_IMAGE:?set D1_GATEWAY_IMAGE to a digest-pinned image}
+  nginx:
+    image: ${D1_NGINX_IMAGE:?set D1_NGINX_IMAGE to a digest-pinned image}

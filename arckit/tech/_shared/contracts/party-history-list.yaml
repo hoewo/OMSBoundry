@@ -1,0 +1,24 @@
+# Party revision 历史 API 契约
+metadata: {path: "tech/_shared/contracts/party-history-list.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/parties/{party_id}/history", summary: "读取主体不可变 revision 历史", auth_required: true, audience: "party-directory", capability: "party-directory.history.read"}
+request:
+  path_params: [{name: party_id, type: string, format: uuid, required: true}]
+  query_params:
+    - {name: before_revision, type: integer, minimum: 2, required: false}
+    - {name: limit, type: integer, minimum: 1, maximum: 100, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: "../models/PartyRevision.yaml"}}
+        next_before_revision: {type: [integer, "null"], minimum: 2}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PARTY_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["按 revision 倒序读取完整不可变快照。", "不从当前投影重构历史。"]

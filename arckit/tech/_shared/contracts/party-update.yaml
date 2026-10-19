@@ -1,0 +1,29 @@
+# 更正 Party 当前资料 API 契约
+metadata: {path: "tech/_shared/contracts/party-update.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: PUT, path: "/api/v1/parties/{party_id}", summary: "以期望 revision 更正主体当前资料", auth_required: true, audience: "party-directory", capability: "party-directory.update"}
+request:
+  path_params: [{name: party_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, kind, legal_name, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      kind: {type: string, enum: [organization, individual]}
+      legal_name: {type: string, minLength: 1, maxLength: 200}
+      registration_identifier: {type: [string, "null"], minLength: 1, maxLength: 100}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+responses:
+  success: {status: 200, schema: {$ref: "../models/Party.yaml"}}
+  errors:
+    - {status: 400, code: INVALID_REQUEST, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PARTY_NOT_FOUND, retryable: false}
+    - {status: 409, code: PARTY_REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 422, code: NO_EFFECTIVE_CHANGE, retryable: false}
+business_logic:
+  flow: ["锁定当前 Party 并校验 expected_revision。", "追加完整 profile_updated revision。", "原子推进当前投影、命令和审计。"]
+  side_effects: ["不修改消费应用已经冻结的主体快照"]

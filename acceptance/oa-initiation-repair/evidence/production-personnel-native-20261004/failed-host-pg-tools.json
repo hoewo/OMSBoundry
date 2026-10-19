@@ -1,0 +1,36 @@
+{
+  "top_level_pass": 158,
+  "pass_including_subtests": 408,
+  "failed": [
+    "TestCounterpartyContextBackupRestorePreservesVersionsIdentityAndReplay"
+  ],
+  "skipped": [
+    "TestProductionMaterialProjectPostgresHTTPCompositionAndEmptyRestore",
+    "TestRecordedMaterialProjectPostgresThreeSourcesAndEmptyRestore"
+  ],
+  "no_test_packages": [
+    "omsbizfoundry/project-workspace/cmd/ops",
+    "omsbizfoundry/project-workspace/cmd/server",
+    "omsbizfoundry/project-workspace/cmd/workload-keyctl",
+    "omsbizfoundry/project-workspace/internal/testdatabase"
+  ],
+  "checks": [
+    {
+      "test": "TestProductionMaterialMigration7To8KeepsLegacyFactsAndIsIdempotent",
+      "output": "production_material_migration_integration_test.go:107: schema7_to_8_legacy_owned_facts_unchanged=true idempotent=true canonical_link_appended=true"
+    },
+    {
+      "test": "TestRecordedMaterialMigration8To9KeepsFactsAndAllThreeLinks",
+      "output": "recorded_material_migration_integration_test.go:105: schema8_to9_legacy_owned_facts_unchanged=true idempotent=true three_canonical_links_appended=true"
+    },
+    {
+      "test": "TestReferenceOAProductionMigration11To12PreservesLegacyAndDoesNotSelectOverlay",
+      "output": "reference_oa_production_migration_integration_test.go:78: migration11_to12_idempotent=true four_old_roles_ids_revisions_snapshots_receipts_history_unchanged=true profiles_and_customer_facts_zero=true no_automatic_grants=true"
+    },
+    {
+      "test": "TestOAProductionNativePG18ColdRestoreReplayAndContinue",
+      "output": "reference_oa_production_repository_integration_test.go:375: project_only_pg18_cold_empty_target_restore=true canonical_digest=a6c85f2366bb11bffc9cedf3733220f1 dump_sha256=e0955eced8dfa995d3face50bfc4d7b1a431290615bc370c90da4e14faf25a2e facts_and_audit_unchanged=true offline_replay_zero_write=true continued_new_identities=true suite_restore=false production_iam=false"
+    }
+  ],
+  "reason": "Host pg_dump/pg_restore absent. Re-run with the actual PG18 tools in the owned container; only random Project test databases accepted."
+}

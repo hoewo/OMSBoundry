@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "application_id": "cost-outsourcing",
+  "application_version": "0.1.0",
+  "audience": "cost-outsourcing",
+  "capability_namespaces": ["cost-entry", "outsourcing-engagement", "outsourcing-payable-suggestion"],
+  "capabilities": [
+    { "id": "cost-entry.create", "description": "在凭证 Project 范围内登记直接成本", "risk": "write", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.read", "description": "读取凭证范围内成本的非金额事实", "risk": "read", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.amount.read", "description": "读取或提交成本金额与币种", "risk": "privileged", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.correct", "description": "基于 expected revision 追加成本纠正", "risk": "write", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.withdraw", "description": "显式撤回成本并保留历史", "risk": "privileged", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.evidence.manage", "description": "增加、替换或移除成本 Evidence 精确引用", "risk": "write", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "cost-entry.history.read", "description": "读取成本的不可变 revision 历史", "risk": "read", "resource_types": ["project", "cost_entry", "reference_oa_cost_entry", "business_cost_project", "production_cost_project"] },
+    { "id": "outsourcing-engagement.create", "description": "在凭证 Project 范围内登记外委事项", "risk": "write", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.read", "description": "读取凭证范围内外委事项的非金额事实", "risk": "read", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.amount.read", "description": "读取或提交外委与合同冻结金额", "risk": "privileged", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.correct", "description": "基于 expected revision 追加外委事项纠正", "risk": "write", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.withdraw", "description": "显式撤回外委事项并保留历史", "risk": "privileged", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.assess", "description": "按固定五分制追加外委评分 revision", "risk": "write", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.evidence.manage", "description": "增加、替换或移除外委 Evidence 精确引用", "risk": "write", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-engagement.history.read", "description": "读取外委事项及评分的不可变历史", "risk": "read", "resource_types": ["project", "outsourcing_engagement"] },
+    { "id": "outsourcing-payable-suggestion.create", "description": "从精确 Cost 或 Engagement revision 提出付款建议并支持恢复重试", "risk": "write", "resource_types": ["project", "payable_suggestion"] },
+    { "id": "outsourcing-payable-suggestion.read", "description": "读取付款建议、Money 独立决定和不可变历史", "risk": "read", "resource_types": ["project", "payable_suggestion"] },
+    { "id": "outsourcing-payable-suggestion.withdraw", "description": "在 Money 决定前撤回付款建议", "risk": "privileged", "resource_types": ["project", "payable_suggestion"] }
+  ]
+}

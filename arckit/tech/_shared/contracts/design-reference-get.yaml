@@ -1,0 +1,28 @@
+# Design Work Item 引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/design-reference-get.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/api/v1/references/design-work-items/{work_item_id}", summary: "向 Project 提供最小稳定 Design 引用投影", auth_required: true, audience: "design-operations", capability: "design-work-item.reference.read"}
+request:
+  path_params: [{name: work_item_id, type: string, format: uuid, required: true}]
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, id, work_item_id, project_id, type_key, resource_type, status, revision, completion_gaps]
+      properties:
+        tenant_id: {type: string}
+        id: {type: string, format: uuid, description: "跨应用稳定引用统一 ID；与 work_item_id 相同"}
+        work_item_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        type_key: {type: string, const: design}
+        resource_type: {type: string, const: design-work-item}
+        status: {type: string, enum: [draft, in-progress, completed, cancelled]}
+        revision: {type: integer, minimum: 1}
+        current_stage_key: {type: [string, "null"]}
+        completion_gaps: {type: array, items: {type: string}}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: WORK_ITEM_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["只返回 Design 自有完成投影和稳定 ID。", "不包含文件对象键、人员名册、合同或资金事实。"]

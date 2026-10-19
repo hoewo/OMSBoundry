@@ -1,0 +1,668 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+project=${D1_PROJECT_NAME:-omsbizfoundry}
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+for command in curl jq openssl docker; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key="$1"
+  fallback="${2:-}"
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+image_mode=$(env_value D1_IMAGE_MODE build)
+if [ -n "${D1_PUBLIC_URL:-}" ]; then
+  base_url=$D1_PUBLIC_URL
+elif [ "$ingress_mode" = https ]; then
+  public_host=$(env_value D1_PUBLIC_HOST)
+  public_https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+  if [ "$public_https_port" = 443 ]; then base_url="https://$public_host"; else base_url="https://$public_host:$public_https_port"; fi
+else
+  base_url="http://$(env_value PUBLIC_BIND 127.0.0.1):$(env_value PUBLIC_PORT 18000)"
+fi
+username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+enable_contract=$(env_value ENABLE_CONTRACT true)
+enable_money=$(env_value ENABLE_MONEY true)
+enable_people=$(env_value ENABLE_PEOPLE true)
+enable_party=$(env_value ENABLE_PARTY true)
+enable_project=$(env_value ENABLE_PROJECT true)
+enable_evidence=$(env_value ENABLE_EVIDENCE true)
+enable_billing=$(env_value ENABLE_BILLING false)
+enable_production=$(env_value ENABLE_PRODUCTION false)
+enable_approval_audit_results=$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)
+enable_cost_outsourcing=$(env_value ENABLE_COST_OUTSOURCING false)
+enable_bonus_distribution=$(env_value ENABLE_BONUS_DISTRIBUTION false)
+tenant_id=$(env_value TENANT_ID)
+compose_file="$d1_dir/compose.yaml"
+pull_compose_file="$d1_dir/compose.pull.yaml"
+https_compose_file="$d1_dir/compose.https.yaml"
+compose_override_file=${D1_COMPOSE_OVERRIDE_FILE:-}
+
+compose() {
+  set -- --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution "$@"
+  [ -z "$compose_override_file" ] || set -- --file "$compose_override_file" "$@"
+  [ "$ingress_mode" != https ] || set -- --file "$https_compose_file" "$@"
+  [ "$image_mode" != pull ] || set -- --file "$pull_compose_file" "$@"
+  set -- --file "$compose_file" "$@"
+  docker compose --project-name "$project" --env-file "$env_file" "$@"
+}
+
+expect_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+hidden_value() {
+  name="$1"
+  file="$2"
+  sed -n "s/.*name=\"$name\" value=\"\([^\"]*\)\".*/\1/p" "$file" | head -1
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" \
+    "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" \
+    "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+published=$(compose config --format json | jq -c '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] | sort')
+[ "$published" = '["nginx"]' ] || { echo "only nginx may publish a host port, got $published" >&2; exit 1; }
+
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-running.XXXXXX")
+trap 'rm -rf "$workspace"' EXIT HUP INT TERM
+cookies="$workspace/cookies"
+csrf=$(curl --fail --silent --show-error --cookie-jar "$cookies" "$base_url/auth/api/v1/csrf" | jq -er .csrf_token)
+payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+curl --fail --silent --show-error --cookie "$cookies" --cookie-jar "$cookies" \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" \
+  "$base_url/auth/api/v1/login" | jq -e --arg username "$username" '.principal.username == $username' >/dev/null
+admin_subject_id=$(curl --fail --silent --show-error --cookie "$cookies" "$base_url/auth/api/v1/session" | jq -er .principal.subject_id)
+
+if [ "$enable_production" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/production-operations")" "authorize Production Operations"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/production.html" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/production/")" "open Production Operations"
+  grep -Fq 'Production Operations' "$workspace/production.html" || {
+    echo "Production Operations workspace marker is missing" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/production/")" "disabled Production route"
+fi
+
+if [ "$enable_approval_audit_results" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/approval-audit-results")" "authorize Approval & Audit Results"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/results.html" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/results/")" "open Approval & Audit Results"
+  grep -Fq 'Approval &amp; Audit Results' "$workspace/results.html" || {
+    echo "Approval & Audit Results workspace marker is missing" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/results/")" "disabled Approval & Audit Results route"
+fi
+
+if [ "$enable_cost_outsourcing" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/cost-outsourcing")" "authorize Cost & Outsourcing"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/cost-outsourcing.html" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/cost-outsourcing/")" "open Cost & Outsourcing"
+  grep -Fq '成本与外协' "$workspace/cost-outsourcing.html" || {
+    echo "Cost & Outsourcing workspace marker is missing" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/cost-outsourcing/")" "disabled Cost & Outsourcing route"
+fi
+
+if [ "$enable_bonus_distribution" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/bonus-distribution")" "authorize Bonus Distribution"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/bonus-distribution.html" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/bonus/")" "open Bonus Distribution"
+  grep -Fq '奖金分配' "$workspace/bonus-distribution.html" || {
+    echo "Bonus Distribution workspace marker is missing" >&2
+    exit 1
+  }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/bonus-distribution.js" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/bonus/assets/bonus-distribution.js")" "load Bonus Distribution browser script"
+  # The application intentionally emits a relative API path. When the script is
+  # mounted below /bonus/, the browser resolves api/v1/... to /bonus/api/v1/...
+  # without coupling the application asset to the edge prefix.
+  grep -Fq '/api/v1/bonus-pools' "$workspace/bonus-distribution.js" || {
+    echo "Bonus Distribution API client marker is missing" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/bonus/")" "disabled Bonus Distribution route"
+fi
+
+stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$(openssl rand -hex 4)"
+fault_suffix=""
+
+if [ "$enable_contract" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/contract-ledger")" "authorize Contract"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/contract.html" --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" "$base_url/contract/parties")" "open Contract"
+  contract_csrf=$(hidden_value csrf_token "$workspace/contract.html")
+  [ -n "$contract_csrf" ] || { echo "Contract CSRF field is missing" >&2; exit 1; }
+  contract_registration_id="D1-C-$stamp"
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$contract_csrf" \
+    --data-urlencode kind=organization --data-urlencode "legal_name=D1 Contract $stamp" \
+    --data-urlencode "registration_identifier=$contract_registration_id" "$base_url/contract/parties")" "write Contract"
+  compose run --no-deps --rm contract-migrate /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/contract-party-preflight.json"
+  jq -e --arg registration_identifier "$contract_registration_id" \
+    '.ready_for_review == true and .ready_for_cutover == false and .automatic_merge_allowed == false and .counts.unresolved == .counts.parties and (.items | any(.registration_identifier == $registration_identifier and .decision_status == "unresolved" and (.local_snapshot_sha256 | length) == 64))' \
+    "$workspace/contract-party-preflight.json" >/dev/null || { echo "Contract Party migration preflight invariant failed" >&2; exit 1; }
+fi
+
+if [ "$enable_money" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/money-flow-ledger")" "authorize Money Flow"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/money.html" --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" "$base_url/money/parties")" "open Money Flow"
+  money_csrf=$(hidden_value csrf_token "$workspace/money.html")
+  command_id=$(hidden_value command_id "$workspace/money.html")
+  [ -n "$money_csrf" ] && [ -n "$command_id" ] || { echo "Money Flow protected form fields are missing" >&2; exit 1; }
+  money_registration_id="D1-M-$stamp"
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$money_csrf" \
+    --data-urlencode "command_id=${command_id:-$(new_uuid)}" --data-urlencode kind=organization \
+    --data-urlencode "legal_name=D1 Money $stamp" --data-urlencode "registration_identifier=$money_registration_id" \
+    "$base_url/money/parties")" "write Money Flow"
+  compose run --no-deps --rm money-migrate /app/ops party-migration-preflight --tenant-id "$tenant_id" >"$workspace/money-party-preflight.json"
+  jq -e --arg registration_identifier "$money_registration_id" \
+    '.ready_for_review == true and .ready_for_cutover == false and .automatic_merge_allowed == false and .counts.unresolved == .counts.parties and (.items | any(.registration_identifier == $registration_identifier and .decision_status == "unresolved" and (.local_snapshot_sha256 | length) == 64))' \
+    "$workspace/money-party-preflight.json" >/dev/null || { echo "Money Flow Party migration preflight invariant failed" >&2; exit 1; }
+fi
+
+if [ "$enable_people" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/people-groups")" "authorize People & Groups"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/people.html" --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" "$base_url/people/")" "open People & Groups"
+  type_key="acceptance_$(openssl rand -hex 4)"
+  role_key="member_$(openssl rand -hex 4)"
+  capability_key="capability_$(openssl rand -hex 4)"
+  create_definition() {
+    kind="$1"; key="$2"; label="$3"
+    payload=$(jq -cn --arg key "$key" --arg display_name "$label" '{key:$key,display_name:$display_name}')
+    expect_status 201 "$(curl --silent --show-error --output "$workspace/definition.json" --write-out '%{http_code}' \
+      --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+      --data "$payload" "$base_url/people/api/v1/definitions/$kind")" "create People definition $kind"
+  }
+  create_definition group_type "$type_key" "D1 验收组类型"
+  create_definition membership_role "$role_key" "D1 验收成员"
+  create_definition capability "$capability_key" "D1 验收能力"
+  payload=$(jq -cn --arg display_name "D1 Person $stamp" --arg reference_code "D1-P-$stamp" '{display_name:$display_name,reference_code:$reference_code}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/person.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/people/api/v1/persons")" "create Person"
+  person_id=$(jq -er .id "$workspace/person.json")
+  payload=$(jq -cn --arg group_type_key "$type_key" --arg name "D1 Group $stamp" --arg purpose "D1 人员编组验收" '{group_type_key:$group_type_key,name:$name,purpose:$purpose}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/group.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/people/api/v1/groups")" "create Group"
+  group_id=$(jq -er .id "$workspace/group.json")
+  payload=$(jq -cn --arg person_id "$person_id" --arg role_key "$role_key" --arg start_date "$(date -u '+%Y-%m-%d')" '{expected_revision:1,person_id:$person_id,role_key:$role_key,start_date:$start_date}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/membership.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/people/api/v1/groups/$group_id/memberships")" "join Membership"
+  group_revision=$(jq -er .group_revision "$workspace/membership.json")
+  payload=$(jq -cn --arg capability_key "$capability_key" --arg start_date "$(date -u '+%Y-%m-%d')" --argjson expected_revision "$group_revision" '{expected_revision:$expected_revision,capability_key:$capability_key,start_date:$start_date}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/capability.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/people/api/v1/groups/$group_id/capabilities")" "assign Group Capability"
+  group_revision=$(jq -er .group_revision "$workspace/capability.json")
+  payload=$(jq -cn --argjson expected_revision "$group_revision" '{expected_revision:$expected_revision}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/snapshot.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/people/api/v1/groups/$group_id/snapshots")" "publish Roster Snapshot"
+  snapshot_sha=$(jq -er .sha256 "$workspace/snapshot.json")
+  [ "${#snapshot_sha}" -eq 64 ] || { echo "People snapshot digest is invalid" >&2; exit 1; }
+fi
+
+if [ "$enable_party" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/party-directory")" "authorize Party Directory"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/party.html" --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" "$base_url/party/")" "open Party Directory"
+  grep -Fq '组织与个人主体' "$workspace/party.html" || { echo "Party Directory human page title is missing" >&2; exit 1; }
+  grep -Fq '登记主体' "$workspace/party.html" || { echo "Party Directory create entry is missing" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/party.js" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/party/assets/demo.js")" "load Party Directory browser script"
+  grep -Fq '/gateway/authorize/party-directory' "$workspace/party.js" || { echo "Party Directory permission refresh is missing" >&2; exit 1; }
+  grep -Fq 'PARTY_REVISION_CONFLICT' "$workspace/party.js" || { echo "Party Directory revision recovery is missing" >&2; exit 1; }
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg legal_name "D1 Party $stamp" --arg registration_identifier "D1-PARTY-$stamp" \
+    '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/party.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/party/api/v1/parties")" "create Party"
+  party_id=$(jq -er .id "$workspace/party.json")
+  party_revision=$(jq -er .revision "$workspace/party.json")
+  [ "$party_revision" = 1 ] || { echo "Party revision is not 1" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/parties.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/party/api/v1/parties?status=active&limit=100")" "list active Party choices"
+  jq -e --arg id "$party_id" '(.allowed_actions | index("party-directory.read")) and (.items | any(.id == $id and .status == "active"))' "$workspace/parties.json" >/dev/null || {
+    echo "Party choice list did not expose the new active Party with allowed_actions" >&2
+    exit 1
+  }
+fi
+
+verify_billing() {
+  [ "$enable_party" = true ] && [ "$enable_project" = true ] && [ "$enable_evidence" = true ] || {
+    echo "Billing acceptance requires Party, Project and Evidence" >&2
+    exit 1
+  }
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/billing-invoice")" "authorize Billing"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing.html" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/")" "open Billing human workspace"
+  grep -Fq '已开票登记' "$workspace/billing.html" || { echo "Billing human workspace title is missing" >&2; exit 1; }
+  grep -Fq '当前允许动作' "$workspace/billing.html" || { echo "Billing allowed-actions projection is missing" >&2; exit 1; }
+  grep -Fq '金额已按权限隐藏' "$workspace/billing.html" || { echo "Billing amount-redaction explanation is missing" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing.js" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/assets/demo.js")" "load Billing browser script"
+  for marker in '/gateway/authorize/billing-invoice' 'error.status===409' 'error.status===503' 'amount_visible' 'expected_revision'; do
+    grep -Fq "$marker" "$workspace/billing.js" || { echo "Billing browser recovery marker is missing: $marker" >&2; exit 1; }
+  done
+  curl --fail --silent --show-error --cookie "$cookies" "$base_url/workbench/" >"$workspace/workbench-billing.html"
+  grep -Fq '/gateway/authorize/billing-invoice' "$workspace/workbench-billing.html" || { echo "Billing is missing from Workbench navigation" >&2; exit 1; }
+
+  receiver_command_id=$(new_uuid)
+  payload=$(jq -cn --arg command_id "$receiver_command_id" --arg legal_name "D1 Billing Recipient $stamp" \
+    --arg registration_identifier "D1-BILL-RECIPIENT-$stamp" \
+    '{command_id:$command_id,kind:"organization",legal_name:$legal_name,registration_identifier:$registration_identifier}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/billing-recipient.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/party/api/v1/parties")" "create Billing recipient Party"
+  billing_recipient_id=$(jq -er .id "$workspace/billing-recipient.json")
+  billing_recipient_revision=$(jq -er .revision "$workspace/billing-recipient.json")
+
+  billing_create_command=$(new_uuid)
+  payload=$(jq -cn --arg command_id "$billing_create_command" --arg issued_on "$(date -u '+%Y-%m-%d')" \
+    --arg issuer_id "$party_id" --argjson issuer_revision "$party_revision" \
+    --arg recipient_id "$billing_recipient_id" --argjson recipient_revision "$billing_recipient_revision" \
+    --arg project_id "$project_id" --argjson project_revision "$project_revision" \
+    '{command_id:$command_id,issued_on:$issued_on,amount_minor:12345,currency:"CNY",issuer_party_ref:{id:$issuer_id,revision:$issuer_revision},recipient_party_ref:{id:$recipient_id,revision:$recipient_revision},source_refs:[{kind:"project",resource_id:$project_id,source_revision:$project_revision}],note:"D1 Billing lifecycle"}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/billing-created.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations")" "record Billing invoice"
+  billing_id=$(jq -er .id "$workspace/billing-created.json")
+  jq -e --arg issuer_id "$party_id" --arg recipient_id "$billing_recipient_id" --arg project_id "$project_id" \
+    '.status == "recorded" and .revision == 1 and .amount_minor == 12345 and .issuer_party.id == $issuer_id and .recipient_party.id == $recipient_id and (.source_refs | any(.kind == "project" and .resource_id == $project_id))' \
+    "$workspace/billing-created.json" >/dev/null || { echo "Billing create projection is invalid" >&2; exit 1; }
+
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-detail.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id")" "read Billing invoice"
+  jq -e '.revision == 1 and .amount_minor == 12345 and (.allowed_actions | index("correct"))' "$workspace/billing-detail.json" >/dev/null || {
+    echo "Billing detail did not preserve amount or allowed actions" >&2
+    exit 1
+  }
+
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:1,reason:"D1 说明纠正",patch:{note:"D1 verified invoice"}}')
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-corrected.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations/$billing_id/corrections")" "correct Billing invoice"
+  jq -e '.revision == 2 and .note == "D1 verified invoice"' "$workspace/billing-corrected.json" >/dev/null
+
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:1,reason:"D1 stale revision",patch:{note:"must not overwrite"}}')
+  expect_status 409 "$(curl --silent --show-error --output "$workspace/billing-stale.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations/$billing_id/corrections")" "reject stale Billing revision"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-after-stale.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id")" "read Billing after stale revision"
+  jq -e '.revision == 2 and .note == "D1 verified invoice"' "$workspace/billing-after-stale.json" >/dev/null || { echo "Billing stale revision changed state" >&2; exit 1; }
+
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg file_id "$file_id" \
+    '{command_id:$command_id,expected_revision:2,reason:"D1 关联原始票据",evidence_refs:[{file_id:$file_id,version:1,purpose:"invoice_document",display_name:"D1 invoice.pdf"}]}')
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-evidence.json" --write-out '%{http_code}' \
+    --request PUT --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations/$billing_id/evidence")" "attach Billing Evidence"
+  jq -e --arg file_id "$file_id" '.revision == 3 and (.evidence_refs | any(.file_id == $file_id and .version == 1))' "$workspace/billing-evidence.json" >/dev/null
+
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3,reason:"D1 重复登记"}')
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-invalidated.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations/$billing_id/invalidation")" "invalidate Billing registration"
+  jq -e '.revision == 4 and .status == "registration_invalidated"' "$workspace/billing-invalidated.json" >/dev/null
+
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-history.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id/history")" "read Billing history"
+  jq -e '[.items[].revision] == [4,3,2,1]' "$workspace/billing-history.json" >/dev/null || { echo "Billing revision history is incomplete" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-list.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations?project_id=$project_id")" "list Billing invoices"
+  jq -e --arg id "$billing_id" '.effective_amount_minor == 0 and (.items | any(.id == $id and .status == "registration_invalidated"))' "$workspace/billing-list.json" >/dev/null || {
+    echo "Billing effective total did not exclude the invalidated registration" >&2
+    exit 1
+  }
+
+  # Revocation is reflected only after a fresh Gateway -> IAM credential. The
+  # target then redacts current/history amounts and rejects blind amount writes.
+  payload=$(jq -cn --arg subject_id "$admin_subject_id" --arg audience billing-invoice --arg action billing-invoice.amount.read \
+    '{subject_id:$subject_id,audience:$audience,action:$action}')
+  expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" \
+    "$base_url/auth/api/v1/admin/grants/revoke")" "revoke Billing amount visibility"
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/billing-invoice")" "refresh Billing after amount revoke"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-redacted.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id")" "read redacted Billing detail"
+  jq -e '.amount_visible == false and .amount_minor == null and .currency == null and (.allowed_actions | index("amount_read")) == null' "$workspace/billing-redacted.json" >/dev/null || { echo "Billing amount revocation did not redact the detail" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-redacted-history.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id/history")" "read redacted Billing history"
+  jq -e '(.items | length) == 4 and all(.items[]; .snapshot.amount_visible == false and .snapshot.amount_minor == null and .snapshot.currency == null)' "$workspace/billing-redacted-history.json" >/dev/null || { echo "Billing history leaked amount after revocation" >&2; exit 1; }
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:4,reason:"blind amount write",patch:{amount_minor:99999}}')
+  expect_status 403 "$(curl --silent --show-error --output "$workspace/billing-blind-amount.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations/$billing_id/corrections")" "reject blind Billing amount correction"
+  payload=$(jq -cn --arg subject_id "$admin_subject_id" --arg audience billing-invoice --arg action billing-invoice.amount.read \
+    '{subject_id:$subject_id,audience:$audience,action:$action}')
+  expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" --data "$payload" \
+    "$base_url/auth/api/v1/admin/grants")" "restore Billing amount visibility"
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/billing-invoice")" "refresh Billing after amount restore"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/billing-restored-amount.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id")" "read restored Billing amount"
+  jq -e '.amount_visible == true and .amount_minor == 12345 and (.allowed_actions | index("amount_read")) != null' "$workspace/billing-restored-amount.json" >/dev/null || { echo "Billing amount permission did not recover" >&2; exit 1; }
+
+  for expectation in \
+    "party-directory|party-directory.reference.read|party|$party_id" \
+    "party-directory|party-directory.reference.read|party|$billing_recipient_id" \
+    "project-workspace|project-workspace.read|project|$project_id" \
+    "evidence-service|evidence-service.view|file|$file_id"; do
+    IFS='|' read -r audience action resource_type resource_id <<EOF
+$expectation
+EOF
+    workload_audits=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='billing-invoice' AND details->>'audience'='$audience' AND details->'actions' @> '[\\\"$action\\\"]'::jsonb AND details->'scope'->'resources' @> '[{\\\"type\\\":\\\"$resource_type\\\",\\\"id\\\":\\\"$resource_id\\\"}]'::jsonb\"")
+    [ "$workload_audits" -ge 1 ] || { echo "Billing exact workload credential audit is missing: $expectation" >&2; exit 1; }
+  done
+
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    --data-urlencode resource_type=project --data-urlencode "resource_id=$project_id" \
+    "$base_url/gateway/authorize/billing-invoice")" "authorize project-scoped Billing"
+  expect_status 403 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations")" "reject unfiltered project-scoped Billing list"
+  expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations?project_id=$project_id")" "allow scoped Billing list"
+  expect_status 403 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations?project_id=$(new_uuid)")" "reject adjacent Billing project"
+}
+
+if [ "$enable_project" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/project-workspace")" "authorize Project Workspace"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/project.html" --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" "$base_url/project/")" "open Project Workspace"
+  grep -Fq 'assets/demo.js' "$workspace/project.html" || { echo "Project Workspace Gateway-safe asset path is missing" >&2; exit 1; }
+  grep -Fq '客户主体（可选）' "$workspace/project.html" || { echo "Project client Party chooser is missing" >&2; exit 1; }
+  grep -Fq '加载主体目录' "$workspace/project.html" || { echo "Project Party load action is missing" >&2; exit 1; }
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/project.js" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/project/assets/demo.js")" "load Project Workspace browser script"
+  grep -Fq "authorizeApplication('party-directory')" "$workspace/project.js" || { echo "Project user Party authorization is missing" >&2; exit 1; }
+  grep -Fq 'client_party' "$workspace/project.js" || { echo "Project client Party submission is missing" >&2; exit 1; }
+  if [ "$enable_party" = true ]; then
+    payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "D1-PROJECT-$stamp" \
+      --arg name "D1 Project $stamp" --arg party_id "$party_id" --argjson party_revision "$party_revision" \
+      '{command_id:$command_id,project_number:$project_number,name:$name,summary:"D1 组合交付验收",planned_start_date:null,planned_end_date:null,project_type_keys:["validation"],client_party:{party_id:$party_id,source_revision:$party_revision}}')
+  else
+    payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "D1-PROJECT-$stamp" \
+      --arg name "D1 Project $stamp" \
+      '{command_id:$command_id,project_number:$project_number,name:$name,summary:"D1 组合交付验收",planned_start_date:null,planned_end_date:null,project_type_keys:["validation"]}')
+  fi
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/project.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/project/api/v1/projects")" "create Project"
+  project_id=$(jq -er .id "$workspace/project.json")
+  payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:1}')
+  expect_status 422 "$(curl --silent --show-error --output "$workspace/project-initiation.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/project/api/v1/projects/$project_id/complete-initiation")" "record incomplete Project initiation"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/project-details.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/project/api/v1/projects/$project_id")" "read Project"
+  project_revision=$(jq -er '.project.revision' "$workspace/project-details.json")
+  [ "$project_revision" = 2 ] || { echo "pending Project revision is not 2" >&2; exit 1; }
+  if [ "$enable_party" = true ]; then
+    jq -e --arg id "$project_id" --arg party_id "$party_id" '.project.id == $id and .project.revision == 2 and .project.status == "pending_completion" and .project.client_party.party_id == $party_id and .project.client_party.source_revision == 1 and .project.client_party.legal_name != ""' "$workspace/project-details.json" >/dev/null
+    workload_party_audits=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d identity_access -At -c \"SELECT count(*) FROM iam_audit_entries WHERE action='iam_service_credential_issued' AND details->>'workload_id'='project-workspace' AND details->>'audience'='party-directory' AND details->'actions' @> '[\\\"party-directory.reference.read\\\"]'::jsonb AND details->'scope'->'resources' @> '[{\\\"type\\\":\\\"party\\\",\\\"id\\\":\\\"$party_id\\\"}]'::jsonb\"")
+    [ "$workload_party_audits" -ge 1 ] || { echo "Project exact Party workload credential audit is missing" >&2; exit 1; }
+  else
+    jq -e --arg id "$project_id" '.project.id == $id and .project.revision == 2 and .project.status == "pending_completion" and .project.client_party == null' "$workspace/project-details.json" >/dev/null
+  fi
+fi
+
+if [ "$enable_evidence" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/evidence-service")" "authorize Evidence Service"
+
+  printf '%%PDF-1.7\nD1 Evidence %s\n' "$stamp" >"$workspace/evidence.pdf"
+  evidence_size=$(wc -c <"$workspace/evidence.pdf" | tr -d ' ')
+  evidence_sha=$(openssl dgst -sha256 -r "$workspace/evidence.pdf" | awk '{print $1}')
+  payload=$(jq -cn --arg file_name "d1-evidence-$stamp.pdf" --arg media_type application/pdf \
+    --arg sha256 "$evidence_sha" --argjson size_bytes "$evidence_size" \
+    '{file_name:$file_name,size_bytes:$size_bytes,media_type:$media_type,sha256:$sha256,client_context:{purpose:"d1-delivery-acceptance"}}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/upload-session.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/evidence/v1/upload-sessions")" "create Evidence upload session"
+  session_id=$(jq -er .session_id "$workspace/upload-session.json")
+  upload_url=$(jq -er .authorization.upload_url "$workspace/upload-session.json")
+  case "$upload_url" in "$base_url/evidence/v1/local-uploads/"*) ;; *) echo "Evidence upload URL is outside the D1 public data plane" >&2; exit 1;; esac
+
+  # No suite cookie is sent: the object-bound short-lived token is the only
+  # credential on this Nginx -> Evidence byte path.
+  expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --request PUT -H 'Content-Type: application/pdf' --data-binary "@$workspace/evidence.pdf" "$upload_url")" "upload Evidence bytes"
+  payload=$(jq -cn --arg sha256 "$evidence_sha" --argjson observed_size_bytes "$evidence_size" \
+    '{observed_size_bytes:$observed_size_bytes,observed_sha256:$sha256}')
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/evidence-version.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' -H "Idempotency-Key: $(new_uuid)" \
+    --data "$payload" "$base_url/evidence/v1/upload-sessions/$session_id/complete")" "complete Evidence upload"
+  file_id=$(jq -er .file_id "$workspace/evidence-version.json")
+  [ "$(jq -er .sha256 "$workspace/evidence-version.json")" = "$evidence_sha" ] || { echo "Evidence service-confirmed digest differs" >&2; exit 1; }
+  payload='{"disposition":"inline","delivery_mode":"direct"}'
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/evidence-grant.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/evidence/v1/files/$file_id/versions/1/access-grants")" "grant Evidence access"
+  evidence_url=$(jq -er .url "$workspace/evidence-grant.json")
+  expect_status 206 "$(curl --silent --show-error --output "$workspace/evidence-range" --write-out '%{http_code}' \
+    -H 'Range: bytes=0-3' "$evidence_url")" "download Evidence range"
+  [ "$(cat "$workspace/evidence-range")" = '%PDF' ] || { echo "Evidence range body differs" >&2; exit 1; }
+
+  curl --fail --silent --show-error --cookie "$cookies" "$base_url/workbench/" >"$workspace/workbench.html"
+  ! grep -q 'evidence-service' "$workspace/workbench.html" || { echo "technical Evidence service leaked into Workbench navigation" >&2; exit 1; }
+fi
+
+if [ "$enable_billing" = true ]; then
+  verify_billing
+fi
+
+if [ "$enable_party" = true ]; then
+  curl --fail --silent --show-error --cookie "$cookies" "$base_url/workbench/" >"$workspace/workbench-party.html"
+  grep -Fq '/gateway/authorize/party-directory' "$workspace/workbench-party.html" || { echo "Party Directory is missing from Workbench navigation" >&2; exit 1; }
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_billing" = true ]; then
+  billing_outage_command=$(new_uuid)
+  payload=$(jq -cn --arg command_id "$billing_outage_command" --arg issued_on "$(date -u '+%Y-%m-%d')" \
+    --arg issuer_id "$party_id" --argjson issuer_revision "$party_revision" \
+    --arg recipient_id "$billing_recipient_id" --argjson recipient_revision "$billing_recipient_revision" \
+    --arg project_id "$project_id" --argjson project_revision "$project_revision" \
+    '{command_id:$command_id,issued_on:$issued_on,amount_minor:6789,currency:"CNY",issuer_party_ref:{id:$issuer_id,revision:$issuer_revision},recipient_party_ref:{id:$recipient_id,revision:$recipient_revision},source_refs:[{kind:"project",resource_id:$project_id,source_revision:$project_revision}],note:"D1 Billing Party outage"}')
+  billing_before_count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d billing_invoice -At -c 'SELECT count(*) FROM invoice_registrations'")
+  compose stop party-directory >/dev/null
+  expect_status 503 "$(curl --silent --show-error --output "$workspace/billing-party-outage.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations")" "reject Billing write while Party is stopped"
+  billing_outage_commands=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d billing_invoice -At -c \"SELECT count(*) FROM invoice_registration_commands WHERE command_id='$billing_outage_command'\"")
+  billing_after_failure_count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d billing_invoice -At -c 'SELECT count(*) FROM invoice_registrations'")
+  [ "$billing_outage_commands" = 0 ] && [ "$billing_after_failure_count" = "$billing_before_count" ] || {
+    echo "Billing dependency failure produced a partial write" >&2
+    exit 1
+  }
+  expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/billing/api/v1/invoice-registrations/$billing_id")" "read existing Billing snapshot while Party is stopped"
+  compose start party-directory >/dev/null
+  recovered=false; attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/party/health/ready")" = 200 ]; then recovered=true; break; fi
+    attempts=$((attempts + 1)); sleep 1
+  done
+  [ "$recovered" = true ] || { echo "Party Directory did not recover for Billing retry" >&2; exit 1; }
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/billing-party-retry.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$payload" \
+    "$base_url/billing/api/v1/invoice-registrations")" "retry Billing write after Party recovery"
+  billing_outage_commands=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d billing_invoice -At -c \"SELECT count(*) FROM invoice_registration_commands WHERE command_id='$billing_outage_command'\"")
+  billing_after_recovery_count=$(compose exec -T postgres sh -eu -c "psql -U \"\$POSTGRES_USER\" -d billing_invoice -At -c 'SELECT count(*) FROM invoice_registrations'")
+  [ "$billing_outage_commands" = 1 ] && [ "$billing_after_recovery_count" -eq $((billing_before_count + 1)) ] || {
+    echo "Billing retry did not commit exactly once after dependency recovery" >&2
+    exit 1
+  }
+  fault_suffix=", Billing dependency failure no-write and recovery"
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_contract" = true ] && [ "$enable_money" = true ]; then
+  compose stop contract-ledger >/dev/null
+  expect_status 503 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/contract/parties")" "stopped Contract"
+  expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/money/parties")" "Money Flow isolation"
+  compose start contract-ledger >/dev/null
+  recovered=false
+  attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/contract/parties")" = 200 ]; then
+      recovered=true
+      break
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  [ "$recovered" = true ] || { echo "Contract did not recover after restart" >&2; exit 1; }
+  fault_suffix=", fault isolation and recovery"
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_people" = true ]; then
+  compose stop people-groups >/dev/null
+  expect_status 503 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/people/")" "stopped People & Groups"
+  [ "$enable_contract" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/contract/parties")" "Contract isolation from People"
+  [ "$enable_money" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/money/parties")" "Money isolation from People"
+  compose start people-groups >/dev/null
+  recovered=false; attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/people/")" = 200 ]; then recovered=true; break; fi
+    attempts=$((attempts + 1)); sleep 1
+  done
+  [ "$recovered" = true ] || { echo "People & Groups did not recover after restart" >&2; exit 1; }
+  fault_suffix=", fault isolation and recovery"
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_party" = true ] && [ "$enable_project" = true ]; then
+  compose stop party-directory >/dev/null
+  independent_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg project_number "D1-PARTY-OPTIONAL-$stamp" \
+    '{command_id:$command_id,project_number:$project_number,name:"Party 停机独立项目",summary:"Party 可选性验收",planned_start_date:null,planned_end_date:null,project_type_keys:["validation"]}')
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/party-optional-project.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$independent_payload" \
+    "$base_url/project/api/v1/projects")" "create Project without Party while Party is stopped"
+
+  outage_command_id=$(new_uuid)
+  outage_project_number="D1-PARTY-OUTAGE-$stamp"
+  outage_payload=$(jq -cn --arg command_id "$outage_command_id" --arg project_number "$outage_project_number" \
+    --arg party_id "$party_id" --argjson party_revision "$party_revision" \
+    '{command_id:$command_id,project_number:$project_number,name:"Party 故障项目",summary:"Party 故障关闭验收",planned_start_date:null,planned_end_date:null,project_type_keys:["validation"],client_party:{party_id:$party_id,source_revision:$party_revision}}')
+  expect_status 503 "$(curl --silent --show-error --output "$workspace/party-outage.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$outage_payload" \
+    "$base_url/project/api/v1/projects")" "reject Party-bound Project while Party is stopped"
+  expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/project/api/v1/projects/$project_id")" "read existing Party snapshot while Party is stopped"
+
+  compose start party-directory >/dev/null
+  recovered=false; attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/party/health/ready")" = 200 ]; then recovered=true; break; fi
+    attempts=$((attempts + 1)); sleep 1
+  done
+  [ "$recovered" = true ] || { echo "Party Directory did not recover after restart" >&2; exit 1; }
+  expect_status 201 "$(curl --silent --show-error --output "$workspace/party-outage-retry.json" --write-out '%{http_code}' \
+    --cookie "$cookies" -H 'Content-Type: application/json' --data "$outage_payload" \
+    "$base_url/project/api/v1/projects")" "retry Party-bound Project after Party recovery"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/projects-after-party-recovery.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/project/api/v1/projects")" "list Projects after Party recovery"
+  [ "$(jq --arg number "$outage_project_number" '[.items[] | select(.project_number == $number)] | length' "$workspace/projects-after-party-recovery.json")" = 1 ] || {
+    echo "Party outage retry did not create exactly one Project" >&2
+    exit 1
+  }
+  fault_suffix=", Party dependency failure isolation and recovery"
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_project" = true ]; then
+  compose stop project-workspace >/dev/null
+  expect_status 503 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/project/api/v1/projects/$project_id")" "stopped Project Workspace"
+  [ "$enable_contract" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/contract/parties")" "Contract isolation from Project"
+  compose start project-workspace >/dev/null
+  recovered=false; attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/project/api/v1/projects/$project_id")" = 200 ]; then recovered=true; break; fi
+    attempts=$((attempts + 1)); sleep 1
+  done
+  [ "$recovered" = true ] || { echo "Project Workspace did not recover after restart" >&2; exit 1; }
+  fault_suffix=", fault isolation and recovery"
+fi
+
+if [ "${D1_ACCEPTANCE_DISRUPTIVE:-}" = yes ] && [ "$enable_evidence" = true ]; then
+  compose stop evidence-service >/dev/null
+  expect_status 503 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" \
+    -H 'Content-Type: application/json' --data '{"disposition":"inline","delivery_mode":"direct"}' \
+    "$base_url/evidence/v1/files/$file_id/versions/1/access-grants")" "stopped Evidence Service"
+  [ "$enable_contract" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/contract/parties")" "Contract isolation from Evidence"
+  [ "$enable_money" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/money/parties")" "Money isolation from Evidence"
+  [ "$enable_people" != true ] || expect_status 200 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/people/")" "People isolation from Evidence"
+  compose start evidence-service >/dev/null
+  recovered=false; attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if [ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --cookie "$cookies" "$base_url/evidence/health/ready")" = 200 ]; then recovered=true; break; fi
+    attempts=$((attempts + 1)); sleep 1
+  done
+  [ "$recovered" = true ] || { echo "Evidence Service did not recover after restart" >&2; exit 1; }
+  fault_suffix=", fault isolation and recovery"
+fi
+
+echo "D1 running-stack acceptance passed: nginx-only exposure, one login, enabled-app read/write, Contract/Money Party migration preflight, People roster snapshot, Party to Project exact-reference lifecycle and Evidence byte lifecycle$fault_suffix"

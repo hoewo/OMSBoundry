@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "version": "v0.1.0-oa.20261003.3",
+  "project_schema": 11,
+  "healthy": 17,
+  "changed_containers": [
+    "identity-access",
+    "project-workspace",
+    "unified-workbench"
+  ],
+  "other_14_container_ids_unchanged": true,
+  "all_old_business_facts_preserved": true,
+  "grant_writes": 0,
+  "assignment_policies_unchanged": true,
+  "d1_check": true,
+  "official_release": false,
+  "full_oa_accepted": false
+}

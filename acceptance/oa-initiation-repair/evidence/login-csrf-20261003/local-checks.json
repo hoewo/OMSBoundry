@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "workbench_go_test_all": true,
+  "gateway_go_test_all": true,
+  "workbench_go_vet_all": true,
+  "node_full_workbench_and_bidding_adapter": {"tests":181,"passed":181,"failed":0,"skipped":0},
+  "login_and_csrf_subset": {"tests":17,"passed":17,"failed":0,"skipped":0},
+  "native_workbench_independent_starts":2,
+  "native_ready_and_login_assets":true,
+  "configured_iam_route_in_html":true,
+  "local_browser_fixture":false,
+  "linux_amd64_server_sha256":"4dac08e2bc6a3f47f11e58d94e7013f38b38050122de783cdb8214a0fecad141",
+  "main_browser_validation_included":false
+}

@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "schema": 10,
+  "changed_containers": [
+    "project-workspace",
+    "unified-workbench"
+  ],
+  "other_container_ids_unchanged": 15,
+  "project_facts_preserved": true,
+  "project_reference_config_only": true,
+  "d1_check": true,
+  "official_release": false,
+  "postflight_receipt": "postflight.json",
+  "initial_failure_retained": true
+}

@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "official_release": false,
+  "main_unchanged": true,
+  "images": {
+    "unified-workbench": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:fb097ceae605cd771e4106934d235472992c1749a67556c41139f32c0140bd3c",
+      "binary_sha256": "ccdc52246dc6c6a5a319a8da6353938ccae186e12bb4a970ccd46557a106421b"
+    }
+  }
+}

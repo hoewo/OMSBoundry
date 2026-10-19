@@ -1,0 +1,42 @@
+{
+  "top_level_pass": 161,
+  "pass_including_subtests": 411,
+  "failed": [],
+  "skipped": [],
+  "no_test_packages": [
+    "omsbizfoundry/project-workspace/cmd/ops",
+    "omsbizfoundry/project-workspace/cmd/server",
+    "omsbizfoundry/project-workspace/cmd/workload-keyctl",
+    "omsbizfoundry/project-workspace/internal/testdatabase"
+  ],
+  "checks": [
+    {
+      "test": "TestProductionMaterialMigration7To8KeepsLegacyFactsAndIsIdempotent",
+      "output": "production_material_migration_integration_test.go:107: schema7_to_8_legacy_owned_facts_unchanged=true idempotent=true canonical_link_appended=true"
+    },
+    {
+      "test": "TestRecordedMaterialMigration8To9KeepsFactsAndAllThreeLinks",
+      "output": "recorded_material_migration_integration_test.go:105: schema8_to9_legacy_owned_facts_unchanged=true idempotent=true three_canonical_links_appended=true"
+    },
+    {
+      "test": "TestReferenceOAProductionMigration11To12PreservesLegacyAndDoesNotSelectOverlay",
+      "output": "reference_oa_production_migration_integration_test.go:78: migration11_to12_idempotent=true four_old_roles_ids_revisions_snapshots_receipts_history_unchanged=true profiles_and_customer_facts_zero=true no_automatic_grants=true"
+    },
+    {
+      "test": "TestOAProductionNativePG18ColdRestoreReplayAndContinue",
+      "output": "reference_oa_production_repository_integration_test.go:375: project_only_pg18_cold_empty_target_restore=true canonical_digest=f448532a1ff4ea73cf49072c35f42381 dump_sha256=eaa6e259dc8449d74dd72661cf7eec0f00be789b10b57101d15b4939319886f5 facts_and_audit_unchanged=true offline_replay_zero_write=true continued_new_identities=true suite_restore=false production_iam=false"
+    },
+    {
+      "test": "TestCounterpartyContextBackupRestorePreservesVersionsIdentityAndReplay",
+      "output": "counterparty_context_restore_integration_test.go:115: context_canonical_before_restore=920593deb8ece5f40f7f963f12315aa93f0331b27af5ba03c49e8436a19697bd dump_sha256=905a1fadcedd71cd2e27332e6842f766318f390451a73f7f8eef53a7296e9cc6 restored_revision=5 continued_revision=6 identity_unchanged=true historical_contacts_preserved=true"
+    },
+    {
+      "test": "TestProductionMaterialProjectPostgresHTTPCompositionAndEmptyRestore",
+      "output": "production_material_integration_test.go:272: canonical_before_restore=efec519c24ae20bc082c82efce1b58c9ffb28364e0b02b3520c9d9b30c774a4d dump_sha256=47309f4eaac68ff1955921c65de88f4f0c47618ee90d17e3208385f791428843 restored_revision=2 continued_revision=3"
+    },
+    {
+      "test": "TestRecordedMaterialProjectPostgresThreeSourcesAndEmptyRestore",
+      "output": "recorded_material_integration_test.go:297: three_sources=true GET_owned_digest_unchanged=true canonical_before_restore=2915381a846ebd1657116b7745cea107a63dcda73b6a2f0ac9cd2a2561c2eb66 dump_sha256=8fed31846fa4e3e0cae69b77bdc35da94fe539b249891554f73ae8922ed1a149 restored_revision=4 continued_revision=5"
+    }
+  ]
+}

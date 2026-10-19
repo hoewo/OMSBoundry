@@ -1,0 +1,84 @@
+{
+  "version": "v0.1.0-oa.20261002.6",
+  "publication": {
+    "passed": true,
+    "official_release": false,
+    "images": {
+      "unified-workbench": {
+        "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:dd3a56c9ba07d140b8b723d7e7d010150cccd1fbd62f614335fead5700948b7b",
+        "image_id": "sha256:dd3a56c9ba07d140b8b723d7e7d010150cccd1fbd62f614335fead5700948b7b",
+        "binary_sha256": {
+          "server": "8b40742c529c4a20d2f4d7086c16f406a6b28b6d6cc8fdf1a48f47cd9f479e3f"
+        }
+      }
+    },
+    "main_unchanged": true
+  },
+  "rollout": {
+    "passed": true,
+    "schema": 10,
+    "changed_containers": [
+      "unified-workbench"
+    ],
+    "other_container_ids_unchanged": 16,
+    "project_facts_preserved": true,
+    "d1_check": true,
+    "official_release": false
+  },
+  "restore": {
+    "passed": true,
+    "empty_databases": 13,
+    "facts_and_sequences_equal": true,
+    "files_and_iam_key_bytes_equal": true,
+    "schema_7_to_10": false,
+    "schema_10_unchanged": true,
+    "existing_project_facts_unchanged": true,
+    "full_suite_restore_runtime": false
+  },
+  "post_browser_readback": {
+    "passed": true,
+    "browser_click_proof": false,
+    "full_oa_accepted": false,
+    "business_api_writes": 0,
+    "grant_writes": 0,
+    "reads": {
+      "f75d4570-5d6a-42ba-ade6-d1cda913ddda": {
+        "commercial_segments": 0,
+        "commercial_source_types": [],
+        "sources": {
+          "cost-outsourcing": {
+            "state": "denied",
+            "status": 403
+          },
+          "bonus-distribution": {
+            "state": "denied",
+            "status": 403
+          }
+        }
+      }
+    },
+    "assets": {
+      "reference-oa-initiation-runtime.js": "3e82fe0f5530485532769bdbac394bd802e4d8dba2d01a733b018124a438b3df",
+      "reference-oa-business-runtime.js": "f1ede9efcaa3ff532ff871a706cbf17b8bc9a9f3688e68fb543497fcf535ad59"
+    },
+    "healthy": 17,
+    "other_container_ids_unchanged": 16,
+    "all_12_business_databases_unchanged": true,
+    "capability_grants_unchanged": true,
+    "official_release": false
+  },
+  "offhost_export": {
+    "archive_sha256": "4e6e32e032399c57c5165cd30849d69fa22ce578c6a3f00e63d9026660df653c",
+    "bytes": 219512,
+    "local_receipt_pending": false,
+    "local_archive": "/Users/crispydog/Documents/aliyun/zhangfeng-antuiinfo/oa-business-tabs-backup-20261002.72gVZ0/oa-public-20261002f-backup.tar.gz",
+    "local_sha256": "4e6e32e032399c57c5165cd30849d69fa22ce578c6a3f00e63d9026660df653c",
+    "local_permission_mode": "0600"
+  },
+  "post_browser_d1_check": {
+    "exit_code": 0,
+    "evidence_provider": "local",
+    "private_pg_stopped": true,
+    "restore20_stopped": true
+  }
+}

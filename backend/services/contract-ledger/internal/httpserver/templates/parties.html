@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>主体登记 · Contract Ledger</title>
+  <link rel="stylesheet" href="{{.BasePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <header>
+    <a href="{{.BasePath}}/">Contract Ledger</a>
+    <h1>主体登记</h1>
+    <p>登记可参与合同签署的组织或个人。合同生效时将另外保存当时快照。</p>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <nav aria-label="合同台账主导航"><a href="{{.BasePath}}/">首页</a> <a href="{{.BasePath}}/parties" aria-current="page">主体</a> <a href="{{.BasePath}}/contracts">合同</a> <a href="{{.BasePath}}/audit">审计</a> {{if .CanRestore}}<a href="{{.BasePath}}/admin/restore">恢复账簿</a>{{end}} {{if .CanManage}}<a href="{{.BasePath}}/admin/users">本地用户</a>{{end}} {{if .UsesLocalIdentity}}<a href="{{.BasePath}}/account/password">修改密码</a>{{end}}</nav>
+    <form method="post" action="{{.LogoutPath}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">注销</button></form>
+  </header>
+
+  <main>
+    {{if .Created}}<p role="status">主体已创建。</p>{{end}}
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    {{if .CanRegisterParty}}<section aria-labelledby="create-party-title">
+      <h2 id="create-party-title">新建主体</h2>
+      <form method="post" action="{{.BasePath}}/parties">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <label for="kind">主体类型</label>
+        <select id="kind" name="kind" required>
+          <option value="organization" {{if eq .Form.Kind "organization"}}selected{{end}}>组织</option>
+          <option value="individual" {{if eq .Form.Kind "individual"}}selected{{end}}>个人</option>
+        </select>
+
+        <label for="legal_name">法定名称或姓名</label>
+        <input id="legal_name" name="legal_name" value="{{.Form.LegalName}}" maxlength="200" required>
+
+        <label for="registration_identifier">登记标识（可选）</label>
+        <input id="registration_identifier" name="registration_identifier" value="{{.Form.RegistrationIdentifier}}" maxlength="100">
+
+        <button type="submit">创建主体</button>
+      </form>
+    </section>{{end}}
+
+    <section aria-labelledby="party-list-title">
+      <h2 id="party-list-title">已登记主体</h2>
+      {{if .Parties}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">类型</th>
+            <th scope="col">法定名称或姓名</th>
+            <th scope="col">登记标识</th>
+            <th scope="col">Revision</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Parties}}
+          <tr>
+            <td>{{if eq .Kind "organization"}}组织{{else}}个人{{end}}</td>
+            <td>{{.LegalName}}</td>
+            <td>{{if .RegistrationIdentifier}}{{.RegistrationIdentifier}}{{else}}—{{end}}</td>
+            <td>{{.Revision}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未登记主体。</p>
+      {{end}}
+    </section>
+  </main>
+</body>
+</html>

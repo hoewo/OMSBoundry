@@ -1,0 +1,58 @@
+{
+  "schema_version": "customer-scenario-evidence/v1",
+  "scenario_id": "replace-customer-scenario",
+  "title": "替换为脱敏场景标题",
+  "source_kind": "real_customer_anonymized",
+  "claim_scope": "single_customer_scenario",
+  "assessment_status": "draft",
+  "problem": {
+    "statement": "替换为客户要解决的问题。",
+    "observable_outcomes": [],
+    "out_of_scope": []
+  },
+  "source_evidence": {
+    "evidence_refs": [],
+    "customer_confirmation_refs": []
+  },
+  "facts": [
+    {
+      "id": "replace-business-fact",
+      "owner": "替换为唯一事实所有者",
+      "meaning": "替换为事实的业务含义。",
+      "states": ["替换为实际状态"],
+      "correction": "替换为更正、撤销、调整或反向规则。",
+      "evidence_refs": []
+    }
+  ],
+  "applications": {
+    "enabled": [],
+    "disabled": []
+  },
+  "differences": [
+    {
+      "id": "replace-customer-difference",
+      "requirement": "替换为客户差异。",
+      "layer": "customer_specific",
+      "disposition": "needs_business_evidence",
+      "rationale": "替换为只归入这一层的理由。",
+      "fact_refs": ["replace-business-fact"],
+      "delivery_artifacts": [],
+      "evidence_refs": []
+    }
+  ],
+  "connectors": [],
+  "boundary_signals": {
+    "customer_core_branches": null,
+    "customer_databases": null,
+    "shared_business_tables": null,
+    "customer_business_migrations": null,
+    "cross_app_internal_reads": null,
+    "onsite_core_patches": null,
+    "hidden_mandatory_dependencies": null
+  },
+  "acceptance_evidence": [],
+  "limitations": [
+    "该文件只是待填写草稿；所有 null、空数组和 replace 占位内容都必须由真实脱敏证据替换。",
+    "在客户确认、验收证据和边界信号完整前不得把 assessment_status 改为 passed。"
+  ]
+}

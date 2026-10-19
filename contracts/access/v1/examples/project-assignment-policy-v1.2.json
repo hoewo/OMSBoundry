@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "policy_id": "project-assignment-access",
+  "policy_version": "1.2.0",
+  "audience": "project-workspace",
+  "roles": {
+    "business_owner": [
+      "project-workspace.read",
+      "project-workspace.update",
+      "project-workspace.profile.correct",
+      "project-workspace.counterparty-context.read",
+      "project-workspace.counterparty-context.manage"
+    ],
+    "production_owner": [
+      "project-workspace.read",
+      "project-workspace.update"
+    ],
+    "participant": [
+      "project-workspace.read"
+    ]
+  }
+}

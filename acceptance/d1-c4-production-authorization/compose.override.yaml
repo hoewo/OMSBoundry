@@ -1,0 +1,13 @@
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 10.250.140.0/28
+  app:
+    ipam:
+      config:
+        - subnet: 10.250.141.0/24
+  data:
+    ipam:
+      config:
+        - subnet: 10.250.142.0/24

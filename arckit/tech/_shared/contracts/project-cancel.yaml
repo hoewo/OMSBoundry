@@ -1,0 +1,46 @@
+# 取消 Project API 契约
+# 路径: arckit/tech/_shared/contracts/project-cancel.yaml
+
+metadata:
+  path: "tech/_shared/contracts/project-cancel.yaml"
+  domain: "project-workspace"
+  owner: "Project Workspace"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+
+endpoint:
+  method: POST
+  path: "/api/v1/projects/{project_id}/cancel"
+  summary: "取消 Project 并保留全部历史"
+  auth_required: true
+  audience: "project-workspace"
+  capability: "project-workspace.cancel"
+
+request:
+  path_params:
+    - {name: project_id, type: string, format: uuid, required: true}
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+
+responses:
+  success: {status: 200, schema: {$ref: "../models/Project.yaml"}}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: PROJECT_NOT_FOUND, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: true}
+    - {status: 409, code: PROJECT_ALREADY_CANCELLED, retryable: false}
+
+business_logic:
+  flow:
+    - "锁定 Project、消费 revision、写 cancellation reason。"
+    - "递增 revision 并原子写 project_cancelled 事件。"
+  state_transitions: ["draft -> cancelled", "pending_completion -> cancelled", "active -> cancelled"]
+  side_effects: ["不删除 Assignment、Link 或任何外部资源"]

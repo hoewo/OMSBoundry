@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-04T14:52:05.321Z",
+  "passed": false,
+  "private_native": true,
+  "public_main_changed": false,
+  "full_oa_accepted": false,
+  "local_docker_started": false,
+  "scenarios": [
+    {
+      "name": "private-Nginx-Gateway-formal-IAM-independent-PG18-owners-four-project-types",
+      "passed": true
+    },
+    {
+      "name": "normal-Workbench-original-shared-scheme-panel-lazy-read-zero-owner-writes",
+      "passed": true
+    }
+  ],
+  "infrastructure": {
+    "pg": "oa-stage-pg-6c880e7c85",
+    "edge": "oa-stage-edge-6c880e7c85",
+    "remote": "/tmp/oa-stage-suite-6c880e7c85",
+    "local_docker": false,
+    "main_changed": false,
+    "nginx_sha256": "84bd149a231d0377653be8edf133944d5b8716728128870e292281ee60b6a805"
+  },
+  "tenant_id": "8d083fb0-23e9-44d5-841a-c647e04dca89",
+  "project_id": "65389dea-344a-4282-875b-8d77efa169d2",
+  "subject_id": "e61286df-de18-485d-8718-497cd6a33613",
+  "stage": "cancel-and-required",
+  "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-drawer:visible').getByText('请至少上传一个方案文件', { exact: true }) to be visible\u001b[22m\n",
+  "page_errors": [],
+  "fixture_stopped": true,
+  "finished_at": "2026-10-04T14:53:31.585Z"
+}

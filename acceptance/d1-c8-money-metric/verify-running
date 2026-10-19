@@ -1,0 +1,350 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the running D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C8_METRIC_EVIDENCE_DIR:-"$d1_dir/.runtime/c8-money-metric-evidence"}
+
+[ "${D1_C8_METRIC_CONFIRM:-}" = yes ] || {
+  echo 'set D1_C8_METRIC_CONFIRM=yes to authorize temporary IAM user/grant mutations' >&2
+  exit 2
+}
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  docker compose --project-name "$compose_project" --env-file "$env_file" --file "$d1_dir/compose.yaml" \
+    --profile contract --profile money --profile people --profile party --profile project --profile evidence \
+    --profile business-engagement --profile billing --profile production --profile approval-audit-results \
+    --profile cost-outsourcing --profile bonus-distribution "$@"
+}
+
+digest_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo 'sha256sum or shasum is required' >&2
+    exit 2
+  fi
+}
+
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  [ "$actual" = "$expected" ] || { echo "$label: HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+hidden_value() {
+  name=$1; file=$2
+  sed -n "s/.*name=\"$name\" value=\"\([^\"]*\)\".*/\1/p" "$file" | head -1
+}
+
+location_value() {
+  key=$1; headers=$2
+  sed -n "s/.*[?&]$key=\([^&[:space:]]*\).*/\1/p" "$headers" | tr -d '\r' | head -1
+}
+
+get_page() {
+  path=$1; cookie_file=$2; output_file=$3
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "GET $path" 200 "$actual" "$duration"
+  expect_status 200 "$actual" "GET $path"
+}
+
+post_form() {
+  path=$1; cookie_file=$2; output_prefix=$3; shift 3
+  result=$(curl --silent --show-error --output "$output_prefix.body" --dump-header "$output_prefix.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+    "$@" "$base_url$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST $path" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "POST $path"
+}
+
+fetch_csrf() {
+  cookie_file=$1; output_file=$2
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"
+  expect_status 200 "$actual" 'fetch IAM csrf'
+  jq -er .csrf_token "$output_file"
+}
+
+auth_json() {
+  path=$1; cookie_file=$2; csrf_token=$3; payload=$4; output_file=$5; expected=$6
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf_token" --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output_file" != /dev/null ]; then
+    cat "$output_file" >&2; printf '\n' >&2
+  fi
+  expect_status "$expected" "$actual" "$path"
+}
+
+authorize_money() {
+  cookie_file=$1; csrf_token=$2; output_file=$3
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" --data-urlencode "csrf_token=$csrf_token" \
+    "$base_url/gateway/authorize/money-flow-ledger")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /gateway/authorize/money-flow-ledger' 303 "$actual" "$duration"
+  expect_status 303 "$actual" 'authorize money-flow-ledger'
+}
+
+metric_get() {
+  cookie_file=$1; output_file=$2; expected=$3; label=$4
+  result=$(curl --silent --show-error --output "$output_file" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie_file" --cookie-jar "$cookie_file" "$base_url/money/api/v1/metrics/operating-summary")
+  actual=${result%% *}; duration=${result#* }
+  record_http "GET /money/api/v1/metrics/operating-summary ($label)" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "$label"
+}
+
+grant_action() {
+  action=$1
+  payload=$(jq -cn --arg subject_id "$subject_id" --arg action "$action" \
+    '{subject_id:$subject_id,audience:"money-flow-ledger",action:$action}')
+  auth_json /api/v1/admin/grants "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+}
+
+revoke_action() {
+  action=$1
+  payload=$(jq -cn --arg subject_id "$subject_id" --arg action "$action" \
+    '{subject_id:$subject_id,audience:"money-flow-ledger",action:$action}')
+  auth_json /api/v1/admin/grants/revoke "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+}
+
+capture_money_facts() {
+  rows_file=$1; counts_file=$2; digest_output=$3
+  compose exec -T postgres psql --quiet --tuples-only --no-align --field-separator="$(printf '\t')" \
+    --set=ON_ERROR_STOP=1 --username "$(env_value POSTGRES_SUPERUSER oms_admin)" --dbname money_flow >"$rows_file" <<'SQL'
+CREATE TEMP TABLE c8_fact_snapshot(table_name text NOT NULL, row_value text NOT NULL);
+DO $$
+DECLARE item record;
+BEGIN
+  FOR item IN
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+      AND table_name NOT IN ('app_metadata','audit_entries','local_sessions','local_users','schema_migrations')
+    ORDER BY table_name
+  LOOP
+    EXECUTE format(
+      'INSERT INTO c8_fact_snapshot(table_name,row_value) SELECT %L,to_jsonb(value)::text FROM %I AS value',
+      item.table_name,
+      item.table_name
+    );
+  END LOOP;
+END $$;
+SELECT table_name,row_value FROM c8_fact_snapshot ORDER BY table_name,row_value;
+SQL
+  awk -F '\t' '{count[$1]++} END {for (table_name in count) print table_name "\t" count[table_name]}' "$rows_file" | LC_ALL=C sort >"$counts_file"
+  digest=$(digest_file "$rows_file")
+  printf '%s\n' "$digest" >"$digest_output"
+}
+
+assert_redacted() {
+  file=$1
+  jq -e '
+    .schema_version == "1" and .source_application == "money-flow-ledger" and
+    .definition_version == "money-flow-operating-summary-v1" and
+    (.items | length) > 0 and
+    all(.items[]; .redacted == true and .value == null and .source_digest == null and
+      .scope.kind == "ledger_owner" and .scope.resource_type == "party" and .unit == "money")
+  ' "$file" >/dev/null || { echo 'metric projection was not fully redacted' >&2; cat "$file" >&2; exit 1; }
+}
+
+assert_visible() {
+  file=$1
+  jq -e '
+    .schema_version == "1" and .source_application == "money-flow-ledger" and
+    .definition_version == "money-flow-operating-summary-v1" and
+    (.items | length) > 0 and
+    all(.items[]; .redacted == false and (.value | type) == "string" and
+      (.source_digest | test("^sha256:[0-9a-f]{64}$")) and
+      .scope.kind == "ledger_owner" and .scope.resource_type == "party" and .unit == "money")
+  ' "$file" >/dev/null || { echo 'metric projection did not expose exact authorized values' >&2; cat "$file" >&2; exit 1; }
+}
+
+create_money_party() {
+  slug=$1; legal_name=$2
+  get_page /money/parties "$admin_cookies" "$workspace/party-$slug-form.html"
+  csrf_token=$(hidden_value csrf_token "$workspace/party-$slug-form.html")
+  command_id=$(hidden_value command_id "$workspace/party-$slug-form.html")
+  [ -n "$csrf_token" ] && [ -n "$command_id" ] || { echo "Money party form tokens are missing: $slug" >&2; exit 1; }
+  post_form /money/parties "$admin_cookies" "$workspace/party-$slug-create" \
+    --data-urlencode "csrf_token=$csrf_token" --data-urlencode "command_id=$command_id" \
+    --data-urlencode kind=organization --data-urlencode "legal_name=$legal_name" \
+    --data-urlencode "registration_identifier=C8-METRIC-$slug-$stamp"
+  location_value party_id "$workspace/party-$slug-create.headers"
+}
+
+create_metric_fixture() {
+  fixture_created=true
+  owner_id=$(create_money_party owner "C8 指标验证本方 $stamp")
+  counterparty_id=$(create_money_party counterparty "C8 指标验证客户 $stamp")
+  [ -n "$owner_id" ] && [ -n "$counterparty_id" ] || { echo 'Money metric fixture party ids are missing' >&2; exit 1; }
+  get_page /money/cash-transactions "$admin_cookies" "$workspace/transaction-form.html"
+  csrf_token=$(hidden_value csrf_token "$workspace/transaction-form.html")
+  command_id=$(hidden_value command_id "$workspace/transaction-form.html")
+  [ -n "$csrf_token" ] && [ -n "$command_id" ] || { echo 'Money transaction form tokens are missing' >&2; exit 1; }
+  post_form /money/cash-transactions "$admin_cookies" "$workspace/transaction-create" \
+    --data-urlencode "csrf_token=$csrf_token" --data-urlencode "command_id=$command_id" \
+    --data-urlencode type=receipt --data-urlencode "ledger_owner_party_id=$owner_id" \
+    --data-urlencode "counterparty_party_id=$counterparty_id" \
+    --data-urlencode "description=C8 指标权限验证收款 $stamp" \
+    --data-urlencode amount=1234.56 --data-urlencode currency=CNY \
+    --data-urlencode "occurred_on=$(date -u '+%Y-%m-%d')" \
+    --data-urlencode account_reference=C8-METRIC-ACCOUNT \
+    --data-urlencode "manual_source_reference=C8-METRIC-$stamp" \
+    --data-urlencode "external_transaction_reference=C8-METRIC-TX-$stamp"
+  transaction_id=$(sed -n 's#^[Ll]ocation: .*\/cash-transactions\/\([0-9a-f-]*\).*#\1#p' \
+    "$workspace/transaction-create.headers" | tr -d '\r' | head -1)
+  [ -n "$transaction_id" ] || { echo 'Money metric fixture transaction id is missing' >&2; exit 1; }
+}
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c8-metric.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+subject_id=''
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+fixture_created=false
+owner_id=''
+counterparty_id=''
+transaction_id=''
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ -n "$subject_id" ] && [ -f "${admin_cookies:-/nonexistent}" ]; then
+    for action in money-flow-ledger.amount.read money-flow-ledger.statistics.read money-flow-ledger.view; do
+      payload=$(jq -cn --arg subject_id "$subject_id" --arg action "$action" \
+        '{subject_id:$subject_id,audience:"money-flow-ledger",action:$action}')
+      curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+        -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/grants/revoke" || true
+    done
+    payload=$(jq -cn --arg subject_id "$subject_id" '{subject_id:$subject_id,status:"disabled"}')
+    curl --silent --output /dev/null --cookie "$admin_cookies" -H 'Content-Type: application/json' \
+      -H "X-CSRF-Token: $admin_csrf" --data "$payload" "$base_url/auth/api/v1/admin/status" || true
+  fi
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv fact-counts-before.tsv fact-counts-after.tsv fact-digest-before.txt fact-digest-after.txt \
+    admin-metric-before-fixture.json admin-metric.json denied.body redacted-before.json redacted-stale-after-grant.json visible.json \
+    visible-stale-after-revoke.json redacted-after-revoke.json ids.json result.md; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+echo '[1/6] 登录正式 IAM，并确认 Money 指标投影已有可验证事实'
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+payload=$(jq -cn --arg username "$(env_value BOOTSTRAP_ADMIN_USERNAME admin)" \
+  --arg password "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" '{username:$username,password:$password}')
+auth_json /api/v1/login "$admin_cookies" "$admin_csrf" "$payload" "$workspace/admin-login.json" 200
+authorize_money "$admin_cookies" "$admin_csrf" "$workspace/admin-authorize.out"
+metric_get "$admin_cookies" "$workspace/admin-metric-before-fixture.json" 200 admin-baseline
+if [ "$(jq -r '.items | length' "$workspace/admin-metric-before-fixture.json")" -eq 0 ]; then
+  echo '  - 当前没有经营指标事实；通过 Money 正式接口建立最小测试收款事实'
+  create_metric_fixture
+fi
+metric_get "$admin_cookies" "$workspace/admin-metric.json" 200 admin-with-fixture
+assert_visible "$workspace/admin-metric.json"
+item_count=$(jq -r '.items | length' "$workspace/admin-metric.json")
+
+echo '[2/6] 固化 Money 业务事实读取前摘要'
+capture_money_facts "$workspace/facts-before.raw" "$workspace/fact-counts-before.tsv" "$workspace/fact-digest-before.txt"
+
+echo '[3/6] 建立临时最小权限账号；只有 view 时指标端点必须拒绝'
+username="c8-money-$stamp"
+password="C8-Money-${stamp}!Aa7"
+payload=$(jq -cn --arg username "$username" --arg display_name 'C8 Money 指标验证员' \
+  '{username:$username,display_name:$display_name}')
+auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/invitation.json" 201
+subject_id=$(jq -er .subject.id "$workspace/invitation.json")
+activation_token=$(jq -er .token "$workspace/invitation.json")
+viewer_cookies="$workspace/viewer.cookies"
+viewer_csrf=$(fetch_csrf "$viewer_cookies" "$workspace/viewer-csrf.json")
+payload=$(jq -cn --arg token "$activation_token" --arg password "$password" '{token:$token,password:$password}')
+auth_json /api/v1/activate "$viewer_cookies" "$viewer_csrf" "$payload" "$workspace/activation.json" 200
+payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+auth_json /api/v1/login "$viewer_cookies" "$viewer_csrf" "$payload" "$workspace/viewer-login.json" 200
+grant_action money-flow-ledger.view
+authorize_money "$viewer_cookies" "$viewer_csrf" "$workspace/viewer-authorize-view.out"
+metric_get "$viewer_cookies" "$workspace/denied.body" 403 statistics-capability-required
+
+echo '[4/6] 增加 statistics.read；重新签发后只返回脱敏指标'
+grant_action money-flow-ledger.statistics.read
+authorize_money "$viewer_cookies" "$viewer_csrf" "$workspace/viewer-authorize-statistics.out"
+metric_get "$viewer_cookies" "$workspace/redacted-before.json" 200 statistics-without-amount
+assert_redacted "$workspace/redacted-before.json"
+
+echo '[5/6] 增加 amount.read；旧凭证保持脱敏，重新签发后才显示精确金额'
+grant_action money-flow-ledger.amount.read
+metric_get "$viewer_cookies" "$workspace/redacted-stale-after-grant.json" 200 old-credential-after-amount-grant
+assert_redacted "$workspace/redacted-stale-after-grant.json"
+authorize_money "$viewer_cookies" "$viewer_csrf" "$workspace/viewer-authorize-amount.out"
+metric_get "$viewer_cookies" "$workspace/visible.json" 200 fresh-credential-with-amount
+assert_visible "$workspace/visible.json"
+
+echo '[6/6] 撤销 amount.read；旧凭证保留短窗口，重新签发后恢复脱敏且业务事实不变'
+revoke_action money-flow-ledger.amount.read
+metric_get "$viewer_cookies" "$workspace/visible-stale-after-revoke.json" 200 residual-window-after-revoke
+assert_visible "$workspace/visible-stale-after-revoke.json"
+authorize_money "$viewer_cookies" "$viewer_csrf" "$workspace/viewer-authorize-after-revoke.out"
+metric_get "$viewer_cookies" "$workspace/redacted-after-revoke.json" 200 fresh-credential-after-revoke
+assert_redacted "$workspace/redacted-after-revoke.json"
+capture_money_facts "$workspace/facts-after.raw" "$workspace/fact-counts-after.tsv" "$workspace/fact-digest-after.txt"
+cmp -s "$workspace/fact-counts-before.tsv" "$workspace/fact-counts-after.tsv" || {
+  echo 'Money fact row counts changed during metric reads' >&2; exit 1
+}
+cmp -s "$workspace/fact-digest-before.txt" "$workspace/fact-digest-after.txt" || {
+  echo 'Money fact digest changed during metric reads' >&2; exit 1
+}
+jq -n --arg subject_id "$subject_id" --arg username "$username" --argjson item_count "$item_count" \
+  --argjson fixture_created "$fixture_created" --arg owner_id "$owner_id" --arg counterparty_id "$counterparty_id" \
+  --arg transaction_id "$transaction_id" \
+  '{temporary_subject_id:$subject_id,temporary_username:$username,metric_item_count:$item_count,
+    fixture_created:$fixture_created,fixture:{owner_party_id:$owner_id,counterparty_party_id:$counterparty_id,transaction_id:$transaction_id}}' \
+  >"$workspace/ids.json"
+cat >"$workspace/result.md" <<EOF
+# D1 C8 Money metric authorization result
+
+- result: pass
+- metric items: $item_count
+- formal Money API fixture created: $fixture_created
+- no statistics capability: HTTP 403
+- statistics without amount: all values and source digests redacted
+- amount grant: old credential remained redacted; fresh credential exposed exact values
+- amount revoke: old credential retained the bounded residual window; fresh credential returned to redacted values
+- Money fact digest before/after: $(cat "$workspace/fact-digest-before.txt")
+- source business writes during reads: none detected
+- temporary IAM account: grants revoked and account disabled during cleanup
+EOF
+printf 'D1 C8 Money metric authorization passed: items=%s facts=%s\n' \
+  "$item_count" "$(cat "$workspace/fact-digest-before.txt")"

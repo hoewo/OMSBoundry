@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+output="${1:?usage: render-nginx-config OUTPUT}"
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+source_config="$script_dir/../nginx/nginx.conf"
+enable_evidence="${ENABLE_EVIDENCE:-true}"
+ingress_mode="${D1_INGRESS_MODE:-http}"
+case "$enable_evidence" in true|false) ;; *) echo "ENABLE_EVIDENCE must be true or false" >&2; exit 2;; esac
+case "$ingress_mode" in
+  http) ;;
+  https)
+    source_config="$script_dir/../nginx/nginx-https.conf"
+    public_host="${D1_PUBLIC_HOST:-}"
+    printf '%s\n' "$public_host" | grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$' || {
+      echo "D1_PUBLIC_HOST must be a DNS hostname when D1_INGRESS_MODE=https" >&2
+      exit 2
+    }
+    ;;
+  *) echo "D1_INGRESS_MODE must be http or https" >&2; exit 2 ;;
+esac
+
+mkdir -p "$(dirname "$output")"
+temporary="${output}.tmp.$$"
+trap 'rm -f "$temporary" "${temporary}.host"' EXIT HUP INT TERM
+if [ "$enable_evidence" = true ]; then
+  cp "$source_config" "$temporary"
+else
+  awk '
+    /# BEGIN OPTIONAL EVIDENCE DATA PLANE/ { skip=1; next }
+    /# END OPTIONAL EVIDENCE DATA PLANE/ { skip=0; next }
+    !skip { print }
+  ' "$source_config" >"$temporary"
+fi
+if [ "$ingress_mode" = https ]; then
+  rendered="${temporary}.host"
+  sed "s/__D1_PUBLIC_HOST__/$public_host/g" "$temporary" >"$rendered"
+  mv "$rendered" "$temporary"
+fi
+mv "$temporary" "$output"
+trap - EXIT HUP INT TERM

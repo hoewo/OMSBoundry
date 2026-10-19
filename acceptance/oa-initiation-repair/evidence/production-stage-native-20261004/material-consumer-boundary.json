@@ -1,0 +1,42 @@
+{
+  "checks": [
+    {
+      "module": "project-workspace",
+      "filter": "^TestProductionMaterialConsumer",
+      "passed": true,
+      "pass_top_level": 3,
+      "pass_including_subtests": 20,
+      "skipped": 0
+    },
+    {
+      "module": "design-operations",
+      "filter": "^TestMaterialReference|^TestStageMaterial",
+      "passed": true,
+      "pass_top_level": 6,
+      "pass_including_subtests": 43,
+      "skipped": 0
+    }
+  ],
+  "evidence_layer": "logic-and-typed-HTTP-test-provider",
+  "shared_collection_consumer_implemented": false,
+  "original_v1_validation_weakened": false,
+  "main_changed": false,
+  "files": [
+    {
+      "path": "backend/services/design-operations/internal/design/material_reference.go",
+      "sha256": "9d90785b5b69342ca762bb24b15f43e3bf97e5f8995d6752168e3e0d4677377e"
+    },
+    {
+      "path": "backend/services/design-operations/internal/design/material_reference_test.go",
+      "sha256": "24d008e8d4079a4f095b83e2aa7a8745e6b3edaa5dffbcf299b41f0568342a4a"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/references/http.go",
+      "sha256": "b468c40100718141d560f3e447d7496fa94a42c365feb1ccf7077fcbe3129de3"
+    },
+    {
+      "path": "backend/services/project-workspace/internal/references/production_material_test.go",
+      "sha256": "9df1b292722e5f620c7b9c0f565441ef5971982bd5a442c7d07c4b4f6e9ead28"
+    }
+  ]
+}

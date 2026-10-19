@@ -1,0 +1,34 @@
+# Billing / Invoice 不可变登记 revision
+metadata:
+  path: "tech/_shared/models/InvoiceRegistrationRevision.yaml"
+  domain: "billing-invoice"
+  entity_name: "InvoiceRegistrationRevision"
+  storage: "PostgreSQL"
+  owner: "Billing / Invoice"
+  version: "1.0"
+  created: "2026-09-27"
+  updated: "2026-09-27"
+
+type: object
+additionalProperties: false
+description: "每次登记、资料纠正、Evidence 变化或登记无效形成的不可变完整快照。"
+required: [invoice_registration_id, tenant_id, revision, event_kind, command_id, snapshot, reason, actor_ref, occurred_at]
+properties:
+  invoice_registration_id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, format: uuid, readOnly: true}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  event_kind: {type: string, enum: [recorded, details_corrected, evidence_changed, registration_invalidated], readOnly: true}
+  command_id: {type: string, format: uuid, readOnly: true}
+  snapshot: {$ref: "InvoiceRegistration.yaml"}
+  reason: {type: string, minLength: 1, maxLength: 1000, readOnly: true}
+  actor_ref: {type: string, minLength: 1, maxLength: 256, readOnly: true}
+  occurred_at: {type: string, format: date-time, readOnly: true}
+
+indexes:
+  - {name: invoice_registration_revisions_pk, columns: [tenant_id, invoice_registration_id, revision], unique: true}
+  - {name: invoice_registration_revisions_command_idx, columns: [tenant_id, command_id], unique: true}
+
+validation:
+  immutable: true
+  revision_sequence: "revision 1 is recorded; each later revision equals the previous revision + 1"
+  legal_state_warning: "registration_invalidated does not mean the real invoice was voided, red-lettered, returned or replaced"

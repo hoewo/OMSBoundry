@@ -1,0 +1,45 @@
+# 创建已开票登记 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-create.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: POST, path: "/api/v1/invoice-registrations", summary: "登记已开具票据 revision 1", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.record"}
+request:
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, issued_on, amount_minor, currency, issuer_party_ref, recipient_party_ref, source_refs]
+    properties:
+      command_id: {type: string, format: uuid}
+      issued_on: {type: string, format: date}
+      amount_minor: {type: integer, minimum: 1}
+      currency: {type: string, pattern: "^[A-Z]{3}$"}
+      issuer_party_ref: {$ref: "#/$defs/party_ref"}
+      recipient_party_ref: {$ref: "#/$defs/party_ref"}
+      source_refs: {type: array, minItems: 1, items: {$ref: "#/$defs/source_ref"}}
+      note: {type: string, maxLength: 2000}
+  credential_scope: {kinds: [tenant, project]}
+responses:
+  success: {status: 201, schema: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 422, code: REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["先按 tenant + command_id 检查幂等。", "验证双方精确 Party revision 和全部类型化来源。", "原子写当前投影、revision 1、命令结果和审计。"]
+  side_effects: ["仅写 Billing 数据库；不创建 Money、Contract、Project 或 Evidence 事实。"]
+$defs:
+  party_ref:
+    type: object
+    additionalProperties: false
+    required: [id, revision]
+    properties: {id: {type: string, format: uuid}, revision: {type: integer, minimum: 1}}
+  source_ref:
+    type: object
+    additionalProperties: false
+    required: [kind]
+    properties:
+      kind: {type: string, enum: [manual_confirmation, project, contract, settlement, money_obligation]}
+      resource_id: {type: [string, "null"], format: uuid}
+      source_revision: {type: [integer, "null"], minimum: 1}
+      manual_summary: {type: [string, "null"], maxLength: 500}

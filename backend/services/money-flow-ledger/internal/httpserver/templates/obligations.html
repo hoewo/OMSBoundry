@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>义务 · Money Flow Ledger</title>
+  <link rel="stylesheet" href="{{basePath}}/assets/demo-workbench.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="资金流台账主导航"><a href="{{basePath}}/">首页</a> · <a href="{{basePath}}/parties">主体</a> · <a href="{{basePath}}/obligations" aria-current="page">义务</a> · <a href="{{basePath}}/cash-transactions">收付款</a> · <a href="{{basePath}}/allocations">核销</a> · <a href="{{basePath}}/internal-transfers">内部转账</a> · <a href="{{basePath}}/aging">账龄</a> · <a href="{{basePath}}/cash-forecast">现金排期</a> · <a href="{{basePath}}/operating-summary">经营汇总</a> · <a href="{{basePath}}/ledger-exports">台账导出</a></nav>
+    <h1>人工应收／应付义务</h1>
+    <p>当前用户：{{.Principal.DisplayName}}（{{.Principal.Role}}）</p>
+    <p>草稿只记录待确认义务，不进入余额、账龄、资金或核销。</p>
+
+    {{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+
+    <section aria-labelledby="create-obligation-heading">
+      <h2 id="create-obligation-heading">建立草稿</h2>
+      {{if .CanCreate}}
+      {{if can .Principal "obligation.manage"}}<form method="post" action="{{basePath}}/obligations">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="command_id" value="{{.Form.CommandID}}">
+
+        <label for="direction">方向（相对于本方账簿主体）</label>
+        <select id="direction" name="direction" required>
+          <option value="receivable" {{if eq .Form.Direction "receivable"}}selected{{end}}>应收：本方是债权方</option>
+          <option value="payable" {{if eq .Form.Direction "payable"}}selected{{end}}>应付：本方是债务方</option>
+        </select>
+
+        <label for="ledger_owner_party_id">本方账簿主体</label>
+        <select id="ledger_owner_party_id" name="ledger_owner_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.Form.LedgerOwnerPartyID .ID}}selected{{end}}>{{.LegalName}}（revision {{.Revision}}）</option>
+          {{end}}
+        </select>
+
+        <label for="counterparty_party_id">往来主体</label>
+        <select id="counterparty_party_id" name="counterparty_party_id" required>
+          <option value="">请选择</option>
+          {{range .Parties}}
+          <option value="{{.ID}}" {{if eq $.Form.CounterpartyPartyID .ID}}selected{{end}}>{{.LegalName}}（revision {{.Revision}}）</option>
+          {{end}}
+        </select>
+
+        <label for="title">义务标题</label>
+        <input id="title" name="title" value="{{.Form.Title}}" maxlength="200" required>
+
+        <label for="original_amount">原始金额</label>
+        <input id="original_amount" name="original_amount" value="{{.Form.OriginalAmount}}" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?" required>
+
+        <label for="currency">币种</label>
+        <input id="currency" name="currency" value="{{.Form.Currency}}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+
+        <label for="due_on">到期日</label>
+        <input id="due_on" name="due_on" type="date" value="{{.Form.DueOn}}" required>
+
+        <label for="manual_source_reference">人工来源依据</label>
+        <input id="manual_source_reference" name="manual_source_reference" value="{{.Form.ManualSourceReference}}" maxlength="200" required>
+
+        <button type="submit">建立义务草稿</button>
+      </form>{{end}}
+      {{else}}
+      <p role="status">建立义务草稿前，至少需要在主体目录登记两个不同主体。</p>
+      {{end}}
+    </section>
+
+    <section aria-labelledby="obligation-list-heading">
+      <h2 id="obligation-list-heading">已有义务</h2>
+      {{if .Obligations}}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">标题</th>
+            <th scope="col">方向</th>
+            <th scope="col">本方</th>
+            <th scope="col">往来方</th>
+            <th scope="col">金额</th>
+            <th scope="col">已分配</th>
+            <th scope="col">已减免</th>
+            <th scope="col">剩余</th>
+            <th scope="col">到期日</th>
+            <th scope="col">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Obligations}}
+          <tr>
+            <td><a href="{{basePath}}/obligations/{{.ID}}">{{.Title}}</a></td>
+            <td>{{.Direction.Label}}</td>
+            <td>{{.LedgerOwner.LegalName}}</td>
+            <td>{{.Counterparty.LegalName}}</td>
+            <td>{{if eq .Status "open"}}{{.EffectiveAmount}}{{else}}{{.OriginalAmount}}{{end}} {{.Currency}}</td>
+            <td>{{if eq .Status "open"}}{{.AllocatedAmount}} {{.Currency}}{{else}}—{{end}}</td>
+            <td>{{if eq .Status "open"}}{{.RemittedAmount}} {{.Currency}}{{else}}—{{end}}</td>
+            <td>{{if eq .Status "open"}}{{.OutstandingAmount}} {{.Currency}}{{else}}—{{end}}</td>
+            <td>{{.DueOn}}</td>
+            <td>{{.Status}} / draft version {{.DraftVersion}}{{if .CurrentRevision}} / current revision {{.CurrentRevision}}{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>尚未建立义务。</p>
+      {{end}}
+    </section>
+
+    <form method="post" action="{{logoutPath}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit">注销</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,145 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo_dir/deployments/d1"}
+d1_ops=${D1_OPS_SCRIPT:-"$d1_dir/ops/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+project=${D1_PROJECT_NAME:-omsbizfoundry}
+manifest=${D1_SUITE_MANIFEST_PATH:-"$d1_dir/.runtime/suite-manifest.json"}
+evidence_dir=${OA_JOURNEY_EVIDENCE_DIR:-"$script_dir/.evidence/c0"}
+
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+[ -x "$d1_ops" ] || { echo "D1 operations script is not executable: $d1_ops" >&2; exit 2; }
+[ -f "$manifest" ] || { echo "Suite Manifest not found: $manifest" >&2; exit 2; }
+for command in curl docker jq; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1
+  fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+if [ -n "${D1_PUBLIC_URL:-}" ]; then
+  base_url=$D1_PUBLIC_URL
+elif [ "$ingress_mode" = https ]; then
+  public_host=$(env_value D1_PUBLIC_HOST)
+  public_https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+  if [ "$public_https_port" = 443 ]; then
+    base_url="https://$public_host"
+  else
+    base_url="https://$public_host:$public_https_port"
+  fi
+else
+  base_url="http://$(env_value PUBLIC_BIND 127.0.0.1):$(env_value PUBLIC_PORT 18000)"
+fi
+
+domain_flags='ENABLE_CONTRACT ENABLE_MONEY ENABLE_PEOPLE ENABLE_PARTY ENABLE_PROJECT ENABLE_EVIDENCE ENABLE_BUSINESS_ENGAGEMENT ENABLE_BILLING ENABLE_PRODUCTION ENABLE_APPROVAL_AUDIT_RESULTS ENABLE_COST_OUTSOURCING ENABLE_BONUS_DISTRIBUTION'
+for flag in $domain_flags; do
+  [ "$(env_value "$flag" false)" = true ] || {
+    echo "$flag must be true for the full OA journey" >&2
+    exit 1
+  }
+done
+
+domain_ids='contract-ledger money-flow-ledger people-groups party-directory project-workspace evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution'
+for application in $domain_ids; do
+  jq -e --arg id "$application" 'any(.applications[]; .id == $id and .enabled == true)' "$manifest" >/dev/null || {
+    echo "$application is not enabled in the Suite Manifest" >&2
+    exit 1
+  }
+done
+
+mkdir -p "$evidence_dir"
+chmod 700 "$evidence_dir"
+cp "$manifest" "$evidence_dir/suite-manifest.json"
+
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME="$project" "$d1_ops" config --format json >"$evidence_dir/compose-config.json"
+published=$(jq -c '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] | sort' "$evidence_dir/compose-config.json")
+[ "$published" = '["nginx"]' ] || {
+  echo "only nginx may publish a host port, got $published" >&2
+  exit 1
+}
+
+running_ids=$(docker ps --filter "label=com.docker.compose.project=$project" --quiet)
+[ -n "$running_ids" ] || { echo "no running containers found for $project" >&2; exit 1; }
+docker inspect $running_ids >"$evidence_dir/container-inspect.json"
+jq '[.[] | {
+  service: .Config.Labels["com.docker.compose.service"],
+  container: .Name[1:],
+  configured_image: .Config.Image,
+  image_id: .Image,
+  repo_digests: (.RepoDigests // []),
+  state: .State.Status,
+  health: (.State.Health.Status // "not-configured")
+}] | sort_by(.service)' "$evidence_dir/container-inspect.json" >"$evidence_dir/images-and-health.json"
+rm -f "$evidence_dir/container-inspect.json"
+
+running_count=$(jq 'length' "$evidence_dir/images-and-health.json")
+healthy_count=$(jq '[.[] | select(.state == "running" and .health == "healthy")] | length' "$evidence_dir/images-and-health.json")
+[ "$running_count" -eq 17 ] || { echo "expected 17 running services, got $running_count" >&2; exit 1; }
+[ "$healthy_count" -eq 17 ] || { echo "expected 17 healthy services, got $healthy_count" >&2; exit 1; }
+
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME="$project" "$d1_ops" check >"$evidence_dir/schema-and-contract-check.log" 2>&1
+ready_status=$(curl --silent --show-error --output "$evidence_dir/readiness.json" --write-out '%{http_code}' "$base_url/health/ready")
+[ "$ready_status" = 200 ] || { echo "public readiness returned HTTP $ready_status" >&2; exit 1; }
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+tenant_id=$(env_value TENANT_ID)
+enabled_applications=$(jq -c '[.applications[] | select(.enabled == true) | .id]' "$manifest")
+schema_log_sha256=$(sha256sum "$evidence_dir/schema-and-contract-check.log" | awk '{print $1}')
+jq -n \
+  --arg schema_version 1 \
+  --arg scenario_id reference-oa-full-suite-continuous-v1 \
+  --arg phase C0 \
+  --arg captured_at "$captured_at" \
+  --arg tenant_id "$tenant_id" \
+  --arg project "$project" \
+  --arg base_url "$base_url" \
+  --arg schema_log_sha256 "$schema_log_sha256" \
+  --argjson enabled_applications "$enabled_applications" \
+  --argjson published_services "$published" \
+  --argjson running_services "$running_count" \
+  --argjson healthy_services "$healthy_count" \
+  '{
+    schema_version: $schema_version,
+    scenario_id: $scenario_id,
+    phase: $phase,
+    result: "pass",
+    captured_at: $captured_at,
+    tenant_id: $tenant_id,
+    deployment: {
+      profile: "D1",
+      compose_project: $project,
+      public_url: $base_url,
+      published_services: $published_services
+    },
+    suite: {
+      enabled_applications: $enabled_applications,
+      domain_application_count: 12,
+      running_services: $running_services,
+      healthy_services: $healthy_services
+    },
+    checks: {
+      full_selection: "pass",
+      nginx_only_host_port: "pass",
+      schemas_current_and_contracts_valid: "pass",
+      public_readiness: "pass",
+      schema_and_contract_log_sha256: $schema_log_sha256
+    },
+    artifacts: [
+      "suite-manifest.json",
+      "compose-config.json",
+      "images-and-health.json",
+      "schema-and-contract-check.log",
+      "readiness.json"
+    ]
+  }' >"$evidence_dir/state-after-c0.json"
+
+echo "PASS C0 full OA preflight: $running_count/$healthy_count services healthy"
+echo "evidence: $evidence_dir/state-after-c0.json"

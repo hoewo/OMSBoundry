@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "main_unchanged": true,
+  "candidate_only": true,
+  "public_or_full_oa": false,
+  "actual_server_startup": true,
+  "schema": 23,
+  "restart_facts_unchanged": true,
+  "anonymous_native_routes_denied": 4,
+  "server_sha256": "b7fff3635b7c78577a97a673699effdcfddf4afc9839632842412688100bcf2a",
+  "ops_sha256": "c6e23b8399b8cb1d204284ce1e0434c9f2cb934406009d4748177d6da2ce8a68",
+  "explicit_ops_migration": true,
+  "migration_mode": "verify",
+  "standalone_with_declared_pg_and_iam_keys": true,
+  "probe_and_pg_stopped": true
+}

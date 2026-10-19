@@ -1,0 +1,37 @@
+# 管理票据 Evidence 引用 API 契约
+metadata: {path: "tech/_shared/contracts/invoice-registration-evidence.yaml", domain: "billing-invoice", owner: "Billing / Invoice", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: PUT, path: "/api/v1/invoice-registrations/{invoice_registration_id}/evidence", summary: "替换当前 Evidence 引用集合", auth_required: true, audience: "billing-invoice", capability: "billing-invoice.evidence.manage"}
+request:
+  path_params: [{name: invoice_registration_id, type: string, format: uuid, required: true}]
+  body:
+    type: object
+    additionalProperties: false
+    required: [command_id, expected_revision, reason, evidence_refs]
+    properties:
+      command_id: {type: string, format: uuid}
+      expected_revision: {type: integer, minimum: 1}
+      reason: {type: string, minLength: 1, maxLength: 1000}
+      evidence_refs:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [file_id, version, purpose]
+          properties:
+            file_id: {type: string, format: uuid}
+            version: {type: integer, minimum: 1}
+            purpose: {type: string, enum: [invoice_document, supporting_material]}
+            display_name: {type: string, minLength: 1, maxLength: 255}
+responses:
+  success: {status: 200, schema: {$ref: "../models/InvoiceRegistrationView.yaml"}}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 409, code: REVISION_CONFLICT, retryable: false}
+    - {status: 409, code: COMMAND_PAYLOAD_CONFLICT, retryable: false}
+    - {status: 409, code: REGISTRATION_INVALIDATED, retryable: false}
+    - {status: 422, code: REFERENCE_INVALID, retryable: false}
+    - {status: 503, code: REFERENCE_SERVICE_UNAVAILABLE, retryable: true}
+business_logic:
+  flow: ["逐一验证同 Tenant 的精确 File Version。", "锁定投影并校验 revision。", "原子追加 evidence_changed revision。"]
+  side_effects: ["不删除或替换 Evidence 字节。"]

@@ -1,0 +1,22 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "8633abad266c9f14c98e3208d3b5795112e9aa317df69cbca5c3427695b0cdcb",
+  "failure": {
+    "stage": "create-UI-COMPANY",
+    "type": "AssertionError",
+    "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ '0.90'\n- '9007199254740993.01'\n"
+  },
+  "business_command_count": 6,
+  "page_errors": []
+}

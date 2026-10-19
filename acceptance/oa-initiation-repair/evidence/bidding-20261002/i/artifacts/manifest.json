@@ -1,0 +1,22 @@
+{
+  "version": "v0.1.0-oa.20261002.9",
+  "platform": "linux/amd64",
+  "official_release": false,
+  "commit": "unknown",
+  "source_archive_sha256": "04c37896c322750dca0bd671b77af74a394d07c26b23c68f96703e3f7fdf1a9b",
+  "applications": {
+    "unified-workbench": {
+      "Dockerfile": "67cfaf74008175c3884e0df4022f2a5914314ea8e9a89246583561d388620b5c",
+      "server": "b411e9654f735d9a41ead4f7b5acd55cbc0f1419f1be5986984d74681aec6ba0"
+    }
+  },
+  "contracts": {
+    "project-assignment-policy-v1.2.json": "1c89c16ecb0bf298501ad5897b4196dca458ec5b83c88a9e4be5eaa751e6af45",
+    "project-workspace-capabilities.json": "469fd69105250c77d1ef08561cb407f7874fa4c94d7615116f6ef86102c04cbb"
+  },
+  "assets": {
+    "reference-oa-initiation-runtime.js": "ddbdfa1fc5dc51652b18b03dff2c845e6458a6631f1f67d20340695a7d83434f",
+    "reference-oa-business-runtime.js": "64db7ee1276f5b4f9fa216b8a38407b08dcaad28e67143d66d3a74901c61daec",
+    "reference-oa-bidding-runtime.js": "8e1296f0ba9ece7c2313c15d80fcce2619f93ab4139ec53b2f17ad8cef467546"
+  }
+}

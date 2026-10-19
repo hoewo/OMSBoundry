@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+project=${D1_PROJECT_NAME:-omsd1c7}
+base_url=${D1_PUBLIC_URL:-http://127.0.0.1:18180}
+evidence_dir=${C7_D1_EVIDENCE_DIR:-"$d1_dir/.runtime/c7-d1-evidence"}
+override=${D1_COMPOSE_OVERRIDE_FILE:-"$script_dir/compose.override.yaml"}
+d1="$d1_dir/ops/d1"
+
+export D1_ENV_FILE="$env_file"
+export D1_PROJECT_NAME="$project"
+export D1_PUBLIC_URL="$base_url"
+export D1_COMPOSE_OVERRIDE_FILE="$override"
+export C7_D1_EVIDENCE_DIR="$evidence_dir"
+
+compose_all() {
+  docker compose --project-name "$project" --env-file "$env_file" \
+    --file "$d1_dir/compose.yaml" --file "$override" \
+    --profile contract --profile money --profile people --profile party --profile project --profile evidence \
+    --profile business-engagement --profile billing --profile production --profile approval-audit-results \
+    --profile cost-outsourcing --profile bonus-distribution "$@"
+}
+
+case "${1:-full}" in
+  up) "$d1" up ;;
+  verify) "$script_dir/verify-running" ;;
+  verify-restored) "$script_dir/verify-restored" ;;
+  verify-disabled) "$script_dir/verify-disabled" ;;
+  run)
+    "$d1" up
+    "$script_dir/verify-running"
+    ;;
+  full)
+    compose_all down --volumes --remove-orphans >/dev/null 2>&1 || true
+    rm -rf "$evidence_dir" "$d1_dir/.runtime/c7-d1-backups"
+    mkdir -p "$evidence_dir"
+    "$d1" up
+    "$script_dir/verify-running"
+    backup_output=$("$d1" backup)
+    printf '%s\n' "$backup_output"
+    backup_id=$(printf '%s\n' "$backup_output" | sed -n 's/^backup created: \([^ ]*\).*/\1/p')
+    [ -n "$backup_id" ] || { echo 'C7 D1 backup ID is missing' >&2; exit 1; }
+    printf '%s\n' "$backup_id" >"$evidence_dir/backup-id.txt"
+    D1_CONFIRM_EMPTY_RESTORE=yes "$d1" restore "$backup_id"
+    "$script_dir/verify-restored"
+    "$script_dir/verify-disabled"
+    ;;
+  down) "$d1" down ;;
+  *) echo "usage: $0 up|verify|run|verify-disabled|verify-restored|full|down" >&2; exit 2 ;;
+esac

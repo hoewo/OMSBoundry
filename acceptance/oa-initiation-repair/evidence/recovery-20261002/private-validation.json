@@ -1,0 +1,37 @@
+{
+  "postgres": {
+    "passed": true,
+    "checks": [
+      {
+        "group": "projects",
+        "passed": true,
+        "tests": 114
+      },
+      {
+        "group": "database",
+        "passed": true,
+        "tests": 3
+      },
+      {
+        "group": "httpserver",
+        "passed": true,
+        "tests": 86
+      }
+    ],
+    "main_unchanged": true,
+    "public_browser_or_full_oa": false
+  },
+  "startup": {
+    "passed": true,
+    "main_unchanged": true,
+    "full_suite_or_business_journey": false,
+    "schema": 10,
+    "actual_server_startup": true,
+    "restart_facts_unchanged": true,
+    "anonymous_native_routes_denied": 9,
+    "server_sha256": "4163b62c92b6f0a2a0e35205e3ae805a6adb2efe2a95f50c1b603a33a7a297f7",
+    "private_owned_database": "oa_initiation_startup_20261002u",
+    "max_total_cpu": 0.4,
+    "max_total_memory_mib": 352
+  }
+}

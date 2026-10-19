@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-10-04T14:46:30.163Z",
+  "passed": false,
+  "private_native": true,
+  "public_main_changed": false,
+  "full_oa_accepted": false,
+  "local_docker_started": false,
+  "scenarios": [
+    {
+      "name": "private-Nginx-Gateway-formal-IAM-independent-PG18-owners-four-project-types",
+      "passed": true
+    }
+  ],
+  "infrastructure": {
+    "pg": "oa-stage-pg-a2f11ff7d1",
+    "edge": "oa-stage-edge-a2f11ff7d1",
+    "remote": "/tmp/oa-stage-suite-a2f11ff7d1",
+    "local_docker": false,
+    "main_changed": false,
+    "nginx_sha256": "84bd149a231d0377653be8edf133944d5b8716728128870e292281ee60b6a805"
+  },
+  "tenant_id": "63957369-993a-437f-a5d2-567cde4830c5",
+  "project_id": "8b5d507c-7aa6-41ca-8911-d603e449ea9d",
+  "subject_id": "0a5e0c8e-d6d2-4a1c-b799-798b5868e736",
+  "stage": "normal-original-panel",
+  "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-real-production-stage-react]').getByRole('button', { name: /新建阶段资料$/ }) to be visible\u001b[22m\n",
+  "page_errors": [],
+  "fixture_stopped": true,
+  "finished_at": "2026-10-04T14:48:06.155Z"
+}

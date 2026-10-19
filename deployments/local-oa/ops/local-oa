@@ -1,0 +1,531 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+deployment_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+bundle_root=$(CDPATH= cd -- "$deployment_dir/../.." && pwd)
+env_file="$deployment_dir/.env"
+compose_file="$deployment_dir/compose.yaml"
+audit_compose_file="$deployment_dir/compose.audit-ipam.yaml"
+release_marker="$deployment_dir/.release-bundle"
+release_images="$bundle_root/images.tar"
+release_demo="$bundle_root/bin/reference-oa-demo"
+
+is_release_bundle() {
+  [ -f "$release_marker" ]
+}
+
+generate_env() {
+  if [ -f "$env_file" ]; then
+    echo "local OA environment already exists: $env_file"
+    return
+  fi
+  umask 077
+  template_token=$(openssl rand -hex 32)
+  reference_token=$(openssl rand -hex 32)
+  postgres_password=$(openssl rand -hex 24)
+  admin_password=$(openssl rand -hex 18)
+  signing_key=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')
+  {
+    echo 'TENANT_ID=33333333-3333-4333-8333-333333333333'
+    echo 'TEMPLATE_SUBJECT_ID=44444444-4444-4444-8444-444444444444'
+    echo "TEMPLATE_ACCESS_TOKEN=$template_token"
+    echo "REFERENCE_ACCESS_TOKEN=$reference_token"
+    echo "LOCAL_SIGNING_KEY=$signing_key"
+    echo "POSTGRES_PASSWORD=$postgres_password"
+    echo 'LOCAL_ADMIN_USERNAME=admin'
+    echo "LOCAL_ADMIN_PASSWORD=$admin_password"
+    echo "CONTRACT_HOST_PORT=${CONTRACT_HOST_PORT:-18081}"
+    echo "MONEY_HOST_PORT=${MONEY_HOST_PORT:-18083}"
+    echo "PEOPLE_HOST_PORT=${PEOPLE_HOST_PORT:-18084}"
+    echo "EVIDENCE_HOST_PORT=${EVIDENCE_HOST_PORT:-18085}"
+    echo "PROJECT_HOST_PORT=${PROJECT_HOST_PORT:-18086}"
+    echo "DESIGN_HOST_PORT=${DESIGN_HOST_PORT:-18087}"
+    if is_release_bundle; then
+      awk -F= '/^LOCAL_OA_[A-Z_]+_IMAGE=/ {print}' "$release_marker"
+    fi
+  } >"$env_file"
+  echo "created local-only credentials: $env_file"
+}
+
+compose() {
+  docker compose --env-file "$env_file" -f "$compose_file" "$@"
+}
+
+subset_compose() {
+  docker compose --env-file "$env_file" -f "$compose_file" -f "$audit_compose_file" "$@"
+}
+
+release_image_references() {
+  awk -F= '/^LOCAL_OA_[A-Z_]+_IMAGE=/ {sub(/^[^=]*=/, ""); print}' "$release_marker"
+}
+
+check_release_images() {
+  target=$(awk -F= '$1 == "target" {print $2}' "$release_marker")
+  [ -n "$target" ] || { echo "release marker has no target" >&2; return 1; }
+  release_image_references | while IFS= read -r image; do
+    [ -n "$image" ] || continue
+    actual=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image" 2>/dev/null) || {
+      echo "release image is not loaded: $image" >&2
+      exit 1
+    }
+    [ "$actual" = "$target" ] || {
+      echo "release image $image targets $actual, expected $target" >&2
+      exit 1
+    }
+  done
+}
+
+release_target() {
+  awk -F= '$1 == "target" {print $2}' "$release_marker"
+}
+
+native_linux_target() {
+  [ "$(uname -s)" = Linux ] || return 1
+  case "$(uname -m)" in
+    x86_64) [ "$(release_target)" = linux/amd64 ] ;;
+    aarch64|arm64) [ "$(release_target)" = linux/arm64 ] ;;
+    *) return 1 ;;
+  esac
+}
+
+run_release_demo_container() {
+  project=${LOCAL_OA_COMPOSE_PROJECT:-omsbizfoundry-local-oa}
+  state_name=$(basename "${DEMO_STATE_PATH:-demo-state.json}")
+  case "$state_name" in
+    demo-state.json|design-delivery-state.json|commercial-ledger-state.json|consultation-delivery-state.json) ;;
+    *) echo "unsupported demo state file: $state_name" >&2; return 1 ;;
+  esac
+  app_network=$(docker network ls \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter 'label=com.docker.compose.network=app' \
+    --format '{{.Name}}' | sed -n '1p')
+  [ -n "$app_network" ] || {
+    echo "release demo application network is not running for project: $project" >&2
+    return 1
+  }
+  mkdir -p "$deployment_dir/.runtime"
+  docker run --rm \
+    --platform "$(release_target)" \
+    --network "$app_network" \
+    --user 0 \
+    --volume "$release_demo:/runner:ro" \
+    --volume "$deployment_dir/.runtime:/state" \
+    --env DEMO_TEMPLATE_ACCESS_TOKEN \
+    --env DEMO_REFERENCE_ACCESS_TOKEN \
+    --env DEMO_ADMIN_USERNAME \
+    --env DEMO_ADMIN_PASSWORD \
+    --env DEMO_CONTRACT_URL=http://contract-ledger:8081 \
+    --env DEMO_MONEY_URL=http://money-flow-ledger:8083 \
+    --env DEMO_PEOPLE_URL=http://people-groups:8084 \
+    --env DEMO_EVIDENCE_URL=http://evidence-service:8085 \
+    --env DEMO_PROJECT_URL=http://project-workspace:8086 \
+    --env DEMO_DESIGN_URL=http://design-operations:8087 \
+    --env DEMO_STATE_PATH="/state/$state_name" \
+    --entrypoint /runner \
+    "$LOCAL_OA_PROJECT_IMAGE" "$@"
+}
+
+digest_file() {
+  file=$1
+  [ -s "$file" ] || { echo "demo state file is missing or empty: $file" >&2; return 1; }
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  else
+    echo "sha256sum or shasum is required" >&2
+    return 1
+  fi
+}
+
+run_demo() {
+  if is_release_bundle; then
+    [ -x "$release_demo" ] || { echo "release demo binary is missing: $release_demo" >&2; exit 1; }
+    if native_linux_target; then
+      "$release_demo" "$@"
+    else
+      echo "host cannot execute $(release_target) Linux binary natively; using the loaded target image"
+      run_release_demo_container "$@"
+    fi
+  else
+    cd "$bundle_root/acceptance/reference-oa-demo"
+    GOWORK=off go run . "$@"
+  fi
+}
+
+require_env() {
+  if [ ! -f "$env_file" ]; then
+    echo "missing $env_file; run: $0 init" >&2
+    exit 1
+  fi
+}
+
+load_demo_env() {
+  require_env
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
+  export DEMO_TEMPLATE_ACCESS_TOKEN="$TEMPLATE_ACCESS_TOKEN"
+  export DEMO_REFERENCE_ACCESS_TOKEN="$REFERENCE_ACCESS_TOKEN"
+  export DEMO_ADMIN_USERNAME="$LOCAL_ADMIN_USERNAME"
+  export DEMO_ADMIN_PASSWORD="$LOCAL_ADMIN_PASSWORD"
+  export DEMO_CONTRACT_URL="http://127.0.0.1:${CONTRACT_HOST_PORT:-18081}"
+  export DEMO_MONEY_URL="http://127.0.0.1:${MONEY_HOST_PORT:-18083}"
+  export DEMO_PEOPLE_URL="http://127.0.0.1:${PEOPLE_HOST_PORT:-18084}"
+  export DEMO_EVIDENCE_URL="http://127.0.0.1:${EVIDENCE_HOST_PORT:-18085}"
+  export DEMO_PROJECT_URL="http://127.0.0.1:${PROJECT_HOST_PORT:-18086}"
+  export DEMO_DESIGN_URL="http://127.0.0.1:${DESIGN_HOST_PORT:-18087}"
+  export DEMO_STATE_PATH="$deployment_dir/.runtime/demo-state.json"
+}
+
+case "${1:-}" in
+  preflight)
+    is_release_bundle || { echo "preflight is available only inside a release bundle" >&2; exit 1; }
+    "$script_dir/preflight-host"
+    ;;
+  init)
+    generate_env
+    ;;
+  up)
+    generate_env
+    if is_release_bundle; then
+      check_release_images || {
+        echo "load the bundled images first: $0 load-images" >&2
+        exit 1
+      }
+      compose up --detach --wait --no-build --pull never
+    else
+      compose up --build --detach --wait
+    fi
+    "$0" verify
+    ;;
+  verify)
+    require_env
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+    "$deployment_dir/../../acceptance/reference-oa-demo/verify-running"
+    ;;
+  demo)
+    load_demo_env
+    run_demo
+    ;;
+  failure-isolation)
+    load_demo_env
+
+    active_service=
+    restore_active_service() {
+	  [ -n "$active_service" ] || return 0
+      if is_release_bundle; then
+		compose up --detach --wait --no-build --pull never "$active_service" >/dev/null
+      else
+		compose up --detach --wait "$active_service" >/dev/null
+      fi
+    }
+	trap restore_active_service 0 1 2 15
+	for active_service in contract-ledger money-flow-ledger people-groups evidence-service design-operations; do
+	  echo "verifying isolated outage: $active_service"
+	  compose stop "$active_service" >/dev/null
+	  run_demo verify-failure-isolation "$active_service"
+	  restore_active_service
+	done
+	active_service=
+    trap - 0 1 2 15
+    ;;
+  composition-audit)
+    generate_env
+    if is_release_bundle; then
+      check_release_images || {
+        echo "load the bundled images first: $0 load-images" >&2
+        exit 1
+      }
+    fi
+    load_demo_env
+    export LOCAL_OA_COMPOSE_PROJECT=${LOCAL_OA_DESIGN_AUDIT_PROJECT:-omsbizfoundry-design-delivery-audit}
+    export PEOPLE_HOST_PORT=19084
+    export EVIDENCE_HOST_PORT=19085
+    export PROJECT_HOST_PORT=19086
+    export DESIGN_HOST_PORT=19087
+    if is_release_bundle; then
+      export EVIDENCE_PUBLIC_BASE_URL=http://evidence-service:8085
+    else
+      export EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:19085
+    fi
+    export DEMO_PEOPLE_URL=http://127.0.0.1:19084
+    export DEMO_EVIDENCE_URL=http://127.0.0.1:19085
+    export DEMO_PROJECT_URL=http://127.0.0.1:19086
+    export DEMO_DESIGN_URL=http://127.0.0.1:19087
+    export DEMO_STATE_PATH="$deployment_dir/.runtime/design-delivery-state.json"
+
+    subset_cleanup() {
+      status=$?
+      trap - 0 1 2 15
+      if [ "$status" -ne 0 ]; then
+        subset_compose ps || true
+        subset_compose logs --tail 100 people-groups evidence-service project-workspace design-operations || true
+      fi
+      subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+      rm -f "$DEMO_STATE_PATH"
+      exit "$status"
+    }
+    trap subset_cleanup 0 1 2 15
+
+    subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    rm -f "$DEMO_STATE_PATH"
+    if is_release_bundle; then
+      subset_compose up --detach --wait --no-build --pull never people-db evidence-db project-db design-db
+      subset_compose up --detach --wait --no-build --pull never --no-deps people-groups evidence-service project-workspace design-operations
+    else
+      subset_compose build people-groups evidence-service project-workspace design-operations
+      subset_compose up --detach --wait people-db evidence-db project-db design-db
+      subset_compose up --detach --wait --no-deps people-groups evidence-service project-workspace design-operations
+    fi
+
+    expected_services='design-db
+design-operations
+evidence-db
+evidence-service
+people-db
+people-groups
+project-db
+project-workspace'
+    actual_services=$(subset_compose ps --services --status running | sort)
+    [ "$actual_services" = "$expected_services" ] || {
+      echo "unexpected design-delivery service set:" >&2
+      printf '%s\n' "$actual_services" >&2
+      exit 1
+    }
+    for absent_service in contract-db contract-ledger money-db money-flow-ledger; do
+      if subset_compose ps --services --status running | grep -qx "$absent_service"; then
+        echo "unselected service is running: $absent_service" >&2
+        exit 1
+      fi
+    done
+
+    echo "verified selected service set; Contract and Money are absent"
+    run_demo design-delivery
+    first_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    run_demo design-delivery
+    second_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    [ "$first_state_sha" = "$second_state_sha" ] || {
+      echo "design-delivery replay changed durable demo state" >&2
+      exit 1
+    }
+    echo "PASS: isolated design-delivery composition; stable replay sha256=$second_state_sha"
+    ;;
+  composition-audit-commercial)
+    generate_env
+    if is_release_bundle; then
+      check_release_images || {
+        echo "load the bundled images first: $0 load-images" >&2
+        exit 1
+      }
+    fi
+    load_demo_env
+    export LOCAL_OA_COMPOSE_PROJECT=${LOCAL_OA_COMMERCIAL_AUDIT_PROJECT:-omsbizfoundry-commercial-ledger-audit}
+    export CONTRACT_HOST_PORT=19081
+    export MONEY_HOST_PORT=19083
+    export DEMO_CONTRACT_URL=http://127.0.0.1:19081
+    export DEMO_MONEY_URL=http://127.0.0.1:19083
+    export DEMO_STATE_PATH="$deployment_dir/.runtime/commercial-ledger-state.json"
+
+    commercial_cleanup() {
+      status=$?
+      trap - 0 1 2 15
+      if [ "$status" -ne 0 ]; then
+        subset_compose ps || true
+        subset_compose logs --tail 100 contract-ledger money-flow-ledger || true
+      fi
+      subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+      rm -f "$DEMO_STATE_PATH"
+      exit "$status"
+    }
+    trap commercial_cleanup 0 1 2 15
+
+    subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    rm -f "$DEMO_STATE_PATH"
+    if is_release_bundle; then
+      subset_compose up --detach --wait --no-build --pull never contract-db money-db
+      subset_compose up --detach --wait --no-build --pull never --no-deps contract-ledger money-flow-ledger
+    else
+      subset_compose build contract-ledger money-flow-ledger
+      subset_compose up --detach --wait contract-db money-db
+      subset_compose up --detach --wait --no-deps contract-ledger money-flow-ledger
+    fi
+
+    expected_services='contract-db
+contract-ledger
+money-db
+money-flow-ledger'
+    actual_services=$(subset_compose ps --services --status running | sort)
+    [ "$actual_services" = "$expected_services" ] || {
+      echo "unexpected commercial-ledger service set:" >&2
+      printf '%s\n' "$actual_services" >&2
+      exit 1
+    }
+    for absent_service in people-db people-groups evidence-db evidence-service project-db project-workspace design-db design-operations; do
+      if subset_compose ps --services --status running | grep -qx "$absent_service"; then
+        echo "unselected service is running: $absent_service" >&2
+        exit 1
+      fi
+    done
+
+    echo "verified selected service set; People, Evidence Service, Project and Design are absent"
+    run_demo commercial-ledger
+    first_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    run_demo commercial-ledger
+    second_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    [ "$first_state_sha" = "$second_state_sha" ] || {
+      echo "commercial-ledger replay changed durable demo state" >&2
+      exit 1
+    }
+    echo "PASS: isolated commercial-ledger composition; stable replay sha256=$second_state_sha"
+    ;;
+  composition-audit-consultation)
+    generate_env
+    if is_release_bundle; then
+      check_release_images || {
+        echo "load the bundled images first: $0 load-images" >&2
+        exit 1
+      }
+    fi
+    load_demo_env
+    export LOCAL_OA_COMPOSE_PROJECT=${LOCAL_OA_CONSULTATION_AUDIT_PROJECT:-omsbizfoundry-consultation-delivery-audit}
+    export PEOPLE_HOST_PORT=19184
+    export EVIDENCE_HOST_PORT=19185
+    export PROJECT_HOST_PORT=19186
+    export DESIGN_HOST_PORT=19187
+    if is_release_bundle; then
+      export EVIDENCE_PUBLIC_BASE_URL=http://evidence-service:8085
+    else
+      export EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:19185
+    fi
+    export DEMO_PEOPLE_URL=http://127.0.0.1:19184
+    export DEMO_EVIDENCE_URL=http://127.0.0.1:19185
+    export DEMO_PROJECT_URL=http://127.0.0.1:19186
+    export DEMO_DESIGN_URL=http://127.0.0.1:19187
+    export DEMO_STATE_PATH="$deployment_dir/.runtime/consultation-delivery-state.json"
+
+    consultation_cleanup() {
+      status=$?
+      trap - 0 1 2 15
+      if [ "$status" -ne 0 ]; then
+        subset_compose ps || true
+        subset_compose logs --tail 100 people-groups evidence-service project-workspace design-operations || true
+      fi
+      subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+      rm -f "$DEMO_STATE_PATH"
+      exit "$status"
+    }
+    trap consultation_cleanup 0 1 2 15
+
+    subset_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    rm -f "$DEMO_STATE_PATH"
+    if is_release_bundle; then
+      subset_compose up --detach --wait --no-build --pull never people-db evidence-db project-db design-db
+      subset_compose up --detach --wait --no-build --pull never --no-deps people-groups evidence-service project-workspace design-operations
+    else
+      subset_compose build people-groups evidence-service project-workspace design-operations
+      subset_compose up --detach --wait people-db evidence-db project-db design-db
+      subset_compose up --detach --wait --no-deps people-groups evidence-service project-workspace design-operations
+    fi
+
+    expected_services='design-db
+design-operations
+evidence-db
+evidence-service
+people-db
+people-groups
+project-db
+project-workspace'
+    actual_services=$(subset_compose ps --services --status running | sort)
+    [ "$actual_services" = "$expected_services" ] || {
+      echo "unexpected consultation-delivery service set:" >&2
+      printf '%s\n' "$actual_services" >&2
+      exit 1
+    }
+    for absent_service in contract-db contract-ledger money-db money-flow-ledger; do
+      if subset_compose ps --services --status running | grep -qx "$absent_service"; then
+        echo "unselected service is running: $absent_service" >&2
+        exit 1
+      fi
+    done
+
+    echo "verified consultation minimum service set; Contract and Money are absent"
+    run_demo consultation-delivery
+    first_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    run_demo consultation-delivery
+    second_state_sha=$(digest_file "$DEMO_STATE_PATH")
+    [ "$first_state_sha" = "$second_state_sha" ] || {
+      echo "consultation-delivery replay changed durable demo state" >&2
+      exit 1
+    }
+    echo "PASS: consultation-only minimum composition; stable replay sha256=$second_state_sha"
+    ;;
+  status)
+    require_env
+    compose ps
+    ;;
+  config)
+    require_env
+    compose config --quiet
+    ;;
+  load-images)
+    is_release_bundle || { echo "load-images is available only inside a release bundle" >&2; exit 1; }
+    [ -f "$release_images" ] || { echo "release image archive is missing: $release_images" >&2; exit 1; }
+    docker load --input "$release_images"
+    check_release_images
+    echo "release images loaded and platform verified"
+    ;;
+  verify-release)
+    is_release_bundle || { echo "verify-release is available only inside a release bundle" >&2; exit 1; }
+    "$script_dir/verify-release"
+    ;;
+  logs)
+    require_env
+    shift
+    compose logs --tail 200 "$@"
+    ;;
+  stop-service)
+    require_env
+    service=${2:-}
+    case "$service" in
+      contract-ledger|money-flow-ledger|people-groups|evidence-service|project-workspace|design-operations) ;;
+      *) echo "unknown or unsafe service: $service" >&2; exit 1 ;;
+    esac
+    compose stop "$service"
+    ;;
+  start-service)
+    require_env
+    service=${2:-}
+    case "$service" in
+      contract-ledger|money-flow-ledger|people-groups|evidence-service|project-workspace|design-operations) ;;
+      *) echo "unknown or unsafe service: $service" >&2; exit 1 ;;
+    esac
+    compose start "$service"
+    ;;
+  credentials)
+    require_env
+    awk -F= '/^(LOCAL_ADMIN_USERNAME|LOCAL_ADMIN_PASSWORD|TEMPLATE_ACCESS_TOKEN)=/ {print $1 "=" $2}' "$env_file"
+    ;;
+  down)
+    require_env
+    compose down
+    ;;
+  reset)
+    require_env
+    if [ "${2:-}" != "--confirm-destroy-data" ]; then
+      echo "reset deletes all local OA databases and files; rerun with --confirm-destroy-data" >&2
+      exit 1
+    fi
+    compose down --volumes
+    rm -rf "$deployment_dir/.runtime"
+    ;;
+  *)
+    echo "usage: $0 {preflight|init|load-images|verify-release|up|verify|demo|failure-isolation|composition-audit|composition-audit-commercial|composition-audit-consultation|status|config|logs [service]|stop-service SERVICE|start-service SERVICE|credentials|down|reset --confirm-destroy-data}" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,119 @@
+<template data-page-template="oms-reference">
+  <div class="oms-demo" data-oms-demo>
+    <header class="oms-demo__topbar">
+      <div class="oms-demo__brand"><span>OMS</span><div><strong>合同与资金经营验证版</strong><small>资质单位视角 · MVP</small></div></div>
+      <div class="oms-demo__topbar-actions"><span class="oms-demo__badge">虚构演示数据</span><button type="button" data-oms-start>从核心合同开始</button></div>
+    </header>
+
+    <section class="oms-demo__context">
+      <div><span>当前主体</span><strong>示例资质单位</strong></div>
+      <p>先用一份合同验证产品方向：合同和附件是否好找，开票与回款是否看得清，下游协作和付款是否能追溯。</p>
+      <small>不读取或写入真实业务 · 候选模型 · 来源快照 27c6148</small>
+    </section>
+
+    <nav class="oms-demo__workspace-nav" aria-label="OMS 核心工作区">
+      <button class="is-active" type="button" data-oms-workspace="overview" aria-current="page"><span>01</span><strong>经营总览</strong><small>先看一笔账是否清楚</small></button>
+      <button type="button" data-oms-workspace="contract"><span>02</span><strong>合同全景</strong><small>合同、附件与关系</small></button>
+      <button type="button" data-oms-workspace="receipts"><span>03</span><strong>开票与回款</strong><small>320 / 220 / 100</small></button>
+      <button type="button" data-oms-workspace="settlement"><span>04</span><strong>下游结算</strong><small>协作、应付与付款</small></button>
+    </nav>
+
+    <main>
+      <section class="oms-demo__workspace is-active" data-oms-panel="overview">
+        <header class="oms-demo__page-heading"><div><span>OPERATING SNAPSHOT</span><h1>一份合同，现在进行到哪一步？</h1><p>数字相互关联，但每一种业务事实仍然独立。</p></div><span class="oms-demo__owner-label">验证问题 01 · 账是否一眼看清</span></header>
+
+        <div class="oms-demo__metric-grid" aria-label="核心经营金额">
+          <button type="button" data-oms-inspect data-label="合同事实" data-title="合同金额" data-amount="800 万元" data-state="已签订" data-summary="这是上游合同记录的金额，不会自动生成发票、应收或回款。" data-question="合同金额是否存在调整、补充协议或多个结算口径？"><span>合同金额</span><strong>800<small> 万</small></strong><em>已签订</em></button>
+          <button type="button" data-oms-inspect data-label="票据事实" data-title="累计开票" data-amount="320 万元" data-state="2 张发票" data-summary="原型展示两张虚构发票，它们引用同一份上游合同。" data-question="开票发生在什么业务节点？是否可能先开票后确认应收？"><span>累计开票</span><strong>320<small> 万</small></strong><em>2 张</em></button>
+          <button type="button" data-oms-inspect data-label="候选确认事实" data-title="已确认应收" data-amount="320 万元" data-state="待客户确认规则" data-summary="应收作为独立记录展示，不因为发票存在而自动成立。" data-question="谁确认应收，确认依据和预计到账日期从哪里来？"><span>确认应收</span><strong>320<small> 万</small></strong><em>候选规则</em></button>
+          <button type="button" data-oms-inspect data-label="实际资金事实" data-title="实际回款" data-amount="220 万元" data-state="分 2 次到账" data-summary="两笔实际到账合计 220 万，并明确分配到对应应收。" data-question="回款是否会跨发票、跨应收或跨合同分配？"><span>实际回款</span><strong>220<small> 万</small></strong><em>2 笔</em></button>
+          <button class="is-risk" type="button" data-oms-inspect data-label="经营风险" data-title="应收未收" data-amount="100 万元" data-state="其中 60 万逾期" data-summary="未收余额来自已确认应收减去已核销回款，不直接使用开票金额计算。" data-question="逾期以哪个日期和哪一种确认记录为准？"><span>应收未收</span><strong>100<small> 万</small></strong><em>60 万逾期</em></button>
+          <button type="button" data-oms-inspect data-label="下游资金事实" data-title="实际付款" data-amount="120 万元" data-state="1 笔已登记" data-summary="实际付款与应付确认、付款授权分别展示，不把授权状态当成付款完成。" data-question="实际收款对象是企业、组织、班组还是个人？"><span>实际付款</span><strong>120<small> 万</small></strong><em>1 笔</em></button>
+        </div>
+
+        <div class="oms-demo__primary-grid">
+          <section class="oms-demo__contract-focus">
+            <header><div><span>核心演示合同</span><h2>2026 年北区道路维护事项</h2><p>HT-2026-001 · 示例城市维护单位</p></div><span class="oms-demo__status">回款中</span></header>
+            <div class="oms-demo__money-path" aria-label="合同资金链路">
+              <button type="button" data-oms-jump="contract"><span>合同</span><strong>800 万</strong><small>原件 1 份</small></button><i>→</i>
+              <button type="button" data-oms-jump="receipts"><span>开票</span><strong>320 万</strong><small>2 张</small></button><i>→</i>
+              <button type="button" data-oms-jump="receipts"><span>回款</span><strong>220 万</strong><small>2 笔</small></button><i>→</i>
+              <button class="is-risk" type="button" data-oms-jump="receipts"><span>未回</span><strong>100 万</strong><small>60 万逾期</small></button><i>→</i>
+              <button type="button" data-oms-jump="settlement"><span>已付款</span><strong>120 万</strong><small>下游 2 类候选</small></button>
+            </div>
+            <footer><span>合同是经营导航主线，不是所有金额事实的所有者。</span><button type="button" data-oms-jump="contract">打开合同全景 →</button></footer>
+          </section>
+
+          <aside class="oms-demo__exceptions">
+            <header><span>当前需要判断</span><strong>2 项经营例外</strong></header>
+            <button type="button" data-oms-inspect data-label="回款异常" data-title="第二期应收已逾期" data-amount="60 万元" data-state="逾期 12 天" data-summary="预计到账日已经过去，但仍有 60 万未核销。" data-question="客户实际如何催收、延期和变更预计到账日？"><span>01</span><div><strong>60 万回款逾期</strong><small>需要核对预计到账日和催收责任</small></div><em>查看</em></button>
+            <button type="button" data-oms-inspect data-label="付款异常" data-title="下游付款等待确认" data-amount="96 万元" data-state="授权规则待确认" data-summary="候选应付已经展示，但当前原型不判断是否可以实际付款。" data-question="上游尚未回款时，下游付款是否允许例外执行？"><span>02</span><div><strong>96 万付款待判断</strong><small>不能由演示页面自动授权</small></div><em>查看</em></button>
+          </aside>
+        </div>
+
+        <section class="oms-demo__hypothesis"><strong>这一页在验证什么？</strong><p>客户是否希望以合同为入口，同时看到票据、应收、回款、下游结算与付款；如果这些概念或关系不符合真实业务，应当直接修改或删除。</p><button type="button" data-oms-inspect data-label="原型说明" data-title="候选模型，不是正式规则" data-amount="4 个核心视角" data-state="等待客户走查" data-summary="原型有明确产品主张，但所有未经一手证据确认的业务规则都保持可推翻。" data-question="这套视角是否能帮助客户讲清一笔真实业务？">为什么这样设计</button></section>
+      </section>
+
+      <section class="oms-demo__workspace" data-oms-panel="contract">
+        <header class="oms-demo__page-heading"><div><span>CONTRACT DOSSIER</span><h1>合同全景</h1><p>打开一份合同，先找到原件，再看关联事项和资金链。</p></div><span class="oms-demo__owner-label">事实所有者 · Contract Ledger</span></header>
+
+        <section class="oms-demo__contract-sheet">
+          <header><div><span>HT-2026-001</span><h2>2026 年北区道路维护服务合同</h2><p>上游主体：示例城市维护单位</p></div><div><strong>800 万元</strong><small>虚构合同金额</small></div></header>
+          <dl><div><dt>签订日期</dt><dd>2026-02-18</dd></div><div><dt>当前状态</dt><dd>回款中</dd></div><div><dt>经营事项</dt><dd>北区道路维护</dd></div><div><dt>负责人显示语</dt><dd>经营负责人 A</dd></div></dl>
+          <div class="oms-demo__document-row"><span>PDF</span><div><strong>上游合同原件.pdf</strong><small>版本 1 · 演示附件 · 6.8 MB</small></div><button type="button" data-oms-inspect data-label="合同附件" data-title="上游合同原件.pdf" data-amount="版本 1" data-state="演示文件" data-summary="正式产品应保存 Evidence File ID 与不可变 Version；当前原型不提供真实文件。" data-question="合同补充协议、变更和作废文件如何管理？">查看附件说明</button></div>
+        </section>
+
+        <div class="oms-demo__relationship">
+          <div><span>上游主体</span><strong>示例城市维护单位</strong><small>候选角色 · 待确认正式称谓</small></div><i>签订上游合同</i><div class="is-current"><span>当前主体</span><strong>示例资质单位</strong><small>OMS 经营视角</small></div><i>组织下游协作</i><div><span>下游协作方</span><strong>2 个候选类型</strong><small>企业型 / 班组型</small></div>
+        </div>
+
+        <section class="oms-demo__trace">
+          <header><div><span>合同经营轨迹</span><h2>从合同到资金的显式引用</h2></div><button type="button" data-oms-jump="receipts">查看金额明细 →</button></header>
+          <ol><li><span>02-18</span><div><strong>上游合同签订</strong><small>合同金额 800 万 · 原件版本 1</small></div></li><li><span>05-10</span><div><strong>第一张发票登记</strong><small>200 万 · 只形成票据记录</small></div></li><li><span>05-12</span><div><strong>第一笔应收候选确认</strong><small>200 万 · 确认规则待客户核验</small></div></li><li><span>06-20</span><div><strong>第一笔回款到账</strong><small>160 万 · 核销至第一笔应收</small></div></li><li class="is-risk"><span>09-18</span><div><strong>第二期仍有 60 万未回</strong><small>当前演示标记为逾期 12 天</small></div></li></ol>
+        </section>
+      </section>
+
+      <section class="oms-demo__workspace" data-oms-panel="receipts">
+        <header class="oms-demo__page-heading"><div><span>RECEIVABLE TRACE</span><h1>开票与回款</h1><p>开票、应收和实际回款分开展示，再通过核销关系连接。</p></div><span class="oms-demo__owner-label">Billing + Money Flow Ledger</span></header>
+
+        <section class="oms-demo__receipt-lead">
+          <div><span>已确认应收</span><strong>320 万</strong></div><div><span>实际回款</span><strong>220 万</strong></div><div class="is-risk"><span>应收未收</span><strong>100 万</strong></div>
+          <aside><span style="--paid:68.75%"></span><p><strong>回款进度 68.75%</strong><small>按已确认应收计算，不按合同额或开票额猜测</small></p></aside>
+        </section>
+
+        <div class="oms-demo__segments" role="group" aria-label="资金记录筛选"><button class="is-active" type="button" data-oms-money-filter="all" aria-pressed="true">全部记录</button><button type="button" data-oms-money-filter="invoice" aria-pressed="false">开票与应收</button><button type="button" data-oms-money-filter="receipt" aria-pressed="false">实际回款</button></div>
+        <section class="oms-demo__ledger-table"><div class="oms-demo__ledger-head"><span>日期 / 类型</span><span>业务记录</span><span>金额</span><span>状态</span><span></span></div>
+          <button type="button" data-oms-money-row="invoice" data-oms-inspect data-label="发票记录" data-title="FP-2026-001" data-amount="200 万元" data-state="已登记" data-summary="第一张虚构发票，引用合同 HT-2026-001；它本身不自动生成应收。" data-question="发票是否需要关联结算节点或项目完成材料？"><span>05-10<small>开票</small></span><div><strong>FP-2026-001</strong><small>引用合同 HT-2026-001</small></div><b>200 万</b><em>已登记</em><i>›</i></button>
+          <button type="button" data-oms-money-row="invoice" data-oms-inspect data-label="应收记录" data-title="YS-2026-001" data-amount="200 万元" data-state="已核销 160 万" data-summary="候选应收确认记录，预计到账日为 2026-06-20。" data-question="应收确认是否需要审批，谁拥有最终确认权？"><span>05-12<small>应收</small></span><div><strong>YS-2026-001</strong><small>预计到账 06-20</small></div><b>200 万</b><em>剩余 40 万</em><i>›</i></button>
+          <button type="button" data-oms-money-row="receipt" data-oms-inspect data-label="实际资金" data-title="HK-2026-001" data-amount="160 万元" data-state="已核销" data-summary="第一笔虚构到账记录，明确分配到 YS-2026-001。" data-question="到账记录来自手工登记、银行流水还是其他系统？"><span>06-20<small>回款</small></span><div><strong>HK-2026-001</strong><small>核销 YS-2026-001</small></div><b>160 万</b><em>已到账</em><i>›</i></button>
+          <button type="button" data-oms-money-row="invoice" data-oms-inspect data-label="发票与应收" data-title="第二期开票与应收" data-amount="120 万元" data-state="部分回款" data-summary="第二张发票和第二笔应收分别登记，原型将它们放在一行便于阅读，但不合并业务事实。" data-question="一张发票是否可能对应多笔应收，或多张发票对应一笔应收？"><span>08-06<small>开票 / 应收</small></span><div><strong>FP-2026-002 / YS-2026-002</strong><small>预计到账 09-18</small></div><b>120 万</b><em>剩余 60 万</em><i>›</i></button>
+          <button type="button" data-oms-money-row="receipt" data-oms-inspect data-label="实际资金" data-title="HK-2026-002" data-amount="60 万元" data-state="已核销" data-summary="第二笔虚构到账记录，分配到 YS-2026-002。" data-question="部分回款时如何确定核销顺序和责任人？"><span>09-10<small>回款</small></span><div><strong>HK-2026-002</strong><small>核销 YS-2026-002</small></div><b>60 万</b><em>已到账</em><i>›</i></button>
+        </section>
+        <div class="oms-demo__boundary-note"><strong>当前规则</strong><span>没有任何自动业务跳转。只有在真实规则、异常和纠错方式确认后，才考虑自动化。</span></div>
+      </section>
+
+      <section class="oms-demo__workspace" data-oms-panel="settlement">
+        <header class="oms-demo__page-heading"><div><span>DOWNSTREAM SETTLEMENT</span><h1>下游协作与结算</h1><p>先展示两种候选下游形态，让客户指出真实分类和付款路径。</p></div><span class="oms-demo__owner-label">候选模型 · 待客户确认</span></header>
+
+        <div class="oms-demo__partner-list">
+          <button type="button" data-oms-inspect data-label="候选下游类型" data-title="北辰工程服务有限公司" data-amount="候选应付 172 万" data-state="企业型候选" data-summary="用于验证是否存在有独立主体、合同和对公结算的下游协作方。" data-question="这类对象真实存在吗？合同、开票和收款账户如何处理？"><span>企</span><div><small>企业型候选</small><strong>北辰工程服务有限公司</strong><p>承接：道路巡护与资料整理 · 合同 GX-001</p></div><em>已付款 120 万</em><i>›</i></button>
+          <button type="button" data-oms-inspect data-label="候选下游类型" data-title="新路现场协作组" data-amount="候选应付 96 万" data-state="班组型候选" data-summary="用于验证是否存在以负责人和成员名册组织的下游协作对象。" data-question="真实付款对象是谁？是否需要人员名册、企业主体或其他凭证？"><span>组</span><div><small>班组型候选</small><strong>新路现场协作组</strong><p>承接：现场维护作业 · 协作依据待确认</p></div><em>付款待判断</em><i>›</i></button>
+        </div>
+
+        <section class="oms-demo__settlement-table"><header><div><span>候选结算批次</span><h2>应付、授权和实付分开呈现</h2></div><span>金额均为虚构演示</span></header><div class="oms-demo__settlement-head"><span>协作方 / 批次</span><span>结算原额</span><span>人工调整项</span><span>确认应付</span><span>授权状态</span><span>实际付款</span></div>
+          <button type="button" data-oms-inspect data-label="结算示例" data-title="JS-2026-001" data-amount="确认应付 172 万" data-state="已实付 120 万" data-summary="结算原额 180 万，人工登记示例调整项 8 万；原型不展示任何计算公式。" data-question="管理费或其他扣款实际由谁收取、何时确认、如何调整？"><span><strong>北辰工程服务有限公司</strong><small>JS-2026-001</small></span><b>180 万</b><b>- 8 万</b><b>172 万</b><em>已授权</em><b>120 万</b></button>
+          <button type="button" data-oms-inspect data-label="结算示例" data-title="JS-2026-002" data-amount="候选应付 96 万" data-state="付款待判断" data-summary="这一行用于暴露班组型对象的支付规则空白，不表示应该向个人或班组直接付款。" data-question="应付对象、收款对象和实际付款对象是否相同？"><span><strong>新路现场协作组</strong><small>JS-2026-002</small></span><b>96 万</b><b>待确认</b><b>96 万</b><em class="is-waiting">待判断</em><b>0</b></button>
+        </section>
+        <div class="oms-demo__boundary-note"><strong>重要边界</strong><span>“企业型 / 班组型”只是用于验证的候选分类；原型不对工程分包、劳务、个人支付或税务关系作法律定性。</span></div>
+      </section>
+    </main>
+
+    <div class="oms-demo__drawer-mask" data-oms-drawer hidden>
+      <aside class="oms-demo__drawer" role="dialog" aria-modal="true" aria-labelledby="oms-demo-drawer-title">
+        <header><div><span data-oms-drawer-label>候选业务节点</span><h2 id="oms-demo-drawer-title" data-oms-drawer-title>详情</h2></div><button type="button" aria-label="关闭" data-oms-drawer-close>×</button></header>
+        <div class="oms-demo__drawer-body"><div class="oms-demo__drawer-fact"><span>示例金额 / 内容</span><strong data-oms-drawer-amount>—</strong><em data-oms-drawer-state>—</em></div><section><span>这个页面表达什么</span><p data-oms-drawer-summary></p></section><section class="is-question"><span>需要客户回答</span><p data-oms-drawer-question></p></section></div>
+        <footer><span>当前操作不会保存数据</span><button type="button" data-oms-drawer-close>关闭</button></footer>
+      </aside>
+    </div>
+  </div>
+</template>

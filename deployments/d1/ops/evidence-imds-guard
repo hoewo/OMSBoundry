@@ -1,0 +1,82 @@
+#!/bin/sh
+# Protect the ECS IPv4 IMDS address from non-Evidence Docker containers.
+# Does not affect host OUTPUT (SSH/operator SDK), public ingress or other traffic.
+# boot installs fail-closed rules before Docker, without contacting it.
+# Real daemon/host restart acceptance is required before claiming persistence.
+set -eu
+
+operation=${1:-status}
+network=${EVIDENCE_IMDS_NETWORK:-}
+chain=BF_EVIDENCE_IMDS
+metadata=100.100.100.200/32
+tag=oms-evidence-imds-v1
+case "$operation" in apply|status|remove|boot) ;; *) echo 'usage: evidence-imds-guard apply|status|remove|boot' >&2; exit 2;; esac
+[ "$(id -u)" = 0 ] || { echo 'root is required' >&2; exit 2; }
+command -v iptables >/dev/null || exit 2
+if [ "$operation" = boot ]; then
+  bridge=${EVIDENCE_IMDS_BRIDGE:?set the verified dedicated bridge}
+  subnet=${EVIDENCE_IMDS_SUBNET:?set its verified IPv4 subnet}
+  case "$bridge" in br-*|bf-evid-*) ;; *) echo 'refuse unknown bridge convention' >&2; exit 2;; esac
+  case "$bridge" in *[!a-zA-Z0-9_-]*) echo 'invalid bridge' >&2; exit 2;; esac
+  [ "${#bridge}" -le 15 ] || { echo 'bridge name too long' >&2; exit 2; }
+else
+for tool in docker jq; do command -v "$tool" >/dev/null || exit 2; done
+case "$network" in *[!a-zA-Z0-9_.-]*|'') echo 'invalid dedicated network name' >&2; exit 2;; esac
+
+info=$(docker network inspect "$network")
+printf '%s' "$info" | jq -e 'length==1 and .[0].Driver=="bridge" and .[0].Internal==false and
+  (.[0].Labels["oms.purpose"]=="evidence-oss-acceptance" or .[0].Labels["oms.component"]=="evidence-egress") and
+  (.[0].IPAM.Config | length)==1' >/dev/null || { echo 'refuse non-dedicated Evidence bridge' >&2; exit 2; }
+# An operator must not attach unrelated applications to this privileged bridge.
+printf '%s' "$info" | jq -e '.[0].Containers | all(.[];
+  (.Name | startswith("evidence_oss_")) or (.Name | test("-evidence-service-[0-9]+$")))' >/dev/null || {
+  echo 'refuse bridge containing a non-Evidence container' >&2; exit 2;
+}
+subnet=$(printf '%s' "$info" | jq -er '.[0].IPAM.Config[0].Subnet')
+bridge=$(printf '%s' "$info" | jq -r '.[0].Options["com.docker.network.bridge.name"] // ("br-" + (.[0].Id[0:12]))')
+fi
+printf '%s\n' "$subnet" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$' || { echo 'invalid IPv4 subnet' >&2; exit 2; }
+case "$subnet" in 10.*/*|172.1[6-9].*/*|172.2[0-9].*/*|172.3[01].*/*|192.168.*/*) ;;
+  *) echo 'refuse non-private IPv4 subnet' >&2; exit 2;; esac
+prefix=${subnet##*/}
+case "$prefix" in 1[6-9]|2[0-9]|3[0-2]) ;; *) echo 'refuse overly broad subnet' >&2; exit 2;; esac
+if ! iptables -w 5 -S DOCKER-USER >/dev/null 2>&1; then
+  [ "$operation" = boot ] || { echo 'Docker iptables backend required' >&2; exit 2; }
+  iptables -w 5 -N DOCKER-USER
+fi
+
+owned_chain() {
+  rules=$(iptables -w 5 -S "$chain") || return 1
+  [ "$(printf '%s\n' "$rules" | awk '$1=="-A" {n++} END{print n+0}')" = 2 ] || return 1
+  iptables -w 5 -C "$chain" -i "$bridge" -s "$subnet" -m comment --comment "$tag" -j RETURN
+  iptables -w 5 -C "$chain" -m comment --comment "$tag" -j REJECT --reject-with icmp-admin-prohibited
+}
+
+case "$operation" in
+  apply|boot)
+    if iptables -w 5 -S "$chain" >/dev/null 2>&1; then
+      owned_chain || { echo 'refuse unexpected existing guard; review before changing it' >&2; exit 2; }
+    else
+      iptables -w 5 -N "$chain"
+      iptables -w 5 -A "$chain" -i "$bridge" -s "$subnet" -m comment --comment "$tag" -j RETURN
+      iptables -w 5 -A "$chain" -m comment --comment "$tag" -j REJECT --reject-with icmp-admin-prohibited
+    fi
+    if ! iptables -w 5 -C DOCKER-USER -d "$metadata" -m comment --comment "$tag" -j "$chain" 2>/dev/null; then
+      iptables -w 5 -I DOCKER-USER 1 -d "$metadata" -m comment --comment "$tag" -j "$chain"
+    fi
+    ;;
+  remove)
+    owned_chain || { echo 'refuse removing an unrecognized guard' >&2; exit 2; }
+    iptables -w 5 -D DOCKER-USER -d "$metadata" -m comment --comment "$tag" -j "$chain"
+    iptables -w 5 -F "$chain"
+    iptables -w 5 -X "$chain"
+    echo 'removed only the owned Evidence IMDS guard'
+    exit 0
+    ;;
+esac
+owned_chain
+iptables -w 5 -C DOCKER-USER -d "$metadata" -m comment --comment "$tag" -j "$chain"
+first_rule=$(iptables -w 5 -S DOCKER-USER | awk '$1=="-A" {print; exit}')
+case "$first_rule" in *"-d $metadata "*"--comment $tag "*"-j $chain") ;;
+  *) echo 'guard must precede other DOCKER-USER rules; review ordering' >&2; exit 2;; esac
+printf 'Evidence IMDS guard active: bridge=%s subnet=%s; other containers denied\n' "$bridge" "$subnet"

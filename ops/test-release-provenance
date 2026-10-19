@@ -1,0 +1,119 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+resolver="$script_directory/resolve-release-provenance"
+test_root=$(mktemp -d)
+cleanup_test_root() {
+  rm -rf "$test_root"
+}
+trap cleanup_test_root EXIT HUP INT TERM
+
+fail() {
+  echo "release provenance test failed: $*" >&2
+  exit 1
+}
+
+new_repository() {
+  repository=$1
+  mkdir -p "$repository"
+  git -C "$repository" init -q
+}
+
+commit_baseline() {
+  repository=$1
+  printf '%s\n' baseline > "$repository/tracked.txt"
+  git -C "$repository" add tracked.txt
+  git -C "$repository" -c user.name='Release Test' -c user.email='release-test@example.invalid' commit -q -m baseline
+}
+
+development_repository="$test_root/development"
+mkdir -p "$development_repository"
+development_output=$(
+  RELEASE_PROVENANCE_MODE=development \
+  RELEASE_BUILT_AT='2026-09-20T12:00:00Z' \
+    "$resolver" "$development_repository"
+)
+if [ "$development_output" != "unknown
+2026-09-20T12:00:00Z" ]; then
+  fail "development mode did not preserve the local unknown identity"
+fi
+
+if RELEASE_PROVENANCE_MODE=invalid "$resolver" "$development_repository" >/dev/null 2>&1; then
+  fail "invalid provenance mode was accepted"
+fi
+if RELEASE_PROVENANCE_MODE=development RELEASE_BUILT_AT='not-a-time' "$resolver" "$development_repository" >/dev/null 2>&1; then
+  fail "invalid build time was accepted"
+fi
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$development_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a directory without Git"
+fi
+
+empty_repository="$test_root/empty"
+new_repository "$empty_repository"
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$empty_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a repository without HEAD"
+fi
+
+clean_repository="$test_root/clean"
+new_repository "$clean_repository"
+commit_baseline "$clean_repository"
+head_commit=$(git -C "$clean_repository" rev-parse --verify HEAD)
+official_output=$(
+  RELEASE_PROVENANCE_MODE=official \
+  RELEASE_BUILT_AT='2026-09-20T12:00:00Z' \
+    "$resolver" "$clean_repository"
+)
+if [ "$official_output" != "$head_commit
+2026-09-20T12:00:00Z" ]; then
+  fail "official mode did not resolve the clean HEAD identity"
+fi
+
+matching_output=$(
+  RELEASE_PROVENANCE_MODE=official \
+  RELEASE_COMMIT="$head_commit" \
+  RELEASE_BUILT_AT='2026-09-20T12:00:00Z' \
+    "$resolver" "$clean_repository"
+)
+if [ "$matching_output" != "$official_output" ]; then
+  fail "matching explicit commit changed the official identity"
+fi
+if RELEASE_PROVENANCE_MODE=official RELEASE_COMMIT=deadbeef RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$clean_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a commit that does not match HEAD"
+fi
+if RELEASE_PROVENANCE_MODE=official "$resolver" "$clean_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a missing build time"
+fi
+
+dirty_repository="$test_root/dirty"
+new_repository "$dirty_repository"
+commit_baseline "$dirty_repository"
+printf '%s\n' changed >> "$dirty_repository/tracked.txt"
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$dirty_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a tracked modification"
+fi
+
+staged_repository="$test_root/staged"
+new_repository "$staged_repository"
+commit_baseline "$staged_repository"
+printf '%s\n' staged >> "$staged_repository/tracked.txt"
+git -C "$staged_repository" add tracked.txt
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$staged_repository" >/dev/null 2>&1; then
+  fail "official mode accepted a staged modification"
+fi
+
+untracked_repository="$test_root/untracked"
+new_repository "$untracked_repository"
+commit_baseline "$untracked_repository"
+printf '%s\n' untracked > "$untracked_repository/untracked.txt"
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$untracked_repository" >/dev/null 2>&1; then
+  fail "official mode accepted an untracked file"
+fi
+
+subdirectory="$clean_repository/subdirectory"
+mkdir -p "$subdirectory"
+if RELEASE_PROVENANCE_MODE=official RELEASE_BUILT_AT='2026-09-20T12:00:00Z' "$resolver" "$subdirectory" >/dev/null 2>&1; then
+  fail "official mode accepted a path below the worktree root"
+fi
+
+printf '%s\n' 'release provenance tests passed'

@@ -1,0 +1,576 @@
+{
+  "passed": true,
+  "fixture_id": "70edead7-9dc9-44a3-9b35-b9d41b83264e",
+  "native_revision": 13,
+  "continued_from": "public-j-continuation",
+  "business_posts": 0,
+  "grant_writes": 0,
+  "scenarios": [
+    {
+      "name": "deep-link-native-history-no-hidden-projection-requests",
+      "passed": true
+    },
+    {
+      "name": "refresh-fast-adjacent-tabs-reload-zero-write-no-429",
+      "passed": true
+    },
+    {
+      "name": "visible-statistics-still-uses-native-authorized-read",
+      "passed": true
+    }
+  ],
+  "responses": [
+    {
+      "path": "/gateway/authorize/cost-outsourcing",
+      "status": 403,
+      "phase": "adjacent"
+    },
+    {
+      "path": "/gateway/authorize/bonus-distribution",
+      "status": 403,
+      "phase": "adjacent"
+    }
+  ],
+  "page_errors": [],
+  "projection_requests": [
+    {
+      "phase": "statistics",
+      "path": "/money/api/v1/metrics/operating-summary"
+    }
+  ],
+  "request_paths": [
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "login",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.js"
+    },
+    {
+      "phase": "login",
+      "method": "POST",
+      "path": "/gateway/login"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-project-directory.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-architecture-lens.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-bidding-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.css"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/workbench/assets/workbench.js"
+    },
+    {
+      "phase": "login-directory",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "login-directory",
+      "method": "GET",
+      "path": "/project/api/v1/project-directory"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-project-directory.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-architecture-lens.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business-runtime.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-bidding-runtime.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.css"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/workbench/assets/workbench.js"
+    },
+    {
+      "phase": "detail",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "detail",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "detail",
+      "method": "POST",
+      "path": "/gateway/authorize/people-groups"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/people/"
+    },
+    {
+      "phase": "detail",
+      "method": "GET",
+      "path": "/people/api/v1/persons"
+    },
+    {
+      "phase": "refresh",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "refresh",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "refresh",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/business-engagement"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/business/"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/business/api/v1/business-engagements"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/cost-outsourcing"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/commercial-summary"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/bonus-distribution"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/commercial-summary"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e/commercial-summary"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "adjacent",
+      "method": "POST",
+      "path": "/gateway/authorize/people-groups"
+    },
+    {
+      "phase": "adjacent",
+      "method": "GET",
+      "path": "/people/"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/people/api/v1/persons"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-login.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-workspace.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-admin.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-detail.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/jinghong-logo.webp"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-project-directory.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-architecture-lens.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-business-runtime.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-bidding-runtime.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.css"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-react-bidding.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/reference-oa-initiation-runtime.js"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/workbench/assets/workbench.js"
+    },
+    {
+      "phase": "reload",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "reload",
+      "method": "POST",
+      "path": "/gateway/authorize/project-workspace"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/project/"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/project/api/v1/projects/70edead7-9dc9-44a3-9b35-b9d41b83264e"
+    },
+    {
+      "phase": "reload",
+      "method": "POST",
+      "path": "/gateway/authorize/people-groups"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/people/"
+    },
+    {
+      "phase": "reload",
+      "method": "GET",
+      "path": "/people/api/v1/persons"
+    },
+    {
+      "phase": "statistics",
+      "method": "POST",
+      "path": "/gateway/authorize/money-flow-ledger"
+    },
+    {
+      "phase": "statistics",
+      "method": "GET",
+      "path": "/money/"
+    },
+    {
+      "phase": "statistics",
+      "method": "GET",
+      "path": "/money/api/v1/metrics/operating-summary"
+    }
+  ],
+  "full_oa_accepted": false,
+  "workbench_bridge_sha256": "6eeab6f3b4e47b50eaec99dc048e63e8714f74564abedd4d775d23d61fe55a84",
+  "test_session_logged_out": true
+}

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "candidate_only": true,
+  "public_ui_verified": false,
+  "schema": 20,
+  "exit_code": 0,
+  "test_started": true,
+  "test_pass": true,
+  "test_skipped": false,
+  "binary_sha256": "fb05622167dbebb304a9889d95720e8f800b88a63ce7a5502d1041262728e169",
+  "main_unchanged": true,
+  "private_pg_stopped": true
+}

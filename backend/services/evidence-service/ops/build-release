@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: build-release VERSION [OUTPUT_DIRECTORY]" >&2
+  exit 2
+fi
+version=$1
+output=${2:-dist}
+if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+  echo "VERSION must look like v1.2.3 or v1.2.3-rc.1" >&2
+  exit 2
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+app_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$app_dir/../.." && pwd)
+goos=${GOOS:-$(go env GOOS)}
+goarch=${GOARCH:-$(go env GOARCH)}
+case "$goos" in darwin|linux) ;; *) echo "unsupported GOOS: $goos" >&2; exit 2 ;; esac
+provenance=$("$repo_dir/ops/resolve-release-provenance" "$repo_dir")
+commit=$(printf '%s\n' "$provenance" | sed -n '1p')
+built_at=$(printf '%s\n' "$provenance" | sed -n '2p')
+
+mkdir -p "$output"
+output=$(CDPATH= cd -- "$output" && pwd)
+name="evidence-service_${version}_${goos}_${goarch}"
+archive="$output/$name.tar.gz"
+checksum="$archive.sha256"
+if [ -e "$archive" ] || [ -e "$checksum" ]; then
+  echo "release output already exists: $archive" >&2
+  exit 1
+fi
+umask 077
+stage=$(mktemp -d)
+temporary_archive="$output/.$name.tar.gz.tmp.$$"
+temporary_checksum="$output/.$name.tar.gz.sha256.tmp.$$"
+cleanup() { rm -rf "$stage"; rm -f "$temporary_archive" "$temporary_checksum"; }
+trap cleanup EXIT HUP INT TERM
+root="$stage/$name"
+mkdir -p "$root/bin" "$root/config" "$root/contracts" "$root/docs"
+ldflags="-s -w -X omsbizfoundry/evidence-service/internal/buildinfo.Version=$version -X omsbizfoundry/evidence-service/internal/buildinfo.Commit=$commit -X omsbizfoundry/evidence-service/internal/buildinfo.BuiltAt=$built_at"
+(
+  cd "$app_dir"
+  for command in server ops backup; do
+    CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOWORK=off go build -trimpath -ldflags "$ldflags" -o "$root/bin/evidence-$command" "./cmd/$command"
+  done
+)
+cp "$app_dir/.env.example" "$root/config/evidence.env.example"
+cp "$app_dir/compose.standalone.yaml" "$root/config/compose.standalone.yaml"
+cp "$repo_dir/contracts/evidence/v1/openapi.json" "$root/contracts/openapi.json"
+cp "$repo_dir/contracts/access/v1/examples/evidence-service-capabilities.json" "$root/contracts/capabilities.json"
+cp "$repo_dir/docs/operations/evidence-service-install-upgrade.md" "$root/docs/INSTALL-UPGRADE.md"
+cp "$repo_dir/docs/operations/evidence-service-backup-restore.md" "$root/docs/BACKUP-RESTORE.md"
+printf 'version=%s\ncommit=%s\nbuilt_at=%s\ntarget=%s/%s\n' "$version" "$commit" "$built_at" "$goos" "$goarch" > "$root/RELEASE-METADATA"
+chmod 0755 "$root"/bin/*
+COPYFILE_DISABLE=1 tar -czf "$temporary_archive" -C "$stage" "$name"
+chmod 0600 "$temporary_archive"
+if command -v sha256sum >/dev/null 2>&1; then digest=$(sha256sum "$temporary_archive" | awk '{print $1}'); else digest=$(shasum -a 256 "$temporary_archive" | awk '{print $1}'); fi
+printf '%s  %s\n' "$digest" "$(basename "$archive")" > "$temporary_checksum"
+chmod 0600 "$temporary_checksum"
+ln "$temporary_archive" "$archive"
+if ! ln "$temporary_checksum" "$checksum"; then rm -f "$archive"; exit 1; fi
+rm -f "$temporary_archive" "$temporary_checksum"
+printf '%s\n%s\n' "$archive" "$checksum"

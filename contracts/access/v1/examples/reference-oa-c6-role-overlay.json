@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "overlay_id": "reference-oa-c6",
+  "overlay_version": "1.0.0",
+  "application_id": "cost-outsourcing",
+  "audience": "cost-outsourcing",
+  "site_roles": {
+    "identity_super_admin": { "display_name": "身份超级管理员", "scope_kind": "tenant", "actions": [] },
+    "oa_business_admin": {
+      "display_name": "OA 业务管理员",
+      "scope_kind": "tenant",
+      "actions": [
+        "cost-entry.create", "cost-entry.read", "cost-entry.amount.read", "cost-entry.correct", "cost-entry.withdraw", "cost-entry.evidence.manage", "cost-entry.history.read",
+        "outsourcing-engagement.create", "outsourcing-engagement.read", "outsourcing-engagement.amount.read", "outsourcing-engagement.correct", "outsourcing-engagement.withdraw", "outsourcing-engagement.assess", "outsourcing-engagement.evidence.manage", "outsourcing-engagement.history.read"
+      ]
+    },
+    "project_manager": {
+      "display_name": "项目负责人",
+      "scope_kind": "resources",
+      "actions": [
+        "cost-entry.create", "cost-entry.read", "cost-entry.amount.read", "cost-entry.correct", "cost-entry.evidence.manage", "cost-entry.history.read",
+        "outsourcing-engagement.create", "outsourcing-engagement.read", "outsourcing-engagement.amount.read", "outsourcing-engagement.correct", "outsourcing-engagement.assess", "outsourcing-engagement.evidence.manage", "outsourcing-engagement.history.read"
+      ]
+    },
+    "finance": {
+      "display_name": "财务",
+      "scope_kind": "resources",
+      "actions": ["cost-entry.read", "cost-entry.amount.read", "cost-entry.history.read", "outsourcing-engagement.read", "outsourcing-engagement.amount.read", "outsourcing-engagement.history.read"]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "passed": false,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "scenarios": [
+    {
+      "name": "original-two-chain-empty-render-zero-write",
+      "passed": true
+    },
+    {
+      "name": "both-original-drawers-exact-money-zero-rate-saved",
+      "passed": true
+    }
+  ],
+  "asset_sha256": "106947b9297246124d72a7d04220e636b859789ee8f8b2796dd90c9f393db705",
+  "failure": {
+    "stage": "amendment",
+    "type": "TimeoutError",
+    "message": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ant-modal:visible').getByLabel('签订日期', { exact: true })\u001b[22m\n"
+  },
+  "business_command_count": 6,
+  "page_errors": []
+}

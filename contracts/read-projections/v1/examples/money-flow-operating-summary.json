@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "source_application": "money-flow-ledger",
+  "tenant_id": "22222222-2222-4222-8222-222222222222",
+  "definition_version": "money-flow-operating-summary-v1",
+  "observed_at": "2026-09-29T10:00:00Z",
+  "items": [
+    {
+      "metric_key": "receivable_outstanding",
+      "scope": {
+        "kind": "ledger_owner",
+        "tenant_id": "22222222-2222-4222-8222-222222222222",
+        "resource_type": "party",
+        "resource_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "unit": "money",
+      "currency": "CNY",
+      "value": "125000.50",
+      "redacted": false,
+      "source_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "time_range": "current",
+      "observed_at": "2026-09-29T10:00:00Z",
+      "deep_link": "/operating-summary/details?metric=receivable_outstanding&ledger_owner_party_id=11111111-1111-4111-8111-111111111111&currency=CNY"
+    },
+    {
+      "metric_key": "payment_effective",
+      "scope": {
+        "kind": "ledger_owner",
+        "tenant_id": "22222222-2222-4222-8222-222222222222",
+        "resource_type": "party",
+        "resource_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "unit": "money",
+      "currency": "CNY",
+      "value": "36000",
+      "redacted": false,
+      "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "time_range": "current",
+      "observed_at": "2026-09-29T10:00:00Z",
+      "deep_link": "/operating-summary/details?metric=payment_effective&ledger_owner_party_id=11111111-1111-4111-8111-111111111111&currency=CNY"
+    }
+  ]
+}

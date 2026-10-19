@@ -1,0 +1,14 @@
+# 读取 Party 当前详情 API 契约
+metadata: {path: "tech/_shared/contracts/party-get.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/parties/{party_id}", summary: "读取主体当前档案与允许动作", auth_required: true, audience: "party-directory", capability: "party-directory.read"}
+request:
+  path_params: [{name: party_id, type: string, format: uuid, required: true}]
+responses:
+  success: {status: 200, schema: {$ref: "../models/Party.yaml"}}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PARTY_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["按 tenant + party_id 读取。", "结合 Capability、Scope 和当前状态计算 allowed_actions。"]

@@ -1,0 +1,23 @@
+# 查询 Design Work Item 历史 API 契约
+metadata: {path: "tech/_shared/contracts/design-history-list.yaml", domain: "design-operations", owner: "Design Operations", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/api/v1/design-work-items/{work_item_id}/history", summary: "读取不可变 Work Item 历史", auth_required: true, audience: "design-operations", capability: "design-work-item.history.read"}
+request:
+  path_params: [{name: work_item_id, type: string, format: uuid, required: true}]
+  query:
+    properties:
+      after_sequence: {type: integer, minimum: 0, default: 0}
+      limit: {type: integer, minimum: 1, maximum: 200, default: 50}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      required: [items, next_after_sequence]
+      properties:
+        items: {type: array, items: {$ref: "../models/DesignHistoryEvent.yaml"}}
+        next_after_sequence: {type: [integer, "null"], minimum: 1}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: WORK_ITEM_NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["按 event_sequence 升序稳定分页。", "不调用 Project 或 Evidence。"]

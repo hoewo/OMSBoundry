@@ -1,0 +1,68 @@
+{
+  "passed": true,
+  "component_test_ports": true,
+  "production_iam": false,
+  "postgresql": false,
+  "public_ui_accepted": false,
+  "full_oa_accepted": false,
+  "asset_sha256": "d2b6e8f5b52859548d370c1f76e80642ac3ddb332ba213f6412c0e6ebff25883",
+  "scenarios": [
+    {
+      "name": "original-two-side-lists-zero-write",
+      "passed": true
+    },
+    {
+      "name": "original-business-closed-category-options",
+      "passed": true
+    },
+    {
+      "name": "original-production-closed-category-options",
+      "passed": true
+    },
+    {
+      "name": "exact-int64-string-null-date-frozen-project",
+      "passed": true
+    },
+    {
+      "name": "production-side-zero-amount-scope-isolation",
+      "passed": true
+    },
+    {
+      "name": "refresh-and-reopen-no-command",
+      "passed": true
+    },
+    {
+      "name": "append-correction-lost-reply-same-command-original-history",
+      "passed": true
+    },
+    {
+      "name": "actual-sdk-complete-lost-owner-reply-preview-byte-exact-no-reupload",
+      "passed": true
+    },
+    {
+      "name": "reasoned-withdrawal-replay-retains-record-amount-file-history",
+      "passed": true
+    },
+    {
+      "name": "native-readonly-no-hidden-write",
+      "passed": true
+    },
+    {
+      "name": "amount-redacted-current-and-history-zero-write",
+      "passed": true
+    },
+    {
+      "name": "three-normal-modal-withdrawals-reopen-visible-hit-target",
+      "passed": true
+    }
+  ],
+  "command_count": 14,
+  "native_records": 6,
+  "file_facts": {
+    "uploads": 1,
+    "completes": 1,
+    "access": 2,
+    "deletes": 0
+  },
+  "page_errors": []
+}

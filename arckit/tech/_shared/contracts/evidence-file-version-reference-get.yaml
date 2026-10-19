@@ -1,0 +1,32 @@
+# Evidence File Version 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/evidence-file-version-reference-get.yaml", domain: "evidence-service", owner: "Evidence Service", version: "1.0", created: "2026-09-25", updated: "2026-09-25"}
+endpoint: {method: GET, path: "/v1/references/files/{file_id}/versions/{version}", summary: "向业务应用提供 Evidence File Version 最小稳定投影", auth_required: true, audience: "evidence-service", capability: "evidence-service.view"}
+request:
+  path_params:
+    - {name: file_id, type: string, format: uuid, required: true}
+    - {name: version, type: integer, minimum: 1, required: true}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [id, file_id, tenant_id, resource_type, status, version, revision, display_name, file_name, size_bytes, media_type, sha256]
+      properties:
+        id: {type: string, format: uuid}
+        file_id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        resource_type: {type: string, const: evidence-file}
+        status: {type: string, const: available}
+        version: {type: integer, minimum: 1}
+        revision: {type: integer, minimum: 1, description: "Evidence v1 等于不可变 File Version。"}
+        display_name: {type: string, minLength: 1}
+        file_name: {type: string, minLength: 1}
+        size_bytes: {type: integer, minimum: 0}
+        media_type: {type: string}
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+  errors:
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 404, code: NOT_FOUND, retryable: false}
+business_logic:
+  flow: ["按 tenant、File ID 和 Version 读取不可变文件版本。", "绝不返回 bucket、object key、STS 或签名 URL。"]

@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "mode": "inspect",
+  "public_origin": "https://oatest.antuinfo.cn",
+  "fixture_id": "3b4c44d3-7b33-4a29-add3-3f6211ca893e",
+  "engagement_id": "231f2977-79d4-4b36-a178-f19a0d8d3119",
+  "native_IAM": true,
+  "grant_writes": 0,
+  "project_writes": 0,
+  "physical_file_deletes": 0,
+  "full_oa_accepted": false,
+  "evidence_provider": "local-http",
+  "browser_errors": [],
+  "network_failures": [],
+  "assets": {},
+  "phases": [],
+  "entry_exchanges": 2,
+  "before": {
+    "project_revision": 4,
+    "engagement_revision": 7,
+    "materials": [],
+    "requirements": [
+      {
+        "key": "tender_document",
+        "required": true,
+        "satisfied": false
+      },
+      {
+        "key": "bid_document",
+        "required": true,
+        "satisfied": false
+      },
+      {
+        "key": "award_document",
+        "required": true,
+        "satisfied": false
+      }
+    ]
+  }
+}

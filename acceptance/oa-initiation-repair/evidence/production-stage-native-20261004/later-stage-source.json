@@ -1,0 +1,33 @@
+{
+  "source_commit": "826e0fc65aa09947fc4f64f62a2644fa5d11a302",
+  "files": [
+    {
+      "path": "frontend/src/components/production/ConstructionStageEditModal.tsx",
+      "sha256": "19484f441296b069856a810478bfe217c5202f5950b59a09d2afb54cc21036f5"
+    },
+    {
+      "path": "frontend/src/components/production/ChangeFileList.tsx",
+      "sha256": "624c67af5c21dce2b8d1bf2bbd15344fd4ffd430b72e5b066f5e4fc79657d739"
+    },
+    {
+      "path": "frontend/src/components/production/CompletionFileList.tsx",
+      "sha256": "077bbc5d1b965432861f9c2a17973f99f51693cb154cf26e1820ae14ad8f9b47"
+    },
+    {
+      "path": "frontend/src/components/production/AuxiliaryFilePanel.tsx",
+      "sha256": "a184112f7f2d1d18ad8f32ee2f8557eac1f88aab47ad5a7c6df46945bca67f87"
+    },
+    {
+      "path": "frontend/src/components/production/ChangeFileUpload.tsx",
+      "sha256": "3f1df977fc883ca6188bc2ce260f7f804deaf4cb935f1438c2647ac2001791e2"
+    },
+    {
+      "path": "frontend/src/components/production/CompletionFileUpload.tsx",
+      "sha256": "b5c3f9f63aac29090f44ac6cafe9770103d6a2e4d6851c41e48d7afa05f41e0f"
+    }
+  ],
+  "original_source_writes": false,
+  "evidence_layer": "read-only-source-inspection",
+  "native_later_stage_accepted": false,
+  "original_live_site_accepted": false
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Directory 主体管理 - 线框图</title>
+    <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+    <header><h1>Party Directory 主体管理</h1><div class="meta-info"><div>页面角色：<code>PartyDirectoryWorkspacePage</code></div><div>路由：<code>/party/</code></div></div></header>
+
+    <details open>
+        <summary>已就绪</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>列表、选中详情和 allowed_actions 读取成功。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">主体目录</div><div class="nav-button">刷新权限</div><div class="nav-button">工作台</div></div>
+                    <div class="split-h">
+                        <div class="sidebar"><div class="sidebar-section">查询主体</div><div class="input-field">名称或登记标识</div><div class="picker">类型：全部</div><div class="picker">状态：active</div><div class="button primary">查询</div><div class="sidebar-section">结果</div><div class="list-item"><div class="list-item-text"><div class="list-item-title">示范设计院</div><div class="list-item-subtitle">组织 · active · r3</div></div></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">张某</div><div class="list-item-subtitle">个人 · active · r1</div></div></div></div>
+                        <div class="panel"><div class="content-area"><div class="toolbar"><span class="badge active">active</span><span class="badge">organization</span><div class="toolbar-spacer"></div><div class="button">重新载入</div></div><div class="section-header">当前档案</div><div class="card-grid"><div class="card"><div class="card-title">法定名称</div>示范设计院</div><div class="card"><div class="card-title">登记标识</div>REG-001</div><div class="card"><div class="card-title">Party ID / revision</div>稳定 UUID · r3</div></div><div class="section-header">服务端允许动作</div><div class="group-box"><span class="badge">read</span> <span class="badge">update</span> <span class="badge">status_manage</span> <span class="badge">history_read</span></div><div class="tab-bar"><div class="tab-item active">当前档案</div><div class="tab-item">修订历史</div></div></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>查询与类型／状态筛选</li><li>主体列表</li><li>当前档案</li><li>allowed_actions</li><li>历史入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>选择主体</code> → 读取详情并按服务端动作重绘</div><div class="interaction-item"><code>切换历史</code> → 保留查询条件与当前 Party</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>空目录</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前查询和筛选返回成功，但 items 为空。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">主体目录</div><div class="nav-button">登记主体</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">没有符合条件的主体</div><p>这表示查询成功且结果为空，不表示服务故障。可以清除筛选，或按权限登记第一条主体。</p></div><div class="toolbar"><div class="button">清除筛选</div><div class="toolbar-spacer"></div><div class="button primary">登记主体</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>空结果说明</li><li>清除筛选</li><li>按权限显示的登记入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>清除筛选</code> → 回到 active 默认列表</div><div class="interaction-item"><code>无 create</code> → 不显示登记按钮</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>登记与更正</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>用户拥有 create，或选中详情包含 update。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">主体目录 · 编辑</div><div class="nav-button">关闭</div></div><div class="content-area"><div class="modal-overlay"><div class="modal-content" data-label="登记或更正主体"><div class="group-box">名称相同不会自动合并；更正基于当前 revision，并追加不可变历史。</div><label>主体类型</label><div class="picker">organization</div><label>法定名称／姓名</label><div class="input-field">示范设计院</div><label>登记标识（可空）</label><div class="input-field">REG-001</div><label>Expected Revision / 原因</label><div class="input-field">3 / 纠正名称</div><div class="toolbar"><div class="button">取消</div><div class="toolbar-spacer"></div><div class="button primary">提交命令</div></div></div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>类型</li><li>名称</li><li>登记标识</li><li>Expected Revision</li><li>更正原因</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>登记</code> → 创建 revision 1</div><div class="interaction-item"><code>更正</code> → 追加下一 revision，不覆盖旧历史</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>revision 冲突</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>提交使用的 Expected Revision 已不是当前 revision。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">主体目录 · 冲突恢复</div><div class="nav-button">帮助</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">本次更正没有写入</div><p>你基于 revision 3 编辑，当前主体已经是 revision 4。系统不会覆盖其他人的修改。</p></div><div class="split-h"><div class="panel"><div class="panel-header">保留的输入</div><div class="content-area">示范设计院（华东） · REG-001</div></div><div class="split-divider-h"></div><div class="panel"><div class="panel-header">当前事实</div><div class="content-area">示范设计院集团 · revision 4</div></div></div><div class="toolbar"><div class="button">放弃输入</div><div class="toolbar-spacer"></div><div class="button primary">基于最新事实重新编辑</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>零写入说明</li><li>保留输入</li><li>最新当前投影</li><li>显式重试入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>409</code> → 自动读取最新详情，但不自动重放旧命令</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>权限或服务恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>操作返回 401／403／503，或响应无法解析。</div>
+            <div class="wireframe-canvas"><div class="device-frame desktop"><div class="nav-bar"><div class="nav-title">主体目录 · 只读恢复</div><div class="nav-button">统一工作台</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">当前不能继续编辑</div><p>权限变化时页面退出编辑态；服务故障时保留已读取档案。错误不会显示为“目录为空”。</p></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">示范设计院</div><div class="list-item-subtitle">已保留的只读摘要 · revision 4</div></div><span class="badge">只读</span></div><div class="toolbar"><div class="button">返回工作台</div><div class="toolbar-spacer"></div><div class="button">重新载入</div><div class="button primary">刷新权限</div></div></div></div></div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>失败类型</li><li>保留的只读摘要</li><li>刷新权限</li><li>重新载入／返回入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>401／403</code> → 清除写动作并重签</div><div class="interaction-item"><code>503</code> → 保留事实并允许稍后重新载入</div></div>
+        </div>
+    </details>
+</div>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "application_id": "approval-audit-results",
+  "application_version": "0.1.0",
+  "audience": "approval-audit-results",
+  "capability_namespace": "approval-audit-result",
+  "capabilities": [
+    { "id": "approval-audit-result.create", "description": "在凭证 Project 范围内登记批复或审计结果", "risk": "write", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.read", "description": "读取凭证范围内结果的非金额事实", "risk": "read", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.amount.read", "description": "读取结果和冻结来源中的金额组成", "risk": "privileged", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.correct", "description": "基于 expected revision 追加结果纠正", "risk": "write", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.withdraw", "description": "显式撤回当前结果并保留历史", "risk": "privileged", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.evidence.manage", "description": "在结果命令中增加、替换或移除 Evidence 精确引用", "risk": "write", "resource_types": ["project", "approval_audit_result"] },
+    { "id": "approval-audit-result.history.read", "description": "读取结果的不可变 revision 历史", "risk": "read", "resource_types": ["project", "approval_audit_result"] }
+  ]
+}

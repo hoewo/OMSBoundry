@@ -1,0 +1,446 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir="$repo_dir/deployments/d1"
+env_file=${D1_ENV_FILE:-"$script_dir/d1.env.example"}
+compose_project=${D1_PROJECT_NAME:?set D1_PROJECT_NAME to the isolated D1 stack}
+base_url=${D1_PUBLIC_URL:?set D1_PUBLIC_URL to the Nginx entry URL}
+evidence_dir=${C5_EVIDENCE_DIR:-"$d1_dir/.runtime/c5-journey-evidence"}
+
+for command in curl jq openssl docker awk sed; do
+  command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 2; }
+done
+[ -f "$env_file" ] || { echo "D1 environment file not found: $env_file" >&2; exit 2; }
+
+env_value() {
+  key=$1; fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+compose() {
+  if [ -n "${D1_COMPOSE_OVERRIDE_FILE:-}" ]; then
+    docker compose --project-name "$compose_project" --env-file "$env_file" \
+      --file "$d1_dir/compose.yaml" --file "$D1_COMPOSE_OVERRIDE_FILE" \
+      --profile contract --profile people --profile project --profile evidence --profile approval-audit-results "$@"
+  else
+    docker compose --project-name "$compose_project" --env-file "$env_file" \
+      --file "$d1_dir/compose.yaml" \
+      --profile contract --profile people --profile project --profile evidence --profile approval-audit-results "$@"
+  fi
+}
+
+new_uuid() {
+  value=$(openssl rand -hex 16)
+  printf '%s-%s-4%s-8%s-%s' \
+    "$(printf '%s' "$value" | cut -c1-8)" "$(printf '%s' "$value" | cut -c9-12)" \
+    "$(printf '%s' "$value" | cut -c14-16)" "$(printf '%s' "$value" | cut -c18-20)" \
+    "$(printf '%s' "$value" | cut -c21-32)"
+}
+
+expect_status() {
+  [ "$1" = "$2" ] || { echo "$3: HTTP $2, expected $1" >&2; exit 1; }
+}
+
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+
+request() {
+  method=$1; url=$2; cookie=$3; payload=$4; output=$5; expected=$6; label=$7
+  idempotency_key=${8:-}
+  if [ -n "$payload" ] && [ -n "$idempotency_key" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' \
+      -H "Idempotency-Key: $idempotency_key" --data "$payload" "$url")
+  elif [ -n "$payload" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' \
+      --data "$payload" "$url")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --request "$method" --cookie "$cookie" --cookie-jar "$cookie" "$url")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "$label" "$expected" "$actual" "$duration"
+  if [ "$actual" != "$expected" ] && [ "$output" != /dev/null ]; then cat "$output" >&2; printf '\n' >&2; fi
+  expect_status "$expected" "$actual" "$label"
+}
+
+fetch_csrf() {
+  cookie=$1; output=$2
+  request GET "$base_url/auth/api/v1/csrf" "$cookie" '' "$output" 200 'GET /auth/api/v1/csrf'
+  jq -er .csrf_token "$output"
+}
+
+auth_json() {
+  path=$1; cookie=$2; csrf=$3; payload=$4; output=$5; expected=$6
+  result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+    --cookie "$cookie" --cookie-jar "$cookie" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
+    --data "$payload" "$base_url/auth$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /auth$path" "$expected" "$actual" "$duration"
+  [ "$actual" = "$expected" ] || { [ "$output" = /dev/null ] || cat "$output" >&2; }
+  expect_status "$expected" "$actual" "POST /auth$path"
+}
+
+login() {
+  cookie=$1; csrf=$2; username=$3; password=$4; output=$5
+  payload=$(jq -cn --arg username "$username" --arg password "$password" '{username:$username,password:$password}')
+  auth_json /api/v1/login "$cookie" "$csrf" "$payload" "$output" 200
+}
+
+authorize_app() {
+  cookie=$1; csrf=$2; app=$3; resource_id=${4:-}; output=$5; expected=${6:-303}
+  if [ -n "$resource_id" ]; then
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      --data-urlencode resource_type=project --data-urlencode "resource_id=$resource_id" \
+      "$base_url/gateway/authorize/$app")
+  else
+    result=$(curl --silent --show-error --output "$output" --write-out '%{http_code} %{time_total}' \
+      --cookie "$cookie" --cookie-jar "$cookie" --data-urlencode "csrf_token=$csrf" \
+      "$base_url/gateway/authorize/$app")
+  fi
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /gateway/authorize/$app" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "authorize $app"
+}
+
+hidden_value() {
+  sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$2" | head -1
+}
+
+form_hidden_value() {
+  action=$1; name=$2; file=$3
+  awk -v action="$action" -v name="$name" '
+    index($0, "<form") && index($0, "action=\"" action "\"") { inside = 1 }
+    inside && index($0, "name=\"" name "\"") {
+      line = $0
+      sub(".*name=\"" name "\" value=\"", "", line)
+      sub("\".*", "", line)
+      print line
+      exit
+    }
+    inside && index($0, "</form>") { inside = 0 }
+  ' "$file"
+}
+
+post_contract() {
+  output=$1; shift
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url/contract/contracts")
+  actual=${result%% *}; duration=${result#* }
+  record_http 'POST /contract/contracts' 303 "$actual" "$duration"
+  expect_status 303 "$actual" 'create Contract'
+}
+
+post_contract_path() {
+  path=$1; output=$2; shift 2
+  result=$(curl --silent --show-error --output "$output.body" --dump-header "$output.headers" \
+    --write-out '%{http_code} %{time_total}' --cookie "$admin_cookies" --cookie-jar "$admin_cookies" \
+    "$@" "$base_url/contract$path")
+  actual=${result%% *}; duration=${result#* }
+  record_http "POST /contract$path" 303 "$actual" "$duration"
+  expect_status 303 "$actual" "POST /contract$path"
+}
+
+location_value() {
+  sed -n "s/.*[?&]$1=\([^&[:space:]]*\).*/\1/p" "$2" | tr -d '\r' | head -1
+}
+
+wait_healthy() {
+  service=$1
+  for _attempt in $(seq 1 60); do
+    container=$(compose ps -q "$service")
+    [ -z "$container" ] || [ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")" != healthy ] || return 0
+    sleep 1
+  done
+  echo "$service did not become healthy" >&2; exit 1
+}
+
+service_container() {
+  container=$(compose ps --all --quiet "$1")
+  [ -n "$container" ] || { echo "$1 container is missing" >&2; exit 1; }
+  printf '%s' "$container"
+}
+
+stop_service() { docker stop "$(service_container "$1")" >/dev/null; }
+start_service() { docker start "$(service_container "$1")" >/dev/null; }
+
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/oms-d1-c5-journey.XXXXXX")
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+stopped_services=''
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  for service in $stopped_services; do start_service "$service" >/dev/null 2>&1 || true; done
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv ids.json approval.json audit.json assessment-confirmed.json assessment-drifted.json assessment-unavailable.json result.md; do
+    [ ! -f "$workspace/$artifact" ] || cp "$workspace/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$workspace"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT HUP INT TERM
+
+admin_username=$(env_value BOOTSTRAP_ADMIN_USERNAME admin)
+admin_password=$(env_value BOOTSTRAP_ADMIN_PASSWORD)
+D1_ENV_FILE="$env_file" D1_PUBLIC_URL="$base_url" "$d1_dir/ops/grant-bootstrap-access" >/dev/null
+admin_cookies="$workspace/admin.cookies"
+admin_csrf=$(fetch_csrf "$admin_cookies" "$workspace/admin-csrf.json")
+login "$admin_cookies" "$admin_csrf" "$admin_username" "$admin_password" "$workspace/admin-login.json"
+for app in people-groups project-workspace contract-ledger evidence-service approval-audit-results; do
+  authorize_app "$admin_cookies" "$admin_csrf" "$app" '' "$workspace/admin-$app.out"
+done
+
+echo '[1/9] 验证选择集并建立 People、Project、Contract、Evidence 来源'
+request GET "$base_url/workbench/" "$admin_cookies" '' "$workspace/workbench.html" 200 'GET /workbench/'
+for selected in people-groups project-workspace contract-ledger approval-audit-results; do
+  grep -Fq "/gateway/authorize/$selected" "$workspace/workbench.html" || { echo "$selected is missing from Workbench" >&2; exit 1; }
+done
+for absent in money-flow-ledger party-directory business-engagement billing-invoice production-operations; do
+  ! grep -Fq "/gateway/authorize/$absent" "$workspace/workbench.html" || { echo "$absent unexpectedly appears in Workbench" >&2; exit 1; }
+done
+
+stamp="$(date -u '+%m%d%H%M%S')$(openssl rand -hex 3)"
+create_person() {
+  slug=$1; display=$2
+  payload=$(jq -cn --arg command_id "$(new_uuid)" --arg display_name "$display" '{command_id:$command_id,display_name:$display_name}')
+  request POST "$base_url/people/api/v1/persons" "$admin_cookies" "$payload" "$workspace/$slug-person.json" 201 "POST /people/persons ($slug)"
+}
+create_person business 'C5 项目经营负责人'
+create_person production 'C5 项目生产负责人'
+business_person=$(jq -er .id "$workspace/business-person.json"); business_person_revision=$(jq -er .revision "$workspace/business-person.json")
+production_person=$(jq -er .id "$workspace/production-person.json"); production_person_revision=$(jq -er .revision "$workspace/production-person.json")
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg number "C5-$stamp" --arg name "C5 结果闭环 $stamp" \
+  '{command_id:$command_id,project_number:$number,name:$name,summary:"C5 real cross-process journey",planned_start_date:null,planned_end_date:null,project_type_keys:["design"]}')
+request POST "$base_url/project/api/v1/projects" "$admin_cookies" "$payload" "$workspace/project.json" 201 'POST /project/projects'
+project_id=$(jq -er .id "$workspace/project.json")
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$business_person" --argjson source_revision "$business_person_revision" \
+  '{command_id:$command_id,expected_revision:1,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"business_owner"}')
+request POST "$base_url/project/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/business-assignment.json" 200 'POST Project business assignment'
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg person "$production_person" --argjson source_revision "$production_person_revision" \
+  '{command_id:$command_id,expected_revision:2,operation:"assign",subject_kind:"person",subject_id:$person,source_revision:$source_revision,role_key:"production_owner"}')
+request POST "$base_url/project/api/v1/projects/$project_id/assignments" "$admin_cookies" "$payload" "$workspace/production-assignment.json" 200 'POST Project production assignment'
+payload=$(jq -cn --arg command_id "$(new_uuid)" '{command_id:$command_id,expected_revision:3}')
+request POST "$base_url/project/api/v1/projects/$project_id/complete-initiation" "$admin_cookies" "$payload" "$workspace/project-active.json" 200 'POST Project complete initiation'
+jq -e '.status == "active" and .revision == 4' "$workspace/project-active.json" >/dev/null
+
+request GET "$base_url/contract/contracts" "$admin_cookies" '' "$workspace/contract-form.html" 200 'GET /contract/contracts'
+contract_csrf=$(hidden_value csrf_token "$workspace/contract-form.html")
+contract_command=$(hidden_value command_id "$workspace/contract-form.html")
+post_contract "$workspace/contract-create" \
+  --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" \
+  --data-urlencode number_namespace=C5 --data-urlencode "contract_number=C5-CONTRACT-$stamp" \
+  --data-urlencode "title=C5 设计合同 $stamp" --data-urlencode category=design \
+  --data-urlencode currency=CNY --data-urlencode total_amount=100000.00 \
+  --data-urlencode "signed_on=$(date -u '+%Y-%m-%d')" --data-urlencode "effective_on=$(date -u '+%Y-%m-%d')"
+contract_id=$(location_value contract_id "$workspace/contract-create.headers")
+[ -n "$contract_id" ] || { echo 'Contract id is missing' >&2; exit 1; }
+
+create_contract_party() {
+  slug=$1; legal_name=$2
+  registration="C5-$slug-$stamp"
+  request GET "$base_url/contract/parties" "$admin_cookies" '' "$workspace/$slug-contract-party-form.html" 200 "GET Contract Party form ($slug)"
+  csrf=$(hidden_value csrf_token "$workspace/$slug-contract-party-form.html")
+  post_contract_path /parties "$workspace/$slug-contract-party-create" \
+    --data-urlencode "csrf_token=$csrf" --data-urlencode kind=organization \
+    --data-urlencode "legal_name=$legal_name" --data-urlencode "registration_identifier=$registration"
+  printf '%s' "$registration"
+}
+owner_party=$(create_contract_party owner "C5 委托方 $stamp")
+supplier_party=$(create_contract_party supplier "C5 受托方 $stamp")
+[ -n "$owner_party" ] && [ -n "$supplier_party" ] || { echo 'Contract Party registrations are missing' >&2; exit 1; }
+
+contract_path="/contracts/$contract_id"
+add_party_path="$contract_path/parties"
+add_contract_party() {
+  slug=$1; registration=$2; role=$3
+  request GET "$base_url/contract$contract_path" "$admin_cookies" '' "$workspace/$slug-contract-detail.html" 200 "GET Contract detail ($slug)"
+  party_id=$(awk -v registration="$registration" '
+    index($0, "<option value=\"") && index($0, registration) {
+      line = $0
+      sub(".*<option value=\"", "", line)
+      sub("\".*", "", line)
+      print line
+      exit
+    }
+  ' "$workspace/$slug-contract-detail.html")
+  [ -n "$party_id" ] || { echo "Contract Party $registration is unavailable" >&2; exit 1; }
+  csrf=$(form_hidden_value "/contract$add_party_path" csrf_token "$workspace/$slug-contract-detail.html")
+  command=$(form_hidden_value "/contract$add_party_path" command_id "$workspace/$slug-contract-detail.html")
+  expected=$(form_hidden_value "/contract$add_party_path" expected_draft_version "$workspace/$slug-contract-detail.html")
+  post_contract_path "$add_party_path" "$workspace/$slug-contract-party-link" \
+    --data-urlencode "csrf_token=$csrf" --data-urlencode "command_id=$command" \
+    --data-urlencode "expected_draft_version=$expected" --data-urlencode "party_id=$party_id" \
+    --data-urlencode "role=$role"
+}
+add_contract_party owner "$owner_party" 委托方
+add_contract_party supplier "$supplier_party" 受托方
+
+activate_path="$contract_path/activate"
+request GET "$base_url/contract$contract_path" "$admin_cookies" '' "$workspace/contract-activation-form.html" 200 'GET Contract activation form'
+contract_csrf=$(form_hidden_value "/contract$activate_path" csrf_token "$workspace/contract-activation-form.html")
+contract_command=$(form_hidden_value "/contract$activate_path" command_id "$workspace/contract-activation-form.html")
+contract_draft_version=$(form_hidden_value "/contract$activate_path" expected_draft_version "$workspace/contract-activation-form.html")
+post_contract_path "$activate_path" "$workspace/contract-activation" \
+  --data-urlencode "csrf_token=$contract_csrf" --data-urlencode "command_id=$contract_command" \
+  --data-urlencode "expected_draft_version=$contract_draft_version"
+
+evidence_content="$workspace/c5-result.txt"
+printf 'C5 approval evidence %s\n' "$stamp" >"$evidence_content"
+evidence_size=$(wc -c <"$evidence_content" | tr -d ' ')
+evidence_sha=$(openssl dgst -sha256 "$evidence_content" | awk '{print $2}')
+payload=$(jq -cn --arg file_name "c5-result-$stamp.txt" --argjson size "$evidence_size" --arg sha "$evidence_sha" \
+  '{file_name:$file_name,size_bytes:$size,media_type:"text/plain",sha256:$sha,client_context:{purpose:"c5-result-proof"}}')
+request POST "$base_url/evidence/v1/upload-sessions" "$admin_cookies" "$payload" "$workspace/upload-session.json" 201 'POST Evidence upload session' "$(new_uuid)"
+upload_url=$(jq -er .authorization.upload_url "$workspace/upload-session.json")
+upload_session=$(jq -er .session_id "$workspace/upload-session.json")
+evidence_file=$(jq -er .file_id "$workspace/upload-session.json")
+expect_status 204 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --request PUT -H 'Content-Type: text/plain' --data-binary "@$evidence_content" "$upload_url")" 'upload Evidence bytes'
+payload=$(jq -cn --argjson size "$evidence_size" --arg sha "$evidence_sha" '{observed_size_bytes:$size,observed_sha256:$sha}')
+request POST "$base_url/evidence/v1/upload-sessions/$upload_session/complete" "$admin_cookies" "$payload" "$workspace/evidence-complete.json" 200 'POST Evidence complete' "$(new_uuid)"
+request GET "$base_url/evidence/v1/references/files/$evidence_file/versions/1" "$admin_cookies" '' "$workspace/evidence-reference.json" 200 'GET Evidence reference'
+evidence_revision=$(jq -er .revision "$workspace/evidence-reference.json")
+
+payload=$(jq -cn --arg command_id "$(new_uuid)" --arg contract "$contract_id" \
+  '{command_id:$command_id,expected_revision:4,operation:"link",target_service:"contract-ledger",resource_type:"contract",resource_id:$contract,source_revision:1,relation_key:"primary-contract",note:"C5 exact approval source"}')
+request POST "$base_url/project/api/v1/projects/$project_id/resource-links" "$admin_cookies" "$payload" "$workspace/project-link.json" 200 'POST Project Contract link'
+project_revision=$(jq -er .project.revision "$workspace/project-link.json")
+[ "$project_revision" = 5 ] || { echo "Project revision=$project_revision, expected 5" >&2; exit 1; }
+
+echo '[2/9] 建立 Results 操作者和无金额观察者的 Project Scope'
+create_actor() {
+  slug=$1; display=$2; username="c5-$slug-$stamp"; password="C5-${slug}-${stamp}!Aa7"
+  payload=$(jq -cn --arg username "$username" --arg display_name "$display" '{username:$username,display_name:$display_name}')
+  auth_json /api/v1/admin/invitations "$admin_cookies" "$admin_csrf" "$payload" "$workspace/$slug-invitation.json" 201
+  subject=$(jq -er .subject.id "$workspace/$slug-invitation.json"); token=$(jq -er .token "$workspace/$slug-invitation.json")
+  cookie="$workspace/$slug.cookies"; csrf=$(fetch_csrf "$cookie" "$workspace/$slug-csrf.json")
+  payload=$(jq -cn --arg token "$token" --arg password "$password" '{token:$token,password:$password}')
+  auth_json /api/v1/activate "$cookie" "$csrf" "$payload" "$workspace/$slug-activation.json" 200
+  login "$cookie" "$csrf" "$username" "$password" "$workspace/$slug-login.json"
+  jq -cn --arg subject_id "$subject" --arg csrf "$csrf" '{subject_id:$subject_id,csrf:$csrf}' >"$workspace/$slug-meta.json"
+}
+grant_action() {
+  subject=$1; action=$2; mode=${3:-grant}; endpoint=/api/v1/admin/grants
+  [ "$mode" != revoke ] || endpoint=/api/v1/admin/grants/revoke
+  payload=$(jq -cn --arg subject_id "$subject" --arg action "$action" '{subject_id:$subject_id,audience:"approval-audit-results",action:$action}')
+  auth_json "$endpoint" "$admin_cookies" "$admin_csrf" "$payload" /dev/null 204
+}
+create_actor operator 'C5 结果登记员'
+create_actor observer 'C5 结果观察者'
+operator_subject=$(jq -er .subject_id "$workspace/operator-meta.json")
+observer_subject=$(jq -er .subject_id "$workspace/observer-meta.json")
+for action in approval-audit-result.create approval-audit-result.read approval-audit-result.amount.read approval-audit-result.correct approval-audit-result.withdraw approval-audit-result.evidence.manage approval-audit-result.history.read; do
+  grant_action "$operator_subject" "$action"
+done
+grant_action "$observer_subject" approval-audit-result.read
+authorize_app "$workspace/operator.cookies" "$(jq -er .csrf "$workspace/operator-meta.json")" approval-audit-results "$project_id" "$workspace/operator-authorize.out"
+authorize_app "$workspace/observer.cookies" "$(jq -er .csrf "$workspace/observer-meta.json")" approval-audit-results "$project_id" "$workspace/observer-authorize.out"
+
+approval_command=$(new_uuid)
+approval_payload=$(jq -cn --arg command_id "$approval_command" --arg project "$project_id" --arg contract "$contract_id" \
+  --arg file "$evidence_file" --argjson evidence_revision "$evidence_revision" --arg confirmed_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+  '{command_id:$command_id,expected_revision:0,project_ref:{id:$project,revision:5},kind:"approval",currency:"CNY",source_ref:{application:"contract-ledger",resource_type:"contract",resource_id:$contract,revision:1},evidence_refs:[{file_id:$file,version:1,slot:"approval_document"}],external_confirmed_by:"C5 外部批复登记",external_confirmed_at:$confirmed_at}')
+
+echo '[3/9] 验证 Evidence／Contract 故障零写入和同 Command 恢复'
+stop_service evidence-service; stopped_services='evidence-service'
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/operator.cookies" "$approval_payload" "$workspace/approval-evidence-down.json" 503 'POST approval with Evidence down'
+request GET "$base_url/results/api/v1/approval-audit-results?project_id=$project_id" "$workspace/operator.cookies" '' "$workspace/results-empty.json" 200 'GET Results after Evidence failure'
+jq -e '.items == []' "$workspace/results-empty.json" >/dev/null
+start_service evidence-service; wait_healthy evidence-service; stopped_services=''
+stop_service contract-ledger; stopped_services='contract-ledger'
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/operator.cookies" "$approval_payload" "$workspace/approval-contract-down.json" 503 'POST approval with Contract down'
+request GET "$base_url/results/api/v1/approval-audit-results?project_id=$project_id" "$workspace/operator.cookies" '' "$workspace/results-still-empty.json" 200 'GET Results after Contract failure'
+jq -e '.items == []' "$workspace/results-still-empty.json" >/dev/null
+start_service contract-ledger; wait_healthy contract-ledger; stopped_services=''
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/operator.cookies" "$approval_payload" "$workspace/approval.json" 201 'POST approval after recovery'
+approval_id=$(jq -er .id "$workspace/approval.json")
+jq -e '.kind == "approval" and .state == "recorded" and .revision == 1 and .total_amount_minor == 10000000 and .source.revision == 1 and (.evidence | length) == 1' "$workspace/approval.json" >/dev/null
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/operator.cookies" "$approval_payload" "$workspace/approval-replay.json" 201 'POST approval replay'
+jq -e --arg id "$approval_id" '.id == $id and .revision == 1' "$workspace/approval-replay.json" >/dev/null
+
+echo '[4/9] 验证 approval → audit 和服务端金额脱敏'
+audit_command=$(new_uuid)
+audit_payload=$(jq -cn --arg command_id "$audit_command" --arg project "$project_id" --arg approval "$approval_id" \
+  --arg confirmed_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+  '{command_id:$command_id,expected_revision:0,project_ref:{id:$project,revision:5},kind:"audit",currency:"CNY",source_ref:{application:"approval-audit-results",resource_type:"approval-result",resource_id:$approval,revision:1},external_confirmed_by:"C5 外部审计登记",external_confirmed_at:$confirmed_at}')
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/operator.cookies" "$audit_payload" "$workspace/audit.json" 201 'POST audit'
+audit_id=$(jq -er .id "$workspace/audit.json")
+jq -e --arg approval "$approval_id" '.kind == "audit" and .state == "recorded" and .revision == 1 and .total_amount_minor == 10000000 and .source.resource_id == $approval and .source.revision == 1' "$workspace/audit.json" >/dev/null
+request GET "$base_url/results/api/v1/approval-audit-results?project_id=$project_id" "$workspace/observer.cookies" '' "$workspace/observer-results.json" 200 'GET Results without amount capability'
+jq -e '(.items | length) == 2 and all(.items[]; has("total_amount_minor") | not) and all(.items[]; (.allowed_actions | sort) == ["approval-audit-result.read"])' "$workspace/observer-results.json" >/dev/null
+wrong_project=$(new_uuid)
+request GET "$base_url/results/api/v1/approval-audit-results?project_id=$wrong_project" "$workspace/operator.cookies" '' "$workspace/wrong-project.json" 403 'GET Results outside Project Scope'
+request POST "$base_url/results/api/v1/approval-audit-results" "$workspace/observer.cookies" "$audit_payload" "$workspace/observer-write.json" 403 'POST Results without create capability'
+
+echo '[5/9] 显式确认 C5 检查点并验证幂等回放'
+request GET "$base_url/project/api/v1/projects/$project_id/completion-assessment?profile=reference-oa-c5-v1" "$admin_cookies" '' "$workspace/assessment-ready.json" 200 'GET completion assessment ready'
+jq -e '.project_revision == 5 and .overall_status == "satisfied" and .drifted == false and all(.requirements[]; .status == "satisfied")' "$workspace/assessment-ready.json" >/dev/null
+confirmation_command=$(new_uuid)
+expected_sources=$(jq -c '[.requirements[] | {requirement_key:.key,result_id:.source.id,result_kind:.source.kind,revision:.source.revision,digest:.source.digest}]' "$workspace/assessment-ready.json")
+confirmation_payload=$(jq -cn --arg command_id "$confirmation_command" --argjson sources "$expected_sources" \
+  '{command_id:$command_id,expected_revision:5,profile_key:"reference-oa-c5-v1",expected_sources:$sources}')
+request POST "$base_url/project/api/v1/projects/$project_id/completion-confirmations" "$admin_cookies" "$confirmation_payload" "$workspace/confirmation.json" 200 'POST completion confirmation'
+jq -e '.observed_project_revision == 5 and .confirmed_project_revision == 6 and (.sources | length) == 2' "$workspace/confirmation.json" >/dev/null
+request GET "$base_url/project/api/v1/projects/$project_id/completion-assessment?profile=reference-oa-c5-v1" "$admin_cookies" '' "$workspace/assessment-confirmed.json" 200 'GET completion assessment confirmed'
+jq -e '.project_revision == 6 and .overall_status == "satisfied" and .drifted == false and .latest_confirmation.confirmed_project_revision == 6' "$workspace/assessment-confirmed.json" >/dev/null
+
+echo '[6/9] 验证 Results Grant 撤销和重新签发'
+grant_action "$operator_subject" approval-audit-result.correct revoke
+authorize_app "$workspace/operator.cookies" "$(jq -er .csrf "$workspace/operator-meta.json")" approval-audit-results "$project_id" "$workspace/operator-refresh-revoked.out"
+correction_payload=$(jq -cn --arg command_id "$(new_uuid)" --arg contract "$contract_id" --arg file "$evidence_file" \
+  --arg confirmed_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+  '{command_id:$command_id,expected_revision:1,reason:"C5 更正外部确认人",currency:"CNY",source_ref:{application:"contract-ledger",resource_type:"contract",resource_id:$contract,revision:1},evidence_refs:[{file_id:$file,version:1,slot:"approval_document"}],external_confirmed_by:"C5 更正后的外部批复登记",external_confirmed_at:$confirmed_at}')
+request POST "$base_url/results/api/v1/approval-audit-results/$approval_id/corrections" "$workspace/operator.cookies" "$correction_payload" "$workspace/correction-denied.json" 403 'POST correction after Grant revoke'
+grant_action "$operator_subject" approval-audit-result.correct grant
+authorize_app "$workspace/operator.cookies" "$(jq -er .csrf "$workspace/operator-meta.json")" approval-audit-results "$project_id" "$workspace/operator-refresh-restored.out"
+
+echo '[7/9] 确认后纠正来源并验证 Project drift'
+request POST "$base_url/results/api/v1/approval-audit-results/$approval_id/corrections" "$workspace/operator.cookies" "$correction_payload" "$workspace/approval-corrected.json" 200 'POST approval correction after Project confirmation'
+jq -e '.revision == 2 and .project.revision == 6 and .external_confirmed_by == "C5 更正后的外部批复登记"' "$workspace/approval-corrected.json" >/dev/null
+request GET "$base_url/results/api/v1/approval-audit-results/$approval_id/history" "$workspace/operator.cookies" '' "$workspace/approval-history.json" 200 'GET approval history'
+jq -e '[.items[].event_kind] == ["recorded","corrected"] and [.items[].revision] == [1,2]' "$workspace/approval-history.json" >/dev/null
+request GET "$base_url/project/api/v1/projects/$project_id/completion-assessment?profile=reference-oa-c5-v1" "$admin_cookies" '' "$workspace/assessment-drifted.json" 200 'GET completion assessment drifted'
+jq -e '.project_revision == 6 and .overall_status == "satisfied" and .drifted == true and .latest_confirmation.confirmed_project_revision == 6' "$workspace/assessment-drifted.json" >/dev/null
+
+echo '[8/9] Results 停服：GET unavailable、新确认失败、旧确认本地回放'
+stop_service approval-audit-results; stopped_services='approval-audit-results'
+request GET "$base_url/project/api/v1/projects/$project_id/completion-assessment?profile=reference-oa-c5-v1" "$admin_cookies" '' "$workspace/assessment-unavailable.json" 200 'GET completion assessment with Results down'
+jq -e '.project_revision == 6 and .overall_status == "unavailable" and all(.requirements[]; .status == "unavailable")' "$workspace/assessment-unavailable.json" >/dev/null
+request POST "$base_url/project/api/v1/projects/$project_id/completion-confirmations" "$admin_cookies" "$confirmation_payload" "$workspace/confirmation-replay-down.json" 200 'POST successful confirmation replay with Results down'
+jq -e '.confirmed_project_revision == 6' "$workspace/confirmation-replay-down.json" >/dev/null
+new_confirmation=$(jq -cn --arg command_id "$(new_uuid)" --argjson sources "$expected_sources" \
+  '{command_id:$command_id,expected_revision:6,profile_key:"reference-oa-c5-v1",expected_sources:$sources}')
+request POST "$base_url/project/api/v1/projects/$project_id/completion-confirmations" "$admin_cookies" "$new_confirmation" "$workspace/confirmation-new-down.json" 503 'POST new confirmation with Results down'
+request GET "$base_url/project/api/v1/projects/$project_id" "$admin_cookies" '' "$workspace/project-after-failure.json" 200 'GET Project after failed confirmation'
+jq -e '.project.revision == 6 and .project.status == "active"' "$workspace/project-after-failure.json" >/dev/null
+start_service approval-audit-results; wait_healthy approval-audit-results; stopped_services=''
+request GET "$base_url/project/api/v1/projects/$project_id/completion-assessment?profile=reference-oa-c5-v1" "$admin_cookies" '' "$workspace/assessment-recovered.json" 200 'GET completion assessment recovered'
+jq -e '.project_revision == 6 and .overall_status == "satisfied" and .drifted == true' "$workspace/assessment-recovered.json" >/dev/null
+
+echo '[9/9] 固化跨进程证据和运行结论'
+jq -cn --arg project_id "$project_id" --arg contract_id "$contract_id" --arg evidence_file_id "$evidence_file" \
+  --arg approval_id "$approval_id" --arg audit_id "$audit_id" \
+  '{project_id:$project_id,contract_id:$contract_id,evidence_file_id:$evidence_file_id,approval_result_id:$approval_id,audit_result_id:$audit_id}' >"$workspace/ids.json"
+assertions=$(awk -F '\t' 'NR > 1 {count++} END {print count+0}' "$http_evidence")
+mismatches=$(awk -F '\t' 'NR > 1 && $2 != $3 {count++} END {print count+0}' "$http_evidence")
+printf '%s\n' \
+  '# C5 D1 独立进程业务旅程结果' \
+  '' \
+  "- HTTP 断言：$assertions" \
+  "- 状态不匹配：$mismatches" \
+  "- Project：${project_id}（当前 revision 6，状态 active）" \
+  '- 结果链：approval revision 2；audit revision 1，冻结 approval revision 1' \
+  '- 失败恢复：Evidence 503、Contract 503 均零写入；同 Command 恢复成功并可重放' \
+  '- 权限：Project Scope、无金额脱敏、无 create 403、correct Grant 撤销/恢复均通过' \
+  '- 完成协作：显式确认 revision 6；来源纠正后 drift；Results 停服为 unavailable' \
+  '- 幂等边界：已成功确认在 Results 停服时本地回放；新确认 503 且 Project revision 不变' \
+  '- 结论：C5 real-independent-process-journey-supported；不等于完整 OA Project completed' \
+  >"$workspace/result.md"
+[ "$mismatches" = 0 ] || { echo "HTTP mismatches=$mismatches" >&2; exit 1; }
+cat "$workspace/result.md"

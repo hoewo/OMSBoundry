@@ -1,0 +1,31 @@
+# DesignHistoryEvent 数据模型
+metadata:
+  path: "tech/_shared/models/DesignHistoryEvent.yaml"
+  domain: "design-operations"
+  entity_name: "DesignHistoryEvent"
+  storage: "PostgreSQL"
+  owner: "Design Operations"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+type: object
+additionalProperties: false
+required: [id, tenant_id, work_item_id, work_item_revision, event_sequence, event_type, actor_subject_id, command_id, payload, occurred_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, minLength: 1, maxLength: 128, readOnly: true}
+  work_item_id: {type: string, format: uuid, readOnly: true}
+  work_item_revision: {type: integer, minimum: 1, readOnly: true}
+  event_sequence: {type: integer, minimum: 1, readOnly: true}
+  event_type:
+    type: string
+    enum: [work-item-created, owner-set, deliverable-linked, deliverable-superseded, stage-completed, stage-not-applicable, stage-applicability-restored, stage-reopened, work-item-completed, work-item-cancelled]
+  actor_subject_id: {type: string, minLength: 1, maxLength: 256, readOnly: true}
+  command_id: {type: string, format: uuid, readOnly: true}
+  payload: {type: object, description: "仅包含 Design Operations 自有事实和稳定外部引用。", readOnly: true}
+  occurred_at: {type: string, format: date-time, readOnly: true}
+indexes:
+  - {name: uq_design_history_sequence, columns: [tenant_id, work_item_id, event_sequence], unique: true}
+immutability:
+  update: forbidden
+  delete: forbidden

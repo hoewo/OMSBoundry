@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>经营承接工作区 - 线框图</title>
+    <link rel="stylesheet" href="../wireframe-style.css">
+</head>
+<body>
+<div class="wireframe-container">
+    <header><h1>经营承接工作区</h1><div class="meta-info"><div>页面角色：<code>EngagementWorkspacePage</code></div><div>路由：<code>/business/</code></div></div></header>
+
+    <details open>
+        <summary>已就绪</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>当前 Scope 内的列表、选中详情与 allowed_actions 读取成功。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView">
+                    <div class="nav-bar"><div class="nav-title">经营承接</div><div class="nav-button">刷新权限</div><div class="nav-button">工作台</div></div>
+                    <div class="split-h">
+                        <div class="sidebar" data-kit="List(sidebar)"><div class="sidebar-section">承接记录</div><div class="list-item"><div class="list-item-text"><div class="list-item-title">材料收集中</div><div class="list-item-subtitle">Project A · revision 3</div></div></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">材料齐备</div><div class="list-item-subtitle">Project B · revision 7</div></div></div></div>
+                        <div class="panel"><div class="content-area"><div class="toolbar"><span class="badge active">材料收集中</span><span class="badge">阶段适用</span><div class="toolbar-spacer"></div><div class="button">重新载入</div></div><div class="section-header">当前事实</div><div class="card-grid"><div class="card"><div class="card-title">关联 Project</div>Project A · source r4</div><div class="card"><div class="card-title">承接方式</div>招投标</div><div class="card"><div class="card-title">材料缺口</div>中标文件</div></div><div class="section-header">服务端允许动作</div><div class="group-box"><span class="badge">read</span> <span class="badge">evidence.manage</span> <span class="badge">history.read</span></div><div class="tab-bar"><div class="tab-item active">阶段判断</div><div class="tab-item">承接材料</div><div class="tab-item">变更历史</div></div></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>Scope 内记录列表</li><li>状态、Project、方式、revision 与缺口</li><li>allowed_actions</li><li>阶段、材料和历史页签</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>选择记录</code> → 读取详情并按 allowed_actions 重绘动作</div><div class="interaction-item"><code>切换页签</code> → 保留选中记录与当前权限上下文</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>建立记录</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>列表响应包含 create，用户选择新建承接记录。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView"><div class="nav-bar"><div class="nav-title">经营承接</div><div class="nav-button">关闭</div></div><div class="content-area"><div class="modal-overlay" data-kit="Sheet"><div class="modal-content" data-label="建立经营承接"><div class="group-box">只引用有效 Project，不复制项目名称、负责人或其他内部字段。</div><label>Project ID</label><div class="input-field">稳定 UUID</div><label>Project 来源 revision</label><div class="input-field">4</div><div class="toolbar"><div class="button">取消</div><div class="toolbar-spacer"></div><div class="button primary">建立记录</div></div></div></div></div></div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>Project 稳定 ID</li><li>来源 revision</li><li>数据所有权说明</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>建立记录</code> → 服务端验证 Project 与 Scope，成功后进入 draft</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>阶段与材料编辑</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>用户选择当前状态和 allowed_actions 同时允许的动作。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView"><div class="nav-bar"><div class="nav-title">经营承接 · revision 3</div><div class="nav-button">刷新权限</div></div><div class="content-area"><div class="section-header">阶段判断</div><div class="group-box" data-kit="Form"><label>阶段判断</label><div class="picker">适用</div><label>承接方式</label><div class="picker">招投标</div><div class="button primary">保存判断</div></div><div class="section-header">材料要求</div><div class="list-item"><div class="list-item-text"><div class="list-item-title">招标文件</div><div class="list-item-subtitle">必需 · Evidence File v1</div></div><span class="badge">已登记</span></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">中标文件</div><div class="list-item-subtitle">必需 · 尚未登记</div></div><span class="badge">缺失</span></div><div class="group-box" data-kit="Form"><label>Evidence File ID</label><div class="input-field">稳定 UUID</div><label>File Version / 来源 revision</label><div class="input-field">1 / 2</div><div class="button primary">登记材料引用</div></div></div></div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>适用性与方式</li><li>材料要求、满足状态与缺口</li><li>Evidence 稳定引用</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>保存判断</code> → 追加 revision 并重新计算材料要求</div><div class="interaction-item"><code>登记材料</code> → 校验 Evidence 后追加引用，不上传字节</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>提交成功</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>命令成功或同一幂等意图复用既有结果。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView"><div class="nav-bar"><div class="nav-title">经营承接</div><div class="nav-button">工作台</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">材料引用已登记</div><p>当前状态：材料齐备 · revision 4</p><p>材料缺口：无。这里不表示已经中标、签约或收款。</p></div><div class="section-header">当前允许动作</div><div class="group-box"><span class="badge">read</span> <span class="badge">evidence.manage</span> <span class="badge">history.read</span></div><div class="toolbar"><div class="button">查看历史</div><div class="toolbar-spacer"></div><div class="button primary">继续查看记录</div></div></div></div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>业务结果</li><li>新 revision</li><li>明确的 ready 语义</li><li>重新计算的动作</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>成功</code> → 同时重读详情、列表与 allowed_actions</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>权限变化恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>显式刷新后岗位／Grant／Assignment 已变化，或业务请求返回 401／403。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView"><div class="nav-bar"><div class="nav-title">经营承接</div><div class="nav-button">统一工作台</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">权限上下文已经变化</div><p>页面已退出编辑态；旧表单不能继续提交。当前记录身份与 revision 暂时保留。</p></div><div class="section-header">刷新后的允许动作</div><div class="group-box"><span class="badge">business-engagement.read</span> <span class="badge">history.read</span></div><div class="list-item"><div class="list-item-text"><div class="list-item-title">Project A · 材料收集中</div><div class="list-item-subtitle">编辑入口已经隐藏</div></div><span class="badge">只读</span></div><div class="toolbar"><div class="button">返回统一工作台</div><div class="toolbar-spacer"></div><div class="button primary">刷新权限</div></div></div></div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>权限变化说明</li><li>保留的只读摘要</li><li>最新 allowed_actions</li><li>刷新与返回入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>刷新权限</code> → Gateway 按租户或 Project／Assignment 上下文向 IAM 重签</div><div class="interaction-item"><code>重签失败</code> → 清除旧动作并返回统一工作台</div></div>
+        </div>
+    </details>
+
+    <details>
+        <summary>冲突与依赖失败恢复</summary>
+        <div class="state-content">
+            <div class="state-description"><strong>触发条件：</strong>revision／状态冲突，引用失效，或 Project／Evidence 暂不可用。</div>
+            <div class="wireframe-canvas">
+                <div class="device-frame desktop" data-kit="NavigationSplitView"><div class="nav-bar"><div class="nav-title">经营承接 · 恢复</div><div class="nav-button">帮助</div></div><div class="content-area"><div class="group-box"><div class="group-box-title">本次操作没有写入</div><p>你提交时使用 revision 3，当前记录已经是 revision 4。页面不会覆盖最新事实。</p></div><div class="split-h"><div class="panel"><div class="panel-header">保留的输入</div><div class="content-area"><div class="list-item">中标文件 · File v1</div></div></div><div class="split-divider-h"></div><div class="panel"><div class="panel-header">当前失败来源</div><div class="content-area"><div class="list-item">Evidence 暂不可用或引用 revision 不匹配</div></div></div></div><div class="toolbar"><div class="button">返回 Project 核对</div><div class="toolbar-spacer"></div><div class="button">使用新命令重试</div><div class="button primary">重新载入最新状态</div></div></div></div>
+            </div>
+            <div class="component-list"><h3>组件清单</h3><ul><li>无部分写入说明</li><li>保留输入</li><li>冲突或依赖来源</li><li>重新载入、显式重试与 Project 核对入口</li></ul></div>
+            <div class="interactions"><h3>交互行为</h3><div class="interaction-item"><code>409</code> → 清除待重试命令，读取最新 revision 后由用户重新决定</div><div class="interaction-item"><code>503</code> → 保留当前投影；用户确认后以新 command_id 重试</div></div>
+        </div>
+    </details>
+</div>
+</body>
+</html>

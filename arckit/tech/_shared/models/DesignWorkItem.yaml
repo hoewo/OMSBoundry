@@ -1,0 +1,32 @@
+# DesignWorkItem 数据模型
+metadata:
+  path: "tech/_shared/models/DesignWorkItem.yaml"
+  domain: "design-operations"
+  entity_name: "DesignWorkItem"
+  storage: "PostgreSQL"
+  owner: "Design Operations"
+  version: "1.0"
+  created: "2026-09-25"
+  updated: "2026-09-25"
+type: object
+additionalProperties: false
+required: [id, tenant_id, project_id, project_source_revision, type_key, type_definition_version, status, revision, created_by, created_at, updated_at]
+properties:
+  id: {type: string, format: uuid, readOnly: true}
+  tenant_id: {type: string, minLength: 1, maxLength: 128, readOnly: true}
+  project_id: {type: string, format: uuid}
+  project_source_revision: {type: integer, minimum: 1}
+  type_key: {type: string, const: design}
+  type_definition_version: {type: string, const: design-v1}
+  owner_assignment_id: {type: [string, "null"], format: uuid}
+  owner_assignment_source_revision: {type: [integer, "null"], minimum: 1}
+  status: {type: string, enum: [draft, in-progress, completed, cancelled]}
+  current_stage_key: {type: [string, "null"], enum: [scheme, preliminary-design, construction-drawing, construction-support, null]}
+  revision: {type: integer, minimum: 1, readOnly: true}
+  cancellation_reason: {type: [string, "null"], maxLength: 1000, readOnly: true}
+  created_by: {type: string, minLength: 1, maxLength: 256, readOnly: true}
+  created_at: {type: string, format: date-time, readOnly: true}
+  updated_at: {type: string, format: date-time, readOnly: true}
+indexes:
+  - {name: uq_design_active_project_type, columns: [tenant_id, project_id, type_key], unique: true, where: "status <> 'cancelled'"}
+  - {name: ix_design_work_items_tenant_status, columns: [tenant_id, status, updated_at, id]}

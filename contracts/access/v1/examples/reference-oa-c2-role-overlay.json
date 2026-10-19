@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "overlay_id": "reference-oa-c2",
+  "overlay_version": "1.0.0",
+  "application_id": "business-engagement",
+  "audience": "business-engagement",
+  "site_roles": {
+    "identity_super_admin": {
+      "display_name": "身份超级管理员",
+      "scope_kind": "tenant",
+      "actions": []
+    },
+    "oa_business_admin": {
+      "display_name": "OA 业务管理员",
+      "scope_kind": "tenant",
+      "actions": [
+        "business-engagement.create",
+        "business-engagement.read",
+        "business-engagement.applicability.manage",
+        "business-engagement.method.select",
+        "business-engagement.evidence.manage",
+        "business-engagement.cancel",
+        "business-engagement.history.read"
+      ]
+    },
+    "business_manager": {
+      "display_name": "经营经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "business-engagement.create",
+        "business-engagement.read",
+        "business-engagement.applicability.manage",
+        "business-engagement.method.select",
+        "business-engagement.evidence.manage",
+        "business-engagement.cancel",
+        "business-engagement.history.read"
+      ]
+    },
+    "general_manager": {
+      "display_name": "总经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "business-engagement.read",
+        "business-engagement.history.read"
+      ]
+    },
+    "production_manager": {
+      "display_name": "生产经理",
+      "scope_kind": "tenant",
+      "actions": [
+        "business-engagement.read",
+        "business-engagement.history.read"
+      ]
+    },
+    "finance": {
+      "display_name": "财务",
+      "scope_kind": "tenant",
+      "actions": []
+    }
+  },
+  "assignment_policy": {
+    "policy_id": "business-engagement-project-access",
+    "policy_version": "1.0.0"
+  }
+}

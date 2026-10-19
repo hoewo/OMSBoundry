@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "official_release": false,
+  "images": {
+    "business-engagement": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/business-engagement@sha256:28dc69fb1db7b3b57c021a4bcb451e8f5bdc3100378619b0a088e551e73f11b9",
+      "image_id": "sha256:28dc69fb1db7b3b57c021a4bcb451e8f5bdc3100378619b0a088e551e73f11b9",
+      "binary_sha256": {
+        "server": "3eda06dbf6c2f2a7a4c68fe8f6bbd8e1ea99ac819b091aa7e7c2d1529de8e4ef",
+        "ops": "72963819a8383e238de140ca125b3ea3e64a4dd3ab2a39aec2a32f8cc54839d7",
+        "workload-keyctl": "603323fdf06f84802498b828ec466ef484d75f5663b59257df6c8c63af302357"
+      }
+    },
+    "unified-workbench": {
+      "reference": "crpi-bin16egpr6fh7gxw.cn-beijing.personal.cr.aliyuncs.com/omsbizfoundry/unified-workbench@sha256:9fb2bc8134efb6c3bca4ffd63ea6375ae5c81d13f38266f9dcacf4867751035f",
+      "image_id": "sha256:9fb2bc8134efb6c3bca4ffd63ea6375ae5c81d13f38266f9dcacf4867751035f",
+      "binary_sha256": {
+        "server": "967364d074ca5eb47ff0162f4756eaea2bdf4bba2360bdfe17ecb8860ee06261"
+      }
+    }
+  },
+  "main_unchanged": true
+}

@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "cycles": [
+    {
+      "cycle": 1,
+      "readiness": true,
+      "anonymous_login_only": true,
+      "five_embedded_runtimes_match": true,
+      "original_react_css_matches": true,
+      "reference_css": true
+    },
+    {
+      "cycle": 2,
+      "readiness": true,
+      "anonymous_login_only": true,
+      "five_embedded_runtimes_match": true,
+      "original_react_css_matches": true,
+      "reference_css": true
+    }
+  ],
+  "probe_stopped": true,
+  "assets_sha256": {
+    "/assets/reference-oa-architecture-lens.js": "d18fd5a6dff937c148e692d629d69b10d6bae853d945d9fdb69b45c128d54006",
+    "/assets/reference-oa-bidding-runtime.js": "e2722dc970486cec274242310ee430b1684698ab5f1d00ad2de858808960ae67",
+    "/assets/reference-oa-initiation-runtime.js": "c795fbf1e5c9fedfc8154d742bac4e0935eb1c95578a7dc3c29cc73cadb07803",
+    "/assets/reference-oa-business-runtime.js": "bda5885dd1a69b55f44c666726f98804fa5036d2652fc433f01abd87a795b2e9",
+    "/assets/reference-oa-react-bidding.js": "64911ad1d580dda8fa8813313a40d7d942bd4065a31a772fee55d386ba29de7f"
+  },
+  "binary_sha256": "3af0f31be533ac0f2d30b0286bf9a9be7397d25495469c721b9417effc9e9c14",
+  "scope": "Native standalone process with declared example Suite; no identity headers, protected user APIs, DB writes, Docker, Main deployment or public browser journey."
+}

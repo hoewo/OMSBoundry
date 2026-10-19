@@ -1,0 +1,31 @@
+# Party 最小引用读取 API 契约
+metadata: {path: "tech/_shared/contracts/party-reference-get.yaml", domain: "party-directory", owner: "Party Directory", version: "1.0", created: "2026-09-27", updated: "2026-09-27"}
+endpoint: {method: GET, path: "/api/v1/references/parties/{party_id}", summary: "向消费应用提供精确主体当前投影", auth_required: true, audience: "party-directory", capability: "party-directory.reference.read"}
+request:
+  path_params: [{name: party_id, type: string, format: uuid, required: true}]
+  credential_scope: {kind: resources, exact_resource: {type: party, id_from: party_id}}
+responses:
+  success:
+    status: 200
+    schema:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_application, id, tenant_id, kind, legal_name, status, revision]
+      properties:
+        schema_version: {type: string, const: "1"}
+        source_application: {type: string, const: party-directory}
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        kind: {type: string, enum: [organization, individual]}
+        legal_name: {type: string, minLength: 1, maxLength: 200}
+        registration_identifier: {type: [string, "null"], minLength: 1, maxLength: 100}
+        status: {type: string, enum: [active, inactive]}
+        revision: {type: integer, minimum: 1}
+  errors:
+    - {status: 401, code: UNAUTHENTICATED, retryable: false}
+    - {status: 403, code: CAPABILITY_DENIED, retryable: false}
+    - {status: 403, code: SCOPE_DENIED, retryable: false}
+    - {status: 404, code: PARTY_NOT_FOUND, retryable: false}
+    - {status: 409, code: PARTY_INACTIVE, retryable: false}
+business_logic:
+  flow: ["只接受精确 Party scope 的短期工作负载凭证。", "active Party 可用于新业务确认；inactive Party 只通过人类详情和历史入口解释既有事实。", "不返回客户角色、合同、义务、项目或内部审计。"]
