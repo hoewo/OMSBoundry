@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-19 BF-164（已接受／OMS 通用经营主体与真实主体列表）：现实客户是“资质单位”只属于客户背景，不构成 OMS 产品概念、Party 类型或行业限制。OMS 以“本方经营主体”表示当前使用系统的公司，通过 `OMS_OPERATING_PARTY_ID` 声明其 Party Directory 稳定 ID；`OMS_QUALIFICATION_PARTY_ID` 只作为已有部署的兼容别名，二者冲突时启动失败。甲方和施工方管理只能从 Party Directory 的版本化 API 读取实际持久化主体，Workbench 不得内置、补齐或回退到任何示例／默认主体；空集合原样显示。角色仍由具体项目关系确定，本方经营主体不得作为自身外部甲方、施工方、票据或资金对手。历史合同中已经冻结的旧角色文本继续只读兼容，不静默重写。本决策取代 BF-122、BF-143、BF-145、BF-149、BF-162 中把单一客户的“资质单位”称谓外推为 OMS 稳定产品语义的部分，不改变这些记录中的历史验证事实。
+
 2026-10-19 BF-163（已接受／客户交付仓库结构）：OMS 一期及其依赖小系统以独立仓库 `OMSBoundry` 形成客户体验与后续协作基线。源码按 `frontend/oms-workbench`、`backend/platform/*`、`backend/services/*` 分层；版本化 `contracts/` 与共享机制 `packages/` 继续保留在仓库根目录，避免改变稳定契约标识、Go replace 路径和发布包上下文。该整理只改变源码文件位置，不合并 Go module、数据库或部署单元，不改变 Owner、API、schema、Grant、Suite Manifest、运行拓扑和业务事实所有权；原 BizFoundry 工作区继续作为既有研发来源，不因复制交付仓库而被改写。交付仓库必须在提交前通过完整 Go 测试与 vet、前端类型／单元／构建检查、架构边界审计、D1／本地发布包测试和代表性容器构建。
 
 2026-10-19 BF-162（已接受／OMS 一期资质单位自交易防护）：Customer Overlay 通过 `OMS_QUALIFICATION_PARTY_ID` 指定的 Party 是当前 OMS 经营主体，不能在同一项目中再扮演外部甲方或施工方，也不能成为该主体的票据或资金对手。Unified Workbench 必须从相关候选集中排除该稳定 ID，并在发送 Project、Contract、Billing 或 Money 命令前重新验证；Owner 仍保留自己的最终校验。该决策只是 OMS 装配的业务角色约束，不给 Party Directory 增加全局“内部／外部”定性，不改变任何 Owner、API、schema 或 Grant。已存在的错误关系保留原始快照；在 Project 尚无版本化甲方更正能力前，页面必须明确提示重新建立，不得直接改库或静默改写历史。

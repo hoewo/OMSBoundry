@@ -43,7 +43,13 @@ enable_bonus_distribution=$(env_value ENABLE_BONUS_DISTRIBUTION false)
 reference_oa_bonus_profile=$(env_value REFERENCE_OA_BONUS_PROFILE)
 reference_oa_personnel_profile=$(env_value REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE)
 reference_oa_stage_profile=$(env_value REFERENCE_OA_PRODUCTION_STAGE_PROFILE)
-oms_qualification_party_id=$(env_value OMS_QUALIFICATION_PARTY_ID)
+oms_operating_party_id=$(env_value OMS_OPERATING_PARTY_ID)
+oms_legacy_party_id=$(env_value OMS_QUALIFICATION_PARTY_ID)
+if [ -n "$oms_operating_party_id" ] && [ -n "$oms_legacy_party_id" ] && [ "$oms_operating_party_id" != "$oms_legacy_party_id" ]; then
+  echo "OMS_OPERATING_PARTY_ID conflicts with legacy OMS_QUALIFICATION_PARTY_ID" >&2
+  exit 2
+fi
+[ -n "$oms_operating_party_id" ] || oms_operating_party_id=$oms_legacy_party_id
 image_mode=$(env_value D1_IMAGE_MODE build)
 ingress_mode=$(env_value D1_INGRESS_MODE http)
 evidence_storage_mode=$(env_value D1_EVIDENCE_STORAGE_PROVIDER local)
@@ -72,12 +78,12 @@ validate_env() {
   case "$reference_oa_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE" >&2; exit 2 ;; esac
-  if [ -n "$oms_qualification_party_id" ] && ! printf '%s\n' "$oms_qualification_party_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
-    echo "OMS_QUALIFICATION_PARTY_ID must be a canonical lowercase UUID" >&2
+  if [ -n "$oms_operating_party_id" ] && ! printf '%s\n' "$oms_operating_party_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    echo "OMS_OPERATING_PARTY_ID must be a canonical lowercase UUID" >&2
     exit 2
   fi
-  if [ -n "$oms_qualification_party_id" ] && { [ "$enable_party" != true ] || [ "$enable_project" != true ] || [ "$enable_billing" != true ]; }; then
-    echo "OMS qualification Party requires Party, Project and Billing" >&2
+  if [ -n "$oms_operating_party_id" ] && { [ "$enable_party" != true ] || [ "$enable_project" != true ] || [ "$enable_billing" != true ]; }; then
+    echo "OMS operating Party requires Party, Project and Billing" >&2
     exit 2
   fi
   if [ -n "$reference_oa_stage_profile" ] && { [ "$enable_production" != true ] || [ "$enable_project" != true ] || [ "$enable_people" != true ] || [ "$enable_evidence" != true ]; }; then echo "production stage requires Production, Project, People and Evidence" >&2; exit 2; fi
@@ -609,13 +615,13 @@ create_backup() {
     backup_stage_profile=$(compose_all exec -T production-operations sh -c 'printf "%s\n" "${REFERENCE_STAGE_MATERIAL_PROFILE-}"')
   fi
   backup_stage_workbench_profile=$(compose_all exec -T unified-workbench sh -c 'printf "%s\n" "${REFERENCE_OA_PRODUCTION_STAGE_PROFILE-}"')
-  backup_oms_qualification_party_id=$(compose_all exec -T unified-workbench sh -c 'printf "%s\n" "${OMS_QUALIFICATION_PARTY_ID-}"')
+  backup_oms_qualification_party_id=$(compose_all exec -T unified-workbench sh -c 'value=${OMS_OPERATING_PARTY_ID-}; [ -n "$value" ] || value=${OMS_QUALIFICATION_PARTY_ID-}; printf "%s\n" "$value"')
   [ "$backup_stage_profile" = "$backup_stage_workbench_profile" ] || { echo "running Production and Workbench stage profiles disagree" >&2; exit 1; }
   case "$backup_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "running Bonus profile is unsupported" >&2; exit 1 ;; esac
   case "$backup_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "running personnel profile is unsupported" >&2; exit 1 ;; esac
   case "$backup_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "running stage profile is unsupported" >&2; exit 1 ;; esac
   if [ -n "$backup_oms_qualification_party_id" ] && ! printf '%s\n' "$backup_oms_qualification_party_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
-    echo "running OMS qualification Party ID is invalid" >&2; exit 1
+    echo "running OMS operating Party ID is invalid" >&2; exit 1
   fi
   if [ "$backup_bonus_profile" = reference-oa-bonus-v3 ] && [ "$backup_personnel_profile" != reference-oa-production-personnel-v1 ]; then
     echo "running professional Bonus has no matching personnel profile" >&2; exit 1
@@ -727,7 +733,7 @@ create_backup() {
     printf 'REFERENCE_OA_BONUS_PROFILE=%s\n' "$backup_bonus_profile"
     printf 'REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE=%s\n' "$backup_personnel_profile"
     printf 'REFERENCE_OA_PRODUCTION_STAGE_PROFILE=%s\n' "$backup_stage_profile"
-    printf 'OMS_QUALIFICATION_PARTY_ID=%s\n' "$backup_oms_qualification_party_id"
+    printf 'OMS_OPERATING_PARTY_ID=%s\n' "$backup_oms_qualification_party_id"
   } >"$target/suite-selection.env"
 
   manifest="$target/checksums.sha256"
@@ -788,23 +794,23 @@ verify_backup_profile_value() {
 verify_backup_oms_party_value() {
   selection_file=$1
   configured_value=$2
-  count=$(awk -F= '$1 == "OMS_QUALIFICATION_PARTY_ID" {n++} END {print n+0}' "$selection_file")
+  count=$(awk -F= '$1 == "OMS_OPERATING_PARTY_ID" || $1 == "OMS_QUALIFICATION_PARTY_ID" {n++} END {print n+0}' "$selection_file")
   if [ "$count" = 0 ]; then
-    [ -z "$configured_value" ] || { echo "backup OMS qualification Party declaration is missing" >&2; exit 1; }
+    [ -z "$configured_value" ] || { echo "backup OMS operating Party declaration is missing" >&2; exit 1; }
     return 0
   fi
-  [ "$count" = 1 ] || { echo "duplicate backup OMS qualification Party declaration" >&2; exit 1; }
-  backed_up_value=$(awk -F= '$1 == "OMS_QUALIFICATION_PARTY_ID" {print substr($0,length($1)+2)}' "$selection_file")
+  [ "$count" = 1 ] || { echo "duplicate backup OMS operating Party declaration" >&2; exit 1; }
+  backed_up_value=$(awk -F= '$1 == "OMS_OPERATING_PARTY_ID" || $1 == "OMS_QUALIFICATION_PARTY_ID" {print substr($0,length($1)+2)}' "$selection_file")
   if [ -n "$backed_up_value" ] && ! printf '%s\n' "$backed_up_value" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
-    echo "backup OMS qualification Party declaration is invalid" >&2; exit 1
+    echo "backup OMS operating Party declaration is invalid" >&2; exit 1
   fi
-  [ "$backed_up_value" = "$configured_value" ] || { echo "backup OMS qualification Party mismatch: backup=$backed_up_value configured=$configured_value" >&2; exit 1; }
+  [ "$backed_up_value" = "$configured_value" ] || { echo "backup OMS operating Party mismatch: backup=$backed_up_value configured=$configured_value" >&2; exit 1; }
 }
 
 verify_backup_selection() {
   selection_file=$1
   if [ ! -f "$selection_file" ]; then
-    [ -z "$reference_oa_bonus_profile" ] && [ -z "$reference_oa_personnel_profile" ] && [ -z "$reference_oa_stage_profile" ] && [ -z "$oms_qualification_party_id" ] || { echo "backup selection is missing for an enabled customer profile" >&2; exit 1; }
+    [ -z "$reference_oa_bonus_profile" ] && [ -z "$reference_oa_personnel_profile" ] && [ -z "$reference_oa_stage_profile" ] && [ -z "$oms_operating_party_id" ] || { echo "backup selection is missing for an enabled customer profile" >&2; exit 1; }
     return 0
   fi
   verify_backup_selection_value "$selection_file" ENABLE_CONTRACT "$enable_contract"
@@ -822,7 +828,7 @@ verify_backup_selection() {
   verify_backup_profile_value "$selection_file" REFERENCE_OA_BONUS_PROFILE "$reference_oa_bonus_profile"
   verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE "$reference_oa_personnel_profile"
   verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_STAGE_PROFILE "$reference_oa_stage_profile"
-  verify_backup_oms_party_value "$selection_file" "$oms_qualification_party_id"
+  verify_backup_oms_party_value "$selection_file" "$oms_operating_party_id"
 }
 
 restore_backup() {

@@ -1,5 +1,5 @@
 {{define "oms-phase1-body"}}
-  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-qualification-party-id="{{.OMSQualificationPartyID}}">
+  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}">
     <div hidden data-oms-v1-routes>{{range .BusinessApplications}}<span data-oms-v1-application="{{.ID}}" data-oms-v1-route="{{.RoutePrefix}}"></span>{{end}}</div>
 
     <aside class="oms-v1__rail" aria-label="OMS 一期主导航">
@@ -24,7 +24,7 @@
 
     <div class="oms-v1__surface">
       <header class="oms-v1__topbar">
-        <div><strong data-oms-v1-context>经营总览</strong><span>资质单位经营视角</span></div>
+        <div><strong data-oms-v1-context>经营总览</strong><span>本公司项目经营视角</span></div>
         <div class="oms-v1__top-actions"><span class="oms-v1__sync" data-oms-v1-sync>正在连接业务系统…</span><a class="oms-v1__legacy-top" href="/legacy/">旧版</a><button type="button" data-oms-v1-refresh aria-label="刷新当前页面">↻</button></div>
       </header>
 
@@ -94,7 +94,7 @@
           </div>
           <div class="oms-v1__tab" data-oms-v1-tab-panel="outgoing-invoices">
             <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索项目或备注" data-oms-v1-invoice-search="outgoing"></label><button type="button" data-oms-v1-invoice-filter="outgoing">筛选</button><span data-oms-v1-invoice-total="outgoing">0 条</span></div><div class="oms-v1__list-actions"><button class="oms-v1__export" type="button" data-oms-v1-export="outgoing">导出</button><button class="oms-v1__primary" type="button" data-oms-v1-new-record="outgoing-invoice">＋ 新增开票</button></div></div>
-            <div class="oms-v1__source-warning" data-oms-v1-invoice-direction>开票方向由部署配置的资质单位稳定 Party ID 判断，不按名称猜测。</div>
+            <div class="oms-v1__source-warning" data-oms-v1-invoice-direction>开票方向由部署配置的本方经营主体稳定 Party ID 判断，不按名称猜测。</div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th>日期</th><th>项目 / 方向</th><th class="is-number">金额</th><th>备注</th><th></th></tr></thead><tbody data-oms-v1-invoice-body="outgoing"></tbody></table></div>
           </div>
           <div class="oms-v1__tab" data-oms-v1-tab-panel="receipts">

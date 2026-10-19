@@ -18,6 +18,7 @@
 
 ## 产品边界
 
+- 2026-10-19 用户纠偏（BF-164）：现实客户可能是“资质单位”，但该称谓不是 OMS 产品概念、主体类型或行业前提。OMS 使用中性的“本方经营主体”表示当前使用系统的公司，并通过 `OMS_OPERATING_PARTY_ID` 绑定其 Party Directory 稳定身份；旧 `OMS_QUALIFICATION_PARTY_ID` 仅作部署兼容别名。甲方和施工方页面只能投影 Party Directory 实际返回的持久化主体，禁止 Workbench 注入示例、默认或兜底主体；无数据时必须显示空状态。本方经营主体仍须从外部往来方候选中排除，历史合同中的旧角色文本只读兼容，不静默改写。
 - 本项目不建设通用业务平台。
 - 当前已经实现 `contract-ledger`、`money-flow-ledger`、People & Groups、Evidence Service、Party Directory、Project Workspace、Business Engagement、Billing、Production、Results、Cost & Outsourcing 及相应 Nginx、Gateway、Identity & Access 和 Unified Workbench 装配；Bonus Distribution 已完成独立领域核心与 PostgreSQL 18 事实层，但 HTTP／IAM、页面、D1、恢复与 Money 建议尚未实现。
 - Contract Ledger、Money Flow Ledger、Project Workspace、Party Directory、Business Engagement 与 People & Groups 必须保持各自数据所有权并可独立迁移、测试、部署和使用；“独立”允许交付包携带显式声明的直接依赖，不等于单进程或零依赖。Evidence Service、Party Directory 与 Business Engagement 均通过版本化端口接入。

@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-19 BF-164 当前修正：把 OMS 活动界面、配置和新写入的合同角色从单客户“资质单位”称谓改为中性的“本方经营主体”；`OMS_OPERATING_PARTY_ID` 成为新配置名，旧变量只兼容既有部署。甲方／施工方列表继续从 Party Directory Owner 分页读取，增加明确无假数据空状态和回归约束，不新增角色表、共享主体库或演示数据注入。完成 Workbench、D1 配置、文档、测试和本地 18182 复验后提交交付仓库；公网发布只有在实际执行后才能登记。
+
 2026-10-19 BF-163 已完成客户交付仓库整理：OMS 一期工作台进入 `frontend/oms-workbench`，Gateway／IAM 进入 `backend/platform`，十二个业务服务进入 `backend/services`；`contracts/` 与 `packages/` 为兼容稳定契约和 Go module 路径继续保留在根目录。所有活动构建、验收和部署脚本已经更新为新路径，并以完整 Go／前端测试、架构边界审计、发布包测试和代表性容器构建作为提交门禁。本轮不修改产品功能、Owner、API、schema、Grant、部署拓扑或公网环境。
 
 2026-10-19 BF-162 已完成并发布：修复当前资质单位被选为项目外部甲方后，Billing 拒绝自开自收票据而页面只显示 `INVALID_REQUEST` 的问题。Workbench 已在项目、施工方、票据和收付款入口统一过滤并提交前校验资质单位 ID，同时补齐中文错误解释。公网 Workbench 为 `v0.1.0-test.oms-v1.18@sha256:2b2e319dfacbc6b84b743f5e3a9dcf09846d37c99f7de8523eba8990adf3f54f`；升级前备份、D1 检查和 17 容器健康通过。下一步由用户以真实甲方重新建立当前错误项目并继续开票流程；如以后确需更正已建项目的甲方，应另行设计 Project 追加 revision 能力，不用直接改库代替。

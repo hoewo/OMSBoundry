@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-19 BF-164：OMS 产品不以“资质单位”为前提。现实客户的行业角色与系统稳定模型分离，当前使用系统的公司统一称“本方经营主体”，新配置使用 `OMS_OPERATING_PARTY_ID`，旧名称只保留部署兼容。甲方／施工方列表只展示 Party Directory 实际返回的持久化数据，不注入演示、默认或兜底主体；没有人工录入数据时显示空状态。
+
 2026-10-19 BF-163：本仓库已形成客户体验与后续协作所需的前后端分层交付基线。目录整理后的全部活动构建、验收和部署路径已同步更新；`contracts/` 与 `packages/` 有意保留在根目录，以维持稳定契约和 Go module 兼容。该整理没有改变任何 Owner、API、数据库、Grant、部署拓扑或公网环境。[仓库结构说明](./docs/repository-layout.md)
 
 2026-10-19 BF-162：OMS 一期已修复新增开票返回 `INVALID_REQUEST` 的业务关系漏洞。根因是项目把当前资质单位自身选为外部甲方，Billing 正确拒绝了“自己给自己开票”。Workbench 现已在新建项目、关联施工方、双向票据和收付款的候选与提交两层排除资质单位自身，并将 Owner 错误转为可操作的中文提示。既有错误项目不静默篡改，需以真实甲方重新建立。公网已发布 Workbench `v0.1.0-test.oms-v1.18@sha256:2b2e319dfacbc6b84b743f5e3a9dcf09846d37c99f7de8523eba8990adf3f54f`，备份 `20261019T130505Z`、D1 检查、17/17 容器健康和公网只读验证通过。[验证报告](./docs/reports/oms-phase1-self-counterparty-guard-validation-20261019.md)

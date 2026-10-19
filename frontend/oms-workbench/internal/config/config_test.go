@@ -30,15 +30,26 @@ func TestExplicitStageProfileRemainsClosed(t *testing.T) {
 	}
 }
 
-func TestOMSQualificationPartyIDMustBeCanonical(t *testing.T) {
+func TestOMSOperatingPartyIDMustBeCanonicalAndLegacyAliasRemainsCompatible(t *testing.T) {
 	t.Setenv("SUITE_MANIFEST_PATH", "test.json")
-	t.Setenv("OMS_QUALIFICATION_PARTY_ID", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	t.Setenv("OMS_QUALIFICATION_PARTY_ID", "")
+	t.Setenv("OMS_OPERATING_PARTY_ID", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	cfg, err := Load()
-	if err != nil || cfg.OMSQualificationPartyID != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" {
-		t.Fatalf("valid qualification Party ID cfg=%+v err=%v", cfg, err)
+	if err != nil || cfg.OMSOperatingPartyID != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" {
+		t.Fatalf("valid operating Party ID cfg=%+v err=%v", cfg, err)
 	}
-	t.Setenv("OMS_QUALIFICATION_PARTY_ID", "not-a-party-id")
+	t.Setenv("OMS_OPERATING_PARTY_ID", "not-a-party-id")
 	if _, err := Load(); err == nil {
-		t.Fatal("invalid qualification Party ID accepted")
+		t.Fatal("invalid operating Party ID accepted")
+	}
+	t.Setenv("OMS_OPERATING_PARTY_ID", "")
+	t.Setenv("OMS_QUALIFICATION_PARTY_ID", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	cfg, err = Load()
+	if err != nil || cfg.OMSOperatingPartyID != "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" {
+		t.Fatalf("legacy operating Party alias cfg=%+v err=%v", cfg, err)
+	}
+	t.Setenv("OMS_OPERATING_PARTY_ID", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	if _, err := Load(); err == nil {
+		t.Fatal("conflicting operating Party declarations accepted")
 	}
 }

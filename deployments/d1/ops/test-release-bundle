@@ -145,8 +145,12 @@ grep -Fq 'BUSINESS_ENGAGEMENT_BASE_URL: http://business-engagement:8089' "$root/
   exit 1
 }
 
+[ "$(grep -Fc 'OMS_OPERATING_PARTY_ID: ${OMS_OPERATING_PARTY_ID:-}' "$root/deployments/d1/compose.yaml")" -eq 2 ] || {
+  echo 'D1 runtime does not receive the explicit OMS operating Party identity' >&2
+  exit 1
+}
 [ "$(grep -Fc 'OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}' "$root/deployments/d1/compose.yaml")" -eq 2 ] || {
-  echo 'D1 Workbench runtime does not receive the explicit OMS qualification Party identity' >&2
+  echo 'D1 runtime dropped the legacy OMS operating Party compatibility alias' >&2
   exit 1
 }
 

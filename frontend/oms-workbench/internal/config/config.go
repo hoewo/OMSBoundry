@@ -15,11 +15,19 @@ type Config struct {
 	ProductionPersonnelProfile string
 	BonusProfile               string
 	ProductionStageProfile     string
-	OMSQualificationPartyID    string
+	OMSOperatingPartyID        string
 }
 
 func Load() (Config, error) {
-	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSQualificationPartyID: strings.TrimSpace(os.Getenv("OMS_QUALIFICATION_PARTY_ID"))}
+	operatingPartyID := strings.TrimSpace(os.Getenv("OMS_OPERATING_PARTY_ID"))
+	legacyPartyID := strings.TrimSpace(os.Getenv("OMS_QUALIFICATION_PARTY_ID"))
+	if operatingPartyID != "" && legacyPartyID != "" && operatingPartyID != legacyPartyID {
+		return Config{}, fmt.Errorf("OMS operating Party ID conflicts with legacy OMS_QUALIFICATION_PARTY_ID")
+	}
+	if operatingPartyID == "" {
+		operatingPartyID = legacyPartyID
+	}
+	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSOperatingPartyID: operatingPartyID}
 	value.ProductionStageProfile = strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_STAGE_PROFILE"))
 	if value.HTTPAddress == "" {
 		value.HTTPAddress = ":8082"
@@ -36,8 +44,8 @@ func Load() (Config, error) {
 	if value.ProductionStageProfile != "" && value.ProductionStageProfile != "reference-oa-stage-materials-v1" {
 		return Config{}, fmt.Errorf("unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE")
 	}
-	if value.OMSQualificationPartyID != "" && !canonicalUUIDPattern.MatchString(value.OMSQualificationPartyID) {
-		return Config{}, fmt.Errorf("OMS_QUALIFICATION_PARTY_ID must be a canonical lowercase UUID")
+	if value.OMSOperatingPartyID != "" && !canonicalUUIDPattern.MatchString(value.OMSOperatingPartyID) {
+		return Config{}, fmt.Errorf("OMS_OPERATING_PARTY_ID must be a canonical lowercase UUID")
 	}
 	return value, nil
 }
