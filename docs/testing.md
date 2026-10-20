@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-20 BF-165 OMS 一期详情交互边界已完成本地验证：`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、`GOWORK=off go test -count=1 ./...`、`GOWORK=off go build -o /tmp/oms-workbench-18182-issue12 ./cmd/server` 和 `git diff --check` 通过，`127.0.0.1:18182` 已重启为静态资源 `20261020.5`。浏览器在桌面断点实际打开“新建项目”：弹窗宽 720px，左右留白约 51px／52px，居中且内容区独立滚动；在窄屏断点实际确认弹窗四边贴合视口、圆角为 0；关闭后弹窗隐藏、页面滚动锁解除，键盘焦点返回“新建项目”。项目详情继续使用独立页面，文件预览继续使用高于业务弹窗的独立预览层；活动 OMS 已无旧右侧抽屉标记。本轮未发布到 `oatest`，不得描述为公网已更新。
+
 2026-10-19 BF-164 OMS 通用经营主体与真实主体列表已完成本地验证：`make fmt-check && make test && make vet`、Workbench 前端 206/206、TypeScript、Vite build、`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、D1 发布包测试和 shell 语法检查通过。`127.0.0.1:18182` 已重启为本次源码构建；浏览器实际刷新后，甲方和施工方页面均显示“暂无人工录入…”空状态及“系统不会补充演示或默认数据”，活动 OMS 页面显示“本公司项目经营视角”和中性 `data-operating-party-id`。本轮尚未发布到 `oatest`，不得描述为公网已更新。[报告](./reports/oms-phase1-generic-operating-party-validation-20261019.md)
 
 2026-10-19 BF-162 OMS 一期资质单位自交易防护已发布并验证：`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235 和 `go test -count=1 ./frontend/oms-workbench/...` 通过；升级前备份为 `/var/backups/omsbizfoundry/20261019T130505Z`。公网 Workbench 为 `v0.1.0-test.oms-v1.18@sha256:2b2e319dfacbc6b84b743f5e3a9dcf09846d37c99f7de8523eba8990adf3f54f`，静态资源 `20261019.1` 包含对手方校验与明确中文提示；D1 `check`、17/17 长运行容器 healthy、正式登录、五个 Gateway 授权与 Owner 只读复验通过，业务写入为 0。已确认异常项目“测试项目100”的甲方 Party ID 与资质单位 ID 相同，因 Project 快照不可直接覆盖，本轮没有篡改或删除该数据。[报告](./reports/oms-phase1-self-counterparty-guard-validation-20261019.md)
