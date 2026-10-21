@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-21 BF-165：昨天确认的 OMS 易用性基线已经从 `main@99ead97` 发布到 [oatest](https://oatest.antuinfo.cn/)。公网 Workbench 为 `v0.1.0-test.oms-v1.19@sha256:6268306eadb7183ddae1da1229e623f5fab3d6fb0c033244b289d24a4629155c`，静态资源为 `20261020.5`；升级前备份、D1 全栈检查、17/17 容器健康、正式登录及五 Owner 只读复验通过。本次只替换 Unified Workbench，不包含独立交互试验分支，也不改变业务事实、Owner、API、schema 或 Grant。[验证报告](./docs/reports/oms-phase1-usability-baseline-publication-20261021.md)
+
 2026-10-19 BF-164：OMS 产品不以“资质单位”为前提。现实客户的行业角色与系统稳定模型分离，当前使用系统的公司统一称“本方经营主体”，新配置使用 `OMS_OPERATING_PARTY_ID`，旧名称只保留部署兼容。甲方／施工方列表只展示 Party Directory 实际返回的持久化数据，不注入演示、默认或兜底主体；没有人工录入数据时显示空状态。
 
 2026-10-19 BF-163：本仓库已形成客户体验与后续协作所需的前后端分层交付基线。目录整理后的全部活动构建、验收和部署路径已同步更新；`contracts/` 与 `packages/` 有意保留在根目录，以维持稳定契约和 Go module 兼容。该整理没有改变任何 Owner、API、数据库、Grant、部署拓扑或公网环境。[仓库结构说明](./docs/repository-layout.md)

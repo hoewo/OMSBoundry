@@ -18,6 +18,7 @@
 
 ## 产品边界
 
+- 2026-10-21 OMS 一期详情交互基线已发布（BF-165）：`main@99ead97` 对应 Workbench `v0.1.0-test.oms-v1.19@sha256:6268306eadb7183ddae1da1229e623f5fab3d6fb0c033244b289d24a4629155c` 已部署到 `oatest`，静态资源为 `20261020.5`。升级前完整备份、D1 全栈检查、17/17 容器健康、正式登录、五 Gateway 授权和 Owner 只读复验通过；本轮只替换 Unified Workbench，不改变 Owner、API、schema、Grant 或业务数据。证据见 [`docs/reports/oms-phase1-usability-baseline-publication-20261021.md`](./docs/reports/oms-phase1-usability-baseline-publication-20261021.md)。
 - 2026-10-19 用户纠偏（BF-164）：现实客户可能是“资质单位”，但该称谓不是 OMS 产品概念、主体类型或行业前提。OMS 使用中性的“本方经营主体”表示当前使用系统的公司，并通过 `OMS_OPERATING_PARTY_ID` 绑定其 Party Directory 稳定身份；旧 `OMS_QUALIFICATION_PARTY_ID` 仅作部署兼容别名。甲方和施工方页面只能投影 Party Directory 实际返回的持久化主体，禁止 Workbench 注入示例、默认或兜底主体；无数据时必须显示空状态。本方经营主体仍须从外部往来方候选中排除，历史合同中的旧角色文本只读兼容，不静默改写。
 - 本项目不建设通用业务平台。
 - 当前已经实现 `contract-ledger`、`money-flow-ledger`、People & Groups、Evidence Service、Party Directory、Project Workspace、Business Engagement、Billing、Production、Results、Cost & Outsourcing 及相应 Nginx、Gateway、Identity & Access 和 Unified Workbench 装配；Bonus Distribution 已完成独立领域核心与 PostgreSQL 18 事实层，但 HTTP／IAM、页面、D1、恢复与 Money 建议尚未实现。

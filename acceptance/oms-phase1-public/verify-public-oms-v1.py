@@ -11,7 +11,7 @@ import urllib.request
 
 
 PUBLIC = "https://oatest.antuinfo.cn"
-QUALIFICATION_PARTY_ID = "95d3793f-7e0d-4ec9-acb8-9baf8bcb1039"
+OPERATING_PARTY_ID = "95d3793f-7e0d-4ec9-acb8-9baf8bcb1039"
 APPLICATIONS = {
     "party-directory": ("/party/api/v1/parties?status=all&limit=100", "items"),
     "project-workspace": ("/project/api/v1/projects?limit=100", "items"),
@@ -87,7 +87,7 @@ def main():
         b"data-oms-v1-nav=\"projects\"",
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
-        (b"data-qualification-party-id=\"" + QUALIFICATION_PARTY_ID.encode() + b"\""),
+        (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
         b"assets/oms-phase1.css",
         b"assets/oms-phase1.js",
     )
@@ -120,10 +120,10 @@ def main():
                 raise RuntimeError(f"{application} response has no item list")
             owner_counts[application] = len(items)
 
-    _, party_raw, _ = request("/party/api/v1/parties/" + QUALIFICATION_PARTY_ID)
+    _, party_raw, _ = request("/party/api/v1/parties/" + OPERATING_PARTY_ID)
     party = json.loads(party_raw)
     if party.get("legal_name") != "北京京宏勘察设计有限公司" or party.get("status") != "active":
-        raise RuntimeError("configured qualification Party is not active or has the wrong name")
+        raise RuntimeError("configured operating Party is not active or has the wrong name")
 
     request(
         "/auth/api/v1/logout",
@@ -140,7 +140,7 @@ def main():
                 "native_login": True,
                 "gateway_authorizations": sorted(APPLICATIONS),
                 "owner_reads": owner_counts,
-                "qualification_party_id": QUALIFICATION_PARTY_ID,
+                "operating_party_id": OPERATING_PARTY_ID,
                 "page_sha256": hashlib.sha256(page).hexdigest(),
                 "business_writes": 0,
             },
