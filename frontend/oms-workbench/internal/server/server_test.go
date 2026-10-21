@@ -570,9 +570,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261020.5",
+		"assets/oms-phase1.css?v=20261021.1",
 		"assets/oms-phase1-pagination.js",
-		"assets/oms-phase1.js?v=20261020.5",
+		"assets/oms-phase1.js?v=20261021.1",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -589,8 +589,8 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-sort-list="commitment-receivable"`,
 		`data-oms-v1-sort-list="invoice-outgoing"`,
 		`data-oms-v1-sort-list="cash-payment"`,
-		`>应收情况</button>`,
-		`>应付情况</button>`,
+		`>应收状态</button>`,
+		`>应付状态</button>`,
 		"oms-v1__detail-section--identity",
 		"oms-v1__section-actions",
 		">项目资料</span><h2>基本信息</h2>",
@@ -636,7 +636,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 template missing action-specific date label %q", label)
 		}
 	}
-	for _, forbidden := range []string{"应收 / 未回", "应付 / 未付"} {
+	for _, forbidden := range []string{"应收 / 未回", "应付 / 未付", ">应收情况</button>", ">应付情况</button>"} {
 		if strings.Contains(omsPhase1HTML, forbidden) {
 			t.Fatalf("OMS phase 1 project table must not use ambiguous money heading %q", forbidden)
 		}
@@ -657,7 +657,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, marker := range []string{"contractor-party", "party-directory.create", "project-workspace.resource-link.manage", "project-workspace.update", "method:'POST'", "method:'PUT'", "/api/v1/parties", "function renderOverview()", "decimalMinor", "async function openInvoice(id,direction", "function openInvoiceCreate(incoming)", "/api/v1/invoice-registrations", "data-invoice-direction", "function renderCommitments(direction)", "/commercial-summary", "function pageItems(items,key)", "data-list-size", "state.filters[key]", "function activeFilterCount(filter,defaults={})", "function updateFilterButton(button,filter,defaults={})", "function compareSortValue(left,right,direction)", "function sortedItems(items,list,accessors)", "function syncSortHeaders(list)", "const sortRenderers=", "function projectInvoiceCount(projectID,direction)", "function projectInvoiceFacts(projectID,direction,partyID='')", "function projectInvoiceItems(projectID,direction)", "function renderProjectInvoiceDetails(projectID)", "function projectMoneyCell(total,outstanding,totalLabel,outstandingLabel)", "projectMoneyCell(receivable,unreceived,'应收','未收')", "projectMoneyCell(payable,unpaid,'应付','未付')", "function projectCashFacts(projectID,type,partyID='')", "function projectContractorItems(project)", "async function hydrateProjectDetail(project,contractors,token)", "/history?limit=8", "workspace?.instruments", "expected_revision:project.revision", "项目基本信息已更新", "function downloadCSV", "function exportDefinition(kind)", "function exportFilterFields(kind,current)", "function exportWithFilter(kind,filter)", "data-oms-v1-export-count", "filteredCommitmentItems(value.direction)", "filteredInvoiceItems(kind)", "filteredCashItems(kind)", "button.dataset.omsV1TabPage", "data-oms-v1-mobile-subnav", "data-oms-v1-create-client", "activatePage('projects','clients')", "/api/v1/contracts/workspace-context", "contract-ledger','/api/v1/contracts", "relation_key:'primary-contract'", "relation_key:'downstream-contract'", "party_reference:{party_id:party.id", "function createDownstreamContract", "value.party_reference?.party_id||value.party_id", "workspace.contract?.draft_version", "function downstreamContractByParty", "function authoritativePartyID(party)", "party?.party_reference?.party_id||party?.id", "project_type_keys:['operations']", "function isOMSProject(item)", ".filter(isOMSProject)", ".filter(item=>!!invoiceProject(item))", ".filter(item=>!!cashProject(item))", "function financialFacts(projectID,direction)", "function openCashCreate(receipt)", "/api/v1/cash-workspace", "ledger_owner_party_reference", "counterparty_party_reference", "票据已保存", "主体档案已更新，历史业务记录保持不变", "经营数据已更新至最新状态。", "const sourceIssue=", "async function authorize(id,force=false)", "ReferenceOAGatewayCSRF", "root.dataset.identityRoutePrefix", "await csrfProvider.token()", "await authorize(id,mutating)", "credentialRedirect(response)", "response?.type==='opaqueredirect'", "error.code==='credential_required'", "async function evidenceFetch(path,options={})", "new Headers(options.headers||{})", "state.evidenceTransfer=factory(evidenceFetch)", "upload-sessions", "/evidence'", "async function openProjectContractEvidence", "async function openProjectContractEditor", "data-oms-v1-contract-edit", "expected_draft_version:contract.draft_version", "新合同金额", "历史版本已保留", "cash-transactions/'+encodeURIComponent(id)+'/evidence", "function previewableEvidenceName", "async function openEvidencePreview", "transfer.getPreviewPolicy(descriptor)", "transfer.resolvePreviewUrl(descriptor,policy.mode)", "data-oms-v1-evidence-preview", "OMSPhase1Pagination", "loadCursorCollection('billing-invoice'", "loadOffsetCollection('money-flow-ledger'", "经营数据实时汇总", "待关联为甲方", "项目累计", "function assertExternalCounterparty", ".filter(isExternalParty)", "不能登记自开自收票据", "暂无人工录入的甲方", "系统不会补充演示或默认数据", "提交内容不符合业务规则", "addEventListener('click',loadAll)"} {
+	for _, marker := range []string{"contractor-party", "party-directory.create", "project-workspace.resource-link.manage", "project-workspace.update", "method:'POST'", "method:'PUT'", "/api/v1/parties", "function renderOverview()", "decimalMinor", "async function openInvoice(id,direction", "function openInvoiceCreate(incoming)", "/api/v1/invoice-registrations", "data-invoice-direction", "function renderCommitments(direction)", "/commercial-summary", "function pageItems(items,key)", "data-list-size", "state.filters[key]", "function activeFilterCount(filter,defaults={})", "function updateFilterButton(button,filter,defaults={})", "function compareSortValue(left,right,direction)", "function sortedItems(items,list,accessors)", "function syncSortHeaders(list)", "const sortRenderers=", "function projectInvoiceCount(projectID,direction)", "function projectInvoiceFacts(projectID,direction,partyID='')", "function projectInvoiceItems(projectID,direction)", "function renderProjectInvoiceDetails(projectID)", "function projectMoneyStatusRank(projectID,direction)", "function projectMoneyStatusCell(projectID,direction)", "projectMoneyStatusCell(item.id,'receivable')", "projectMoneyStatusCell(item.id,'payable')", "function projectCashFacts(projectID,type,partyID='')", "function projectContractorItems(project)", "async function hydrateProjectDetail(project,contractors,token)", "/history?limit=8", "workspace?.instruments", "expected_revision:project.revision", "项目基本信息已更新", "function downloadCSV", "function exportDefinition(kind)", "function exportFilterFields(kind,current)", "function exportWithFilter(kind,filter)", "data-oms-v1-export-count", "filteredCommitmentItems(value.direction)", "filteredInvoiceItems(kind)", "filteredCashItems(kind)", "button.dataset.omsV1TabPage", "data-oms-v1-mobile-subnav", "data-oms-v1-create-client", "activatePage('projects','clients')", "/api/v1/contracts/workspace-context", "contract-ledger','/api/v1/contracts", "relation_key:'primary-contract'", "relation_key:'downstream-contract'", "party_reference:{party_id:party.id", "function createDownstreamContract", "value.party_reference?.party_id||value.party_id", "workspace.contract?.draft_version", "function downstreamContractByParty", "function authoritativePartyID(party)", "party?.party_reference?.party_id||party?.id", "project_type_keys:['operations']", "function isOMSProject(item)", ".filter(isOMSProject)", ".filter(item=>!!invoiceProject(item))", ".filter(item=>!!cashProject(item))", "function financialFacts(projectID,direction)", "function openCashCreate(receipt)", "/api/v1/cash-workspace", "ledger_owner_party_reference", "counterparty_party_reference", "票据已保存", "主体档案已更新，历史业务记录保持不变", "经营数据已更新至最新状态。", "const sourceIssue=", "async function authorize(id,force=false)", "ReferenceOAGatewayCSRF", "root.dataset.identityRoutePrefix", "await csrfProvider.token()", "await authorize(id,mutating)", "credentialRedirect(response)", "response?.type==='opaqueredirect'", "error.code==='credential_required'", "async function evidenceFetch(path,options={})", "new Headers(options.headers||{})", "state.evidenceTransfer=factory(evidenceFetch)", "upload-sessions", "/evidence'", "async function openProjectContractEvidence", "async function openProjectContractEditor", "data-oms-v1-contract-edit", "expected_draft_version:contract.draft_version", "新合同金额", "历史版本已保留", "cash-transactions/'+encodeURIComponent(id)+'/evidence", "function previewableEvidenceName", "async function openEvidencePreview", "transfer.getPreviewPolicy(descriptor)", "transfer.resolvePreviewUrl(descriptor,policy.mode)", "data-oms-v1-evidence-preview", "OMSPhase1Pagination", "loadCursorCollection('billing-invoice'", "loadOffsetCollection('money-flow-ledger'", "经营数据实时汇总", "待关联为甲方", "项目累计", "function assertExternalCounterparty", ".filter(isExternalParty)", "不能登记自开自收票据", "暂无人工录入的甲方", "系统不会补充演示或默认数据", "提交内容不符合业务规则", "addEventListener('click',loadAll)"} {
 		if !strings.Contains(omsPhase1JS, marker) {
 			t.Fatalf("OMS phase 1 owner command wiring missing %q", marker)
 		}
@@ -675,6 +675,16 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	if strings.Contains(omsPhase1JS, "<small>未回 ") {
 		t.Fatal("OMS project money cells must not render the former two-line receivable copy")
+	}
+	for _, forbidden := range []string{"function projectMoneyCell(", "projectMoneyCell(receivable", "projectMoneyCell(payable"} {
+		if strings.Contains(omsPhase1JS, forbidden) {
+			t.Fatalf("OMS project list must not render receivable or payable amount copy %q", forbidden)
+		}
+	}
+	for _, marker := range []string{"status==='complete'?'已完成'", "status==='anomaly'?'金额异常':'未完成'"} {
+		if !strings.Contains(omsPhase1JS, marker) {
+			t.Fatalf("OMS project list settlement status copy missing %q", marker)
+		}
 	}
 	for _, marker := range []string{"const invoiceDateLabel=", "const cashDateLabel=", "headers:[invoiceDateLabel(kind)", "headers:[cashDateLabel(kind)"} {
 		if !strings.Contains(omsPhase1JS, marker) {
@@ -695,7 +705,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	if !strings.Contains(omsPhase1CSS, "body.oms-v1-active.oms-v1-dialog-open .architecture-lens-trigger{display:none}") {
 		t.Fatal("OMS phase 1 dialog must hide the overlapping architecture lens trigger")
 	}
-	for _, marker := range []string{".oms-v1__money-chain", ".oms-v1__contractor-item", ".oms-v1__invoice-ledger", ".oms-v1__invoice-row", ".oms-v1__export-filters", ".oms-v1__sort", ".oms-v1__sort.is-active", ".oms-v1__project-money", ".oms-v1__detail-lower", ".oms-v1__detail-description", ".oms-v1__section-actions", ".oms-v1__preview-mask[hidden]", ".oms-v1__preview-image"} {
+	for _, marker := range []string{".oms-v1__money-chain", ".oms-v1__contractor-item", ".oms-v1__invoice-ledger", ".oms-v1__invoice-row", ".oms-v1__export-filters", ".oms-v1__sort", ".oms-v1__sort.is-active", ".oms-v1__project-status", ".oms-v1__detail-lower", ".oms-v1__detail-description", ".oms-v1__section-actions", ".oms-v1__preview-mask[hidden]", ".oms-v1__preview-image"} {
 		if !strings.Contains(omsPhase1CSS, marker) {
 			t.Fatalf("OMS phase 1 complete project detail style missing %q", marker)
 		}
@@ -756,7 +766,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261020.5"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261021.1"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}

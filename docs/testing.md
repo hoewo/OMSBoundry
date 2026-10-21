@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-21 BF-166 OMS 项目列表收付状态已完成本地回归：项目列表表头固定为“应收状态／应付状态”，渲染代码不再包含原金额单元格，状态文案固定为“已完成／未完成／金额异常”；精确金额投影与专业模块不变。`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...` 和 `git diff --check` 通过。公网发布尚未在本记录中宣称完成。
+
 2026-10-21 BF-165 OMS 一期详情交互边界已发布并验证：源码为 `main@99ead97`，本地 `node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...` 和 `git diff --check` 通过。公网只替换 Unified Workbench 为 `v0.1.0-test.oms-v1.19@sha256:6268306eadb7183ddae1da1229e623f5fab3d6fb0c033244b289d24a4629155c`，静态资源为 `20261020.5`；升级前备份为 `/var/backups/omsbizfoundry/20261021T111655Z`。候选 IAM 契约校验、发布后 D1 `check`、17/17 长运行容器 healthy、正式登录、五次 Gateway 授权和 Owner 只读复验通过，读取 Party 7、Project 28、Billing 2、Money 3、Contract workspace 6，业务写入为 0。独立 `codex/oms-interaction-patterns` 试验分支未部署。[报告](./reports/oms-phase1-usability-baseline-publication-20261021.md)
 
 2026-10-19 BF-164 OMS 通用经营主体与真实主体列表已完成本地验证：`make fmt-check && make test && make vet`、Workbench 前端 206/206、TypeScript、Vite build、`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、D1 发布包测试和 shell 语法检查通过。`127.0.0.1:18182` 已重启为本次源码构建；浏览器实际刷新后，甲方和施工方页面均显示“暂无人工录入…”空状态及“系统不会补充演示或默认数据”，活动 OMS 页面显示“本公司项目经营视角”和中性 `data-operating-party-id`。本轮尚未发布到 `oatest`，不得描述为公网已更新。[报告](./reports/oms-phase1-generic-operating-party-validation-20261019.md)
