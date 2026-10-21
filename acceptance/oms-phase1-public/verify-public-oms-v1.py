@@ -88,8 +88,8 @@ def main():
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css",
-        b"assets/oms-phase1.js",
+        b"assets/oms-phase1.css?v=20261021.1",
+        b"assets/oms-phase1.js?v=20261021.1",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
