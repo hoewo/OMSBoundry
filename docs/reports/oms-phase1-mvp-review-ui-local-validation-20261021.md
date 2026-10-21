@@ -1,0 +1,32 @@
+# OMS 一期 `/mvp-review` 交互对齐本地验证
+
+日期：2026-10-21  
+决策：BF-167  
+分支：`codex/oms1-mvp-review-ui`
+
+## 目标
+
+问题：OMS1 已有真实 Owner 接入和业务闭环，但列表页的层级、筛选、导出和详情返回方式与 `/mvp-review` 验证原型不一致。  
+可验证结果：在不修改任何事实 Owner 的前提下，把原型中已经验证清楚的工作台交互迁入正式 OMS1 前端。
+
+## 实现范围
+
+- 使用图形化一级侧栏、对应二级入口、面包屑和直接页面标题；删除重复副标题。
+- 项目列表增加项目数、应收已完成、应付已完成和金额异常四项摘要，但不重新暴露 BF-166 已隐藏的收付金额。
+- 列表维持单行字段、表头排序和 20／50／100 分页。
+- 筛选从居中弹窗改为当前列表内就地展开，支持应用、重置、收起和日期区间校验。
+- 导出继续使用居中确认，继承当前搜索、筛选和排序且不受当前分页限制；补齐项目、甲方和施工方 CSV。
+- 桌面项目详情只覆盖内容区，保留左侧主菜单；移动端仍使用完整视口。
+- CSS／JS 静态查询版本递增到 `20261021.2`。
+
+## 已执行验证
+
+- `git diff --check`
+- `node --check frontend/oms-workbench/internal/server/oms_phase1.js`
+- `node --test frontend/oms-workbench/internal/server/*.test.mjs`：235／235 通过
+- `GOWORK=off go test -count=1 ./...`（`frontend/oms-workbench`）：通过
+- 本地浏览器 `http://127.0.0.1:18183/?preview=oa&view=oms-v1`：确认新侧栏与面包屑、项目摘要、排序表头、分页、筛选展开／收起及项目导出确认可见可用。
+
+## 边界
+
+本地预览不连接真实 Owner，所以只验证结构和交互，不证明真实数据读写。本轮未修改 Project、Party、Contract、Billing、Money、Evidence、IAM、Gateway、API、schema、Grant、数据库或公网环境；尚未合并 `main`，也没有发布到 `oatest`。

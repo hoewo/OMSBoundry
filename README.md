@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-21 BF-167：OMS 一期已在独立分支 `codex/oms1-mvp-review-ui` 完成本地界面候选。实现参考 `/mvp-review` 的导航、层级和操作方式，将筛选改为列表内就地展开，导出保留居中确认并继承当前搜索／筛选／排序，补齐项目与甲乙方主体导出、项目摘要、统一排序分页和不遮挡主菜单的项目详情。该候选只改 Workbench 表现层，未发布到 `oatest`，也没有改变 Owner、API、schema、Grant、精确金额或业务数据。
+
 2026-10-21 BF-166：OMS 项目列表已改为只显示“应收状态／应付状态”，正常为“已完成／未完成”，金额异常仍单独警示；具体应收、未收、应付、未付金额保留在项目详情和专业模块。`main@acce030` 已发布为 Workbench `v0.1.0-test.oms-v1.20@sha256:f78176522965d41a6858ddf6bda7ea9f97332b0dca2b2fece9fe502760f0efc5`，备份、D1 检查、17/17 容器健康及公网正式登录／五 Owner 只读复验通过；未改变业务事实、Owner、API、schema 或 Grant。[验证报告](./docs/reports/oms-phase1-project-settlement-status-publication-20261021.md)
 
 2026-10-21 BF-165：昨天确认的 OMS 易用性基线已经从 `main@99ead97` 发布到 [oatest](https://oatest.antuinfo.cn/)。公网 Workbench 为 `v0.1.0-test.oms-v1.19@sha256:6268306eadb7183ddae1da1229e623f5fab3d6fb0c033244b289d24a4629155c`，静态资源为 `20261020.5`；升级前备份、D1 全栈检查、17/17 容器健康、正式登录及五 Owner 只读复验通过。本次只替换 Unified Workbench，不包含独立交互试验分支，也不改变业务事实、Owner、API、schema 或 Grant。[验证报告](./docs/reports/oms-phase1-usability-baseline-publication-20261021.md)

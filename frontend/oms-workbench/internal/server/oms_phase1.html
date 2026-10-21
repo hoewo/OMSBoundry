@@ -5,27 +5,27 @@
     <aside class="oms-v1__rail" aria-label="OMS 一期主导航">
       <div class="oms-v1__brand"><span>O</span><div><strong>OMS</strong><small>项目经营管理</small></div></div>
       <nav class="oms-v1__nav-tree">
-        <button class="oms-v1__nav-main is-active" type="button" data-oms-v1-nav="overview" aria-current="page"><i>⌁</i><span><strong>经营总览</strong><small>收支与项目资金</small></span></button>
+        <button class="oms-v1__nav-main is-active" type="button" data-oms-v1-nav="overview" aria-current="page"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 11h5v7H3zM12 3h5v15h-5zM3 4h5v4H3z"/></svg></i><span><strong>经营总览</strong></span></button>
         <div class="oms-v1__nav-group" data-oms-v1-nav-group="projects">
-          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="projects" aria-expanded="false"><i>项</i><span><strong>项目经营</strong><small>项目与合作主体</small></span><b>⌄</b></button>
+          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="projects" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h6l2 2h6v10H3zM3 5V3h6l2 2"/></svg></i><span><strong>项目经营</strong></span><b>⌄</b></button>
           <div class="oms-v1__nav-sub" aria-label="项目经营二级菜单"><button class="is-active" type="button" data-oms-v1-tab="project-list" data-oms-v1-tab-page="projects">项目列表</button><button type="button" data-oms-v1-tab="clients" data-oms-v1-tab-page="projects">甲方管理</button><button type="button" data-oms-v1-tab="contractors" data-oms-v1-tab-page="projects">施工方管理</button></div>
         </div>
         <div class="oms-v1__nav-group" data-oms-v1-nav-group="receivable">
-          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="receivable" aria-expanded="false"><i>收</i><span><strong>应收回款</strong><small>应收、开票、回款</small></span><b>⌄</b></button>
+          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="receivable" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M3 14v4h14v-4"/></svg></i><span><strong>应收回款</strong></span><b>⌄</b></button>
           <div class="oms-v1__nav-sub" aria-label="应收回款二级菜单"><button class="is-active" type="button" data-oms-v1-tab="receivables" data-oms-v1-tab-page="receivable">应收管理</button><button type="button" data-oms-v1-tab="outgoing-invoices" data-oms-v1-tab-page="receivable">开票管理</button><button type="button" data-oms-v1-tab="receipts" data-oms-v1-tab-page="receivable">回款记录</button></div>
         </div>
         <div class="oms-v1__nav-group" data-oms-v1-nav-group="payable">
-          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="payable" aria-expanded="false"><i>付</i><span><strong>应付支付</strong><small>应付、支付、收票</small></span><b>⌄</b></button>
+          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="payable" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M3 14v4h14v-4"/></svg></i><span><strong>应付支付</strong></span><b>⌄</b></button>
           <div class="oms-v1__nav-sub" aria-label="应付支付二级菜单"><button class="is-active" type="button" data-oms-v1-tab="payables" data-oms-v1-tab-page="payable">应付管理</button><button type="button" data-oms-v1-tab="payments" data-oms-v1-tab-page="payable">支付记录</button><button type="button" data-oms-v1-tab="incoming-invoices" data-oms-v1-tab-page="payable">发票管理</button></div>
         </div>
       </nav>
-      <div class="oms-v1__rail-foot"><span class="oms-v1__live-dot"></span><span>系统运行中</span><a href="/legacy/">旧版工作台</a></div>
+      <div class="oms-v1__rail-foot"><span class="oms-v1__live-dot"></span><span>经营工作台</span><a href="/legacy/">旧版工作台</a></div>
     </aside>
 
     <div class="oms-v1__surface">
       <header class="oms-v1__topbar">
-        <div><strong data-oms-v1-context>经营总览</strong><span>本公司项目经营视角</span></div>
-        <div class="oms-v1__top-actions"><span class="oms-v1__sync" data-oms-v1-sync>正在连接业务系统…</span><a class="oms-v1__legacy-top" href="/legacy/">旧版</a><button type="button" data-oms-v1-refresh aria-label="刷新当前页面">↻</button></div>
+        <div class="oms-v1__breadcrumb"><span data-oms-v1-context-group>经营总览</span><i>/</i><strong data-oms-v1-context>经营总览</strong></div>
+        <div class="oms-v1__top-actions"><span class="oms-v1__sync" data-oms-v1-sync><i></i>正在连接业务系统…</span><span class="oms-v1__workspace">经营工作台</span><span class="oms-v1__avatar">经</span><a class="oms-v1__legacy-top" href="/legacy/">旧版</a><button type="button" data-oms-v1-refresh aria-label="刷新当前页面">↻</button></div>
       </header>
 
       <nav class="oms-v1__mobile-subnav" aria-label="OMS 一期移动二级导航">
@@ -36,7 +36,7 @@
 
       <main class="oms-v1__content">
         <section class="oms-v1__page is-active" data-oms-v1-page="overview">
-          <header class="oms-v1__page-head"><div><span class="oms-v1__eyebrow">经营总览</span><h1>钱走到哪里，一眼看清</h1></div><label class="oms-v1__period">期间<select data-oms-v1-period><option>2026 年</option><option>全部时间</option></select></label></header>
+          <header class="oms-v1__page-head"><div><h1>经营总览</h1><p>项目、回款与支付的实时经营视图</p></div><label class="oms-v1__period">期间<select data-oms-v1-period><option>2026 年</option><option>全部时间</option></select></label></header>
 
           <div class="oms-v1__notice" data-oms-v1-overview-notice><span></span><p>正在读取经营数据。</p></div>
           <div class="oms-v1__overview-grid">
@@ -66,28 +66,30 @@
         </section>
 
         <section class="oms-v1__page" data-oms-v1-page="projects">
-          <header class="oms-v1__page-head"><div><span class="oms-v1__eyebrow">项目经营</span><h1>项目与合作主体</h1></div><button class="oms-v1__primary" type="button" data-oms-v1-new-project>＋ 新建项目</button></header>
+          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>项目列表</h1></div></header>
           <div class="oms-v1__tab is-active" data-oms-v1-tab-panel="project-list">
-            <div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索项目" data-oms-v1-project-search></label><button type="button" data-oms-v1-filter>筛选</button><span data-oms-v1-project-total>0 条</span></div>
+            <div class="oms-v1__summary" data-oms-v1-project-summary><article><span>项目总数</span><strong data-oms-v1-project-metric="total">0</strong><small>个</small></article><article><span>应收已完成</span><strong data-oms-v1-project-metric="receivable-complete">0</strong><small>个</small></article><article><span>应付已完成</span><strong data-oms-v1-project-metric="payable-complete">0</strong><small>个</small></article><article class="is-alert"><span>金额异常</span><strong data-oms-v1-project-metric="anomaly">0</strong><small>个</small></article></div>
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索项目名称、甲方或施工方" data-oms-v1-project-search></label><button type="button" data-oms-v1-filter>筛选</button></div><div class="oms-v1__list-actions"><button class="oms-v1__export" type="button" data-oms-v1-export="projects">导出</button><button class="oms-v1__primary" type="button" data-oms-v1-new-project>＋ 新建项目</button></div></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-oms-v1-project-total>0</strong> 条</span></div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="projects" data-oms-v1-sort-key="name" data-oms-v1-sort-default="asc">项目</button></th><th>甲方</th><th class="is-date"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="projects" data-oms-v1-sort-key="start_date" data-oms-v1-sort-default="desc">项目开启日期</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="projects" data-oms-v1-sort-key="receivable" data-oms-v1-sort-default="desc">应收状态</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="projects" data-oms-v1-sort-key="payable" data-oms-v1-sort-default="desc">应付状态</button></th><th></th></tr></thead><tbody data-oms-v1-project-body><tr><td colspan="6"><div class="oms-v1__empty"><strong>正在读取项目</strong><span>请稍候。</span></div></td></tr></tbody></table></div>
             <div class="oms-v1__pagination"><span data-oms-v1-project-page-copy>第 1 页</span><div><button type="button" data-oms-v1-project-prev disabled>‹</button><button type="button" class="is-current">1</button><button type="button" data-oms-v1-project-next disabled>›</button></div><select data-oms-v1-project-page-size><option>20 条/页</option><option>50 条/页</option><option>100 条/页</option></select></div>
           </div>
 
           <div class="oms-v1__tab" data-oms-v1-tab-panel="clients">
-            <div class="oms-v1__scope-note"><strong>甲方档案</strong><span>显示全部可选主体；是否已作为甲方，以项目关系为准。</span><button type="button" data-oms-v1-new-party="client">＋ 新增甲方档案</button></div>
-            <div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索甲方名称" data-oms-v1-party-search="client"></label><span data-oms-v1-party-total="client">0 条</span></div>
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索甲方名称或登记标识" data-oms-v1-party-search="client"></label></div><div class="oms-v1__list-actions"><button class="oms-v1__export" type="button" data-oms-v1-export="clients">导出</button><button class="oms-v1__primary" type="button" data-oms-v1-new-party="client">＋ 新增甲方</button></div></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-oms-v1-party-total="client">0</strong> 条</span></div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-client" data-oms-v1-sort-key="name" data-oms-v1-sort-default="asc">名称</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-client" data-oms-v1-sort-key="registration" data-oms-v1-sort-default="asc">登记标识</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-client" data-oms-v1-sort-key="status" data-oms-v1-sort-default="asc">状态</button></th><th></th></tr></thead><tbody data-oms-v1-party-body="client"></tbody></table></div>
           </div>
 
           <div class="oms-v1__tab" data-oms-v1-tab-panel="contractors">
-            <div class="oms-v1__scope-note"><strong>施工方档案</strong><span>显示全部可选主体；是否已作为施工方，以项目关系为准。</span><button type="button" data-oms-v1-new-party="contractor">＋ 新增施工方档案</button></div>
-            <div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索施工方名称" data-oms-v1-party-search="contractor"></label><span data-oms-v1-party-total="contractor">0 条</span></div>
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索施工方名称或登记标识" data-oms-v1-party-search="contractor"></label></div><div class="oms-v1__list-actions"><button class="oms-v1__export" type="button" data-oms-v1-export="contractors">导出</button><button class="oms-v1__primary" type="button" data-oms-v1-new-party="contractor">＋ 新增施工方</button></div></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-oms-v1-party-total="contractor">0</strong> 条</span></div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-contractor" data-oms-v1-sort-key="name" data-oms-v1-sort-default="asc">名称</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-contractor" data-oms-v1-sort-key="registration" data-oms-v1-sort-default="asc">登记标识</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="party-contractor" data-oms-v1-sort-key="status" data-oms-v1-sort-default="asc">状态</button></th><th></th></tr></thead><tbody data-oms-v1-party-body="contractor"></tbody></table></div>
           </div>
         </section>
 
         <section class="oms-v1__page" data-oms-v1-page="receivable">
-          <header class="oms-v1__page-head"><div><span class="oms-v1__eyebrow">应收回款</span><h1>甲方侧资金</h1></div></header>
+          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>应收管理</h1></div></header>
           <div class="oms-v1__tab is-active" data-oms-v1-tab-panel="receivables">
             <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索项目或备注" data-oms-v1-commitment-search="receivable"></label><button type="button" data-oms-v1-commitment-filter="receivable">筛选</button><span data-oms-v1-commitment-total="receivable">0 条</span></div><button class="oms-v1__export" type="button" data-oms-v1-export="receivable">导出</button></div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-receivable" data-oms-v1-sort-key="project" data-oms-v1-sort-default="asc">项目</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-receivable" data-oms-v1-sort-key="counterparty" data-oms-v1-sort-default="asc">甲方</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-receivable" data-oms-v1-sort-key="effective" data-oms-v1-sort-default="desc">应收总额</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-receivable" data-oms-v1-sort-key="allocated" data-oms-v1-sort-default="desc">已回款</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-receivable" data-oms-v1-sort-key="outstanding" data-oms-v1-sort-default="desc">未回款</button></th><th></th></tr></thead><tbody data-oms-v1-commitment-body="receivable"></tbody></table></div>
@@ -103,7 +105,7 @@
         </section>
 
         <section class="oms-v1__page" data-oms-v1-page="payable">
-          <header class="oms-v1__page-head"><div><span class="oms-v1__eyebrow">应付支付</span><h1>施工方侧资金</h1></div></header>
+          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>应付管理</h1></div></header>
           <div class="oms-v1__tab is-active" data-oms-v1-tab-panel="payables">
             <div class="oms-v1__list-head"><div class="oms-v1__toolbar"><label><span>⌕</span><input type="search" placeholder="搜索项目、施工方或备注" data-oms-v1-commitment-search="payable"></label><button type="button" data-oms-v1-commitment-filter="payable">筛选</button><span data-oms-v1-commitment-total="payable">0 条</span></div><button class="oms-v1__export" type="button" data-oms-v1-export="payable">导出</button></div>
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-payable" data-oms-v1-sort-key="project" data-oms-v1-sort-default="asc">项目 / 施工方</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-payable" data-oms-v1-sort-key="effective" data-oms-v1-sort-default="desc">应付总额</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-payable" data-oms-v1-sort-key="allocated" data-oms-v1-sort-default="desc">已支付</button></th><th class="is-number"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="commitment-payable" data-oms-v1-sort-key="outstanding" data-oms-v1-sort-default="desc">未支付</button></th><th></th></tr></thead><tbody data-oms-v1-commitment-body="payable"></tbody></table></div>
