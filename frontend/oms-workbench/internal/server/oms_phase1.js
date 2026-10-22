@@ -165,8 +165,17 @@
     group.classList.toggle('is-expanded',expanded);
     group.querySelector(':scope > [data-oms-v1-nav]')?.setAttribute('aria-expanded',expanded?'true':'false');
   }
+  function closeProjectDetail(){
+    const detail=root.querySelector('[data-oms-v1-project-detail]');
+    if(!detail||detail.hidden)return false;
+    detail.hidden=true;
+    state.selectedProjectID='';
+    state.projectDetailToken++;
+    document.body.style.overflow='';
+    return true;
+  }
   function activatePage(name,tab){
-    closeInlineFilter();
+    closeProjectDetail();closeInlineFilter();
     const selectedTab=tab||activeTabs[name]||defaultTabs[name]||'';
     for(const page of root.querySelectorAll('[data-oms-v1-page]'))page.classList.toggle('is-active',page.dataset.omsV1Page===name);
     for(const button of root.querySelectorAll('[data-oms-v1-nav]')){const active=button.dataset.omsV1Nav===name;button.classList.toggle('is-active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current')}
@@ -190,7 +199,7 @@
   for(const button of root.querySelectorAll('[data-oms-v1-nav]'))button.addEventListener('click',()=>{
     const group=button.closest('[data-oms-v1-nav-group]');
     if(!group){activatePage(button.dataset.omsV1Nav);return}
-    if(group.classList.contains('is-active')){setNavGroupExpanded(group,!group.classList.contains('is-expanded'));return}
+    if(group.classList.contains('is-active')){if(closeProjectDetail())return;setNavGroupExpanded(group,!group.classList.contains('is-expanded'));return}
     setNavGroupExpanded(group,true);activatePage(button.dataset.omsV1Nav);
   });
   for(const button of root.querySelectorAll('[data-oms-v1-tab]'))button.addEventListener('click',()=>activatePage(button.dataset.omsV1TabPage,button.dataset.omsV1Tab));
@@ -452,7 +461,7 @@
     state.selectedProjectID=id;const token=++state.projectDetailToken,detail=root.querySelector('[data-oms-v1-project-detail]'),contractors=projectContractorItems(item),receivable=financialFacts(id,'receivable'),payable=financialFacts(id,'payable'),outgoing=projectInvoiceFacts(id,'outgoing'),incoming=projectInvoiceFacts(id,'incoming'),receipts=projectCashFacts(id,'receipt'),payments=projectCashFacts(id,'payment'),latestBusiness=[outgoing.latestDate,incoming.latestDate,receipts.latestDate,payments.latestDate].filter(Boolean).sort().at(-1)||'',values={'receivable-total':detailAmount(receivable.effective,'尚无应收'),'outgoing-invoice':detailAmount(outgoing.amount),'received':detailAmount(receivable.allocated),'unreceived':detailAmount(receivable.outstanding),'payable-total':detailAmount(payable.effective,'尚无应付'),'incoming-invoice':detailAmount(incoming.amount),'paid':detailAmount(payable.allocated),'unpaid':detailAmount(payable.outstanding)};
     detail.querySelector('[data-oms-v1-detail-name]').textContent=item.name||'—';detail.querySelector('[data-oms-v1-detail-client]').textContent='经营数据实时汇总'+(latestBusiness?' · 最近票款 '+date(latestBusiness):' · 暂无票款记录');detail.querySelector('[data-oms-v1-detail-date]').textContent=date(item.planned_start_date);detail.querySelector('[data-oms-v1-detail-client-name]').textContent=item.client_party?.legal_name||'待补充';detail.querySelector('[data-oms-v1-detail-contractors]').textContent=contractors.length+' 个';detail.querySelector('[data-oms-v1-detail-updated]').textContent=dateTime(item.updated_at||item.created_at);detail.querySelector('[data-oms-v1-detail-contractor-count]').textContent=contractors.length+' 个施工方';detail.querySelector('[data-oms-v1-detail-created]').textContent='创建于 '+dateTime(item.created_at);detail.querySelector('[data-oms-v1-detail-revision]').textContent='更新于 '+dateTime(item.updated_at||item.created_at);detail.querySelector('[data-oms-v1-detail-summary]').textContent=item.summary||'暂无项目说明';for(const node of detail.querySelectorAll('[data-oms-v1-flow]'))node.textContent=values[node.dataset.omsV1Flow]||'—';detail.querySelector('[data-oms-v1-flow-count="outgoing"]').textContent=outgoing.count===null?'暂不可用':outgoing.count+' 笔'+(outgoing.latestDate?' · 最近 '+date(outgoing.latestDate):'');detail.querySelector('[data-oms-v1-flow-count="incoming"]').textContent=incoming.count===null?'暂不可用':incoming.count+' 笔'+(incoming.latestDate?' · 最近 '+date(incoming.latestDate):'');detail.querySelector('[data-oms-v1-flow-count="receipt"]').textContent=receipts.count+' 笔'+(receipts.latestDate?' · 最近 '+date(receipts.latestDate):'');detail.querySelector('[data-oms-v1-flow-count="payment"]').textContent=payments.count+' 笔'+(payments.latestDate?' · 最近 '+date(payments.latestDate):'');detail.querySelector('[data-oms-v1-upstream-contract]').textContent='正在读取合同…';detail.querySelector('[data-oms-v1-contract-changes]').innerHTML='<div class="oms-v1__detail-empty">正在读取…</div>';detail.querySelector('[data-oms-v1-project-history]').innerHTML='<div class="oms-v1__detail-empty">正在读取…</div>';renderProjectInvoiceDetails(id);renderProjectContractors(item,contractors);detail.hidden=false;detail.scrollTop=0;document.body.style.overflow='hidden';hydrateProjectDetail(item,contractors,token).catch(()=>{if(token!==state.projectDetailToken)return;detail.querySelector('[data-oms-v1-upstream-contract]').textContent='合同信息暂不可用';detail.querySelector('[data-oms-v1-contract-changes]').innerHTML='<div class="oms-v1__detail-empty">请稍后重试</div>'});
   }
-  root.querySelector('[data-oms-v1-project-back]').addEventListener('click',()=>{root.querySelector('[data-oms-v1-project-detail]').hidden=true;document.body.style.overflow=''});
+  root.querySelector('[data-oms-v1-project-back]').addEventListener('click',()=>closeProjectDetail());
 
   const dialog=root.querySelector('[data-oms-v1-dialog]'),dialogTitle=root.querySelector('[data-oms-v1-dialog-title]'),dialogKicker=root.querySelector('[data-oms-v1-dialog-kicker]'),dialogBody=root.querySelector('[data-oms-v1-dialog-body]'),dialogSubmit=root.querySelector('[data-oms-v1-dialog-submit]');
   const preview=root.querySelector('[data-oms-v1-preview]'),previewTitle=root.querySelector('[data-oms-v1-preview-title]'),previewMeta=root.querySelector('[data-oms-v1-preview-meta]'),previewBody=root.querySelector('[data-oms-v1-preview-body]'),previewDownload=root.querySelector('[data-oms-v1-preview-download]'),previewZoom=root.querySelector('[data-oms-v1-preview-zoom]'),previewZoomReset=root.querySelector('[data-oms-v1-preview-zoom-reset]');

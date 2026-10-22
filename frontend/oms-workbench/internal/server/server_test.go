@@ -575,9 +575,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261022.2",
+		"assets/oms-phase1.css?v=20261022.3",
 		"assets/oms-phase1-pagination.js",
-		"assets/oms-phase1.js?v=20261022.2",
+		"assets/oms-phase1.js?v=20261022.3",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -670,6 +670,11 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	for _, marker := range []string{"function setNavGroupExpanded(group,expanded)", "group.classList.contains('is-expanded')", "setNavGroupExpanded(group,true);activatePage", "root.querySelectorAll('[data-oms-v1-tab]')", "button.removeAttribute('aria-current')"} {
 		if !strings.Contains(omsPhase1JS, marker) {
 			t.Fatalf("OMS phase 1 independent navigation expansion missing %q", marker)
+		}
+	}
+	for _, marker := range []string{"function closeProjectDetail()", "state.selectedProjectID=''", "state.projectDetailToken++", "closeProjectDetail();closeInlineFilter()", "if(closeProjectDetail())return", "addEventListener('click',()=>closeProjectDetail())"} {
+		if !strings.Contains(omsPhase1JS, marker) {
+			t.Fatalf("OMS phase 1 navigation must close the project detail surface; missing %q", marker)
 		}
 	}
 	for _, forbidden := range []string{"资金事实归 Money", "先保存 Billing 票据", "当前条件在 Owner", "精确 Party revision", "已保存到 Money", "已保存到 Billing", "项目修订 r"} {
@@ -781,7 +786,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261022.2"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261022.3"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}
