@@ -61,3 +61,7 @@
 ## 结论
 
 `oatest` 当前已处于空业务状态，可以从新建外部甲方／施工方和项目开始重新走 OMS 一期录入流程。需要整体回滚时使用上述备份；不要把本次维护方式暴露为普通用户的删除入口。
+
+## 后续纠正（BF-171）
+
+上述首次核验遗漏了 Contract／Money workspace context 的 Party Directory authority：清理把两库的 runtime cutover 与 reviewed mapping 一并删除，虽然 schema、容器、列表读取全部健康，新建项目仍会因 `directory_authority_established=false` 被正确禁用。现已通过两个 Owner 的正式 migration／cutover 命令重建最小运行基准，并把 directory authority 加入公网强制验收。业务事实和附件仍为空；详细根因与证据见[BF-171 修复报告](./oms-phase1-party-runtime-reset-repair-20261022.md)。

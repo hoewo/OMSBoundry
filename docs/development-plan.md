@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-171 已修复：BF-170 清理后新建项目被禁用，根因不是 Contract 容器、权限或用户输入，而是清理误删 Contract／Money 的 Party Directory runtime cutover。两套 Owner 已通过正式 migration／cutover 恢复 `directory` authority，重复执行均为 `changed=false`；D1 `check`、17/17 healthy 和增强后的公网正式登录／五 Owner 只读验收通过。下一步直接继续用户的新项目录入；后续任何 Demo reset 必须把主体 runtime baseline 列为保留项，并以增强后的 `verify-public-oms-v1.py` 作为交付门禁。[修复报告](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)
+
 2026-10-22 BF-170 已执行：在完整备份 `20261022T023910Z` 校验通过后，`oatest` 十二个业务 Owner 的用户录入／业务事实及 Evidence／Contract 本地附件对象已归零；IAM、Grant、schema、部署和本方经营主体保留。数据库逐表实数核验除 Party 基准的 1 条主体／revision／command／audit 外均为 0，附件文件 0，D1 `check`、17/17 长期容器健康和公网正式登录／五 Owner 只读复验通过。下一步直接从空项目、空外部甲方／施工方状态走一遍 OMS 真实录入旅程；若发现流程问题只修复交互或正式 Owner 命令，不回灌旧 Demo 数据。[执行报告](./reports/oms-phase1-demo-full-business-reset-20261022.md)
 
 2026-10-22 BF-169 已完成并发布：切换任一二级页面时，Workbench 现在会对全部二级导航重新计算选中态，而不是只清理当前业务组；三个业务组可继续同时展开，但桌面实测只有当前组及其一个当前二级入口保留路径高亮。非当前导航不再保留 `aria-current`。源码 `5779637` 已构建为 Workbench `v0.1.0-test.oms-v1.22@sha256:d9b11412c72a6d4b9d9a9aa8c8786855e4e8f5219503edb8514554c0966a4f42`，静态资源为 `20261022.2`；备份、预检、D1 检查、17/17 健康及公网登录／五 Owner 只读验收通过。下一步只在用户确认测试数据边界后执行数据重置，不把登录、权限和本方经营主体误删。[发布证据](./reports/oms-phase1-single-current-navigation-publication-20261022.md)

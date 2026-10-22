@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-22 主体目录运行基线（BF-171）：业务数据为空不等于 Contract／Money 可以退回本地主体模式。两套台账必须持续保持 `party_runtime_mode=directory` 且 `directory_authority_established=true`；为证明该状态而存在的最小本地来源 Party、reviewed mapping 和追加式 runtime cutover 是部署运行基准，不在 Demo 业务清理范围。D1 schema 与容器 health 不能单独证明这项业务可写前提，公网验收必须读取两套 workspace context 并明确断言 authority 已建立。[修复证据](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)
+
 2026-10-22 Demo 数据基线（BF-170）：`oatest` 当前用于从空业务状态重新走 OMS 一期录入流程。十二个已启用业务 Owner 的用户录入／业务事实与两个本地附件对象卷已经归零；IAM 账号、登录与 Grant、schema／migration、部署配置及不作为外部合作方展示的本方经营主体继续作为系统运行基准保留。页面中的项目、甲方、施工方、合同、票据、收付款、人员／分组、经营承接、生产、审批结果、成本外包与奖金均不得由旧 OA 或旧演示事实回填。该基线不改变各 Owner 的所有权或不可变事实规则，只记录一次有回滚点的 Demo 环境维护操作。[执行证据](./reports/oms-phase1-demo-full-business-reset-20261022.md)
 
 2026-10-22 OMS 一期导航选中态基线（BF-169）：多个业务组同时展开只表示二级入口可见，不表示这些组仍是当前页面。桌面侧栏全局只允许当前页面对应的一个二级入口高亮，历史访问过的二级入口在切页后必须撤销选中和 `aria-current`；当前一级组仍可作为路径父级显示，其他组仅保留展开状态。该基线只约束 Workbench 呈现和无障碍语义，不改变任何业务事实或权限边界；已发布为公网 Workbench v1.22。[发布证据](./reports/oms-phase1-single-current-navigation-publication-20261022.md)

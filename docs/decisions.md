@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-22 BF-171（已接受／已修复／业务清空不得删除主体目录运行基准）：Contract Ledger 与 Money Flow Ledger 的 `party_runtime_transitions`、对应 reviewed mapping 和最小本地来源 Party 是“已切换到 Party Directory 权威”的运行基准，不是可随 Demo 业务事实一起归零的数据。BF-170 首次清理误删该基准，D1 schema／health 仍通过，但 Workbench 正确读取到 `directory_authority_established=false` 并禁用新建项目，显示“合同功能尚未准备完成”。本次通过两个 Owner 的正式 Party migration／cutover 命令各重建 1 条到本方经营主体的精确映射，重复执行返回 `changed=false`；没有直接伪造 runtime 状态，也没有创建项目、合同或资金事实。公网只读验收现在强制检查 Contract／Money 的 directory authority，防止以后“容器健康但业务不可写”漏检。[故障与修复报告](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)
+
 2026-10-22 BF-170（已接受／已执行／Demo 全量业务数据归零）：当前 `oatest` 明确仍是可反复录入的 Demo 环境，允许在完整可恢复备份后清除当前 Suite 的全部用户录入与业务事实，不沿用 BF-161 的“只清 OMS 投影、保留旧 OA 事实”范围。此次清理覆盖 Contract、Money、People、Party、Project、Evidence、Business Engagement、Billing、Production、Approval & Audit Results、Cost & Outsourcing、Bonus Distribution 十二个 Owner 及 Evidence／Contract 本地附件对象；只保留 schema／migration、Contract／Money 技术元数据、IAM 账号／登录／Grant、部署配置和 Workbench 运行必需且不作为外部甲方／施工方展示的本方经营主体。该动作是测试环境维护，不新增产品内删除能力，不改变 Owner、API、schema、Grant、Suite Manifest 或数据所有权。回滚点为 `/var/backups/omsbizfoundry/20261022T023910Z`。[执行报告](./reports/oms-phase1-demo-full-business-reset-20261022.md)
 
 2026-10-22 BF-169（已接受／已发布／OMS 导航唯一选中项）：桌面侧栏的“业务组可展开”与“当前二级页面被选中”继续分别管理。多个业务组可以同时保持展开，但每次切换页面必须在全部桌面二级菜单中重新计算选中态，只允许当前页面对应的一个二级菜单显示选中效果并拥有 `aria-current="page"`；其他已展开组只能表达可见性，不得保留历史页面的绿色选中。移动端对应入口同步保持同一当前页面语义。该决定只修正 Workbench 导航状态与无障碍语义，不改变 Owner、API、schema、Grant、数据或部署拓扑。[公网发布证据](./reports/oms-phase1-single-current-navigation-publication-20261022.md)

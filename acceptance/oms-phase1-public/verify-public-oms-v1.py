@@ -19,6 +19,22 @@ APPLICATIONS = {
     "money-flow-ledger": ("/money/api/v1/cash-transactions?limit=100", "items"),
     "contract-ledger": ("/contract/api/v1/contracts/workspace-context", None),
 }
+RUNTIME_CONTEXTS = {
+    "contract-ledger": "/contract/api/v1/contracts/workspace-context",
+    "money-flow-ledger": "/money/api/v1/cash-workspace",
+}
+
+
+def require_directory_authority(application, document):
+    if application not in {"contract-ledger", "money-flow-ledger"}:
+        return
+    if not isinstance(document, dict):
+        raise RuntimeError(f"{application} workspace context is not an object")
+    if (
+        document.get("party_runtime_mode") != "directory"
+        or document.get("directory_authority_established") is not True
+    ):
+        raise RuntimeError(f"{application} Party Directory authority is not established")
 
 
 def iam_environment():
@@ -108,6 +124,12 @@ def main():
                 "X-CSRF-Token": csrf,
             },
         )
+        runtime_path = RUNTIME_CONTEXTS.get(application)
+        if runtime_path:
+            _, runtime_raw, runtime_headers = request(runtime_path)
+            if runtime_headers.get_content_type() != "application/json":
+                raise RuntimeError(f"{application} runtime context did not return JSON")
+            require_directory_authority(application, json.loads(runtime_raw))
         _, raw, headers = request(path)
         if headers.get_content_type() != "application/json":
             raise RuntimeError(f"{application} did not return JSON")
