@@ -574,7 +574,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261022.9",
+		"assets/oms-phase1.css?v=20261022.10",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
 		"assets/oms-phase1.js?v=20261022.9",
 		`data-oms-v1-flow="receivable-total"`,
@@ -669,7 +669,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261022.9", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261022.9", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261022.10", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261022.9", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {

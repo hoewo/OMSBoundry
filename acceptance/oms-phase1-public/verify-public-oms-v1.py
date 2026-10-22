@@ -165,7 +165,7 @@ def main():
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css?v=20261022.9",
+        b"assets/oms-phase1.css?v=20261022.10",
         b"assets/oms-phase1-pagination.js?v=20261022.6",
         b"assets/oms-phase1.js?v=20261022.9",
     )
@@ -186,7 +186,7 @@ def main():
 
     critical_assets = {}
     for path in (
-        "/workbench/assets/oms-phase1.css?v=20261022.9",
+        "/workbench/assets/oms-phase1.css?v=20261022.10",
         "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
         "/workbench/assets/oms-phase1.js?v=20261022.9",
     ):

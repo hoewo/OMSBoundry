@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-179 Workbench 操作列投影：列表末列是表现层导航 affordance，不拥有业务事实。Workbench 通过表头末列和 `tr[data-oms-v1-row] > td:last-child` 建立统一 76px 右对齐边界，保持动态模板无需复制列样式，并显式排除没有 `data-oms-v1-row` 的空状态行。该变化不新增服务、数据库、API、Capability、Grant、路由或跨应用读取。
+
 2026-10-22 BF-178 Workbench 金额列投影：金额列是前端对既有精确金额字符串的排版语义，不成为新的计算或事实层。Workbench 在应收、应付、Billing 和 Money 的列表投影中给金额表头与数值单元格增加 `is-money`，统一列宽、右边界和 tabular lining figures；排序 accessors、Owner 返回值、整数最小货币单位及两位小数格式保持不变。项目状态列和非金额数字不复用该语义。该变化不新增服务、数据库、共享表、API、Capability、Grant 或跨应用读取。
 
 2026-10-22 BF-177 建项前主体候选边界：Party Directory 继续拥有中性主体当前档案；Project Workspace 新增 `project_party_candidates` 追加式事实和 `/api/v1/project-party-candidates` 版本化端口，拥有“某稳定 Party 可在本租户后续项目中作为甲方／施工方被选择”的项目侧语义。候选只冻结登记时 Party revision 用于校验与审计，不复制名称、不替代项目的 `client_party` 快照或 `contractor-party` 关系。Workbench 组合候选与已发生关系：候选决定建项前列表和选择器，项目关系决定关联项目数；同一 Party 可有两个候选记录。写入按 Party → Project Candidate 两段幂等命令执行，后段失败可续办而不回滚或重建前段。现有 tenant-scoped `project-workspace.read/create` 覆盖读取／登记，本轮不增加 IAM Grant、共享表、跨库写或前端持久化事实。该边界已由公网 Project Workspace／Workbench v1.28、migration 000014 与正式候选命令验证。见 [ADR-0037](./adr/0037-project-workspace-owns-pre-project-party-candidates.md)和[发布证据](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)。

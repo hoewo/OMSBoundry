@@ -278,3 +278,8 @@ body.oms-v1-active.oms-v1-dialog-open{overflow:hidden}body.oms-v1-active.oms-v1-
 .oms-v1__table td.is-money>strong{display:block;width:100%;max-width:none;margin:0;text-align:right;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 .oms-v1__table td.is-money>small{width:100%;text-align:right}
 .oms-v1__invoice-row>b{display:block;width:100%;white-space:nowrap;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+
+/* BF-179: the terminal action column stays on one shared right edge. */
+.oms-v1__table thead th:last-child{width:76px;min-width:76px;text-align:right}
+.oms-v1__table tr[data-oms-v1-row]>td:last-child{width:76px;min-width:76px;text-align:right;white-space:nowrap}
+.oms-v1__table .oms-v1__row-action{display:inline-flex;min-height:28px;align-items:center;justify-content:flex-end;padding:0;text-align:right;white-space:nowrap}

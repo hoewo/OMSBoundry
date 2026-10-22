@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-22 BF-179（已接受／已实现待发布／列表操作列视觉基线）：项目、甲方、施工方、应收、应付、开票、收票、回款和支付表格的最后一列是详情操作列，统一使用 76px 最小宽度、右对齐和单行按钮；表头空占位与按钮沿表格最右边界排列。规则只作用于真实数据行，不能压缩空状态的跨列提示。整行点击和“详情”按钮继续进入同一详情，不改变 Owner、API、schema、Capability、Grant 或业务数据。
+
 2026-10-22 BF-178（已接受／已发布／金额列视觉基线）：应收、应付、票据和实际资金列表中的金额必须使用独立列语义，而不能只依赖通用数字右对齐。Workbench 为金额表头与金额单元格统一 `is-money`：最小宽度 132px、同一右边界、无负边距的全宽排序按钮、nowrap 及 tabular lining figures；项目“应收状态／应付状态”继续只使用状态布局。项目详情票据金额沿用相同 tabular 数字规则。该决定不改变金额的整数最小货币单位、固定两位小数、排序、筛选、导出、Owner、API、schema、Capability、Grant 或数据所有权。公网 Workbench v1.29 已发布并完成 D1 与正式只读链路复验。[发布证据](./reports/oms-phase1-money-column-alignment-publication-20261022.md)
 
 2026-10-22 BF-177（已接受／已发布／建项前合作主体候选）：OMS 的甲方管理和施工方管理都是项目建立前的资料入口，仅依赖 `client_party`／`contractor-party` 已发生关系无法表达“先建施工方、后建项目”的流程。Party Directory 仍只拥有主体当前档案、稳定 ID 与 revision，不增加客户／供应商／甲方／施工方类型。Project Workspace 作为项目主体选择语义的所有者，新增租户级追加式 `project-party-candidate`：保存 Party ID、候选角色、登记时 Party revision、命令和 Actor，只表示可在后续项目中选择，不表示项目关系已经发生。Workbench 从对应页面创建主体时必须以 Party 创建和候选登记两条独立幂等命令续办，候选登记成功后才关闭弹窗并刷新；中途失败不得重复创建 Party。读取复用 `project-workspace.read`，登记复用租户级 `project-workspace.create`，本轮不扩大 Grant。该决定取代 BF-174／BF-176 中“未关联施工方无法进入列表”的临时限制，不建立共享表、浏览器业务事实或跨库写入。见 [ADR-0037](./adr/0037-project-workspace-owns-pre-project-party-candidates.md)和[公网发布证据](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)。
