@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-22 BF-173：已优化 OMS 一期刷新体验。有效的既有 Capability Cookie 会直接用于 Owner 只读请求，只有服务明确要求凭证时才按 Audience 重新授权并重放一次；并发的同一 Owner 授权会合并。项目与合作主体先显示，票据、资金、合同和经营汇总随后补齐，重复刷新也只执行一轮。写操作仍先取得新授权，未增加浏览器业务数据缓存。公网只替换 Workbench 为 `v0.1.0-test.oms-v1.24`，D1 全栈、17/17 健康和正式登录／五 Owner 只读复验通过。[发布报告](./docs/reports/oms-phase1-progressive-refresh-publication-20261022.md)
+
 2026-10-22 BF-172：已修复项目详情打开时点击侧栏只切换底层页面、画面仍停留详情的问题。侧栏导航现在会统一退出项目详情、恢复滚动、清除旧项目选择并作废未完成的详情读取；公网只替换 Workbench 为 `v0.1.0-test.oms-v1.23`，D1 全栈、17/17 健康和正式登录／五 Owner 只读复验通过。[发布报告](./docs/reports/oms-phase1-project-detail-navigation-publication-20261022.md)
 
 2026-10-22 BF-171：已修复 BF-170 清理后“合同功能尚未准备完成”。根因是把 Contract／Money 的 Party Directory runtime cutover 误当业务数据删除；服务和 schema 健康并不代表这项写入前提仍存在。两套 Owner 已通过正式 reviewed mapping／cutover 恢复 directory authority，重复执行幂等；公网验收新增强制运行态断言并通过，未创建项目、合同或资金事实。[故障报告](./docs/reports/oms-phase1-party-runtime-reset-repair-20261022.md)

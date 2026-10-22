@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-22 BF-173（已接受／已发布／OMS 渐进刷新与授权复用）：多 Owner 是数据所有权边界，不等于页面刷新必须无条件执行一轮 IAM 授权。Workbench 的 Owner 只读请求应先使用浏览器已有的 HttpOnly Capability Cookie；仅当响应明确为 `opaqueredirect`、状态 0、3xx 或 `401 credential_required` 时，才清除该页面内授权标记、按 Audience 合并并发换票，并只重放原读取一次。创建、编辑、上传等写请求仍在提交前强制取得新授权。全部来源可并发启动，但 Project 与 Party 返回后应先形成可操作的项目／主体画面；Billing、Money、Contract 与逐项目经营汇总随后渐进补齐，不能再用最慢 Owner 阻塞整个首屏。重复刷新合并为一个加载任务。该决策不允许把 Owner 业务数据持久化到浏览器，不绕过 IAM、Gateway 或 Owner 最终授权，也不改变 API、schema、Capability、Grant、事实所有权或部署拓扑。[公网发布证据](./reports/oms-phase1-progressive-refresh-publication-20261022.md)
+
 2026-10-22 BF-172（已接受／已发布／项目详情导航生命周期）：项目详情是当前 Workbench 内容区的临时完整工作面，不拥有独立侧栏选中态或路由。用户点击任一侧栏一级／二级入口时，Workbench 必须先关闭详情、恢复 `body` 滚动、清除当前项目选择并递增详情读取令牌，使晚到的旧项目异步响应不能重新写入页面，再激活目标页面；点击当前已展开的业务组时同样优先退出详情。多个业务组的展开状态继续遵守 BF-168，唯一选中项继续遵守 BF-169。该决策只修正 Workbench 交互生命周期，不改变 Owner、API、schema、Grant、业务事实或部署拓扑。[公网发布证据](./reports/oms-phase1-project-detail-navigation-publication-20261022.md)
 
 2026-10-22 BF-171（已接受／已修复／业务清空不得删除主体目录运行基准）：Contract Ledger 与 Money Flow Ledger 的 `party_runtime_transitions`、对应 reviewed mapping 和最小本地来源 Party 是“已切换到 Party Directory 权威”的运行基准，不是可随 Demo 业务事实一起归零的数据。BF-170 首次清理误删该基准，D1 schema／health 仍通过，但 Workbench 正确读取到 `directory_authority_established=false` 并禁用新建项目，显示“合同功能尚未准备完成”。本次通过两个 Owner 的正式 Party migration／cutover 命令各重建 1 条到本方经营主体的精确映射，重复执行返回 `changed=false`；没有直接伪造 runtime 状态，也没有创建项目、合同或资金事实。公网只读验收现在强制检查 Contract／Money 的 directory authority，防止以后“容器健康但业务不可写”漏检。[故障与修复报告](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)

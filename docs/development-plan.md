@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-173 已优化并发布：去除 Owner 只读请求在每次页面刷新前的无条件授权；已有 Capability 先直接读取，只有明确凭证失效时才按 Audience 合并换票并重放一次，写入仍强制先授权。六个来源仍并发启动，Project／Party 就绪后先显示可用页面，Billing／Money／Contract 与逐项目汇总随后补齐；重复刷新合并为一轮。源码提交为 `00c5d6b`，公网 Workbench 为 `v0.1.0-test.oms-v1.24@sha256:015ab2b216b47f40d38ac253f89ce8e27afd3fba0c6d6a3a2098cf0c8b3c1054`，静态资源为 `20261022.4`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。当前证据证明请求轮次收敛与渐进可用，尚未完成同一已登录浏览器的前后毫秒基准，下一步由用户实际刷新体验确认，不虚报精确提速比例。[发布证据](./reports/oms-phase1-progressive-refresh-publication-20261022.md)
+
 2026-10-22 BF-172 已修复并发布：项目详情打开时，任一侧栏一级／二级导航都会先统一关闭详情、恢复滚动、清除项目选择并使旧详情请求失效，再显示目标页面；点击当前业务组也不再被详情层截留。源码修复提交为 `149cfff`，公网 Workbench 为 `v0.1.0-test.oms-v1.23@sha256:3b78fdbeeb273723340b50aa509fcca1aa3620919212f7480ddd590cb95cebc1`，静态资源为 `20261022.3`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。下一步由用户直接刷新公网或本地页面，打开项目详情后逐项切换侧栏做人工体验确认。[发布证据](./reports/oms-phase1-project-detail-navigation-publication-20261022.md)
 
 2026-10-22 BF-171 已修复：BF-170 清理后新建项目被禁用，根因不是 Contract 容器、权限或用户输入，而是清理误删 Contract／Money 的 Party Directory runtime cutover。两套 Owner 已通过正式 migration／cutover 恢复 `directory` authority，重复执行均为 `changed=false`；D1 `check`、17/17 healthy 和增强后的公网正式登录／五 Owner 只读验收通过。下一步直接继续用户的新项目录入；后续任何 Demo reset 必须把主体 runtime baseline 列为保留项，并以增强后的 `verify-public-oms-v1.py` 作为交付门禁。[修复报告](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)

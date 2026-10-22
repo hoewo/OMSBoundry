@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-173 Workbench 渐进装配：Project、Party、Billing、Money、Contract 与 Evidence 的 Owner 边界和读取端点保持不变。Workbench 可以并发发起读取并把 Project／Party 组成第一阶段投影，再异步合并票据、资金、合同和逐项目经营摘要；阶段化渲染只是装配顺序，不产生新的事实副本。Gateway 签发的 HttpOnly Capability Cookie 是只读暖刷新可复用的既有安全上下文，明确凭证失效后才按 Audience 重新授权且最多重放一次；写请求仍先强制授权。同一 Audience 的并发授权和同一页面的重复刷新分别由内存中的在途任务合并，任务结束即释放，不形成跨刷新业务缓存。该变化没有新增服务、数据库、共享表、API、Capability 或 Grant。
+
 2026-10-22 BF-172 Workbench 详情导航投影：项目详情继续由 Workbench 请求时组合 Project、Contract、Billing、Money、Party 与 Evidence，不成为新路由或事实 Owner。详情可见性、当前项目 ID 和异步读取令牌组成同一个前端生命周期；全局导航切换先原子式结束该生命周期，再激活目标页面，从而避免旧详情遮挡新页面或晚到响应污染当前视图。侧栏展开与唯一选中语义继续分别服从 BF-168／BF-169。该变化没有新增服务、数据库、共享表、API、Capability 或 Grant。
 
 2026-10-19 BF-164 OMS 主体装配：Customer Overlay 以 `OMS_OPERATING_PARTY_ID` 把当前使用系统的公司稳定映射到 Party Directory；该身份只用于判断本方与外部往来方向，不产生“资质单位”类型。旧变量名仅在配置入口兼容，运行页只接收中性 `data-operating-party-id`。甲方／施工方集合来自 Party Directory API 的实际响应，Workbench 不拥有主体、没有静态主体种子，也不能在 Owner 失败时用假数据替代。历史合同已经冻结的旧角色字符串可被读取识别，新合同只写“本方主体”。

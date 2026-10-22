@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-22 OMS 一期刷新体验基线（BF-173）：多 Owner 读取继续存在，但“连接系统”是后台数据更新状态，不应成为每次刷新时阻塞整个工作台的启动门。仍有效的浏览器 Capability Cookie 可直接用于只读请求；凭证确实失效时再进行一次按 Audience 合并的授权和一次原请求重放，写操作仍必须新授权。项目与主体是首个可用阶段，票据、资金、合同和经营汇总随后更新；页面不持久化业务事实，也不把部分加载误报为全部完成。该基线已发布为公网 Workbench v1.24。[发布证据](./reports/oms-phase1-progressive-refresh-publication-20261022.md)
+
 2026-10-22 OMS 一期项目详情导航基线（BF-172）：项目详情虽然是完整工作面，但仍属于当前项目列表上下文；侧栏始终是全局页面导航。详情打开时选择任何侧栏入口，界面必须退出详情并显示目标页面，不能让详情继续覆盖已经切换的底层内容。退出同时恢复滚动、清除项目选择并使旧异步详情读取失效，避免快速切换后旧响应污染新页面。该基线只约束 Workbench 交互，不改变业务事实或权限边界；已发布为公网 Workbench v1.23。[发布证据](./reports/oms-phase1-project-detail-navigation-publication-20261022.md)
 
 2026-10-22 主体目录运行基线（BF-171）：业务数据为空不等于 Contract／Money 可以退回本地主体模式。两套台账必须持续保持 `party_runtime_mode=directory` 且 `directory_authority_established=true`；为证明该状态而存在的最小本地来源 Party、reviewed mapping 和追加式 runtime cutover 是部署运行基准，不在 Demo 业务清理范围。D1 schema 与容器 health 不能单独证明这项业务可写前提，公网验收必须读取两套 workspace context 并明确断言 authority 已建立。[修复证据](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)
