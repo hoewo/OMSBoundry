@@ -31,4 +31,4 @@
 
 ## 边界
 
-本地预览不连接真实 Owner，所以只验证结构和交互，不证明真实数据读写。本轮未修改 Project、Party、Contract、Billing、Money、Evidence、IAM、Gateway、API、schema、Grant、数据库或公网环境；尚未合并 `main`，也没有发布到 `oatest`。
+本地预览不连接真实 Owner，所以本报告只验证结构和交互，不证明真实数据读写；本地阶段没有修改 Project、Party、Contract、Billing、Money、Evidence、IAM、Gateway、API、schema、Grant 或数据库。候选随后合并为 `main@32d9597` 并于 2026-10-22 发布到 `oatest`，公网事实以[发布报告](./oms-phase1-mvp-review-ui-publication-20261022.md)为准。
