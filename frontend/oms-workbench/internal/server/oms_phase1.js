@@ -16,9 +16,16 @@
   const contexts=root.querySelector('[data-oms-v1-context]');
   const sync=root.querySelector('[data-oms-v1-sync]');
   const authorizationTasks=new Map();
-  let loadTask=null;
+  let loadTask=null,evidenceRuntimeTask=null;
   let activeFilterPanel=null,activeFilterButton=null;
-  const csrfProvider=globalThis.ReferenceOAGatewayCSRF?new globalThis.ReferenceOAGatewayCSRF({route:root.dataset.identityRoutePrefix}):null;
+  // Self-contained equivalent of ReferenceOAGatewayCSRF keeps OMS first paint independent of the legacy runtime.
+  class GatewayCSRF{
+    constructor(route){this.route=route;this.pending=null}
+    current(){const value=document.cookie.split(';').map(item=>item.trim()).find(item=>item.startsWith('oms_iam_csrf=')),token=value?value.slice('oms_iam_csrf='.length):'';return /^[A-Za-z0-9_-]{16,256}$/.test(token)?token:''}
+    async token(){const current=this.current();if(current)return current;if(!this.pending)this.pending=this.refresh().finally(()=>{this.pending=null});return this.pending}
+    async refresh(){if(!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(this.route||''))throw new Error('页面状态已过期，请刷新后重试');const response=await fetch(this.route+'/api/v1/csrf',{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json'}});if(!response.ok||response.redirected)throw new Error('页面状态已过期，请刷新后重试');const data=await response.json(),current=this.current();if(!current||data.csrf_token!==current)throw new Error('页面状态已过期，请刷新后重试');return current}
+  }
+  const csrfProvider=new GatewayCSRF(root.dataset.identityRoutePrefix);
   const app=id=>{const node=root.querySelector('[data-oms-v1-application="'+id+'"]');return node?{id,route:node.dataset.omsV1Route}:null};
   const safeText=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const option=(value,label,current)=>'<option value="'+safeText(value)+'" '+(value===current?'selected':'')+'>'+safeText(label)+'</option>';
@@ -109,13 +116,14 @@
   const activeExternalParties=()=>state.parties.filter(item=>item.status==='active'&&isExternalParty(item));
   function assertExternalCounterparty(party,label){if(!party||party.status!=='active')throw new Error('请选择有效'+label);if(!isExternalParty(party))throw new Error(label+'不能是本方经营主体，请选择真实往来主体')}
   function isOMSProject(item){return Array.isArray(item?.project_type_keys)&&item.project_type_keys.includes('operations')}
+  async function ensureEvidenceRuntime(){
+    if(globalThis.ReferenceOAReactBidding?.createEvidenceTransfer)return globalThis.ReferenceOAReactBidding;
+    if(!evidenceRuntimeTask)evidenceRuntimeTask=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='assets/reference-oa-react-bidding.js?v=20261022.5';script.async=true;script.addEventListener('load',()=>globalThis.ReferenceOAReactBidding?.createEvidenceTransfer?resolve(globalThis.ReferenceOAReactBidding):reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});script.addEventListener('error',()=>reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});document.head.append(script)}).catch(error=>{evidenceRuntimeTask=null;throw error});
+    return evidenceRuntimeTask;
+  }
   function evidenceTransfer(){
     if(state.evidenceTransfer)return state.evidenceTransfer;
-    const factory=globalThis.ReferenceOAReactBidding?.createEvidenceTransfer;
-    if(typeof factory!=='function')throw new Error('附件功能暂不可用，请稍后重试');
-    if(!app('evidence-service'))throw new Error('附件功能暂不可用，请稍后重试');
-    state.evidenceTransfer=factory(evidenceFetch);
-    return state.evidenceTransfer;
+    return ensureEvidenceRuntime().then(runtime=>{const factory=runtime.createEvidenceTransfer;if(typeof factory!=='function'||!app('evidence-service'))throw new Error('附件功能暂不可用，请稍后重试');state.evidenceTransfer=factory(evidenceFetch);return state.evidenceTransfer});
   }
   function evidenceFiles(data,name='evidence_files'){return [...(data.getAll(name)||[])].filter(value=>value instanceof File&&value.size>0)}
   async function uploadEvidence(files,{ownerRef,purpose,status}){
@@ -125,7 +133,7 @@
       const file=files[index];
       if(file.size<=0)throw new Error(file.name+' 是空文件，未上传');
       if(status)status.textContent='正在上传 '+(index+1)+' / '+files.length+'：'+file.name;
-      const result=await evidenceTransfer().uploadFile({file,clientContext:{ownerRef,purpose},onProgress:progress=>{if(status)status.textContent='正在上传 '+file.name+' · '+Math.round(progress.percent)+'%'}});
+      const result=await (await evidenceTransfer()).uploadFile({file,clientContext:{ownerRef,purpose},onProgress:progress=>{if(status)status.textContent='正在上传 '+file.name+' · '+Math.round(progress.percent)+'%'}});
       refs.push({file_id:result.version.fileId,version:result.version.version,purpose,display_name:result.version.fileName});
     }
     return refs;
@@ -136,7 +144,7 @@
   }
   async function downloadEvidence(ref,status){
     if(status)status.textContent='正在申请附件下载授权…';
-    const descriptor=await evidenceDescriptor(ref);await evidenceTransfer().downloadFile(descriptor,descriptor.fileName);
+    const descriptor=await evidenceDescriptor(ref);await (await evidenceTransfer()).downloadFile(descriptor,descriptor.fileName);
     if(status)status.textContent='已触发下载：'+descriptor.fileName;
   }
   function previewableEvidenceName(name){return /\.(?:pdf|png|jpe?g|webp|gif|bmp)$/i.test(String(name||''))}
@@ -359,13 +367,13 @@
   function partyListData(kind){
     const query=(root.querySelector('[data-oms-v1-party-search="'+kind+'"]')?.value||'').trim().toLocaleLowerCase('zh-CN');
     const roleCount=new Map();for(const project of state.projects){const ids=kind==='client'?[project.client_party?.party_id].filter(Boolean):(project.resource_links||[]).filter(link=>link.target_service==='party-directory'&&link.resource_type==='party'&&link.relation_key==='contractor-party'&&!link.unlinked_at).map(link=>link.resource_id);for(const id of new Set(ids))roleCount.set(id,(roleCount.get(id)||0)+1)}
-    const key='party-'+kind,filtered=state.parties.filter(isExternalParty).filter(item=>!query||(item.legal_name||'').toLocaleLowerCase('zh-CN').includes(query)||(item.registration_identifier||'').toLocaleLowerCase('zh-CN').includes(query)),items=sortedItems(filtered,key,{usage:item=>roleCount.get(item.id)||0,name:item=>item.legal_name,registration:item=>item.registration_identifier,status:item=>item.status});return {key,items,roleCount};
+    const roleIDs=new Set(roleCount.keys()),key='party-'+kind,filtered=state.parties.filter(isExternalParty).filter(item=>roleIDs.has(item.id)).filter(item=>!query||(item.legal_name||'').toLocaleLowerCase('zh-CN').includes(query)||(item.registration_identifier||'').toLocaleLowerCase('zh-CN').includes(query)),items=sortedItems(filtered,key,{usage:item=>roleCount.get(item.id)||0,name:item=>item.legal_name,registration:item=>item.registration_identifier,status:item=>item.status});return {key,items,roleCount};
   }
   function renderParties(kind){
     const {key,items,roleCount}=partyListData(kind);
     syncSortHeaders(key);
     root.querySelector('[data-oms-v1-party-total="'+kind+'"]').textContent=String(items.length);
-    const page=pageItems(items,key),body=root.querySelector('[data-oms-v1-party-body="'+kind+'"]');body.innerHTML=page.items.length?page.items.map(item=>{const count=roleCount.get(item.id)||0,usage=count?(kind==='client'?'已作为甲方关联 ':'已作为施工方关联 ')+count+' 个项目':kind==='client'?'待关联为甲方':'待关联为施工方';return '<tr data-oms-v1-row data-party-id="'+safeText(item.id)+'"><td><strong title="'+safeText(item.legal_name)+'">'+safeText(item.legal_name)+'</strong><small>'+safeText((item.kind==='organization'?'企业 / 组织':item.kind||'主体')+' · '+usage)+'</small></td><td>'+safeText(item.registration_identifier||'—')+'</td><td><span class="oms-v1__tag '+(item.status==='active'?'':'is-muted')+'">'+safeText(item.status==='active'?'启用':'停用')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(4,kind==='client'?'暂无人工录入的甲方':'暂无人工录入的施工方','点击新增后录入真实主体；系统不会补充演示或默认数据。');
+    const page=pageItems(items,key),body=root.querySelector('[data-oms-v1-party-body="'+kind+'"]');body.innerHTML=page.items.length?page.items.map(item=>{const count=roleCount.get(item.id)||0,usage=(kind==='client'?'已作为甲方关联 ':'已作为施工方关联 ')+count+' 个项目';return '<tr data-oms-v1-row data-party-id="'+safeText(item.id)+'"><td><strong title="'+safeText(item.legal_name)+'">'+safeText(item.legal_name)+'</strong><small>'+safeText((item.kind==='organization'?'企业 / 组织':item.kind||'主体')+' · '+usage)+'</small></td><td>'+safeText(item.registration_identifier||'—')+'</td><td><span class="oms-v1__tag '+(item.status==='active'?'':'is-muted')+'">'+safeText(item.status==='active'?'启用':'停用')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(4,kind==='client'?'暂无已关联项目的甲方':'暂无已关联项目的施工方','主体保存后可在项目中选择；形成项目关系后才进入当前角色列表。');
     for(const row of body.querySelectorAll('[data-party-id]'))row.addEventListener('click',()=>openParty(row.dataset.partyId,kind));
     syncListPager(body,key,page,()=>renderParties(kind));
   }
@@ -477,11 +485,11 @@
   let dialogAction=null,dialogReturnFocus=null,currentPreview=null,previewScale=1,previewReturnFocus=null;
   function formatFileSize(value){const size=Number(value)||0;if(size<1024)return size+' B';if(size<1024*1024)return (size/1024).toFixed(size<10240?1:0)+' KB';return (size/1024/1024).toFixed(size<10*1024*1024?1:0)+' MB'}
   function setPreviewScale(next){previewScale=Math.max(.5,Math.min(3,next));const image=previewBody.querySelector('img');if(image)image.style.transform='scale('+previewScale+')';previewZoomReset.textContent=Math.round(previewScale*100)+'%'}
-  function closeEvidencePreview(){if(currentPreview){try{evidenceTransfer().revokeFile(currentPreview)}catch{}}currentPreview=null;preview.hidden=true;previewBody.innerHTML='';previewDownload.disabled=true;previewZoom.hidden=true;document.body.classList.remove('oms-v1-preview-open');previewReturnFocus?.focus?.();previewReturnFocus=null}
+  function closeEvidencePreview(){if(currentPreview&&state.evidenceTransfer){try{state.evidenceTransfer.revokeFile(currentPreview)}catch{}}currentPreview=null;preview.hidden=true;previewBody.innerHTML='';previewDownload.disabled=true;previewZoom.hidden=true;document.body.classList.remove('oms-v1-preview-open');previewReturnFocus?.focus?.();previewReturnFocus=null}
   async function openEvidencePreview(ref,status,returnFocus){
     previewReturnFocus=returnFocus||document.activeElement;preview.hidden=false;document.body.classList.add('oms-v1-preview-open');previewTitle.textContent=ref.display_name||'附件';previewMeta.textContent='正在读取文件信息…';previewBody.innerHTML='<div class="oms-v1__preview-state">正在准备安全预览…</div>';previewDownload.disabled=true;previewZoom.hidden=true;setPreviewScale(1);
     try{
-      const descriptor=await evidenceDescriptor(ref),transfer=evidenceTransfer(),policy=transfer.getPreviewPolicy(descriptor);currentPreview=descriptor;previewTitle.textContent=descriptor.fileName;previewMeta.textContent=evidenceTypeLabel(descriptor.fileName)+' · '+formatFileSize(descriptor.sizeBytes);previewDownload.disabled=false;
+      const descriptor=await evidenceDescriptor(ref),transfer=await evidenceTransfer(),policy=transfer.getPreviewPolicy(descriptor);currentPreview=descriptor;previewTitle.textContent=descriptor.fileName;previewMeta.textContent=evidenceTypeLabel(descriptor.fileName)+' · '+formatFileSize(descriptor.sizeBytes);previewDownload.disabled=false;
       if(policy.mode==='download'){const reason=policy.reason==='size-limit'||policy.reason==='large-image'?'文件较大，当前安全策略仅允许下载后查看。':'当前文件格式不支持浏览器内安全预览。';previewBody.innerHTML='<div class="oms-v1__preview-state"><strong>暂不支持在线预览</strong><span>'+safeText(reason)+'</span><button type="button" data-oms-v1-preview-fallback-download>下载文件</button></div>';previewBody.querySelector('[data-oms-v1-preview-fallback-download]')?.addEventListener('click',()=>previewDownload.click());return}
       const url=await transfer.resolvePreviewUrl(descriptor,policy.mode),pdf=descriptor.mediaType.includes('pdf')||/\.pdf$/i.test(descriptor.fileName);
       if(pdf){previewBody.innerHTML='<iframe title="'+safeText(descriptor.fileName)+'" src="'+safeText(url)+'"></iframe>'}else{previewBody.innerHTML='<div class="oms-v1__preview-image"><img src="'+safeText(url)+'" alt="'+safeText(descriptor.fileName)+'"></div>';previewZoom.hidden=false;setPreviewScale(1)}
@@ -492,7 +500,7 @@
   function closeDialog(){closeUnifiedSelect();dialog.hidden=true;dialogAction=null;document.body.classList.remove('oms-v1-dialog-open');dialogReturnFocus?.focus?.();dialogReturnFocus=null}
   dialogSubmit.addEventListener('click',async()=>{if(!dialogAction)return;const form=dialogBody.querySelector('form');if(form&&!form.reportValidity())return;const status=dialogBody.querySelector('[data-oms-v1-form-status]');dialogSubmit.disabled=true;const original=dialogSubmit.textContent;dialogSubmit.textContent=original.includes('下载')?'正在生成…':'正在保存…';if(status)status.textContent='';try{await dialogAction(form?new FormData(form):new FormData(),form)}catch(error){if(status)status.textContent=error instanceof Error?error.message:'操作未完成';else sync.textContent=error instanceof Error?error.message:'操作未完成';dialogSubmit.disabled=false;dialogSubmit.textContent=original}});
   for(const close of root.querySelectorAll('[data-oms-v1-dialog-close]'))close.addEventListener('click',closeDialog);dialog.addEventListener('click',event=>{if(event.target===dialog)closeDialog()});
-  for(const close of root.querySelectorAll('[data-oms-v1-preview-close]'))close.addEventListener('click',closeEvidencePreview);preview.addEventListener('click',event=>{if(event.target===preview)closeEvidencePreview()});previewDownload.addEventListener('click',async()=>{if(!currentPreview)return;previewDownload.disabled=true;const original=previewDownload.textContent;previewDownload.textContent='准备中…';try{await evidenceTransfer().downloadFile(currentPreview,currentPreview.fileName)}catch(error){previewMeta.textContent=error instanceof Error?error.message:'下载未完成'}finally{previewDownload.disabled=false;previewDownload.textContent=original}});root.querySelector('[data-oms-v1-preview-zoom-out]').addEventListener('click',()=>setPreviewScale(previewScale-.25));root.querySelector('[data-oms-v1-preview-zoom-in]').addEventListener('click',()=>setPreviewScale(previewScale+.25));previewZoomReset.addEventListener('click',()=>setPreviewScale(1));document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!preview.hidden){event.preventDefault();event.stopImmediatePropagation();closeEvidencePreview()}},{capture:true});
+  for(const close of root.querySelectorAll('[data-oms-v1-preview-close]'))close.addEventListener('click',closeEvidencePreview);preview.addEventListener('click',event=>{if(event.target===preview)closeEvidencePreview()});previewDownload.addEventListener('click',async()=>{if(!currentPreview)return;previewDownload.disabled=true;const original=previewDownload.textContent;previewDownload.textContent='准备中…';try{await (await evidenceTransfer()).downloadFile(currentPreview,currentPreview.fileName)}catch(error){previewMeta.textContent=error instanceof Error?error.message:'下载未完成'}finally{previewDownload.disabled=false;previewDownload.textContent=original}});root.querySelector('[data-oms-v1-preview-zoom-out]').addEventListener('click',()=>setPreviewScale(previewScale-.25));root.querySelector('[data-oms-v1-preview-zoom-in]').addEventListener('click',()=>setPreviewScale(previewScale+.25));previewZoomReset.addEventListener('click',()=>setPreviewScale(1));document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!preview.hidden){event.preventDefault();event.stopImmediatePropagation();closeEvidencePreview()}},{capture:true});
   function exportDecimal(value){const minor=decimalMinor(value);return minor===null?'':minorDecimal(minor)}
   function exportMinor(value){try{return minorDecimal(BigInt(String(value)))}catch{return ''}}
   function csvCell(value){let text=String(value??'');if(/^\s*[=+\-@]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"'}
@@ -563,7 +571,7 @@
       root.querySelector('[data-oms-v1-new-party="client"]')?.focus();
     });
   });
-  for(const button of root.querySelectorAll('[data-oms-v1-new-party]'))button.addEventListener('click',()=>{const role=button.dataset.omsV1NewParty==='client'?'甲方':'施工方',enabled=state.partyActions.has('party-directory.create');showDialog({kicker:'主体档案',title:'新增'+role+'档案',submit:'保存主体',enabled,onSubmit:async data=>{const name=String(data.get('legal_name')||'').trim(),duplicate=state.parties.some(item=>(item.legal_name||'').trim()===name);if(duplicate&&!globalThis.confirm('已有同名主体档案，仍要继续创建吗？建议使用可区分的名称。'))throw new Error('已取消同名主体创建');const identifier=String(data.get('registration_identifier')||'').trim();await api('party-directory','/api/v1/parties',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),kind:String(data.get('kind')||'organization'),legal_name:name,registration_identifier:identifier||null})});closeDialog();await loadAll();activatePage('projects',role==='甲方'?'clients':'contractors');sync.textContent='主体档案“'+name+'”已保存并显示在'+role+'管理；在项目中选择后形成'+role+'关系';},body:'<form><label>名称 *<input name="legal_name" required maxlength="200" placeholder="请输入主体名称"></label><label>主体类型<select name="kind"><option value="organization">企业 / 组织</option><option value="individual">个人</option></select></label><label>统一社会信用代码或登记标识<input name="registration_identifier" maxlength="100" placeholder="选填"></label><div class="oms-v1__form-note">保存后可在项目中选择为'+role+'。</div><div class="oms-v1__form-status" data-oms-v1-form-status>'+(enabled?'':'当前账号没有新增主体权限')+'</div></form>'})});
+  for(const button of root.querySelectorAll('[data-oms-v1-new-party]'))button.addEventListener('click',()=>{const role=button.dataset.omsV1NewParty==='client'?'甲方':'施工方',enabled=state.partyActions.has('party-directory.create');showDialog({kicker:'主体档案',title:'新增'+role+'档案',submit:'保存主体',enabled,onSubmit:async data=>{const name=String(data.get('legal_name')||'').trim(),duplicate=state.parties.some(item=>(item.legal_name||'').trim()===name);if(duplicate&&!globalThis.confirm('已有同名主体档案，仍要继续创建吗？建议使用可区分的名称。'))throw new Error('已取消同名主体创建');const identifier=String(data.get('registration_identifier')||'').trim();await api('party-directory','/api/v1/parties',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),kind:String(data.get('kind')||'organization'),legal_name:name,registration_identifier:identifier||null})});closeDialog();await loadAll();activatePage('projects',role==='甲方'?'clients':'contractors');sync.textContent='主体档案“'+name+'”已保存；请在项目中选择为'+role+'，关联后将在当前列表显示';},body:'<form><label>名称 *<input name="legal_name" required maxlength="200" placeholder="请输入主体名称"></label><label>主体类型<select name="kind"><option value="organization">企业 / 组织</option><option value="individual">个人</option></select></label><label>统一社会信用代码或登记标识<input name="registration_identifier" maxlength="100" placeholder="选填"></label><div class="oms-v1__form-note">主体档案保持中性；在项目中选择后才形成'+role+'关系并进入当前列表。</div><div class="oms-v1__form-status" data-oms-v1-form-status>'+(enabled?'':'当前账号没有新增主体权限')+'</div></form>'})});
   function openInvoiceCreate(incoming){
     const operatingParty=state.operatingParty,enabled=!!operatingParty&&operatingParty.status==='active'&&state.invoiceActions.has('record')&&state.projects.length>0;
     const status=!root.dataset.operatingPartyId?'本公司信息尚未配置，请联系管理员':!operatingParty?'本公司信息暂不可用':operatingParty.status!=='active'?'本公司信息尚未启用':!state.invoiceActions.has('record')?'当前账号没有票据登记权限':!state.projects.length?'没有可选项目':'';

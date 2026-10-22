@@ -104,13 +104,33 @@ def main():
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css?v=20261022.4",
-        b"assets/oms-phase1.js?v=20261022.4",
+        b"assets/oms-phase1.css?v=20261022.5",
+        b"assets/oms-phase1-pagination.js?v=20261022.5",
+        b"assets/oms-phase1.js?v=20261022.5",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
+    eager_legacy_assets = (
+        b'src="assets/reference-oa-react-bidding.js',
+        b'src="assets/reference-oa-initiation-runtime.js',
+        b'href="assets/reference-oa-workspace.css',
+        b'href="assets/reference-oa-business.css',
+    )
+    if any(marker in page for marker in eager_legacy_assets):
+        raise RuntimeError("OMS v1 page still eagerly loads a legacy runtime asset")
     if "text/html" not in page_headers.get("Content-Type", ""):
         raise RuntimeError("OMS v1 did not return HTML")
+
+    critical_assets = {}
+    for path in (
+        "/workbench/assets/oms-phase1.css?v=20261022.5",
+        "/workbench/assets/oms-phase1-pagination.js?v=20261022.5",
+        "/workbench/assets/oms-phase1.js?v=20261022.5",
+    ):
+        _, asset, asset_headers = request(path)
+        if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
+            raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
+        critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
 
     owner_counts = {}
     for application, (path, list_key) in APPLICATIONS.items():
@@ -162,6 +182,7 @@ def main():
                 "native_login": True,
                 "gateway_authorizations": sorted(APPLICATIONS),
                 "owner_reads": owner_counts,
+                "critical_assets_bytes": critical_assets,
                 "operating_party_id": OPERATING_PARTY_ID,
                 "page_sha256": hashlib.sha256(page).hexdigest(),
                 "business_writes": 0,
