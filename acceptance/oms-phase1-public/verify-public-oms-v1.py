@@ -165,9 +165,9 @@ def main():
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css?v=20261022.6",
+        b"assets/oms-phase1.css?v=20261022.9",
         b"assets/oms-phase1-pagination.js?v=20261022.6",
-        b"assets/oms-phase1.js?v=20261022.8",
+        b"assets/oms-phase1.js?v=20261022.9",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
@@ -186,15 +186,15 @@ def main():
 
     critical_assets = {}
     for path in (
-        "/workbench/assets/oms-phase1.css?v=20261022.6",
+        "/workbench/assets/oms-phase1.css?v=20261022.9",
         "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
-        "/workbench/assets/oms-phase1.js?v=20261022.8",
+        "/workbench/assets/oms-phase1.js?v=20261022.9",
     ):
         _, asset, asset_headers = request(path)
         if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
             raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
-        if path.endswith("oms-phase1.js?v=20261022.8") and (b"function partyVisibleForRole" not in asset or b"/api/v1/project-party-candidates" not in asset):
+        if path.endswith("oms-phase1.js?v=20261022.9") and (b"function partyVisibleForRole" not in asset or b"/api/v1/project-party-candidates" not in asset):
             raise RuntimeError("current OMS script is missing the party directory visibility guard")
 
     evidence_path = "/workbench/assets/oms-phase1-evidence.js?v=20261022.6"

@@ -1,6 +1,6 @@
 # OMSBizFoundry
 
-当前 OMS 金额列规则（BF-178）：应收、应付、票据和实际收付款列表中的金额列使用专用 `is-money` 语义，统一最小宽度、右边界、表头排序按钮内边距和 tabular lining figures；币种符号、整数、小数点及两位小数沿同一右边界排列。项目“应收状态／应付状态”不是金额列，不套用该宽度规则。
+当前 OMS 金额列规则（BF-178）：应收、应付、票据和实际收付款列表中的金额列使用专用 `is-money` 语义，统一最小宽度、右边界、表头排序按钮内边距和 tabular lining figures；币种符号、整数、小数点及两位小数沿同一右边界排列。项目“应收状态／应付状态”不是金额列，不套用该宽度规则。该规则已由公网 Workbench v1.29 验证并发布。[发布报告](./docs/reports/oms-phase1-money-column-alignment-publication-20261022.md)
 
 当前 OMS 主体页规则（BF-177）：Party Directory 继续只保存中性主体档案；Project Workspace 以租户级、追加式 `project-party-candidate` 记录建项前可选的甲方／施工方候选。用户从对应管理页新建主体后，Workbench 先保存 Party，再登记候选角色并刷新当前列表；真实项目关系建立后只补充关联项目数。该记录不是 Party 全局类型，也不是虚构项目关系。BF-177 取代 BF-174／BF-176 对未关联施工方无法表达的临时规则，并已由公网 v1.28 与正式 API 投影验证。[发布报告](./docs/reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 

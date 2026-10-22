@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-22 BF-178 已完成本地实现、待公网发布：十个金额表头和五类动态金额单元格已收口为专用 `is-money` 语义，统一 132px 最小宽度、同一右边界、排序按钮内边距、nowrap 和 tabular lining figures；项目状态列保持独立。新增金额列静态回归 3/3，本地 Node 回归 10/10、Workbench Go test／vet、前端 TypeScript check、206/206 测试、双 bundle build 和浏览器计算样式复核通过。下一步只替换 Workbench，并以线上真实应收／应付记录复核表头与数值右边界。
+2026-10-22 BF-178 已完成并发布：十个金额表头和五类动态金额单元格已收口为专用 `is-money` 语义，统一 132px 最小宽度、同一右边界、排序按钮内边距、nowrap 和 tabular lining figures；项目状态列保持独立。新增金额列静态回归 3/3，本地 Node 回归 10/10、Workbench Go test／vet、前端 TypeScript check、206/206 测试、双 bundle build 和浏览器计算样式复核通过。源码为 `main@37ec7e3`，公网 Workbench 为 v1.29；升级前完整备份、D1 检查、17/17 健康、正式登录／五 Owner 只读验收和公网不可变资源复核通过。[发布证据](./reports/oms-phase1-money-column-alignment-publication-20261022.md)
 
 2026-10-22 BF-177 已完成并发布：Project Workspace 新增 `000014_project_party_candidates.sql`、`GET/POST /api/v1/project-party-candidates` 及 Party revision 精确校验；Workbench 新增主体时以稳定的 Party 命令和候选登记命令分段续办，刷新时并发读取候选，甲方／施工方列表和新建项目／关联施工方选择器共用同一角色投影。源码为 `main@6903934`，公网 Project Workspace／Workbench 为 v1.28；升级前完整备份、migration、D1 检查、17/17 健康及正式 API 读写复验通过。此前残留的中性 Party“施工方1”已通过正式候选命令补登记，最终目录投影为甲方 3、施工方 1。[发布证据](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 

@@ -1,6 +1,6 @@
 # OMSBizFoundry 验证入口
 
-2026-10-22 BF-178 本地验证：金额列静态回归 3/3 断言十个金额表头、五类动态金额单元格、固定最小宽度、无负边距的全宽排序按钮、数值右对齐和 tabular lining figures；与分页、主体候选合并的 Node 回归 10/10 通过。Workbench `node --check`、Go test／vet、前端 TypeScript check、206/206 测试和双 bundle build 通过。浏览器在应收管理页读取三个金额表头的计算样式均为 132px、右对齐、`lining-nums tabular-nums`，表头按钮距单元格右边界均为 14px。公网尚未发布，不得描述为线上已修复。
+2026-10-22 BF-178 已发布并验证：金额列静态回归 3/3 断言十个金额表头、五类动态金额单元格、固定最小宽度、无负边距的全宽排序按钮、数值右对齐和 tabular lining figures；与分页、主体候选合并的 Node 回归 10/10 通过。Workbench `node --check`、Go test／vet、前端 TypeScript check、206/206 测试和双 bundle build 通过。本地浏览器在应收管理页读取三个金额表头的计算样式均为 132px、右对齐、`lining-nums tabular-nums`，表头按钮距单元格右边界均为 14px。公网只替换 Workbench 为 v1.29，备份、D1 `check`、17/17 healthy、正式登录与五 Owner 只读复验通过，业务写入为 0；版本化 CSS／JS 均为 `.9` 且不可变缓存生效。[报告](./reports/oms-phase1-money-column-alignment-publication-20261022.md)
 
 2026-10-22 BF-177 已发布并验证：Project Workspace 候选模型／服务／PostgreSQL repository／HTTP 端点／migration 回归覆盖 Party 精确 revision 校验、重放不依赖 Party 服务、非法角色拒绝、租户范围、Capability、命令冲突、重复候选幂等、不可变触发器及跨租户隔离；普通 Go test／vet、integration-tag 编译与真实 PostgreSQL 18 定向集成通过。Workbench `node --check`、角色回归 3/3、Go test／vet、前端 206/206 与双 bundle build 通过。公网完成 migration 000014、D1 `check`、17/17 healthy、正式登录与新候选 API 读写；通过正式命令把已有中性 Party“施工方1”登记为 contractor，复读得到候选 1、甲方 `[甲方1, 甲方2, 甲方3]`、施工方 `[施工方1]`。[报告](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 
