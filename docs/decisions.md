@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-22 BF-170（已接受／已执行／Demo 全量业务数据归零）：当前 `oatest` 明确仍是可反复录入的 Demo 环境，允许在完整可恢复备份后清除当前 Suite 的全部用户录入与业务事实，不沿用 BF-161 的“只清 OMS 投影、保留旧 OA 事实”范围。此次清理覆盖 Contract、Money、People、Party、Project、Evidence、Business Engagement、Billing、Production、Approval & Audit Results、Cost & Outsourcing、Bonus Distribution 十二个 Owner 及 Evidence／Contract 本地附件对象；只保留 schema／migration、Contract／Money 技术元数据、IAM 账号／登录／Grant、部署配置和 Workbench 运行必需且不作为外部甲方／施工方展示的本方经营主体。该动作是测试环境维护，不新增产品内删除能力，不改变 Owner、API、schema、Grant、Suite Manifest 或数据所有权。回滚点为 `/var/backups/omsbizfoundry/20261022T023910Z`。[执行报告](./reports/oms-phase1-demo-full-business-reset-20261022.md)
+
 2026-10-22 BF-169（已接受／已发布／OMS 导航唯一选中项）：桌面侧栏的“业务组可展开”与“当前二级页面被选中”继续分别管理。多个业务组可以同时保持展开，但每次切换页面必须在全部桌面二级菜单中重新计算选中态，只允许当前页面对应的一个二级菜单显示选中效果并拥有 `aria-current="page"`；其他已展开组只能表达可见性，不得保留历史页面的绿色选中。移动端对应入口同步保持同一当前页面语义。该决定只修正 Workbench 导航状态与无障碍语义，不改变 Owner、API、schema、Grant、数据或部署拓扑。[公网发布证据](./reports/oms-phase1-single-current-navigation-publication-20261022.md)
 
 2026-10-22 BF-168（已接受／已发布／OMS 导航展开与分页控件）：桌面一级业务组的“当前页面”与“是否展开”是两个不同状态。进入项目经营、应收回款或应付支付时必须展开目标组，但不得自动收起用户此前展开的其他组；再次点击当前组可只收起该组。分页条数选择器继续使用 BF-156 的统一选择控件，必须保留固定可读宽度并把标签和箭头完整约束在边框内。该决定只调整 Workbench 交互与样式，不改变 Owner、API、schema、Grant、数据或部署拓扑。[公网发布证据](./reports/oms-phase1-mvp-review-ui-publication-20261022.md)

@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-22 BF-170：用户明确当前仍是 Demo，可清除全部旧演示与 OA 业务数据后重新走录入流程。`oatest` 已在完整备份 `20261022T023910Z` 后归零十二个业务 Owner 和两个本地附件对象卷；IAM／Grant、schema、部署与不作为外部合作方显示的本方经营主体保留。逐库实数、附件 0、D1 全栈、17/17 健康及公网正式登录／五 Owner 只读复验均通过。[执行报告](./docs/reports/oms-phase1-demo-full-business-reset-20261022.md)
+
 2026-10-22 BF-169：用户进一步明确“可同时展开”不等于“可同时选中”。Workbench 已改为跨全部业务组统一计算二级导航状态，多个组保持展开时只有当前页面对应的一项高亮，非当前项同时移除 `aria-current`。源码 `5779637` 已发布为 Workbench `v0.1.0-test.oms-v1.22@sha256:d9b11412c72a6d4b9d9a9aa8c8786855e4e8f5219503edb8514554c0966a4f42`，静态资源为 `20261022.2`；备份、D1 检查、17/17 容器健康和公网只读验收通过。[验证报告](./docs/reports/oms-phase1-single-current-navigation-publication-20261022.md)
 
 2026-10-22 BF-168：用户确认 BF-167 工作台候选可作为 OMS 一期后续改进基线。侧栏业务组可同时展开，当前页面与展开状态分离；分页条数选择器固定完整宽度，文字和箭头都保持在控件边框内。`main@32d9597` 已发布为 Workbench `v0.1.0-test.oms-v1.21@sha256:6dcba5542c68b0c7970c80cee4282fc3560ece7efab197a87ac0e9088c65e423`，静态资源为 `20261022.1`；升级前备份、候选预检、D1 检查、17/17 容器健康和公网正式登录／五 Owner 只读复验通过，仅替换 Unified Workbench。[验证报告](./docs/reports/oms-phase1-mvp-review-ui-publication-20261022.md)
