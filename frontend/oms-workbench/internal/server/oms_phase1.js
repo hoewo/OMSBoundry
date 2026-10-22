@@ -169,7 +169,7 @@
     closeInlineFilter();
     const selectedTab=tab||activeTabs[name]||defaultTabs[name]||'';
     for(const page of root.querySelectorAll('[data-oms-v1-page]'))page.classList.toggle('is-active',page.dataset.omsV1Page===name);
-    for(const button of root.querySelectorAll('[data-oms-v1-nav]')){const active=button.dataset.omsV1Nav===name;button.classList.toggle('is-active',active);button.setAttribute('aria-current',active?'page':'false')}
+    for(const button of root.querySelectorAll('[data-oms-v1-nav]')){const active=button.dataset.omsV1Nav===name;button.classList.toggle('is-active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current')}
     for(const group of root.querySelectorAll('[data-oms-v1-nav-group]')){const active=group.dataset.omsV1NavGroup===name;group.classList.toggle('is-active',active);if(active)setNavGroupExpanded(group,true)}
     for(const group of root.querySelectorAll('[data-oms-v1-mobile-subnav]'))group.classList.toggle('is-active',group.dataset.omsV1MobileSubnav===name);
     root.querySelector('.oms-v1__mobile-subnav')?.classList.toggle('is-visible',Boolean(defaultTabs[name]));
@@ -181,7 +181,7 @@
   function activateTab(scope,name){
     if(!scope)return;
     const pageName=scope.dataset.omsV1Page;if(!pageName)return;activeTabs[pageName]=name;
-    for(const button of root.querySelectorAll('[data-oms-v1-tab-page="'+pageName+'"]')){const active=button.dataset.omsV1Tab===name;button.classList.toggle('is-active',active);button.setAttribute('aria-current',active?'page':'false')}
+    for(const button of root.querySelectorAll('[data-oms-v1-tab]')){const active=button.dataset.omsV1TabPage===pageName&&button.dataset.omsV1Tab===name;button.classList.toggle('is-active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current')}
     for(const panel of scope.querySelectorAll(':scope > [data-oms-v1-tab-panel]'))panel.classList.toggle('is-active',panel.dataset.omsV1TabPanel===name);
     contextGroup.textContent=labels[pageName]||'OMS';
     contexts.textContent=tabLabels[name]||name;

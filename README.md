@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-22 BF-169：用户进一步明确“可同时展开”不等于“可同时选中”。Workbench 已在本地改为跨全部业务组统一计算二级导航状态，多个组保持展开时只有当前页面对应的一项高亮，非当前项同时移除 `aria-current`；静态资源为 `20261022.2`，本地测试和桌面浏览器复核通过，尚未登记为公网发布。
+
 2026-10-22 BF-168：用户确认 BF-167 工作台候选可作为 OMS 一期后续改进基线。侧栏业务组可同时展开，当前页面与展开状态分离；分页条数选择器固定完整宽度，文字和箭头都保持在控件边框内。`main@32d9597` 已发布为 Workbench `v0.1.0-test.oms-v1.21@sha256:6dcba5542c68b0c7970c80cee4282fc3560ece7efab197a87ac0e9088c65e423`，静态资源为 `20261022.1`；升级前备份、候选预检、D1 检查、17/17 容器健康和公网正式登录／五 Owner 只读复验通过，仅替换 Unified Workbench。[验证报告](./docs/reports/oms-phase1-mvp-review-ui-publication-20261022.md)
 
 2026-10-21 BF-167：OMS 一期已在独立分支 `codex/oms1-mvp-review-ui` 完成本地界面候选。实现参考 `/mvp-review` 的导航、层级和操作方式，将筛选改为列表内就地展开，导出保留居中确认并继承当前搜索／筛选／排序，补齐项目与甲乙方主体导出、项目摘要、统一排序分页和不遮挡主菜单的项目详情。该候选只改 Workbench 表现层，未发布到 `oatest`，也没有改变 Owner、API、schema、Grant、精确金额或业务数据。

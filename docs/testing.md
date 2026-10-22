@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-22 BF-169 OMS 导航唯一选中项已完成本地验证：`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...`、`go vet` 和 `git diff --check` 通过。桌面浏览器依次展开项目经营、应收回款和应付支付后，DOM 复核 `expanded=[projects,receivable,payable]`、`activeGroups=[payable]`、桌面 `activeSecondary=[incoming-invoices]`，证明多个分组保持展开且只有当前“发票管理”被选中。静态资源为 `20261022.2`；本条只登记本地证据，不宣称公网已经发布。
+
 2026-10-22 BF-168 OMS 导航与分页控件已发布并验证：本地 `node --check`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...`、`go vet`、`git diff --check` 和桌面视觉验收通过；三个业务组可同时展开，分页标签与箭头位于统一触发器边界内。公网只替换 Workbench 为 `v0.1.0-test.oms-v1.21@sha256:6dcba5542c68b0c7970c80cee4282fc3560ece7efab197a87ac0e9088c65e423`，备份为 `/var/backups/omsbizfoundry/20261022T021316Z`；候选预检、D1 `check`、17/17 容器健康、正式登录、五次 Gateway 授权与 Owner 只读复验通过，业务写入为 0。公网 HTML SHA-256 为 `a9fd8b254d716d1deeeecc86b869eb39721f84d044a549f3ff73dc7239064e0b`。[报告](./reports/oms-phase1-mvp-review-ui-publication-20261022.md)
 
 2026-10-21 BF-167 OMS 一期列表工作台候选已完成本地验证：静态资源更新为 `20261021.2`；`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...` 和 `git diff --check` 通过。本地 `127.0.0.1:18183` 浏览器确认新侧栏与面包屑、项目四项摘要、表头排序、分页、就地展开／收起筛选和居中导出条件均可达；预览环境没有连接真实 Owner，因此空列表只用于交互复核，不外推真实数据结论。本候选尚未发布到公网。[报告](./reports/oms-phase1-mvp-review-ui-local-validation-20261021.md)
