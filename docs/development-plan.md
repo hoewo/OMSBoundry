@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-22 BF-175 当前实施：停止旧仿 OA／旧 OMS 的活动产品面，同时不动后端 Owner。Gateway 收口旧入口并拒绝旧静态资源；Workbench 把登录从旧 75 KB 立项运行时拆为专用轻量脚本，把附件从旧 2.5 MB OA React bundle 拆为独立 Evidence bundle并保持首次使用按需加载。完成本地 Go、前端、Python 验收后，需要同时发布 Gateway 与 Workbench，并用公网未登录登录页、正式登录、旧入口重定向、旧资源 `410`、Evidence bundle、D1 全栈和 17/17 健康共同验收；未经该批公网证据前只能称发布候选。
+2026-10-22 BF-175 已完成并发布：旧仿 OA／旧 OMS 已停止公开运行，后端 Owner 保持不变。Gateway 收口旧入口并拒绝旧静态资源；Workbench 把登录从旧 75 KB 立项运行时拆为专用轻量脚本，把附件从旧 2.5 MB OA React bundle 拆为独立 Evidence bundle并保持首次使用按需加载。源码为 `main@6ccad2d`，公网 Gateway／Workbench 为 `v0.1.0-test.oms-v1.26`；升级前备份 `20261022T071636Z`、候选预检、D1 全栈、17/17 健康、匿名／正式登录、旧入口、旧资源、Evidence bundle 与五 Owner 只读验收均通过。下一步继续优化当前 OMS，不再维护旧界面的活动部署路径。[发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)
 
 2026-10-22 BF-174 已修复并发布：在用户确认 BF-173 体感不明显后，公网测量定位到首屏仍同步加载 2,512,394 bytes 的附件 React 运行时，单资源约 5.15 秒。该运行时现改为第一次附件／预览动作时按需加载，首屏版本化 OMS 资源合计 234,029 bytes 并启用 immutable 缓存；同时按 Project `client_party`／活动 `contractor-party` 关系拆分甲方和施工方列表。源码提交为 `105b7c1`，公网 Workbench 为 `v0.1.0-test.oms-v1.25@sha256:d9df134e7bcadf70418058bba5d84f4646ae96ae28a509bbb9230883aba7e3f5`，静态资源为 `20261022.5`。备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读验收通过；当前数据角色投影为甲方 `甲方1`、施工方空集合。下一步由用户实际刷新体验确认；如果仍慢，再基于浏览器网络瀑布继续定位 Owner 响应，不回退数据所有权边界。[发布证据](./reports/oms-phase1-critical-path-and-party-role-publication-20261022.md)
 

@@ -17,7 +17,7 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
-2026-10-22 BF-175：旧仿 OA 与旧 OMS 已从活动产品边界移除。旧入口统一转回当前 OMS，旧界面静态资源在 Gateway 返回 `410 Gone`；当前 OMS 登录、经营工作面和 Evidence 附件能力分别使用自身的版本化资源，不再运行旧 OA React／立项运行时。历史源码仍保留作追溯，IAM、Gateway、Evidence 和业务 Owner 均继续运行，未删除任何业务数据或后端能力。
+2026-10-22 BF-175：旧仿 OA 与旧 OMS 已从活动产品边界移除并发布到 `oatest`。旧入口统一转回当前 OMS，旧界面静态资源在 Gateway 返回 `410 Gone`；当前 OMS 登录、经营工作面和 Evidence 附件能力分别使用自身的版本化资源，不再运行旧 OA React／立项运行时。历史源码仍保留作追溯，IAM、Gateway、Evidence 和业务 Owner 均继续运行，未删除任何业务数据或后端能力。公网 Gateway／Workbench 为 `v0.1.0-test.oms-v1.26`，D1 全栈与 17/17 容器健康通过。[发布报告](./docs/reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)
 
 2026-10-22 BF-174：已把 OMS 刷新关键路径上的附件运行时移出首屏。之前即使 BF-173 已减少授权轮次，页面仍会同步下载 2,512,394 bytes、实测约 5.15 秒的附件脚本；现在首屏只同步加载 OMS CSS、分页和主脚本（合计 234,029 bytes），附件／预览首次使用时再加载，并为版本化资源设置 immutable 缓存。甲方与施工方列表也改为按真实项目关系投影：当前公网数据验证为甲方 `甲方1`、施工方空集合，不再把三个甲方误显示为施工方。公网 Workbench 已更新到 `v0.1.0-test.oms-v1.25@sha256:d9df134e7bcadf70418058bba5d84f4646ae96ae28a509bbb9230883aba7e3f5`。[发布报告](./docs/reports/oms-phase1-critical-path-and-party-role-publication-20261022.md)
 

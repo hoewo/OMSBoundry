@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-10-22 OMS 一期活动界面基线（BF-175）：旧仿 OA 与旧 OMS 只保留历史源码，不再提供公网入口或可执行静态资源。所有旧入口回到当前 OMS，旧界面资源返回 `410 Gone`。当前 OMS 的登录、业务页面和 Evidence 附件适配分别由自身轻量资源承担，旧 OA React／立项运行时不再被当前页面加载。这里停止的是旧前端产品面，不是 IAM、Gateway、Evidence 或各事实 Owner；任何数据、权限和文件事实均不因前端下线而删除。
+2026-10-22 OMS 一期活动界面基线（BF-175）：旧仿 OA 与旧 OMS 只保留历史源码，不再提供公网入口或可执行静态资源。所有旧入口回到当前 OMS，旧界面资源返回 `410 Gone`。当前 OMS 的登录、业务页面和 Evidence 附件适配分别由自身轻量资源承担，旧 OA React／立项运行时不再被当前页面加载。这里停止的是旧前端产品面，不是 IAM、Gateway、Evidence 或各事实 Owner；任何数据、权限和文件事实均不因前端下线而删除。该基线已由公网 `v0.1.0-test.oms-v1.26`、D1 检查和 17/17 健康验证。[发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)
 
 2026-10-22 OMS 一期首屏与主体角色基线（BF-174）：刷新体验要同时控制授权轮次和首屏资源体积；附件／预览专用运行时不得阻塞每次工作台启动，应在首次需要时按需加载并由版本化 immutable 缓存复用。甲方、施工方是 Party 在具体 OMS 项目中的角色，不是 Party Directory 的永久分类，也不是“创建主体时所在的页面”；角色列表只显示已经形成对应项目关系的主体，未关联主体继续作为选择候选存在。该基线已发布为公网 Workbench v1.25，并取代 BF-157 中两页展示全部候选主体的页面规则。[发布证据](./reports/oms-phase1-critical-path-and-party-role-publication-20261022.md)
 
