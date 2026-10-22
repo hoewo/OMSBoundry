@@ -38,11 +38,8 @@ export {createProductionPersonnelWorkspace} from './production-personnel-workspa
 export {createProductionStageWorkspace} from './production-stage-workspace'
 dayjs.locale('zh-cn')
 
-// The OMS phase-1 surface is intentionally plain DOM rather than a second
-// React application, but it must use the same audited upload implementation
-// as the reference OA workspaces. Expose a narrow factory from this already
-// loaded bundle instead of duplicating OSS signing or leaking credentials into
-// the Workbench script.
+// Kept for the retired reference OA source and its internal tests. The current
+// OMS uses evidence-transfer.ts and never loads this React workspace bundle.
 export function createEvidenceTransfer(evidenceFetch:(input:RequestInfo|URL,options?:RequestInit)=>Promise<Response>) {
   const api=createFetchFileTransferApi({baseUrl:'',fetcher:evidenceFetch})
   return new FileTransferClient({

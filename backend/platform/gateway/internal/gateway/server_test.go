@@ -290,7 +290,7 @@ func TestOMSReferenceEntryRedirectsThroughWorkbenchPreview(t *testing.T) {
 		if response.Code != http.StatusSeeOther {
 			t.Fatalf("%s returned %d", entry, response.Code)
 		}
-		if location := response.Header().Get("Location"); location != "/workbench/?preview=oa&view=oms-reference" {
+		if location := response.Header().Get("Location"); location != "/workbench/?view=oms-v1" {
 			t.Fatalf("%s redirected to %q", entry, location)
 		}
 	}
@@ -325,7 +325,7 @@ func TestOMSPhase1EntryRedirectsToProtectedWorkbench(t *testing.T) {
 	}
 }
 
-func TestPrimaryAndLegacyEntriesKeepExplicitWorkbenchSurfaces(t *testing.T) {
+func TestPrimaryAndRetiredEntriesResolveToCurrentOMS(t *testing.T) {
 	publicKey, _, _ := ed25519.GenerateKey(rand.Reader)
 	path := writeKeys(t, publicKey)
 	iam := httptest.NewServer(http.NotFoundHandler())
@@ -344,8 +344,13 @@ func TestPrimaryAndLegacyEntriesKeepExplicitWorkbenchSurfaces(t *testing.T) {
 		location string
 	}{
 		{path: "/", location: "/workbench/?view=oms-v1"},
-		{path: "/legacy", location: "/workbench/?view=legacy"},
-		{path: "/legacy/", location: "/workbench/?view=legacy"},
+		{path: "/legacy", location: "/workbench/?view=oms-v1"},
+		{path: "/legacy/", location: "/workbench/?view=oms-v1"},
+		{path: "/oms", location: "/workbench/?view=oms-v1"},
+		{path: "/oms/", location: "/workbench/?view=oms-v1"},
+		{path: "/workbench/?view=legacy", location: "/workbench/?view=oms-v1"},
+		{path: "/workbench/?view=oms-reference", location: "/workbench/?view=oms-v1"},
+		{path: "/workbench/?preview=oa&view=oms-v1", location: "/workbench/?view=oms-v1"},
 	} {
 		request := httptest.NewRequest(http.MethodGet, "http://gateway.test"+item.path, nil)
 		response := httptest.NewRecorder()
@@ -356,6 +361,19 @@ func TestPrimaryAndLegacyEntriesKeepExplicitWorkbenchSurfaces(t *testing.T) {
 	}
 	if got := safeReturnPath("https://attacker.example/"); got != "/workbench/?view=oms-v1" {
 		t.Fatalf("unsafe return path fell back to %q", got)
+	}
+	for _, path := range []string{
+		"/workbench/assets/reference-oa-react-bidding.js",
+		"/workbench/assets/reference-oa-initiation-runtime.js",
+		"/workbench/assets/reference-oms-demo.js",
+		"/workbench/assets/workbench.js",
+	} {
+		request := httptest.NewRequest(http.MethodGet, "http://gateway.test"+path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusGone {
+			t.Fatalf("retired asset %s returned status=%d", path, response.Code)
+		}
 	}
 }
 
@@ -375,7 +393,7 @@ func TestWorkbenchAssetsDoNotConsumeBusinessRequestBudget(t *testing.T) {
 	defer server.Close()
 	client := clientWithJar(t)
 	for index := 0; index < 20; index++ {
-		response := get(t, client, server.URL+"/workbench/assets/reference-oa-business.css", http.StatusOK)
+		response := get(t, client, server.URL+"/workbench/assets/oms-phase1.css?v=test", http.StatusOK)
 		_ = response.Body.Close()
 	}
 	for index := 0; index < 10; index++ {

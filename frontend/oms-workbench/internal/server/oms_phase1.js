@@ -117,8 +117,8 @@
   function assertExternalCounterparty(party,label){if(!party||party.status!=='active')throw new Error('请选择有效'+label);if(!isExternalParty(party))throw new Error(label+'不能是本方经营主体，请选择真实往来主体')}
   function isOMSProject(item){return Array.isArray(item?.project_type_keys)&&item.project_type_keys.includes('operations')}
   async function ensureEvidenceRuntime(){
-    if(globalThis.ReferenceOAReactBidding?.createEvidenceTransfer)return globalThis.ReferenceOAReactBidding;
-    if(!evidenceRuntimeTask)evidenceRuntimeTask=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='assets/reference-oa-react-bidding.js?v=20261022.5';script.async=true;script.addEventListener('load',()=>globalThis.ReferenceOAReactBidding?.createEvidenceTransfer?resolve(globalThis.ReferenceOAReactBidding):reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});script.addEventListener('error',()=>reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});document.head.append(script)}).catch(error=>{evidenceRuntimeTask=null;throw error});
+    if(globalThis.OMSPhase1Evidence?.createEvidenceTransfer)return globalThis.OMSPhase1Evidence;
+    if(!evidenceRuntimeTask)evidenceRuntimeTask=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='assets/oms-phase1-evidence.js?v=20261022.6';script.async=true;script.addEventListener('load',()=>globalThis.OMSPhase1Evidence?.createEvidenceTransfer?resolve(globalThis.OMSPhase1Evidence):reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});script.addEventListener('error',()=>reject(new Error('附件功能暂不可用，请稍后重试')),{once:true});document.head.append(script)}).catch(error=>{evidenceRuntimeTask=null;throw error});
     return evidenceRuntimeTask;
   }
   function evidenceTransfer(){

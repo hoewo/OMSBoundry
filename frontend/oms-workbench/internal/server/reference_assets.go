@@ -93,6 +93,19 @@ var omsPhase1JS string
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string
 
+// omsPhase1LoginJS is the current product login runtime. It intentionally owns
+// only CSRF refresh and IAM form behavior so the retired OA initiation runtime
+// is not loaded on the OMS login path.
+//
+//go:embed oms_phase1_login.js
+var omsPhase1LoginJS string
+
+// omsPhase1EvidenceJS is a narrow current-OMS file transfer bundle. It keeps
+// Evidence and bounded OSS upload support without loading the retired OA UI.
+//
+//go:embed oms_phase1_evidence.js
+var omsPhase1EvidenceJS string
+
 // businessViewsHTML contains the remaining reference OA route surfaces. It is
 // kept outside server.go so each source-level page can be reviewed in isolation.
 //

@@ -107,10 +107,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/workbench/?view=oms-v1", http.StatusSeeOther)
 		return
 	case (r.URL.Path == "/oms" || r.URL.Path == "/oms/") && (r.Method == http.MethodGet || r.Method == http.MethodHead):
-		// The first OMS slice is an explicitly read-only Workbench composition.
-		// Keep the alias at the versioned Gateway boundary instead of bypassing it
-		// with a second public Nginx upstream.
-		http.Redirect(w, r, "/workbench/?preview=oa&view=oms-reference", http.StatusSeeOther)
+		// The old read-only OMS prototype is retired. Keep the historical alias
+		// stable, but send it to the current protected OMS instead of booting the
+		// reference UI and its legacy runtime.
+		http.Redirect(w, r, "/workbench/?view=oms-v1", http.StatusSeeOther)
 		return
 	case (r.URL.Path == "/oms-v1" || r.URL.Path == "/oms-v1/") && (r.Method == http.MethodGet || r.Method == http.MethodHead):
 		// OMS phase 1 is a protected Workbench composition. Unlike the historical
@@ -120,10 +120,19 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/workbench/?view=oms-v1", http.StatusSeeOther)
 		return
 	case (r.URL.Path == "/legacy" || r.URL.Path == "/legacy/") && (r.Method == http.MethodGet || r.Method == http.MethodHead):
-		// The former OA workbench and the OMS reference prototype remain
-		// available for comparison, but are deliberately outside the current
-		// product's primary navigation.
-		http.Redirect(w, r, "/workbench/?view=legacy", http.StatusSeeOther)
+		// The former OA workbench is no longer a public product surface.
+		http.Redirect(w, r, "/workbench/?view=oms-v1", http.StatusSeeOther)
+		return
+	case (r.URL.Path == "/workbench" || r.URL.Path == "/workbench/") && (r.Method == http.MethodGet || r.Method == http.MethodHead) && retiredWorkbenchView(r):
+		// Prevent direct query-string access from bypassing the retired public
+		// aliases. Source remains available for archaeology, not as a live UI.
+		http.Redirect(w, r, "/workbench/?view=oms-v1", http.StatusSeeOther)
+		return
+	case retiredWorkbenchAsset(r.URL.Path) && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+		// Retired UI assets remain in source history but are no longer public
+		// runtime surfaces. This also prevents stale bookmarks from reconstructing
+		// the former OA/OMS prototype outside the current product entry.
+		writeProblem(w, http.StatusGone, "retired_ui_asset", "旧版界面资源已停止提供")
 		return
 	case r.URL.Path == "/gateway/login" && r.Method == http.MethodPost:
 		s.login(w, r)
@@ -172,6 +181,17 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Header.Set("Authorization", "Bearer "+cookie.Value)
 	s.proxies[app.ID].ServeHTTP(w, r)
+}
+
+func retiredWorkbenchView(r *http.Request) bool {
+	view := strings.TrimSpace(r.URL.Query().Get("view"))
+	return r.URL.Query().Get("preview") == "oa" || view == "legacy" || view == "oms-reference"
+}
+
+func retiredWorkbenchAsset(path string) bool {
+	return path == "/workbench/assets/workbench.js" ||
+		strings.HasPrefix(path, "/workbench/assets/reference-oa-") ||
+		strings.HasPrefix(path, "/workbench/assets/reference-oms-demo.")
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {

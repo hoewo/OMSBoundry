@@ -58,6 +58,13 @@ def main():
     client = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar)
     )
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+            return None
+
+    redirect_client = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), NoRedirect()
+    )
 
     def request(path, method="GET", body=None, headers=None, expected=(200,)):
         try:
@@ -75,8 +82,62 @@ def main():
                     raise RuntimeError(f"unexpected HTTP {response.status} for {path}")
                 return response.status, data, response.headers
         except urllib.error.HTTPError as error:
-            error.read()
+            data = error.read()
+            if error.code in expected:
+                return error.code, data, error.headers
             raise RuntimeError(f"HTTP {error.code} for {path}") from None
+
+    _, login_page, _ = request("/workbench/?view=oms-v1")
+    for marker in (
+        b"data-oms-login",
+        b"assets/oms-phase1-login.css?v=20261022.6",
+        b"assets/oms-phase1-login.js?v=20261022.6",
+    ):
+        if marker not in login_page:
+            raise RuntimeError(f"OMS login page is missing current asset marker: {marker!r}")
+    for retired in (
+        b"assets/reference-oa-initiation-runtime.js",
+        b"assets/reference-oa-login.js",
+        b"assets/reference-oa-login.css",
+        b"assets/reference-oa-workspace.css",
+        b"assets/reference-oms-demo.css",
+    ):
+        if retired in login_page:
+            raise RuntimeError(f"OMS login page still loads retired runtime: {retired!r}")
+
+    for path in (
+        "/workbench/assets/oms-phase1-login.css?v=20261022.6",
+        "/workbench/assets/oms-phase1-login.js?v=20261022.6",
+    ):
+        _, asset, asset_headers = request(path)
+        if not asset:
+            raise RuntimeError(f"current OMS login asset is empty: {path}")
+        if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
+            raise RuntimeError(f"versioned OMS login asset is not immutable: {path}")
+
+    for path in (
+        "/legacy/",
+        "/oms/",
+        "/workbench/?view=legacy",
+        "/workbench/?view=oms-reference",
+    ):
+        try:
+            redirect_client.open(PUBLIC + path, timeout=30)
+            raise RuntimeError(f"retired surface did not redirect: {path}")
+        except urllib.error.HTTPError as error:
+            error.read()
+            if error.code != 303 or error.headers.get("Location") != "/workbench/?view=oms-v1":
+                raise RuntimeError(f"retired surface does not resolve to current OMS: {path}") from None
+
+    for path in (
+        "/workbench/assets/reference-oa-react-bidding.js",
+        "/workbench/assets/reference-oa-initiation-runtime.js",
+        "/workbench/assets/reference-oms-demo.js",
+        "/workbench/assets/workbench.js",
+    ):
+        status, _, _ = request(path, expected=(410,))
+        if status != 410:
+            raise RuntimeError(f"retired UI asset is still public: {path}")
 
     _, csrf_raw, _ = request("/auth/api/v1/csrf")
     csrf = json.loads(csrf_raw)["csrf_token"]
@@ -104,9 +165,9 @@ def main():
         b"data-oms-v1-nav=\"receivable\"",
         b"data-oms-v1-nav=\"payable\"",
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css?v=20261022.5",
-        b"assets/oms-phase1-pagination.js?v=20261022.5",
-        b"assets/oms-phase1.js?v=20261022.5",
+        b"assets/oms-phase1.css?v=20261022.6",
+        b"assets/oms-phase1-pagination.js?v=20261022.6",
+        b"assets/oms-phase1.js?v=20261022.6",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
@@ -118,19 +179,28 @@ def main():
     )
     if any(marker in page for marker in eager_legacy_assets):
         raise RuntimeError("OMS v1 page still eagerly loads a legacy runtime asset")
+    if b'href="/legacy/"' in page or b"view=oms-reference" in page:
+        raise RuntimeError("OMS v1 page still advertises a retired public surface")
     if "text/html" not in page_headers.get("Content-Type", ""):
         raise RuntimeError("OMS v1 did not return HTML")
 
     critical_assets = {}
     for path in (
-        "/workbench/assets/oms-phase1.css?v=20261022.5",
-        "/workbench/assets/oms-phase1-pagination.js?v=20261022.5",
-        "/workbench/assets/oms-phase1.js?v=20261022.5",
+        "/workbench/assets/oms-phase1.css?v=20261022.6",
+        "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
+        "/workbench/assets/oms-phase1.js?v=20261022.6",
     ):
         _, asset, asset_headers = request(path)
         if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
             raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
+
+    evidence_path = "/workbench/assets/oms-phase1-evidence.js?v=20261022.6"
+    _, evidence_asset, evidence_headers = request(evidence_path)
+    if evidence_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
+        raise RuntimeError("current OMS Evidence runtime is not immutable")
+    if b"createEvidenceTransfer" not in evidence_asset:
+        raise RuntimeError("current OMS Evidence runtime is missing its narrow factory")
 
     owner_counts = {}
     owner_items = {}
@@ -215,6 +285,7 @@ def main():
                 "owner_reads": owner_counts,
                 "role_projection": role_projection,
                 "critical_assets_bytes": critical_assets,
+                "lazy_evidence_asset_bytes": len(evidence_asset),
                 "operating_party_id": OPERATING_PARTY_ID,
                 "page_sha256": hashlib.sha256(page).hexdigest(),
                 "business_writes": 0,

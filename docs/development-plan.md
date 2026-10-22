@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-175 当前实施：停止旧仿 OA／旧 OMS 的活动产品面，同时不动后端 Owner。Gateway 收口旧入口并拒绝旧静态资源；Workbench 把登录从旧 75 KB 立项运行时拆为专用轻量脚本，把附件从旧 2.5 MB OA React bundle 拆为独立 Evidence bundle并保持首次使用按需加载。完成本地 Go、前端、Python 验收后，需要同时发布 Gateway 与 Workbench，并用公网未登录登录页、正式登录、旧入口重定向、旧资源 `410`、Evidence bundle、D1 全栈和 17/17 健康共同验收；未经该批公网证据前只能称发布候选。
+
 2026-10-22 BF-174 已修复并发布：在用户确认 BF-173 体感不明显后，公网测量定位到首屏仍同步加载 2,512,394 bytes 的附件 React 运行时，单资源约 5.15 秒。该运行时现改为第一次附件／预览动作时按需加载，首屏版本化 OMS 资源合计 234,029 bytes 并启用 immutable 缓存；同时按 Project `client_party`／活动 `contractor-party` 关系拆分甲方和施工方列表。源码提交为 `105b7c1`，公网 Workbench 为 `v0.1.0-test.oms-v1.25@sha256:d9df134e7bcadf70418058bba5d84f4646ae96ae28a509bbb9230883aba7e3f5`，静态资源为 `20261022.5`。备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读验收通过；当前数据角色投影为甲方 `甲方1`、施工方空集合。下一步由用户实际刷新体验确认；如果仍慢，再基于浏览器网络瀑布继续定位 Owner 响应，不回退数据所有权边界。[发布证据](./reports/oms-phase1-critical-path-and-party-role-publication-20261022.md)
 
 2026-10-22 BF-173 已优化并发布：去除 Owner 只读请求在每次页面刷新前的无条件授权；已有 Capability 先直接读取，只有明确凭证失效时才按 Audience 合并换票并重放一次，写入仍强制先授权。六个来源仍并发启动，Project／Party 就绪后先显示可用页面，Billing／Money／Contract 与逐项目汇总随后补齐；重复刷新合并为一轮。源码提交为 `00c5d6b`，公网 Workbench 为 `v0.1.0-test.oms-v1.24@sha256:015ab2b216b47f40d38ac253f89ce8e27afd3fba0c6d6a3a2098cf0c8b3c1054`，静态资源为 `20261022.4`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。当前证据证明请求轮次收敛与渐进可用，尚未完成同一已登录浏览器的前后毫秒基准，下一步由用户实际刷新体验确认，不虚报精确提速比例。[发布证据](./reports/oms-phase1-progressive-refresh-publication-20261022.md)

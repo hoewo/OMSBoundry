@@ -236,7 +236,7 @@ Workbench 页面内“已经进入过某应用”不能当成长期授权。所�
 
 第一版确认保留登录并复用现有 IAM。账号由后台／既有 IAM 开通；部署阶段可以预置验收账号，但不得在 OMS 内增加自注册、匿名管理员或免登录旁路。
 
-公网固定入口链为 `Browser → Nginx → Gateway → IAM → Unified Workbench OMS`。`https://oatest.antuinfo.cn/` 是一期默认产品入口，登录后直接进入 OMS；`/oms-v1/` 保留为同一工作面的显式别名。旧项目立项、项目管理、资料、统计和参考 Demo 统一由 `/legacy/` 进入“旧版工作台”，旧 `/oms/` 只保留为参考 Demo 兼容别名。业务浏览器不得直接访问 Workbench 或各事实应用的内部端口。
+公网固定入口链为 `Browser → Nginx → Gateway → IAM → Unified Workbench OMS`。`https://oatest.antuinfo.cn/` 是一期默认产品入口，登录后直接进入 OMS；`/oms-v1/` 保留为同一工作面的显式别名。旧 `/legacy/`、旧 `/oms/`、旧视图查询均只重定向当前 OMS，旧仿 OA／旧 OMS 静态资源停止公开提供；历史源码可留作追溯，但不再作为活动产品入口。业务浏览器不得直接访问 Workbench 或各事实应用的内部端口。
 
 部署必须通过 Customer Overlay 配置 `OMS_OPERATING_PARTY_ID`，其值是 Party Directory 中本方经营主体当前档案的规范小写 UUID。该配置只声明“本次组合中我方是谁”，不授予任何能力，也不复制主体档案；为空、格式错误、主体停用或不可读取时，所有依赖本方方向的开票／收票新增动作失败关闭。旧 `OMS_QUALIFICATION_PARTY_ID` 只作为已有部署的兼容别名，不能继续用于新配置。只读 Demo／`preview=oa` 不得注入真实本方经营主体 ID。
 

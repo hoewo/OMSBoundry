@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "apps" / "unified-workbench" / "internal" / "server" / "oms_phase1.js"
+SOURCE = ROOT / "frontend" / "oms-workbench" / "internal" / "server" / "oms_phase1.js"
 
 
 class OMSPhase1DependencyBoundaryTests(unittest.TestCase):
