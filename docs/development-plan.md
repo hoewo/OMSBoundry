@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-174 已修复并发布：在用户确认 BF-173 体感不明显后，公网测量定位到首屏仍同步加载 2,512,394 bytes 的附件 React 运行时，单资源约 5.15 秒。该运行时现改为第一次附件／预览动作时按需加载，首屏版本化 OMS 资源合计 234,029 bytes 并启用 immutable 缓存；同时按 Project `client_party`／活动 `contractor-party` 关系拆分甲方和施工方列表。源码提交为 `105b7c1`，公网 Workbench 为 `v0.1.0-test.oms-v1.25@sha256:d9df134e7bcadf70418058bba5d84f4646ae96ae28a509bbb9230883aba7e3f5`，静态资源为 `20261022.5`。备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读验收通过；当前数据角色投影为甲方 `甲方1`、施工方空集合。下一步由用户实际刷新体验确认；如果仍慢，再基于浏览器网络瀑布继续定位 Owner 响应，不回退数据所有权边界。[发布证据](./reports/oms-phase1-critical-path-and-party-role-publication-20261022.md)
+
 2026-10-22 BF-173 已优化并发布：去除 Owner 只读请求在每次页面刷新前的无条件授权；已有 Capability 先直接读取，只有明确凭证失效时才按 Audience 合并换票并重放一次，写入仍强制先授权。六个来源仍并发启动，Project／Party 就绪后先显示可用页面，Billing／Money／Contract 与逐项目汇总随后补齐；重复刷新合并为一轮。源码提交为 `00c5d6b`，公网 Workbench 为 `v0.1.0-test.oms-v1.24@sha256:015ab2b216b47f40d38ac253f89ce8e27afd3fba0c6d6a3a2098cf0c8b3c1054`，静态资源为 `20261022.4`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。当前证据证明请求轮次收敛与渐进可用，尚未完成同一已登录浏览器的前后毫秒基准，下一步由用户实际刷新体验确认，不虚报精确提速比例。[发布证据](./reports/oms-phase1-progressive-refresh-publication-20261022.md)
 
 2026-10-22 BF-172 已修复并发布：项目详情打开时，任一侧栏一级／二级导航都会先统一关闭详情、恢复滚动、清除项目选择并使旧详情请求失效，再显示目标页面；点击当前业务组也不再被详情层截留。源码修复提交为 `149cfff`，公网 Workbench 为 `v0.1.0-test.oms-v1.23@sha256:3b78fdbeeb273723340b50aa509fcca1aa3620919212f7480ddd590cb95cebc1`，静态资源为 `20261022.3`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。下一步由用户直接刷新公网或本地页面，打开项目详情后逐项切换侧栏做人工体验确认。[发布证据](./reports/oms-phase1-project-detail-navigation-publication-20261022.md)

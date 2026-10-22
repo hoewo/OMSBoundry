@@ -133,6 +133,7 @@ def main():
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
 
     owner_counts = {}
+    owner_items = {}
     for application, (path, list_key) in APPLICATIONS.items():
         form = urllib.parse.urlencode({"csrf_token": csrf}).encode()
         request(
@@ -161,6 +162,36 @@ def main():
             if not isinstance(items, list):
                 raise RuntimeError(f"{application} response has no item list")
             owner_counts[application] = len(items)
+            owner_items[application] = items
+
+    operation_projects = [
+        item
+        for item in owner_items["project-workspace"]
+        if "operations" in (item.get("project_type_keys") or [])
+    ]
+    client_ids = {
+        (item.get("client_party") or {}).get("party_id")
+        for item in operation_projects
+        if (item.get("client_party") or {}).get("party_id")
+    }
+    contractor_ids = {
+        link.get("resource_id")
+        for item in operation_projects
+        for link in (item.get("resource_links") or [])
+        if link.get("target_service") == "party-directory"
+        and link.get("resource_type") == "party"
+        and link.get("relation_key") == "contractor-party"
+        and not link.get("unlinked_at")
+        and link.get("resource_id")
+    }
+    party_names = {
+        item.get("id"): item.get("legal_name")
+        for item in owner_items["party-directory"]
+    }
+    role_projection = {
+        "clients": sorted(party_names.get(item, item) for item in client_ids),
+        "contractors": sorted(party_names.get(item, item) for item in contractor_ids),
+    }
 
     _, party_raw, _ = request("/party/api/v1/parties/" + OPERATING_PARTY_ID)
     party = json.loads(party_raw)
@@ -182,6 +213,7 @@ def main():
                 "native_login": True,
                 "gateway_authorizations": sorted(APPLICATIONS),
                 "owner_reads": owner_counts,
+                "role_projection": role_projection,
                 "critical_assets_bytes": critical_assets,
                 "operating_party_id": OPERATING_PARTY_ID,
                 "page_sha256": hashlib.sha256(page).hexdigest(),

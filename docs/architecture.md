@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-174 Workbench 资源与角色投影：服务端渲染的 OMS 主入口只同步装配 OMS 样式、分页和业务脚本；Evidence 交互复用的旧 React 运行时由 Workbench 在首次附件动作时动态加载，Gateway CSRF 读取由 OMS 自身的最小客户端完成。带版本查询的静态资源使用长期 immutable 缓存，未带版本资源保持原缓存策略。主体页面从 Project 投影角色 ID 后再与内存中的 Party Directory 响应连接：`client_party.party_id` 形成甲方集合，活动 `contractor-party` 资源关系形成施工方集合；Party Directory 继续拥有主体档案，Project Workspace 继续拥有项目关系。该变化没有新增事实服务、数据库、共享表、API、Capability 或 Grant。
+
 2026-10-22 BF-173 Workbench 渐进装配：Project、Party、Billing、Money、Contract 与 Evidence 的 Owner 边界和读取端点保持不变。Workbench 可以并发发起读取并把 Project／Party 组成第一阶段投影，再异步合并票据、资金、合同和逐项目经营摘要；阶段化渲染只是装配顺序，不产生新的事实副本。Gateway 签发的 HttpOnly Capability Cookie 是只读暖刷新可复用的既有安全上下文，明确凭证失效后才按 Audience 重新授权且最多重放一次；写请求仍先强制授权。同一 Audience 的并发授权和同一页面的重复刷新分别由内存中的在途任务合并，任务结束即释放，不形成跨刷新业务缓存。该变化没有新增服务、数据库、共享表、API、Capability 或 Grant。
 
 2026-10-22 BF-172 Workbench 详情导航投影：项目详情继续由 Workbench 请求时组合 Project、Contract、Billing、Money、Party 与 Evidence，不成为新路由或事实 Owner。详情可见性、当前项目 ID 和异步读取令牌组成同一个前端生命周期；全局导航切换先原子式结束该生命周期，再激活目标页面，从而避免旧详情遮挡新页面或晚到响应污染当前视图。侧栏展开与唯一选中语义继续分别服从 BF-168／BF-169。该变化没有新增服务、数据库、共享表、API、Capability 或 Grant。
