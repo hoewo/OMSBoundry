@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发决策总表
 
-2026-10-22 BF-176（已接受／待发布／甲方候选档案恢复）：BF-174 把甲方和施工方同时收缩为“已有项目关系”属于过度修正。甲方管理是新建项目的前置档案入口，必须显示全部未被明确识别为仅施工方的人工录入外部 Party；已有 `client_party` 关系只决定关联项目数，不决定甲方是否可见。施工方管理继续以活动 `contractor-party` 关系为准，避免把甲方集合复制到施工方页；同一主体存在真实双角色关系时可同时出现。当前 Party Directory 没有持久化未关联施工方候选角色，因此本决定不虚构该能力，也不使用浏览器状态作为事实。该决定取代 BF-174 的甲方可见性部分，不改变施工方规则、Owner、API、schema、Capability、Grant、事实所有权或数据。
+2026-10-22 BF-176（已接受／已发布／甲方候选档案恢复）：BF-174 把甲方和施工方同时收缩为“已有项目关系”属于过度修正。甲方管理是新建项目的前置档案入口，必须显示全部未被明确识别为仅施工方的人工录入外部 Party；已有 `client_party` 关系只决定关联项目数，不决定甲方是否可见。施工方管理继续以活动 `contractor-party` 关系为准，避免把甲方集合复制到施工方页；同一主体存在真实双角色关系时可同时出现。当前 Party Directory 没有持久化未关联施工方候选角色，因此本决定不虚构该能力，也不使用浏览器状态作为事实。该决定取代 BF-174 的甲方可见性部分，不改变施工方规则、Owner、API、schema、Capability、Grant、事实所有权或数据。[公网发布证据](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 
 2026-10-22 BF-175（已接受／已发布／旧仿 OA 与旧 OMS 停止公开运行）：旧 OA 工作台、旧 OMS 参考 Demo 和当前 OMS 不再共享活动入口或浏览器运行时。Gateway 必须把 `/legacy[/]`、旧 `/oms[/]`、`view=legacy`、`view=oms-reference` 与 `preview=oa` 收敛到 `/workbench/?view=oms-v1`，并对旧 `reference-oa-*`、`reference-oms-demo.*` 和 `workbench.js` 公网资源返回 `410 Gone`。当前 OMS 登录只加载自己的 CSRF／IAM 登录脚本；附件上传、下载和预览通过独立、按需、版本化的 `oms-phase1-evidence` bundle 复用 Evidence SDK 机制，不再执行旧 OA React 或立项运行时。旧源码允许留在仓库作为历史审计材料，但不得从公网重新装配为产品。该决定取代 BF-159 中“旧版工作台与参考 Demo 保留公开入口”的部分；不停止 IAM、Gateway、Evidence 或任何事实 Owner，不删除业务数据，也不改变 API、schema、Capability、Grant、数据所有权或部署拓扑。[公网发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)
 
