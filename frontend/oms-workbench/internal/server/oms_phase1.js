@@ -15,6 +15,8 @@
   const contextGroup=root.querySelector('[data-oms-v1-context-group]');
   const contexts=root.querySelector('[data-oms-v1-context]');
   const sync=root.querySelector('[data-oms-v1-sync]');
+  const authorizationTasks=new Map();
+  let loadTask=null;
   let activeFilterPanel=null,activeFilterButton=null;
   const csrfProvider=globalThis.ReferenceOAGatewayCSRF?new globalThis.ReferenceOAGatewayCSRF({route:root.dataset.identityRoutePrefix}):null;
   const app=id=>{const node=root.querySelector('[data-oms-v1-application="'+id+'"]');return node?{id,route:node.dataset.omsV1Route}:null};
@@ -57,25 +59,31 @@
   async function authorize(id,force=false){
     if(force)state.authorized.delete(id);
     if(state.authorized.has(id))return;
-    const config=app(id);if(!config)throw new Error('相关功能暂不可用，请联系管理员');
-    if(!csrfProvider)throw new Error('页面状态已过期，请刷新后重试');
-    const token=await csrfProvider.token();
-    const body=new URLSearchParams({csrf_token:token});
-    const response=await fetch('/gateway/authorize/'+encodeURIComponent(id),{method:'POST',credentials:'same-origin',body,redirect:'follow'});
-    if(!response.ok)await problem(response);
-    state.authorized.add(id);
+    if(authorizationTasks.has(id))return authorizationTasks.get(id);
+    const task=(async()=>{
+      const config=app(id);if(!config)throw new Error('相关功能暂不可用，请联系管理员');
+      if(!csrfProvider)throw new Error('页面状态已过期，请刷新后重试');
+      const token=await csrfProvider.token();
+      const body=new URLSearchParams({csrf_token:token});
+      const response=await fetch('/gateway/authorize/'+encodeURIComponent(id),{method:'POST',credentials:'same-origin',body,redirect:'follow'});
+      if(!response.ok)await problem(response);
+      state.authorized.add(id);
+    })();
+    authorizationTasks.set(id,task);
+    try{return await task}finally{if(authorizationTasks.get(id)===task)authorizationTasks.delete(id)}
   }
   async function api(id,path,options={}){
     const config=app(id);if(!config||!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.route||''))throw new Error('相关功能暂不可用，请联系管理员');
     const evidencePath=id==='evidence-service'&&/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(path);
     if((!evidencePath&&!/^\/api\/v1\/[A-Za-z0-9_/?=&%.-]+$/.test(path))||path.includes('..'))throw new Error('业务请求路径无效');
     const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD',request=()=>fetch(config.route+path,{...options,credentials:'same-origin',redirect:'manual',headers:{Accept:'application/json',...(options.headers||{})}});
-    await authorize(id,mutating);
+    if(mutating)await authorize(id,true);
     let response=await request();
     if(credentialRedirect(response)){state.authorized.delete(id);await authorize(id,true);response=await request()}
     if(response.status===401){const error=await responseProblem(response);if(error.code==='credential_required'){state.authorized.delete(id);await authorize(id,true);response=await request()}else throw error}
     if(credentialRedirect(response))throw new Error('页面状态已过期，请刷新后重试');
     if(!response.ok)await problem(response);
+    state.authorized.add(id);
     return response.status===204?{}:response.json();
   }
   async function evidenceFetch(path,options={}){
@@ -83,12 +91,13 @@
     if(!config||!/^\/evidence(?:\/|$)/.test(config.route||''))throw new Error('附件功能暂不可用，请稍后重试');
     if(!/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(value)||value.includes('..'))throw new Error('文件请求路径无效');
     const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD';
-    await authorize('evidence-service',mutating);
+    if(mutating)await authorize('evidence-service',true);
     const headers=new Headers(options.headers||{});if(!headers.has('Accept'))headers.set('Accept','application/json');
     const request=()=>fetch(config.route+value,{...options,credentials:'same-origin',redirect:'manual',headers});let response=await request();
     if(credentialRedirect(response)){state.authorized.delete('evidence-service');await authorize('evidence-service',true);response=await request()}
     if(response.status===401){const error=await responseProblem(response.clone());if(error.code==='credential_required'){state.authorized.delete('evidence-service');await authorize('evidence-service',true);response=await request()}}
     if(credentialRedirect(response))throw new Error('页面状态已过期，请刷新后重试');
+    if(response.ok)state.authorized.add('evidence-service');
     return response;
   }
   const pagination=globalThis.OMSPhase1Pagination;
@@ -736,27 +745,30 @@
   async function loadCommercialSummaries(){state.commercial.clear();if(!state.projects.length)return;let cursor=0,failed=0;const worker=async()=>{while(cursor<state.projects.length){const project=state.projects[cursor++];try{state.commercial.set(project.id,await api('project-workspace','/api/v1/projects/'+encodeURIComponent(project.id)+'/commercial-summary'))}catch{failed++}}};await Promise.all(Array.from({length:Math.min(6,state.projects.length)},worker));if(failed)state.errors.push('经营汇总：'+failed+' 个项目暂不可用')}
   async function loadOperatingParty(){const id=root.dataset.operatingPartyId||'';state.operatingParty=null;if(!id)return;try{state.operatingParty=await partyByID(id)}catch(error){state.errors.push(sourceIssue('本公司信息',error))}}
 
-  async function loadAll(){
-    sync.textContent='正在连接业务系统…';sync.classList.remove('is-error');state.errors=[];
-    const results=await Promise.allSettled([
-      loadOffsetCollection('project-workspace','/api/v1/project-directory',{status:'all'}),
-      loadCursorCollection('party-directory','/api/v1/parties',{status:'all'}),
-      loadCursorCollection('billing-invoice','/api/v1/invoice-registrations'),
-      loadOffsetCollection('money-flow-ledger','/api/v1/cash-transactions',{status:'all'}),
-      api('money-flow-ledger','/api/v1/cash-workspace'),
-      api('contract-ledger','/api/v1/contracts/workspace-context')
-    ]);
-    if(results[0].status==='fulfilled'){state.projects=(results[0].value.items||[]).filter(isOMSProject);state.projectActions=new Set(results[0].value.allowed_actions||[])}else{state.projects=[];state.projectActions.clear();state.errors.push(sourceIssue('项目',results[0].reason))}
+  async function performLoadAll(){
+    const refresh=root.querySelector('[data-oms-v1-refresh]'),notice=root.querySelector('[data-oms-v1-overview-notice]');
+    refresh.disabled=true;sync.textContent='正在更新数据…';sync.classList.remove('is-error');state.errors=[];notice.classList.remove('is-warning');notice.querySelector('p').textContent='正在读取项目与合作主体。';
+    const projectTask=loadOffsetCollection('project-workspace','/api/v1/project-directory',{status:'all'}),partyTask=loadCursorCollection('party-directory','/api/v1/parties',{status:'all'}),invoiceTask=loadCursorCollection('billing-invoice','/api/v1/invoice-registrations'),cashTask=loadOffsetCollection('money-flow-ledger','/api/v1/cash-transactions',{status:'all'}),moneyContextTask=api('money-flow-ledger','/api/v1/cash-workspace'),contractContextTask=api('contract-ledger','/api/v1/contracts/workspace-context');
+    const primary=await Promise.allSettled([projectTask,partyTask]);
+    if(primary[0].status==='fulfilled'){state.projects=(primary[0].value.items||[]).filter(isOMSProject);state.projectActions=new Set(primary[0].value.allowed_actions||[])}else{state.projects=[];state.projectActions.clear();state.errors.push(sourceIssue('项目',primary[0].reason))}
     state.partyCache.clear();
-    if(results[1].status==='fulfilled'){state.parties=results[1].value.items||[];for(const party of state.parties)state.partyCache.set(party.id,party);state.partyActions=new Set(results[1].value.allowed_actions||[])}else{state.parties=[];state.partyActions.clear();state.errors.push(sourceIssue('合作主体',results[1].reason))}
-    if(results[2].status==='fulfilled'){state.invoices=(results[2].value.items||[]).filter(item=>!!invoiceProject(item));state.invoiceActions=new Set(results[2].value.allowed_actions||[])}else{state.invoices=[];state.invoiceActions.clear();state.errors.push(sourceIssue('票据',results[2].reason))}
-    if(results[3].status==='fulfilled'){state.cash=(results[3].value.items||[]).filter(item=>!!cashProject(item));state.moneyAvailable=true}else{state.cash=[];state.moneyAvailable=false;state.errors.push(sourceIssue('收付款',results[3].reason))}
-    if(results[4].status==='fulfilled'){state.moneyContext=results[4].value}else{state.moneyContext=null;state.errors.push(sourceIssue('收付款登记',results[4].reason))}
-    if(results[5].status==='fulfilled'){state.contractContext=results[5].value;state.contractActions=new Set(results[5].value.allowed_operations||[]);state.contractAvailable=true}else{state.contractContext=null;state.contractActions.clear();state.contractAvailable=false;state.errors.push(sourceIssue('合同',results[5].reason))}
-    await loadOperatingParty();renderProjects();renderParties('client');renderParties('contractor');renderInvoices();renderCash();renderOverview();
-    await loadCommercialSummaries();renderProjects();renderCommitments('receivable');renderCommitments('payable');renderOverview();
-    const notice=root.querySelector('[data-oms-v1-overview-notice]');
+    if(primary[1].status==='fulfilled'){state.parties=primary[1].value.items||[];for(const party of state.parties)state.partyCache.set(party.id,party);state.partyActions=new Set(primary[1].value.allowed_actions||[])}else{state.parties=[];state.partyActions.clear();state.errors.push(sourceIssue('合作主体',primary[1].reason))}
+    await loadOperatingParty();renderProjects();renderParties('client');renderParties('contractor');
+    sync.textContent='项目与主体已就绪 · 正在汇总票款';notice.querySelector('p').textContent='项目与合作主体已可使用，票据与资金正在后台补齐。';
+    const commercialTask=loadCommercialSummaries(),secondary=await Promise.allSettled([invoiceTask,cashTask,moneyContextTask,contractContextTask]);
+    if(secondary[0].status==='fulfilled'){state.invoices=(secondary[0].value.items||[]).filter(item=>!!invoiceProject(item));state.invoiceActions=new Set(secondary[0].value.allowed_actions||[])}else{state.invoices=[];state.invoiceActions.clear();state.errors.push(sourceIssue('票据',secondary[0].reason))}
+    if(secondary[1].status==='fulfilled'){state.cash=(secondary[1].value.items||[]).filter(item=>!!cashProject(item));state.moneyAvailable=true}else{state.cash=[];state.moneyAvailable=false;state.errors.push(sourceIssue('收付款',secondary[1].reason))}
+    if(secondary[2].status==='fulfilled'){state.moneyContext=secondary[2].value}else{state.moneyContext=null;state.errors.push(sourceIssue('收付款登记',secondary[2].reason))}
+    if(secondary[3].status==='fulfilled'){state.contractContext=secondary[3].value;state.contractActions=new Set(secondary[3].value.allowed_operations||[]);state.contractAvailable=true}else{state.contractContext=null;state.contractActions.clear();state.contractAvailable=false;state.errors.push(sourceIssue('合同',secondary[3].reason))}
+    renderInvoices();renderCash();renderOverview();
+    await commercialTask;renderProjects();renderCommitments('receivable');renderCommitments('payable');renderOverview();
     if(state.errors.length){sync.textContent='部分数据暂不可用';sync.classList.add('is-error');notice.classList.add('is-warning');notice.querySelector('p').textContent=state.errors.join('；')}else{sync.textContent='数据已更新';notice.classList.remove('is-warning');notice.querySelector('p').textContent='经营数据已更新至最新状态。'}
+    refresh.disabled=false;
+  }
+  function loadAll(){
+    if(loadTask)return loadTask;
+    loadTask=performLoadAll().finally(()=>{root.querySelector('[data-oms-v1-refresh]').disabled=false;loadTask=null});
+    return loadTask;
   }
   root.querySelector('[data-oms-v1-refresh]').addEventListener('click',loadAll);
   document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!dialog.hidden)closeDialog();else if(!root.querySelector('[data-oms-v1-project-detail]').hidden)root.querySelector('[data-oms-v1-project-back]').click()}});
