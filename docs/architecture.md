@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-176 Workbench 主体目录投影：Party Directory 返回外部主体档案，Project Workspace 返回 `client_party` 与活动 `contractor-party` 关系。Workbench 的甲方页显示显式甲方以及尚未被识别为施工方的外部主体，施工方页只显示活动施工方关系；关系计数来自 Project，不写回 Party。该装配恢复建项前甲方候选可见性，同时避免甲方误入施工方页面；不创建共享角色表、浏览器事实、Owner 写入或跨库读取。
+
 2026-10-22 BF-175 活动前端装配：Gateway 是旧界面退役门禁，旧入口统一重定向当前 OMS，旧 OA／旧 OMS 静态资源不再代理给浏览器。当前 Workbench 由三个相互有界的资源层组成：服务端 OMS shell／业务脚本、只包含 CSRF 与 IAM 提交的登录脚本、首次附件动作才加载的 Evidence transfer bundle。Evidence bundle 继续调用版本化 Evidence API、Local upload 或 OSS STS multipart，不拥有文件事实；把 SDK 机制从旧 React UI 拆出不创建新服务、数据库或授权边。历史参考模板和源码可留在源码树，但不属于公网运行图。该装配已由 Gateway／Workbench `v0.1.0-test.oms-v1.26` 的公网门禁与正式 Owner 读取验证。[发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)
 
 2026-10-22 BF-174 Workbench 资源与角色投影：服务端渲染的 OMS 主入口只同步装配 OMS 样式、分页和业务脚本；Evidence 交互复用的旧 React 运行时由 Workbench 在首次附件动作时动态加载，Gateway CSRF 读取由 OMS 自身的最小客户端完成。带版本查询的静态资源使用长期 immutable 缓存，未带版本资源保持原缓存策略。主体页面从 Project 投影角色 ID 后再与内存中的 Party Directory 响应连接：`client_party.party_id` 形成甲方集合，活动 `contractor-party` 资源关系形成施工方集合；Party Directory 继续拥有主体档案，Project Workspace 继续拥有项目关系。该变化没有新增事实服务、数据库、共享表、API、Capability 或 Grant。

@@ -167,7 +167,7 @@ def main():
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
         b"assets/oms-phase1.css?v=20261022.6",
         b"assets/oms-phase1-pagination.js?v=20261022.6",
-        b"assets/oms-phase1.js?v=20261022.6",
+        b"assets/oms-phase1.js?v=20261022.7",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
@@ -188,12 +188,14 @@ def main():
     for path in (
         "/workbench/assets/oms-phase1.css?v=20261022.6",
         "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
-        "/workbench/assets/oms-phase1.js?v=20261022.6",
+        "/workbench/assets/oms-phase1.js?v=20261022.7",
     ):
         _, asset, asset_headers = request(path)
         if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
             raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
+        if path.endswith("oms-phase1.js?v=20261022.7") and b"function partyVisibleForRole" not in asset:
+            raise RuntimeError("current OMS script is missing the party directory visibility guard")
 
     evidence_path = "/workbench/assets/oms-phase1-evidence.js?v=20261022.6"
     _, evidence_asset, evidence_headers = request(evidence_path)
@@ -262,6 +264,17 @@ def main():
         "clients": sorted(party_names.get(item, item) for item in client_ids),
         "contractors": sorted(party_names.get(item, item) for item in contractor_ids),
     }
+    external_ids = set(party_names) - {OPERATING_PARTY_ID}
+    directory_projection = {
+        "clients": sorted(
+            party_names[item]
+            for item in external_ids
+            if item in client_ids or item not in contractor_ids
+        ),
+        "contractors": sorted(
+            party_names[item] for item in external_ids if item in contractor_ids
+        ),
+    }
 
     _, party_raw, _ = request("/party/api/v1/parties/" + OPERATING_PARTY_ID)
     party = json.loads(party_raw)
@@ -284,6 +297,7 @@ def main():
                 "gateway_authorizations": sorted(APPLICATIONS),
                 "owner_reads": owner_counts,
                 "role_projection": role_projection,
+                "directory_projection": directory_projection,
                 "critical_assets_bytes": critical_assets,
                 "lazy_evidence_asset_bytes": len(evidence_asset),
                 "operating_party_id": OPERATING_PARTY_ID,
