@@ -1,6 +1,6 @@
 # OMSBizFoundry
 
-当前 OMS 列表操作列规则（BF-179）：项目、甲方、施工方、应收、应付、票据、回款和支付列表的“详情”固定在最右侧 76px 操作列并右对齐；空状态不套用该列宽。整行进入详情的既有交互保持不变。
+当前 OMS 列表操作列规则（BF-179）：项目、甲方、施工方、应收、应付、票据、回款和支付列表的“详情”固定在最右侧 76px 操作列并右对齐；空状态不套用该列宽。整行进入详情的既有交互保持不变。该规则已由公网 Workbench v1.30 验证并发布。[发布报告](./docs/reports/oms-phase1-detail-action-column-publication-20261022.md)
 
 当前 OMS 金额列规则（BF-178）：应收、应付、票据和实际收付款列表中的金额列使用专用 `is-money` 语义，统一最小宽度、右边界、表头排序按钮内边距和 tabular lining figures；币种符号、整数、小数点及两位小数沿同一右边界排列。项目“应收状态／应付状态”不是金额列，不套用该宽度规则。该规则已由公网 Workbench v1.29 验证并发布。[发布报告](./docs/reports/oms-phase1-money-column-alignment-publication-20261022.md)
 
