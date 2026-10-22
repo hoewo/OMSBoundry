@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-172 Workbench 详情导航投影：项目详情继续由 Workbench 请求时组合 Project、Contract、Billing、Money、Party 与 Evidence，不成为新路由或事实 Owner。详情可见性、当前项目 ID 和异步读取令牌组成同一个前端生命周期；全局导航切换先原子式结束该生命周期，再激活目标页面，从而避免旧详情遮挡新页面或晚到响应污染当前视图。侧栏展开与唯一选中语义继续分别服从 BF-168／BF-169。该变化没有新增服务、数据库、共享表、API、Capability 或 Grant。
+
 2026-10-19 BF-164 OMS 主体装配：Customer Overlay 以 `OMS_OPERATING_PARTY_ID` 把当前使用系统的公司稳定映射到 Party Directory；该身份只用于判断本方与外部往来方向，不产生“资质单位”类型。旧变量名仅在配置入口兼容，运行页只接收中性 `data-operating-party-id`。甲方／施工方集合来自 Party Directory API 的实际响应，Workbench 不拥有主体、没有静态主体种子，也不能在 Owner 失败时用假数据替代。历史合同已经冻结的旧角色字符串可被读取识别，新合同只写“本方主体”。
 
 2026-10-19 BF-163 仓库工程形态：客户交付仓库使用 `frontend/oms-workbench`、`backend/platform/{gateway,identity-access}` 与 `backend/services/*` 明确区分前端装配、平台入口和业务事实 Owner。根目录 `contracts/`、`packages/` 是稳定契约与共享机制，不是共享业务数据库。目录移动不改变模块、运行时、数据库、API、Capability、Suite Manifest 或事实所有权；完整职责与验证入口见[仓库结构说明](./repository-layout.md)。

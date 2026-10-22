@@ -17,6 +17,8 @@ OMSBoundry/
 
 完整目录职责、开发入口和验证命令见[仓库结构说明](./docs/repository-layout.md)。新开发优先从 `frontend/` 或相应 `backend/services/` 进入；不要把业务事实写进 Workbench、Gateway 或共享包。
 
+2026-10-22 BF-172：已修复项目详情打开时点击侧栏只切换底层页面、画面仍停留详情的问题。侧栏导航现在会统一退出项目详情、恢复滚动、清除旧项目选择并作废未完成的详情读取；公网只替换 Workbench 为 `v0.1.0-test.oms-v1.23`，D1 全栈、17/17 健康和正式登录／五 Owner 只读复验通过。[发布报告](./docs/reports/oms-phase1-project-detail-navigation-publication-20261022.md)
+
 2026-10-22 BF-171：已修复 BF-170 清理后“合同功能尚未准备完成”。根因是把 Contract／Money 的 Party Directory runtime cutover 误当业务数据删除；服务和 schema 健康并不代表这项写入前提仍存在。两套 Owner 已通过正式 reviewed mapping／cutover 恢复 directory authority，重复执行幂等；公网验收新增强制运行态断言并通过，未创建项目、合同或资金事实。[故障报告](./docs/reports/oms-phase1-party-runtime-reset-repair-20261022.md)
 
 2026-10-22 BF-170：用户明确当前仍是 Demo，可清除全部旧演示与 OA 业务数据后重新走录入流程。`oatest` 已在完整备份 `20261022T023910Z` 后归零十二个业务 Owner 和两个本地附件对象卷；IAM／Grant、schema、部署与不作为外部合作方显示的本方经营主体保留。逐库实数、附件 0、D1 全栈、17/17 健康及公网正式登录／五 Owner 只读复验均通过。[执行报告](./docs/reports/oms-phase1-demo-full-business-reset-20261022.md)

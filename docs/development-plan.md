@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-172 已修复并发布：项目详情打开时，任一侧栏一级／二级导航都会先统一关闭详情、恢复滚动、清除项目选择并使旧详情请求失效，再显示目标页面；点击当前业务组也不再被详情层截留。源码修复提交为 `149cfff`，公网 Workbench 为 `v0.1.0-test.oms-v1.23@sha256:3b78fdbeeb273723340b50aa509fcca1aa3620919212f7480ddd590cb95cebc1`，静态资源为 `20261022.3`。升级前备份、候选预检、D1 全栈、17/17 健康和公网正式登录／五 Owner 只读复验通过。下一步由用户直接刷新公网或本地页面，打开项目详情后逐项切换侧栏做人工体验确认。[发布证据](./reports/oms-phase1-project-detail-navigation-publication-20261022.md)
+
 2026-10-22 BF-171 已修复：BF-170 清理后新建项目被禁用，根因不是 Contract 容器、权限或用户输入，而是清理误删 Contract／Money 的 Party Directory runtime cutover。两套 Owner 已通过正式 migration／cutover 恢复 `directory` authority，重复执行均为 `changed=false`；D1 `check`、17/17 healthy 和增强后的公网正式登录／五 Owner 只读验收通过。下一步直接继续用户的新项目录入；后续任何 Demo reset 必须把主体 runtime baseline 列为保留项，并以增强后的 `verify-public-oms-v1.py` 作为交付门禁。[修复报告](./reports/oms-phase1-party-runtime-reset-repair-20261022.md)
 
 2026-10-22 BF-170 已执行：在完整备份 `20261022T023910Z` 校验通过后，`oatest` 十二个业务 Owner 的用户录入／业务事实及 Evidence／Contract 本地附件对象已归零；IAM、Grant、schema、部署和本方经营主体保留。数据库逐表实数核验除 Party 基准的 1 条主体／revision／command／audit 外均为 0，附件文件 0，D1 `check`、17/17 长期容器健康和公网正式登录／五 Owner 只读复验通过。下一步直接从空项目、空外部甲方／施工方状态走一遍 OMS 真实录入旅程；若发现流程问题只修复交互或正式 Owner 命令，不回灌旧 Demo 数据。[执行报告](./reports/oms-phase1-demo-full-business-reset-20261022.md)
