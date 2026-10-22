@@ -575,9 +575,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261021.2",
+		"assets/oms-phase1.css?v=20261022.1",
 		"assets/oms-phase1-pagination.js",
-		"assets/oms-phase1.js?v=20261021.2",
+		"assets/oms-phase1.js?v=20261022.1",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -667,6 +667,11 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 owner command wiring missing %q", marker)
 		}
 	}
+	for _, marker := range []string{"function setNavGroupExpanded(group,expanded)", "group.classList.contains('is-expanded')", "setNavGroupExpanded(group,true);activatePage"} {
+		if !strings.Contains(omsPhase1JS, marker) {
+			t.Fatalf("OMS phase 1 independent navigation expansion missing %q", marker)
+		}
+	}
 	for _, forbidden := range []string{"资金事实归 Money", "先保存 Billing 票据", "当前条件在 Owner", "精确 Party revision", "已保存到 Money", "已保存到 Billing", "项目修订 r"} {
 		if strings.Contains(omsPhase1JS, forbidden) {
 			t.Fatalf("OMS phase 1 must not expose implementation copy %q", forbidden)
@@ -730,6 +735,11 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 unified detail/select style missing %q", marker)
 		}
 	}
+	for _, marker := range []string{"BF-168: navigation groups expand independently", ".oms-v1__nav-group.is-expanded .oms-v1__nav-sub", ".oms-v1__pagination>.oms-v1__select{flex:0 0 112px", ".oms-v1__pagination .oms-v1__select-trigger>i{flex:0 0 7px"} {
+		if !strings.Contains(omsPhase1CSS, marker) {
+			t.Fatalf("OMS phase 1 navigation/pagination interaction style missing %q", marker)
+		}
+	}
 	if strings.Contains(omsPhase1HTML, `style="height:18%"`) || strings.Contains(omsPhase1HTML, `style="height:28%"`) {
 		t.Fatal("OMS phase 1 overview must not ship static trend values that look like business facts")
 	}
@@ -771,7 +781,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261021.2"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `href="/legacy/">旧版工作台</a>`, `src="assets/oms-phase1.js?v=20261022.1"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}

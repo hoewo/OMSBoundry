@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-22 BF-168 OMS 导航与分页控件本地验证通过：`node --check`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...`、`go vet` 和 `git diff --check` 通过。桌面浏览器依次打开项目经营、应收回款、应付支付后，三个二级菜单同时可见且各自 `aria-expanded=true`；项目分页选择器触发器为 112px，标签为“20 条/页”，箭头的右边界位于触发器右边界以内。该记录仍是本地证据，不替代公网发布验收。
+
 2026-10-21 BF-167 OMS 一期列表工作台候选已完成本地验证：静态资源更新为 `20261021.2`；`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...` 和 `git diff --check` 通过。本地 `127.0.0.1:18183` 浏览器确认新侧栏与面包屑、项目四项摘要、表头排序、分页、就地展开／收起筛选和居中导出条件均可达；预览环境没有连接真实 Owner，因此空列表只用于交互复核，不外推真实数据结论。本候选尚未发布到公网。[报告](./reports/oms-phase1-mvp-review-ui-local-validation-20261021.md)
 
 2026-10-21 BF-166 OMS 项目列表收付状态已发布并验证：项目列表表头固定为“应收状态／应付状态”，渲染代码不再包含原金额单元格，状态文案固定为“已完成／未完成／金额异常”；精确金额投影与专业模块不变。`node --check frontend/oms-workbench/internal/server/oms_phase1.js`、Workbench Node 235/235、`GOWORK=off go test -count=1 ./...` 和 `git diff --check` 通过。公网只替换 Workbench 为 `v0.1.0-test.oms-v1.20@sha256:f78176522965d41a6858ddf6bda7ea9f97332b0dca2b2fece9fe502760f0efc5`，备份为 `/var/backups/omsbizfoundry/20261021T112852Z`；D1 `check`、17/17 容器健康、正式登录、五次 Gateway 授权和 Owner 只读复验通过，业务写入为 0。[报告](./reports/oms-phase1-project-settlement-status-publication-20261021.md)

@@ -160,12 +160,17 @@
     const value=await api('party-directory','/api/v1/parties/'+encodeURIComponent(id));state.partyCache.set(id,value);return value;
   }
 
+  function setNavGroupExpanded(group,expanded){
+    if(!group)return;
+    group.classList.toggle('is-expanded',expanded);
+    group.querySelector(':scope > [data-oms-v1-nav]')?.setAttribute('aria-expanded',expanded?'true':'false');
+  }
   function activatePage(name,tab){
     closeInlineFilter();
     const selectedTab=tab||activeTabs[name]||defaultTabs[name]||'';
     for(const page of root.querySelectorAll('[data-oms-v1-page]'))page.classList.toggle('is-active',page.dataset.omsV1Page===name);
-    for(const button of root.querySelectorAll('[data-oms-v1-nav]')){const active=button.dataset.omsV1Nav===name;button.classList.toggle('is-active',active);button.setAttribute('aria-current',active?'page':'false');if(button.hasAttribute('aria-expanded'))button.setAttribute('aria-expanded',active?'true':'false')}
-    for(const group of root.querySelectorAll('[data-oms-v1-nav-group]'))group.classList.toggle('is-active',group.dataset.omsV1NavGroup===name);
+    for(const button of root.querySelectorAll('[data-oms-v1-nav]')){const active=button.dataset.omsV1Nav===name;button.classList.toggle('is-active',active);button.setAttribute('aria-current',active?'page':'false')}
+    for(const group of root.querySelectorAll('[data-oms-v1-nav-group]')){const active=group.dataset.omsV1NavGroup===name;group.classList.toggle('is-active',active);if(active)setNavGroupExpanded(group,true)}
     for(const group of root.querySelectorAll('[data-oms-v1-mobile-subnav]'))group.classList.toggle('is-active',group.dataset.omsV1MobileSubnav===name);
     root.querySelector('.oms-v1__mobile-subnav')?.classList.toggle('is-visible',Boolean(defaultTabs[name]));
     contextGroup.textContent=labels[name]||'OMS';
@@ -182,7 +187,12 @@
     contexts.textContent=tabLabels[name]||name;
     const title=scope.querySelector('[data-oms-v1-page-title]');if(title)title.textContent=tabLabels[name]||name;
   }
-  for(const button of root.querySelectorAll('[data-oms-v1-nav]'))button.addEventListener('click',()=>activatePage(button.dataset.omsV1Nav));
+  for(const button of root.querySelectorAll('[data-oms-v1-nav]'))button.addEventListener('click',()=>{
+    const group=button.closest('[data-oms-v1-nav-group]');
+    if(!group){activatePage(button.dataset.omsV1Nav);return}
+    if(group.classList.contains('is-active')){setNavGroupExpanded(group,!group.classList.contains('is-expanded'));return}
+    setNavGroupExpanded(group,true);activatePage(button.dataset.omsV1Nav);
+  });
   for(const button of root.querySelectorAll('[data-oms-v1-tab]'))button.addEventListener('click',()=>activatePage(button.dataset.omsV1TabPage,button.dataset.omsV1Tab));
   for(const button of root.querySelectorAll('[data-oms-v1-jump]'))button.addEventListener('click',()=>{const [page,tab]=button.dataset.omsV1Jump.split(':');activatePage(page,tab)});
 
