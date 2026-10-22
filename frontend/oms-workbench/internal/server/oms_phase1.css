@@ -271,3 +271,10 @@ body.oms-v1-active.oms-v1-dialog-open{overflow:hidden}body.oms-v1-active.oms-v1-
   .oms-v1__record-facts>div{border-right:0;border-bottom:1px solid var(--line)!important}
   .oms-v1__record-facts>div:last-child{border-bottom:0!important}
 }
+
+/* BF-178: every monetary column shares one width, one right edge and tabular figures. */
+.oms-v1__table th.is-money,.oms-v1__table td.is-money{width:clamp(132px,12vw,180px);min-width:132px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.oms-v1__table th.is-money .oms-v1__sort{display:flex;width:100%;margin:0;padding:4px 0;justify-content:flex-end}
+.oms-v1__table td.is-money>strong{display:block;width:100%;max-width:none;margin:0;text-align:right;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.oms-v1__table td.is-money>small{width:100%;text-align:right}
+.oms-v1__invoice-row>b{display:block;width:100%;white-space:nowrap;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
