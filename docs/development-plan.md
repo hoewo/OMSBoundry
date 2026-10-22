@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-22 BF-177 已完成本地实现、待公网发布：Project Workspace 新增 `000014_project_party_candidates.sql`、`GET/POST /api/v1/project-party-candidates` 及 Party revision 精确校验；Workbench 新增主体时以稳定的 Party 命令和候选登记命令分段续办，刷新时并发读取候选，甲方／施工方列表和新建项目／关联施工方选择器共用同一角色投影。已完成 Project Workspace Go test／vet、integration-tag 编译、Workbench Go test／vet、JS 语法与 3 项角色回归；下一步为 D1 migration、Project Workspace／Workbench 联合发布及真实浏览器新增施工方验证。
+2026-10-22 BF-177 已完成并发布：Project Workspace 新增 `000014_project_party_candidates.sql`、`GET/POST /api/v1/project-party-candidates` 及 Party revision 精确校验；Workbench 新增主体时以稳定的 Party 命令和候选登记命令分段续办，刷新时并发读取候选，甲方／施工方列表和新建项目／关联施工方选择器共用同一角色投影。源码为 `main@6903934`，公网 Project Workspace／Workbench 为 v1.28；升级前完整备份、migration、D1 检查、17/17 健康及正式 API 读写复验通过。此前残留的中性 Party“施工方1”已通过正式候选命令补登记，最终目录投影为甲方 3、施工方 1。[发布证据](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 
 2026-10-22 BF-176 已完成并发布：撤销 BF-174 对甲方列表的过度关系过滤，恢复尚未关联项目的人工录入甲方可见性；施工方列表继续按活动项目关系过滤。源码为 `main@ee7862d`，公网 Workbench 为 `v0.1.0-test.oms-v1.27@sha256:e7906954de08ab389083d82b5df615730f2d0ca9073bada7b136151f63e2bc68`；备份、候选预检、D1 全栈、17/17 健康、正式登录和五 Owner 只读验收通过，甲方投影恢复为 3 条且业务写入为 0。[发布证据](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 

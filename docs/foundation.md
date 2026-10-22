@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-10-22 OMS 一期建项前主体候选基线（BF-177）：甲方管理和施工方管理都承担项目建立前的资料维护，创建成功后必须立即留在对应列表并进入后续选择器。Party Directory 只保存中性主体主档；Project Workspace 追加保存租户级候选角色，角色只表示“可供项目选择”，不表示 Party 全局类型或项目关系已经发生。Workbench 使用两段幂等命令创建 Party、登记候选，第二段失败时保留第一段结果并以原命令续办，不能依赖浏览器状态或重复创建主体。真实 `client_party`／`contractor-party` 关系继续只负责项目关联和计数。该基线取代 BF-174／BF-176 对未关联施工方的临时限制。
+2026-10-22 OMS 一期建项前主体候选基线（BF-177）：甲方管理和施工方管理都承担项目建立前的资料维护，创建成功后必须立即留在对应列表并进入后续选择器。Party Directory 只保存中性主体主档；Project Workspace 追加保存租户级候选角色，角色只表示“可供项目选择”，不表示 Party 全局类型或项目关系已经发生。Workbench 使用两段幂等命令创建 Party、登记候选，第二段失败时保留第一段结果并以原命令续办，不能依赖浏览器状态或重复创建主体。真实 `client_party`／`contractor-party` 关系继续只负责项目关联和计数。该基线取代 BF-174／BF-176 对未关联施工方的临时限制，并已发布为公网 Project Workspace／Workbench v1.28。[发布证据](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 
 2026-10-22 OMS 一期甲方档案基线（BF-176）：甲方管理是建项前置入口，人工录入的外部主体不能因为尚未关联项目而被隐藏；项目关系只补充使用次数。施工方继续由项目中的活动施工方关系投影，不能重新显示甲方集合。页面投影不等于 Party Directory 拥有永久甲方／施工方分类，未关联施工方候选仍是后续需要正式建模的能力，不在第一版补造。该基线已发布为公网 Workbench v1.27。[发布证据](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 

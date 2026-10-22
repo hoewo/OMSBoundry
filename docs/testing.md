@@ -1,6 +1,6 @@
 # OMSBizFoundry 验证入口
 
-2026-10-22 BF-177 本地验证：Project Workspace 新增候选模型／服务／PostgreSQL repository／HTTP 端点／migration 回归，覆盖 Party 精确 revision 校验、重放不依赖 Party 服务、非法角色拒绝、租户范围、Capability、命令冲突、重复候选幂等、不可变触发器及跨租户隔离；普通 Go test／vet 与 integration-tag 编译通过。Workbench `node --check`、角色回归 3/3、Go test／vet 通过，验证新增主体先登记 Project 候选、刷新后回到对应列表，甲方与施工方选择器复用候选投影。公网 migration、写入和浏览器复验尚未执行，不得描述为已发布。
+2026-10-22 BF-177 已发布并验证：Project Workspace 候选模型／服务／PostgreSQL repository／HTTP 端点／migration 回归覆盖 Party 精确 revision 校验、重放不依赖 Party 服务、非法角色拒绝、租户范围、Capability、命令冲突、重复候选幂等、不可变触发器及跨租户隔离；普通 Go test／vet、integration-tag 编译与真实 PostgreSQL 18 定向集成通过。Workbench `node --check`、角色回归 3/3、Go test／vet、前端 206/206 与双 bundle build 通过。公网完成 migration 000014、D1 `check`、17/17 healthy、正式登录与新候选 API 读写；通过正式命令把已有中性 Party“施工方1”登记为 contractor，复读得到候选 1、甲方 `[甲方1, 甲方2, 甲方3]`、施工方 `[施工方1]`。[报告](./reports/oms-phase1-preproject-party-candidate-publication-20261022.md)
 
 2026-10-22 BF-176 甲方可见性已发布并验证：新增纯函数回归覆盖未关联主体进入甲方但不进入施工方、甲方专属、施工方专属与真实双角色四种情况；`node --check`、新测试 2/2、Workbench Go test／vet、前端 check／206 项测试／双 bundle build、公共验收 Python 10/10、语法检查和 `git diff --check` 通过。公网只替换 Workbench 为 `v0.1.0-test.oms-v1.27@sha256:e7906954de08ab389083d82b5df615730f2d0ca9073bada7b136151f63e2bc68`，备份为 `/var/backups/omsbizfoundry/20261022T114210Z`；候选预检、D1 `check`、17/17 healthy、正式登录和五 Owner 只读通过。真实目录投影为甲方 `[甲方1, 甲方2, 甲方3]`、施工方 `[]`，业务写入为 0。[报告](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 
