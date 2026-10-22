@@ -59,6 +59,7 @@ Project 拥有 Project 身份、生命周期、层级、Assignment、Resource Li
 
 ### 当前演变
 
+- BF-177 为“先维护甲方／施工方档案，后建项目”补充租户级 `project-party-candidate`。该事实由 Project Workspace 拥有，因为它只表达某 Party 是否可进入项目甲方／施工方选择器；Party Directory 仍独占主体档案，具体项目仍以 `client_party` 快照和 `contractor-party` Resource Link 为准。新增一条 Project migration 和 GET／POST 端口，不增加跨库写、共享表或逐请求同步链；登记时通过版本化 Party 引用端口校验稳定 ID 与 revision。
 - 立项前派发和待立项草稿允许编号／类型稍后补齐；
 - Profile Correction、Initiation Info Change、Basic Info Change 把原 OA 的补录、更正和负责人原子变更纳入 Project 自有历史；
 - Counterparty Context 保存“本项目发生时的业务联系快照”，但不替代 Party Directory 当前主档；
@@ -66,7 +67,7 @@ Project 拥有 Project 身份、生命周期、层级、Assignment、Resource Li
 - Project Completion Profile／Checkpoint 表达项目级闭环条件，不复制 Results、Production、Cost 等来源事实；
 - Production、Results、Cost、Contract、Billing、Business Engagement 等仍只通过类型化 Resource Link 接入。
 
-当前能力目录有 25 项；数据库尾部迁移为 `000010_initial_dispatch_draft.sql`、`000011_commercial_contributors.sql`、`000012_reference_oa_production_personnel.sql`。当前候选定义应写成：
+当前能力目录继续复用既有读取／创建能力；数据库尾部迁移为 `000012_reference_oa_production_personnel.sql`、`000013_party_directory_resource_links.sql`、`000014_project_party_candidates.sql`。当前候选定义应写成：
 
 > Project Workspace 拥有项目身份、生命周期、项目内角色与上下文、外部资源关系及项目级检查点；它不拥有被引用领域的内容、状态机或业务历史。
 

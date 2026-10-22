@@ -16,6 +16,7 @@ go run ./cmd/server
 - PostgreSQL：`127.0.0.1:55437`
 - 健康检查：`/health/live`、`/health/ready`
 - Project API 前缀：`/api/v1/projects`
+- 建项前合作主体候选：`GET/POST /api/v1/project-party-candidates`。Party Directory 保持中性主体主档；Project Workspace 只记录该稳定 Party 可进入后续项目的 `client`／`contractor` 选择器，不把候选当作已发生项目关系。登记必须携带 Party 当前 revision 并使用租户级 `project-workspace.create`，读取使用 `project-workspace.read`。
 - 初始派发：`POST /api/v1/initiation-dispatches`，名称＋版本化 Person 引用，草稿与经营 Assignment 原子保存；编号／类型在完成前补齐。需要相应创建／层级及经营分工能力。
 
 - 已立项基本资料更正候选：`POST /api/v1/projects/{id}/profile-corrections`，显式 `project-workspace.profile.correct`。旧 PUT 仍只处理立项期；新动作保留稳定身份、状态和外部引用，追加更正原因及历史。见 [规格](../../../arckit/spec/project-workspace/profile-correction.md)。

@@ -35,6 +35,11 @@ type useCasesStub struct {
 	directoryTenant          string
 	directoryCalls           int
 	directoryResult          projects.DirectoryPage
+	partyCandidateCalls      int
+	partyCandidateTenant     string
+	partyCandidateResult     projects.PartyCandidatePage
+	partyCandidateInput      projects.PartyCandidateInput
+	partyCandidateRegistered projects.PartyCandidate
 	correctionCalls          int
 	correctionInput          projects.ProfileCorrectionInput
 	listResult               []projects.Project
@@ -103,6 +108,16 @@ func (s *useCasesStub) Directory(_ context.Context, tenant string, query project
 	s.directoryCalls++
 	s.directoryTenant, s.directoryQuery = tenant, query
 	return s.directoryResult, nil
+}
+func (s *useCasesStub) ListPartyCandidates(_ context.Context, tenant string) (projects.PartyCandidatePage, error) {
+	s.partyCandidateCalls++
+	s.partyCandidateTenant = tenant
+	return s.partyCandidateResult, nil
+}
+func (s *useCasesStub) RegisterPartyCandidate(_ context.Context, _ projects.Actor, input projects.PartyCandidateInput) (projects.PartyCandidate, error) {
+	s.partyCandidateCalls++
+	s.partyCandidateInput = input
+	return s.partyCandidateRegistered, nil
 }
 func (s *useCasesStub) List(_ context.Context, tenant string, limit int) ([]projects.Project, error) {
 	s.listTenant, s.listLimit = tenant, limit

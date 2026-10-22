@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-22 BF-177 建项前主体候选边界：Party Directory 继续拥有中性主体当前档案；Project Workspace 新增 `project_party_candidates` 追加式事实和 `/api/v1/project-party-candidates` 版本化端口，拥有“某稳定 Party 可在本租户后续项目中作为甲方／施工方被选择”的项目侧语义。候选只冻结登记时 Party revision 用于校验与审计，不复制名称、不替代项目的 `client_party` 快照或 `contractor-party` 关系。Workbench 组合候选与已发生关系：候选决定建项前列表和选择器，项目关系决定关联项目数；同一 Party 可有两个候选记录。写入按 Party → Project Candidate 两段幂等命令执行，后段失败可续办而不回滚或重建前段。现有 tenant-scoped `project-workspace.read/create` 覆盖读取／登记，本轮不增加 IAM Grant、共享表、跨库写或前端持久化事实。见 [ADR-0037](./adr/0037-project-workspace-owns-pre-project-party-candidates.md)。
+
 2026-10-22 BF-176 Workbench 主体目录投影：Party Directory 返回外部主体档案，Project Workspace 返回 `client_party` 与活动 `contractor-party` 关系。Workbench 的甲方页显示显式甲方以及尚未被识别为施工方的外部主体，施工方页只显示活动施工方关系；关系计数来自 Project，不写回 Party。该装配恢复建项前甲方候选可见性，同时避免甲方误入施工方页面；不创建共享角色表、浏览器事实、Owner 写入或跨库读取。公网 v1.27 已按真实 Owner 响应验证。[发布证据](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 
 2026-10-22 BF-175 活动前端装配：Gateway 是旧界面退役门禁，旧入口统一重定向当前 OMS，旧 OA／旧 OMS 静态资源不再代理给浏览器。当前 Workbench 由三个相互有界的资源层组成：服务端 OMS shell／业务脚本、只包含 CSRF 与 IAM 提交的登录脚本、首次附件动作才加载的 Evidence transfer bundle。Evidence bundle 继续调用版本化 Evidence API、Local upload 或 OSS STS multipart，不拥有文件事实；把 SDK 机制从旧 React UI 拆出不创建新服务、数据库或授权边。历史参考模板和源码可留在源码树，但不属于公网运行图。该装配已由 Gateway／Workbench `v0.1.0-test.oms-v1.26` 的公网门禁与正式 Owner 读取验证。[发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)

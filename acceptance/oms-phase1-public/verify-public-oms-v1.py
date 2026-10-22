@@ -14,7 +14,7 @@ PUBLIC = "https://oatest.antuinfo.cn"
 OPERATING_PARTY_ID = "95d3793f-7e0d-4ec9-acb8-9baf8bcb1039"
 APPLICATIONS = {
     "party-directory": ("/party/api/v1/parties?status=all&limit=100", "items"),
-    "project-workspace": ("/project/api/v1/projects?limit=100", "items"),
+    "project-workspace": ("/project/api/v1/project-directory?status=all&limit=100", "items"),
     "billing-invoice": ("/billing/api/v1/invoice-registrations?limit=100", "items"),
     "money-flow-ledger": ("/money/api/v1/cash-transactions?limit=100", "items"),
     "contract-ledger": ("/contract/api/v1/contracts/workspace-context", None),
@@ -167,7 +167,7 @@ def main():
         (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
         b"assets/oms-phase1.css?v=20261022.6",
         b"assets/oms-phase1-pagination.js?v=20261022.6",
-        b"assets/oms-phase1.js?v=20261022.7",
+        b"assets/oms-phase1.js?v=20261022.8",
     )
     if not all(marker in page for marker in markers):
         raise RuntimeError("OMS v1 page is missing required assembly markers")
@@ -188,13 +188,13 @@ def main():
     for path in (
         "/workbench/assets/oms-phase1.css?v=20261022.6",
         "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
-        "/workbench/assets/oms-phase1.js?v=20261022.7",
+        "/workbench/assets/oms-phase1.js?v=20261022.8",
     ):
         _, asset, asset_headers = request(path)
         if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
             raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
-        if path.endswith("oms-phase1.js?v=20261022.7") and b"function partyVisibleForRole" not in asset:
+        if path.endswith("oms-phase1.js?v=20261022.8") and (b"function partyVisibleForRole" not in asset or b"/api/v1/project-party-candidates" not in asset):
             raise RuntimeError("current OMS script is missing the party directory visibility guard")
 
     evidence_path = "/workbench/assets/oms-phase1-evidence.js?v=20261022.6"
@@ -256,6 +256,24 @@ def main():
         and not link.get("unlinked_at")
         and link.get("resource_id")
     }
+    _, candidates_raw, candidates_headers = request(
+        "/project/api/v1/project-party-candidates"
+    )
+    if candidates_headers.get_content_type() != "application/json":
+        raise RuntimeError("project party candidates did not return JSON")
+    candidates = json.loads(candidates_raw).get("items")
+    if not isinstance(candidates, list):
+        raise RuntimeError("project party candidates response has no item list")
+    client_ids.update(
+        item.get("party_id")
+        for item in candidates
+        if item.get("role_key") == "client" and item.get("party_id")
+    )
+    contractor_ids.update(
+        item.get("party_id")
+        for item in candidates
+        if item.get("role_key") == "contractor" and item.get("party_id")
+    )
     party_names = {
         item.get("id"): item.get("legal_name")
         for item in owner_items["party-directory"]
@@ -298,6 +316,7 @@ def main():
                 "owner_reads": owner_counts,
                 "role_projection": role_projection,
                 "directory_projection": directory_projection,
+                "project_party_candidates": len(candidates),
                 "critical_assets_bytes": critical_assets,
                 "lazy_evidence_asset_bytes": len(evidence_asset),
                 "operating_party_id": OPERATING_PARTY_ID,

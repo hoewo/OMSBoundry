@@ -23,3 +23,11 @@ test('confirmed project roles remain separated without losing dual-role parties'
   assert.equal(partyVisibleForRole('client', 'both', clients, contractors), true)
   assert.equal(partyVisibleForRole('contractor', 'both', clients, contractors), true)
 })
+
+test('pre-project candidate roles are loaded from Project Workspace and saved before refresh', () => {
+  assert.match(source, /for\(const candidate of state\.partyCandidates\)/)
+  assert.match(source, /candidate\.role_key==='contractor'\)contractorIDs\.add\(candidate\.party_id\)/)
+  assert.match(source, /api\('project-workspace','\/api\/v1\/project-party-candidates',\{method:'POST'/)
+  assert.match(source, /await loadAll\(\);activatePage\('projects',roleKey==='client'\?'clients':'contractors'\)/)
+  assert.match(source, /activePartiesForRole\('contractor'\)/)
+})

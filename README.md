@@ -1,6 +1,6 @@
 # OMSBizFoundry
 
-当前 OMS 主体页规则（BF-176）：甲方管理保留尚未建项的人工录入外部主体，施工方管理只投影项目中已建立的施工方关系；主体档案仍由 Party Directory 持有，页面可见性不新增永久角色事实。[公网发布证据](./docs/reports/oms-phase1-client-directory-visibility-publication-20261022.md)
+当前 OMS 主体页规则（BF-177）：Party Directory 继续只保存中性主体档案；Project Workspace 以租户级、追加式 `project-party-candidate` 记录建项前可选的甲方／施工方候选。用户从对应管理页新建主体后，Workbench 先保存 Party，再登记候选角色并刷新当前列表；真实项目关系建立后只补充关联项目数。该记录不是 Party 全局类型，也不是虚构项目关系。BF-177 取代 BF-174／BF-176 对未关联施工方无法表达的临时规则。
 
 本仓库是 OMS 一期及其底层小系统的可交付源码仓库。为方便客户体验、持续开发和独立部署，源码按“前端工作台、平台后端、业务事实服务”分层；这次整理只改变目录结构，不合并数据库、不改变 API、IAM、业务事实所有权或部署边界。
 

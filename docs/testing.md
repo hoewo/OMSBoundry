@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-22 BF-177 本地验证：Project Workspace 新增候选模型／服务／PostgreSQL repository／HTTP 端点／migration 回归，覆盖 Party 精确 revision 校验、重放不依赖 Party 服务、非法角色拒绝、租户范围、Capability、命令冲突、重复候选幂等、不可变触发器及跨租户隔离；普通 Go test／vet 与 integration-tag 编译通过。Workbench `node --check`、角色回归 3/3、Go test／vet 通过，验证新增主体先登记 Project 候选、刷新后回到对应列表，甲方与施工方选择器复用候选投影。公网 migration、写入和浏览器复验尚未执行，不得描述为已发布。
+
 2026-10-22 BF-176 甲方可见性已发布并验证：新增纯函数回归覆盖未关联主体进入甲方但不进入施工方、甲方专属、施工方专属与真实双角色四种情况；`node --check`、新测试 2/2、Workbench Go test／vet、前端 check／206 项测试／双 bundle build、公共验收 Python 10/10、语法检查和 `git diff --check` 通过。公网只替换 Workbench 为 `v0.1.0-test.oms-v1.27@sha256:e7906954de08ab389083d82b5df615730f2d0ca9073bada7b136151f63e2bc68`，备份为 `/var/backups/omsbizfoundry/20261022T114210Z`；候选预检、D1 `check`、17/17 healthy、正式登录和五 Owner 只读通过。真实目录投影为甲方 `[甲方1, 甲方2, 甲方3]`、施工方 `[]`，业务写入为 0。[报告](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 
 2026-10-22 BF-175 退役界面门禁已发布并验证：当前 OMS 未登录页只引用 `oms-phase1-login`，已登录首屏不引用任何 `reference-oa-*`，附件动作只加载 `oms-phase1-evidence`；Gateway 回归覆盖旧入口 303 到当前 OMS 和旧资源 410。本地前端 check／206 项测试／双 bundle build、Workbench／Gateway Go test 与 vet、公共验收 Python 10/10、语法检查和 `git diff --check` 通过。公网 Gateway／Workbench `v0.1.0-test.oms-v1.26` 发布后，匿名页、正式 IAM 登录、旧入口、旧资源、版本化 immutable 当前资源、五 Owner 只读、Party runtime authority、D1 `check` 和 17/17 健康均通过；业务写入为 0，回滚备份为 `/var/backups/omsbizfoundry/20261022T071636Z`。[报告](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)

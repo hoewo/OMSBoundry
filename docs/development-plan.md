@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-22 BF-177 已完成本地实现、待公网发布：Project Workspace 新增 `000014_project_party_candidates.sql`、`GET/POST /api/v1/project-party-candidates` 及 Party revision 精确校验；Workbench 新增主体时以稳定的 Party 命令和候选登记命令分段续办，刷新时并发读取候选，甲方／施工方列表和新建项目／关联施工方选择器共用同一角色投影。已完成 Project Workspace Go test／vet、integration-tag 编译、Workbench Go test／vet、JS 语法与 3 项角色回归；下一步为 D1 migration、Project Workspace／Workbench 联合发布及真实浏览器新增施工方验证。
+
 2026-10-22 BF-176 已完成并发布：撤销 BF-174 对甲方列表的过度关系过滤，恢复尚未关联项目的人工录入甲方可见性；施工方列表继续按活动项目关系过滤。源码为 `main@ee7862d`，公网 Workbench 为 `v0.1.0-test.oms-v1.27@sha256:e7906954de08ab389083d82b5df615730f2d0ca9073bada7b136151f63e2bc68`；备份、候选预检、D1 全栈、17/17 健康、正式登录和五 Owner 只读验收通过，甲方投影恢复为 3 条且业务写入为 0。[发布证据](./reports/oms-phase1-client-directory-visibility-publication-20261022.md)
 
 2026-10-22 BF-175 已完成并发布：旧仿 OA／旧 OMS 已停止公开运行，后端 Owner 保持不变。Gateway 收口旧入口并拒绝旧静态资源；Workbench 把登录从旧 75 KB 立项运行时拆为专用轻量脚本，把附件从旧 2.5 MB OA React bundle 拆为独立 Evidence bundle并保持首次使用按需加载。源码为 `main@6ccad2d`，公网 Gateway／Workbench 为 `v0.1.0-test.oms-v1.26`；升级前备份 `20261022T071636Z`、候选预检、D1 全栈、17/17 健康、匿名／正式登录、旧入口、旧资源、Evidence bundle 与五 Owner 只读验收均通过。下一步继续优化当前 OMS，不再维护旧界面的活动部署路径。[发布证据](./reports/oms-phase1-retired-surfaces-and-evidence-decoupling-publication-20261022.md)

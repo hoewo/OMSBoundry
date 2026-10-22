@@ -25,6 +25,8 @@ type UseCases interface {
 	Ping(context.Context) error
 	List(context.Context, string, int) ([]projects.Project, error)
 	Directory(context.Context, string, projects.DirectoryQuery) (projects.DirectoryPage, error)
+	ListPartyCandidates(context.Context, string) (projects.PartyCandidatePage, error)
+	RegisterPartyCandidate(context.Context, projects.Actor, projects.PartyCandidateInput) (projects.PartyCandidate, error)
 	Create(context.Context, projects.Actor, projects.CreateInput) (projects.Project, error)
 	DispatchInitiation(context.Context, projects.Actor, projects.InitiationDispatchInput) (projects.Project, error)
 	CreatePackage(context.Context, projects.Actor, projects.PackageCreateInput) (projects.Project, error)
@@ -90,6 +92,8 @@ func NewWithOAProduction(useCases UseCases, authenticator auth.Authenticator, oa
 	mux.HandleFunc("GET /completion/", s.completionPage)
 	mux.HandleFunc("GET /", s.index)
 	mux.Handle("GET /api/v1/projects", s.protected(auth.ActionRead, false, http.HandlerFunc(s.list)))
+	mux.Handle("GET /api/v1/project-party-candidates", s.protected(auth.ActionRead, false, http.HandlerFunc(s.partyCandidates)))
+	mux.Handle("POST /api/v1/project-party-candidates", s.protected(auth.ActionCreate, false, http.HandlerFunc(s.registerPartyCandidate)))
 	mux.HandleFunc("GET /api/v1/project-directory", s.directory)
 	mux.HandleFunc("GET /api/v1/counterparty-context/name-suggestions", s.counterpartyNameSuggestions)
 	mux.Handle("POST /api/v1/projects", s.protected(auth.ActionCreate, false, http.HandlerFunc(s.create)))
