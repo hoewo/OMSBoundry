@@ -4,14 +4,9 @@
   const root=document.querySelector('[data-oms-v1]'),model=globalThis.OMSInternalModel;
   if(!root||!model)return;
 
-  // This branch deliberately keeps the candidate workflow local-only.  If it is
-  // accidentally included in an authenticated/public build, fail closed before
-  // reading or writing browser business data.
-  if(document.body.dataset.demoPreview!=='true'){
-    const page=root.querySelector('[data-oms-v1-page="internal"]');
-    if(page)page.innerHTML='<header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>公司内部管理</h1><p>本功能仍处于本地验证阶段</p></div></header><div class="oms-v1__empty"><strong>尚未接入正式业务服务</strong><span>请使用本地预览验证交互；当前页面不会在正式环境保存成员、工资或财务申请。</span></div>';
-    return;
-  }
+  // This public candidate is intentionally browser-local. Authentication controls
+  // access to the page; Tenant and Subject isolate the browser storage key. No
+  // member, payroll or finance record is sent to an Owner service by this script.
 
   const safe=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const uuid=()=>globalThis.crypto?.randomUUID?.()||'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,value=>{const random=Math.random()*16|0,part=value==='x'?random:(random&3|8);return part.toString(16)});
@@ -35,10 +30,12 @@
     },
   });
   const emptyStore=()=>({version:1,members:[],payroll_periods:[],finance_records:[],benefit_scheme:defaultScheme()});
-  const storeKey='oms-v1.company-internal.v1.'+(root.dataset.tenantId||'local');
+  const storeKey='oms-v1.company-internal.v1.'+(root.dataset.tenantId||'local')+'.'+(root.dataset.subjectId||'preview');
+  const legacyStoreKey='oms-v1.company-internal.v1.'+(root.dataset.tenantId||'local');
   function readStore(){
     try{
-      const value=JSON.parse(localStorage.getItem(storeKey)||'null');
+      const current=localStorage.getItem(storeKey),legacy=document.body.dataset.demoPreview==='true'?localStorage.getItem(legacyStoreKey):null;
+      const value=JSON.parse(current||legacy||'null');
       if(value?.version===1&&Array.isArray(value.members)&&Array.isArray(value.payroll_periods)&&Array.isArray(value.finance_records))return {...emptyStore(),...value};
     }catch{}
     return emptyStore();

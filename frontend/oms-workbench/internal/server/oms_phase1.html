@@ -1,5 +1,5 @@
 {{define "oms-phase1-body"}}
-  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}">
+  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-subject-id="{{.SubjectID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}">
     <div hidden data-oms-v1-routes>{{range .BusinessApplications}}<span data-oms-v1-application="{{.ID}}" data-oms-v1-route="{{.RoutePrefix}}"></span>{{end}}</div>
 
     <aside class="oms-v1__rail" aria-label="OMS 一期主导航">
@@ -126,7 +126,8 @@
         </section>
 
         <section class="oms-v1__page" data-oms-v1-page="internal">
-          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>成员管理</h1><p>公司成员、工资与内部费用的本地功能验证</p></div></header>
+          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>成员管理</h1><p>公司成员、工资与内部费用的浏览器体验版</p></div></header>
+          <div class="oms-v1__notice is-warning"><span></span><p>体验版数据仅保存在当前登录账号的本浏览器中，不会写入正式业务服务，也不会跨设备同步。</p></div>
 
           <div class="oms-v1__tab is-active" data-oms-v1-tab-panel="members">
             <div class="oms-v1__list-head"><div class="oms-v1__toolbar oms-v1__internal-toolbar"><label><span>⌕</span><input type="search" placeholder="搜索姓名、部门或岗位" data-internal-member-search></label><select aria-label="成员状态" data-internal-member-status><option value="">全部状态</option><option value="active">在职</option><option value="inactive">停用</option></select></div><div class="oms-v1__list-actions"><button class="oms-v1__primary" type="button" data-internal-new-member>＋ 新增成员</button></div></div>
