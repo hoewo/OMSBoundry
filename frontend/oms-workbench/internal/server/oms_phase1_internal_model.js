@@ -57,6 +57,11 @@
     if(paid>0)return 'partial';
     return String(payDate||'')<=String(today||'')?'confirm':'planned';
   };
+  const canSyncPeriod=lines=>Array.isArray(lines)&&!lines.some(line=>Boolean(line?.paid_at));
+  const payrollSyncCandidates=(members,lines)=>{
+    const existing=new Set((Array.isArray(lines)?lines:[]).map(line=>line?.member_id).filter(Boolean));
+    return (Array.isArray(members)?members:[]).filter(member=>member?.status==='active'&&member.id&&!existing.has(member.id));
+  };
 
-  scope.OMSInternalModel=Object.freeze({decimalMinor,money,contribution,components,payrollLine,lineStatus,periodStatus});
+  scope.OMSInternalModel=Object.freeze({decimalMinor,money,contribution,components,payrollLine,lineStatus,periodStatus,canSyncPeriod,payrollSyncCandidates});
 })(globalThis);

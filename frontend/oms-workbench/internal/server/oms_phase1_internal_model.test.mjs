@@ -38,3 +38,14 @@ test('planned date never creates a paid fact without confirmation',()=>{
   assert.equal(model.lineStatus({paid_at:''},'2026-10-30','2026-10-23'),'planned');
   assert.equal(model.lineStatus({paid_at:'2026-10-23T01:00:00Z'},'2026-10-20','2026-10-23'),'paid');
 });
+
+test('member sync only proposes new active members before any payment',()=>{
+  const members=[
+    {id:'member-a',name:'已在工资表',status:'active'},
+    {id:'member-b',name:'新成员',status:'active'},
+    {id:'member-c',name:'停用成员',status:'inactive'},
+  ];
+  assert.deepEqual(model.payrollSyncCandidates(members,[{member_id:'member-a',paid_at:''}]).map(item=>item.id),['member-b']);
+  assert.equal(model.canSyncPeriod([{member_id:'member-a',paid_at:''}]),true);
+  assert.equal(model.canSyncPeriod([{member_id:'member-a',paid_at:'2026-10-23T01:00:00Z'}]),false);
+});
