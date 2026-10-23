@@ -18,6 +18,8 @@
 
 ## 产品边界
 
+- 2026-10-23 用户要求在独立分支验证 OMS“公司内部管理”（BF-180）：侧栏新增一级入口，下设成员管理、工资管理和财务管理；成员保存固定工资与社保／公积金基数，绩效按月录入；工资以计划发薪日区分待发放／待确认，只能在外部实际发薪后单条或批量确认已发放；报销和付款申请按草稿／待支付／已支付流转并记录操作人。当前只实现浏览器本地交互和精确金额计算，不做统计、审批、个税、银行支付或公网部署，不新增 Owner、数据库、API、Capability、Grant 或 Suite Manifest。People & Groups 仍只拥有人与组织事实；未来 Payroll 拥有工资期间与计算快照，申请来源应用拥有草稿／审批，Money 只接收确认后的义务建议或实际资金。范围见 [`docs/specs/assembly/oms-company-internal-management-local-mvp-v0.1.md`](./docs/specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)。
+
 - 2026-10-22 用户确认列表“详情”是最右侧操作列（BF-179）：项目、主体、应收、应付、票据和实际收付款列表的末列必须使用统一 76px 宽度并右对齐，表头占位与按钮共用同一右边界；空状态行不得误套操作列宽度。该修复只改变 Workbench 排版，不改变整行进入详情的交互、Owner、API、schema、Grant 或业务数据。
 - 2026-10-22 用户反馈所有金额列绘制歪斜（BF-178）：根因是金额表头排序按钮使用通用负边距，而金额单元格使用正常表格内边距，表头与数值的右边界不一致；不同金额列也没有共同的最小宽度。Workbench 的应收、应付、开票、收票、回款和支付列表必须使用专用 `is-money` 列语义，统一列宽、右对齐、表头排序按钮边界和 tabular lining figures；项目收付“状态”列不得冒充金额列。该修复只改变展示，不改变精确金额格式、排序值、导出、Owner、API、schema、Grant 或业务事实。
 - 2026-10-22 用户反馈从施工方管理新建主体后页面刷新仍不可见（BF-177）：根因是 BF-174／BF-176 只用已形成的项目关系推导角色，无法表达建项前必须先维护施工方档案的产品流程。Party Directory 继续只拥有中性主体主档；Project Workspace 新增租户级、追加式 `project-party-candidate` 候选事实与版本化 API，记录该稳定 Party ID 可在后续项目中作为甲方或施工方选择。Workbench 必须以 Party 创建 → 候选登记两段幂等命令完成新增，登记成功后刷新并立即显示在当前列表；中途失败保留已创建 Party，并以原 command 安全续办，不能重复创建或用浏览器状态猜测。该候选不是 Party 永久类型、不是已发生项目关系，也不得复制 Party 档案；同一 Party 可被分别登记为两个候选角色。迁移为 Project Workspace `000014_project_party_candidates.sql`。公网 Project Workspace／Workbench v1.28 已发布，原先只创建了 Party 的“施工方1”已通过正式候选命令补登记并进入施工方投影；证据见 [`docs/reports/oms-phase1-preproject-party-candidate-publication-20261022.md`](./docs/reports/oms-phase1-preproject-party-candidate-publication-20261022.md)。

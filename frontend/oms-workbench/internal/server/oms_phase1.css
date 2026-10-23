@@ -218,6 +218,40 @@ body.oms-v1-active.oms-v1-dialog-open{overflow:hidden}body.oms-v1-active.oms-v1-
 .oms-v1__select-menu button:hover,.oms-v1__select-menu button.is-current{background:#edf4f0;color:#145c45}
 .oms-v1__select-menu button[aria-selected="true"]{font-weight:750}
 .oms-v1__select-menu button:disabled{color:#a0a7a3;cursor:not-allowed}
+
+/* Company internal management local interaction candidate. */
+.oms-v1__page-head p{margin:7px 0 0;color:var(--muted);font-size:11px}
+.oms-v1__internal-toolbar{flex-wrap:wrap}
+.oms-v1__internal-toolbar>.oms-v1__select{flex:0 0 128px;width:128px}
+.oms-v1__internal-toolbar>.oms-v1__select .oms-v1__select-trigger{min-height:36px;padding-block:6px;border-radius:6px;font-size:12px}
+.oms-v1__internal-toolbar>input[type="month"]{width:142px;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:12px;outline:none}
+.oms-v1__internal-toolbar>input[type="month"]:focus{border-color:#9ebdac;box-shadow:0 0 0 3px #edf5f0}
+.oms-v1__notice[data-internal-scheme-state]{margin-bottom:12px}
+.oms-v1__notice[data-internal-scheme-state] p{flex:1}
+.oms-v1__notice[data-internal-scheme-state] button{border:0;background:transparent;color:var(--green);font-size:11px;font-weight:750}
+.oms-v1__internal-table{min-width:980px}
+.oms-v1__internal-table th.is-check,.oms-v1__internal-table td:first-child:has(input[type="checkbox"]){width:42px;padding-inline:12px;text-align:center}
+.oms-v1__internal-table input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--green)}
+.oms-v1__internal-table td{white-space:nowrap}
+.oms-v1__internal-table td:nth-child(2),.oms-v1__internal-table td:nth-child(3){max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.oms-v1__internal-tag{display:inline-flex;align-items:center;min-height:23px;padding:0 8px;border-radius:99px;background:#edf2ee;color:#53615a;font-size:10px;font-weight:700;white-space:nowrap}
+.oms-v1__internal-tag.is-positive{background:#e8f3ed;color:#176b4f}.oms-v1__internal-tag.is-warning{background:#f6eee2;color:#9a6728}.oms-v1__internal-tag.is-muted{background:#f0f1ef;color:#7b827e}
+.oms-v1__row-actions{display:flex;justify-content:flex-end;gap:10px;min-width:76px}
+.oms-v1__row-actions button{padding:0;border:0;background:transparent;color:var(--green);font-size:11px;font-weight:700}
+.oms-v1__internal-batch{display:flex;align-items:center;gap:9px;min-height:42px;margin:8px 0;padding:7px 10px;border:1px solid #d8e5dd;border-radius:8px;background:#f4f8f5}
+.oms-v1__internal-batch span{margin-right:auto;color:#53615a;font-size:11px}.oms-v1__internal-batch strong{color:var(--ink)}
+.oms-v1__internal-batch button{min-height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#53615a;font-size:11px;font-weight:700}
+.oms-v1__internal-batch button.is-primary{border-color:var(--green);background:var(--green);color:#fff}
+.oms-v1__form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.oms-v1__form-grid>.is-wide{grid-column:1/-1}
+.oms-v1__rate-table{display:grid;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.oms-v1__rate-row{display:grid;grid-template-columns:minmax(110px,1fr) 1fr 1fr;align-items:end;gap:12px;padding:11px 12px;border-top:1px solid var(--line)}.oms-v1__rate-row:first-child{border-top:0}
+.oms-v1__rate-row>strong{align-self:center;font-size:12px}.oms-v1__rate-row label{font-size:10px!important}
+.oms-v1__batch-form{display:grid;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.oms-v1__batch-form>label{display:grid!important;grid-template-columns:minmax(0,1fr) 160px;align-items:center;gap:16px;padding:10px 12px;border-top:1px solid var(--line)}.oms-v1__batch-form>label:first-child{border-top:0}
+.oms-v1__batch-form>label>span{display:grid;gap:2px}.oms-v1__batch-form small{color:var(--muted);font-size:10px;font-weight:500}
+.oms-v1__record-subtitle{margin:18px 0 8px;color:var(--ink);font-size:12px}
+@media(max-width:760px){.oms-v1__form-grid{grid-template-columns:1fr}.oms-v1__internal-toolbar>.oms-v1__select,.oms-v1__internal-toolbar>input[type="month"]{flex:1 1 128px;width:auto}.oms-v1__batch-form>label{grid-template-columns:1fr}.oms-v1__rate-row{grid-template-columns:1fr 1fr}.oms-v1__rate-row>strong{grid-column:1/-1}.oms-v1__internal-batch{align-items:stretch;flex-wrap:wrap}.oms-v1__internal-batch span{flex:1 0 100%}}
 .oms-v1__select-menu button i{color:#176b4f;font-style:normal;font-weight:800;text-align:center}
 
 .oms-v1__record-detail{display:grid;gap:0;border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden}

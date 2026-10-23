@@ -554,12 +554,16 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-nav-group="projects"`,
 		`data-oms-v1-nav-group="receivable"`,
 		`data-oms-v1-nav-group="payable"`,
+		`data-oms-v1-nav-group="internal"`,
 		`data-oms-v1-tab="project-list"`,
 		`data-oms-v1-tab-page="projects"`,
 		`data-oms-v1-tab="outgoing-invoices"`,
 		`data-oms-v1-tab="receipts"`,
 		`data-oms-v1-tab="payments"`,
 		`data-oms-v1-tab="incoming-invoices"`,
+		`data-oms-v1-tab="members"`,
+		`data-oms-v1-tab="payroll"`,
+		`data-oms-v1-tab="finance"`,
 		`data-oms-v1-invoice-search="incoming"`,
 		`data-oms-v1-commitment-body="receivable"`,
 		`data-oms-v1-commitment-body="payable"`,
@@ -574,9 +578,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261022.10",
+		"assets/oms-phase1.css?v=20261023.1",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
-		"assets/oms-phase1.js?v=20261022.9",
+		"assets/oms-phase1.js?v=20261023.1",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -607,6 +611,11 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"data-oms-v1-dialog",
 		"data-oms-v1-dialog-body",
 		"data-oms-v1-dialog-submit",
+		"data-internal-member-body",
+		"data-internal-payroll-body",
+		"data-internal-finance-body",
+		"assets/oms-phase1-internal-model.js?v=20261023.1",
+		"assets/oms-phase1-internal.js?v=20261023.1",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -660,6 +669,8 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		{"/assets/oms-phase1.css", "text/css; charset=utf-8", ".oms-v1__nav-sub"},
 		{"/assets/oms-phase1-pagination.js", "application/javascript; charset=utf-8", "async function loadOffsetCollection(api, id, base, params = {})"},
 		{"/assets/oms-phase1.js", "application/javascript; charset=utf-8", "loadOffsetCollection('project-workspace','/api/v1/project-directory',{status:'all'})"},
+		{"/assets/oms-phase1-internal-model.js", "application/javascript; charset=utf-8", "scope.OMSInternalModel"},
+		{"/assets/oms-phase1-internal.js", "application/javascript; charset=utf-8", "oms-v1.company-internal"},
 		{"/assets/oms-phase1-evidence.js", "application/javascript; charset=utf-8", "createEvidenceTransfer"},
 		{"/assets/workbench.js", "application/javascript; charset=utf-8", "window.location.assign('/workbench/?view=oms-v1')"},
 	} {
@@ -669,7 +680,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261022.10", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261022.9", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261023.1", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.1", "/assets/oms-phase1-internal-model.js?v=20261023.1", "/assets/oms-phase1-internal.js?v=20261023.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -877,7 +888,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261022.9"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261023.1"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}

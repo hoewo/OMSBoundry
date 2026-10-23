@@ -4,13 +4,16 @@ import test from 'node:test';
 
 const html = readFileSync(new URL('./oms_phase1.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('./oms_phase1.js', import.meta.url), 'utf8');
+const internalScript = readFileSync(new URL('./oms_phase1_internal.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('./oms_phase1.css', import.meta.url), 'utf8');
 
 test('every operational table reserves its final column for row details', () => {
   const actionHeaders = html.match(/<th><\/th>/g) || [];
   const actionCells = script.match(/<td><button class="oms-v1__row-action"/g) || [];
-  assert.equal(actionHeaders.length, 9);
+  const internalActionCells = internalScript.match(/class="oms-v1__row-actions"/g) || [];
+  assert.equal(actionHeaders.length, 12);
   assert.equal(actionCells.length, 5);
+  assert.equal(internalActionCells.length, 3);
 });
 
 test('detail actions use a fixed right-aligned terminal column', () => {

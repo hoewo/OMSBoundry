@@ -18,6 +18,10 @@
           <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="payable" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M3 14v4h14v-4"/></svg></i><span><strong>应付支付</strong></span><b>⌄</b></button>
           <div class="oms-v1__nav-sub" aria-label="应付支付二级菜单"><button class="is-active" type="button" data-oms-v1-tab="payables" data-oms-v1-tab-page="payable">应付管理</button><button type="button" data-oms-v1-tab="payments" data-oms-v1-tab-page="payable">支付记录</button><button type="button" data-oms-v1-tab="incoming-invoices" data-oms-v1-tab-page="payable">发票管理</button></div>
         </div>
+        <div class="oms-v1__nav-group" data-oms-v1-nav-group="internal">
+          <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="internal" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V7l7-4 7 4v10M7 17v-5h6v5M6 8h1M10 8h1M14 8h1"/></svg></i><span><strong>公司内部管理</strong></span><b>⌄</b></button>
+          <div class="oms-v1__nav-sub" aria-label="公司内部管理二级菜单"><button class="is-active" type="button" data-oms-v1-tab="members" data-oms-v1-tab-page="internal">成员管理</button><button type="button" data-oms-v1-tab="payroll" data-oms-v1-tab-page="internal">工资管理</button><button type="button" data-oms-v1-tab="finance" data-oms-v1-tab-page="internal">财务管理</button></div>
+        </div>
       </nav>
       <div class="oms-v1__rail-foot"><span class="oms-v1__live-dot"></span><span>经营工作台</span></div>
     </aside>
@@ -32,6 +36,7 @@
         <div data-oms-v1-mobile-subnav="projects"><button class="is-active" type="button" data-oms-v1-tab="project-list" data-oms-v1-tab-page="projects">项目列表</button><button type="button" data-oms-v1-tab="clients" data-oms-v1-tab-page="projects">甲方管理</button><button type="button" data-oms-v1-tab="contractors" data-oms-v1-tab-page="projects">施工方管理</button></div>
         <div data-oms-v1-mobile-subnav="receivable"><button class="is-active" type="button" data-oms-v1-tab="receivables" data-oms-v1-tab-page="receivable">应收管理</button><button type="button" data-oms-v1-tab="outgoing-invoices" data-oms-v1-tab-page="receivable">开票管理</button><button type="button" data-oms-v1-tab="receipts" data-oms-v1-tab-page="receivable">回款记录</button></div>
         <div data-oms-v1-mobile-subnav="payable"><button class="is-active" type="button" data-oms-v1-tab="payables" data-oms-v1-tab-page="payable">应付管理</button><button type="button" data-oms-v1-tab="payments" data-oms-v1-tab-page="payable">支付记录</button><button type="button" data-oms-v1-tab="incoming-invoices" data-oms-v1-tab-page="payable">发票管理</button></div>
+        <div data-oms-v1-mobile-subnav="internal"><button class="is-active" type="button" data-oms-v1-tab="members" data-oms-v1-tab-page="internal">成员管理</button><button type="button" data-oms-v1-tab="payroll" data-oms-v1-tab-page="internal">工资管理</button><button type="button" data-oms-v1-tab="finance" data-oms-v1-tab-page="internal">财务管理</button></div>
       </nav>
 
       <main class="oms-v1__content">
@@ -119,10 +124,38 @@
             <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="invoice-incoming" data-oms-v1-sort-key="date" data-oms-v1-sort-default="desc">收票日期</button></th><th><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="invoice-incoming" data-oms-v1-sort-key="project" data-oms-v1-sort-default="asc">项目 / 方向</button></th><th class="is-number is-money"><button class="oms-v1__sort" type="button" data-oms-v1-sort-list="invoice-incoming" data-oms-v1-sort-key="amount" data-oms-v1-sort-default="desc">金额</button></th><th>备注</th><th></th></tr></thead><tbody data-oms-v1-invoice-body="incoming"></tbody></table></div>
           </div>
         </section>
+
+        <section class="oms-v1__page" data-oms-v1-page="internal">
+          <header class="oms-v1__page-head"><div><h1 data-oms-v1-page-title>成员管理</h1><p>公司成员、工资与内部费用的本地功能验证</p></div></header>
+
+          <div class="oms-v1__tab is-active" data-oms-v1-tab-panel="members">
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar oms-v1__internal-toolbar"><label><span>⌕</span><input type="search" placeholder="搜索姓名、部门或岗位" data-internal-member-search></label><select aria-label="成员状态" data-internal-member-status><option value="">全部状态</option><option value="active">在职</option><option value="inactive">停用</option></select></div><div class="oms-v1__list-actions"><button class="oms-v1__primary" type="button" data-internal-new-member>＋ 新增成员</button></div></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-internal-member-total>0</strong> 条</span></div>
+            <div class="oms-v1__table-wrap"><table class="oms-v1__table oms-v1__internal-table"><thead><tr><th><button class="oms-v1__sort" type="button" data-internal-sort="members" data-key="name">姓名</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="members" data-key="department">部门</button></th><th>岗位</th><th class="is-number is-money"><button class="oms-v1__sort" type="button" data-internal-sort="members" data-key="fixed_salary">固定工资</button></th><th class="is-number is-money">社保基数</th><th class="is-number is-money">公积金基数</th><th><button class="oms-v1__sort" type="button" data-internal-sort="members" data-key="status">状态</button></th><th>操作人</th><th></th></tr></thead><tbody data-internal-member-body></tbody></table></div>
+            <div class="oms-v1__pagination" data-internal-pager="members"></div>
+          </div>
+
+          <div class="oms-v1__tab" data-oms-v1-tab-panel="payroll">
+            <div class="oms-v1__notice" data-internal-scheme-state><span></span><p>正在读取五险一金缴费方案。</p><button type="button" data-internal-benefit-scheme>设置比例</button></div>
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar oms-v1__internal-toolbar"><label><span>⌕</span><input type="search" placeholder="搜索成员、部门或月份" data-internal-payroll-search></label><input type="month" aria-label="工资月份" data-internal-payroll-month><select aria-label="工资状态" data-internal-payroll-status><option value="">全部状态</option><option value="planned">待发放</option><option value="confirm">待确认</option><option value="partial">部分发放</option><option value="paid">已发放</option></select></div><div class="oms-v1__list-actions"><button class="oms-v1__primary" type="button" data-internal-new-payroll>＋ 新建工资表</button></div></div>
+            <div class="oms-v1__internal-batch" data-internal-payroll-batch hidden><span>已选择 <strong>0</strong> 条</span><button type="button" data-internal-payroll-performance>批量录入绩效</button><button class="is-primary" type="button" data-internal-payroll-paid>确认已发放</button></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-internal-payroll-total>0</strong> 条</span></div>
+            <div class="oms-v1__table-wrap"><table class="oms-v1__table oms-v1__internal-table"><thead><tr><th class="is-check"></th><th><button class="oms-v1__sort" type="button" data-internal-sort="payroll" data-key="month">月份</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="payroll" data-key="member">成员</button></th><th class="is-number is-money">固定工资</th><th class="is-number is-money">绩效</th><th class="is-number is-money">个人五险一金</th><th class="is-number is-money"><button class="oms-v1__sort" type="button" data-internal-sort="payroll" data-key="payable">发放金额</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="payroll" data-key="pay_date">发薪日期</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="payroll" data-key="status">状态</button></th><th>操作人</th><th></th></tr></thead><tbody data-internal-payroll-body></tbody></table></div>
+            <div class="oms-v1__pagination" data-internal-pager="payroll"></div>
+          </div>
+
+          <div class="oms-v1__tab" data-oms-v1-tab-panel="finance">
+            <div class="oms-v1__list-head"><div class="oms-v1__toolbar oms-v1__internal-toolbar"><label><span>⌕</span><input type="search" placeholder="搜索事项、申请人或收款方" data-internal-finance-search></label><select aria-label="财务类型" data-internal-finance-type><option value="">全部类型</option><option value="reimbursement">报销</option><option value="payment_request">付款申请</option></select><select aria-label="支付状态" data-internal-finance-status><option value="">全部状态</option><option value="draft">草稿</option><option value="pending">待支付</option><option value="paid">已支付</option></select></div><div class="oms-v1__list-actions"><button class="oms-v1__primary" type="button" data-internal-new-finance>＋ 新增申请</button></div></div>
+            <div class="oms-v1__internal-batch" data-internal-finance-batch hidden><span>已选择 <strong>0</strong> 条</span><button class="is-primary" type="button" data-internal-finance-paid>确认已支付</button></div>
+            <div class="oms-v1__result-line"><span>共 <strong data-internal-finance-total>0</strong> 条</span></div>
+            <div class="oms-v1__table-wrap"><table class="oms-v1__table oms-v1__internal-table"><thead><tr><th class="is-check"></th><th><button class="oms-v1__sort" type="button" data-internal-sort="finance" data-key="type">类型</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="finance" data-key="title">事项</button></th><th>申请人</th><th>收款方</th><th class="is-number is-money"><button class="oms-v1__sort" type="button" data-internal-sort="finance" data-key="amount">金额</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="finance" data-key="business_date">发生日期</button></th><th><button class="oms-v1__sort" type="button" data-internal-sort="finance" data-key="status">状态</button></th><th>操作人</th><th></th></tr></thead><tbody data-internal-finance-body></tbody></table></div>
+            <div class="oms-v1__pagination" data-internal-pager="finance"></div>
+          </div>
+        </section>
       </main>
 
       <nav class="oms-v1__mobile-nav" aria-label="OMS 一期移动导航">
-        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button>
+        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button><button type="button" data-oms-v1-nav="internal"><i>内</i><span>内部</span></button>
       </nav>
     </div>
 

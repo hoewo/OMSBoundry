@@ -90,6 +90,18 @@ var omsPhase1CSS string
 //go:embed oms_phase1.js
 var omsPhase1JS string
 
+// omsPhase1InternalModel contains exact local calculations for the company
+// internal-management interaction candidate. It does not own persisted facts.
+//
+//go:embed oms_phase1_internal_model.js
+var omsPhase1InternalModelJS string
+
+// omsPhase1Internal is a local-only interaction candidate for members, payroll
+// and internal expense requests. It persists only in the current browser.
+//
+//go:embed oms_phase1_internal.js
+var omsPhase1InternalJS string
+
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string
 

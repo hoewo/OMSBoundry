@@ -1,5 +1,7 @@
 # OMSBizFoundry 验证入口
 
+2026-10-23 BF-180 本地候选已验证、未发布：Node 模型回归覆盖精确十进制转分、大数、五险一金逐项取整和“到达发薪日不得自动变成已发放”；Workbench Go 测试覆盖新静态资源和页面标记。浏览器从空数据走通新增成员、确认缴费方案、生成月度工资、批量录入绩效、确认发放、新增报销和付款申请、批量确认支付，列表和操作人同步更新，控制台无错误。正式环境失败关闭；未执行 `oatest` 部署，也未修改任何 Owner 数据。复验入口：`http://127.0.0.1:18183/?preview=oa&view=oms-v1`。[规格](./specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)
+
 2026-10-22 BF-179 已发布并验证：操作列回归 2/2 断言九个表头末列、五类动态详情单元格及 76px 右对齐 CSS；与金额、分页和主体候选合并的 Node 回归 9/9 通过。Workbench Go test／vet、前端 TypeScript check、206/206 测试、双 bundle build、公网验收单测 2/2 和 Python 语法检查通过。本地浏览器在应收管理页复核表头末列计算样式为 76px、`text-align:right`，其右边界与表格右边界一致。公网只替换 Workbench 为 v1.30，备份、D1 `check`、17/17 healthy、正式登录与五 Owner 只读复验通过，业务写入为 0；版本化 CSS `.10` 返回不可变缓存资源并包含操作列右对齐规则。[报告](./reports/oms-phase1-detail-action-column-publication-20261022.md)
 
 2026-10-22 BF-178 已发布并验证：金额列静态回归 3/3 断言十个金额表头、五类动态金额单元格、固定最小宽度、无负边距的全宽排序按钮、数值右对齐和 tabular lining figures；与分页、主体候选合并的 Node 回归 10/10 通过。Workbench `node --check`、Go test／vet、前端 TypeScript check、206/206 测试和双 bundle build 通过。本地浏览器在应收管理页读取三个金额表头的计算样式均为 132px、右对齐、`lining-nums tabular-nums`，表头按钮距单元格右边界均为 14px。公网只替换 Workbench 为 v1.29，备份、D1 `check`、17/17 healthy、正式登录与五 Owner 只读复验通过，业务写入为 0；版本化 CSS／JS 均为 `.9` 且不可变缓存生效。[报告](./reports/oms-phase1-money-column-alignment-publication-20261022.md)

@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-23 BF-180 本地候选已实现、等待用户体验：独立分支提供成员新增／编辑、五险一金方案、月度工资生成、绩效批量录入、已发放批量确认，以及报销／付款申请的草稿、待支付和已支付流程；三个列表均支持筛选、排序和分页。候选只在本地演示模式保存数据并在正式环境失败关闭，本轮不部署。下一步先根据体验结果收口字段和操作，再分别决定 People 接入、Payroll Owner、申请／审批 Owner、Evidence、Money 建议和 IAM 权限；未作决定前不得把浏览器模型提升为正式架构。
+
 2026-10-22 BF-179 已完成并发布：九张业务表格的末列统一为 76px 右对齐详情操作列，五类动态数据行共用同一终端单元格规则，空状态不受影响。新增操作列回归 2/2，与金额、分页和主体候选合并的 Node 回归 9/9、Workbench Go test／vet、前端 TypeScript check、206/206 测试、双 bundle build及公网验收单测 2/2 通过；本地浏览器计算样式确认表头末列为 76px、右对齐且右边界与表格一致。源码为 `main@cd84894`，公网 Workbench 为 v1.30；升级前完整备份、D1 检查、17/17 健康、正式登录／五 Owner 只读验收和公网不可变 CSS 复核通过。[发布证据](./reports/oms-phase1-detail-action-column-publication-20261022.md)
 
 2026-10-22 BF-178 已完成并发布：十个金额表头和五类动态金额单元格已收口为专用 `is-money` 语义，统一 132px 最小宽度、同一右边界、排序按钮内边距、nowrap 和 tabular lining figures；项目状态列保持独立。新增金额列静态回归 3/3，本地 Node 回归 10/10、Workbench Go test／vet、前端 TypeScript check、206/206 测试、双 bundle build 和浏览器计算样式复核通过。源码为 `main@37ec7e3`，公网 Workbench 为 v1.29；升级前完整备份、D1 检查、17/17 健康、正式登录／五 Owner 只读验收和公网不可变资源复核通过。[发布证据](./reports/oms-phase1-money-column-alignment-publication-20261022.md)

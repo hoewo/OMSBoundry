@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-23 BF-180 公司内部管理候选边界：Workbench 新增的页面和 `localStorage` 模型仅用于本地交互验证，不拥有正式成员、工资、申请、审批或资金事实；非演示环境在访问持久化逻辑前失败关闭。目标态中 People & Groups 提供人员与组织事实，独立 Payroll 拥有工资期间、成员／比例快照、精确计算和确认历史，报销／付款申请来源应用拥有表单及未来审批，Money Flow 只接收确认后的义务建议或实际资金。各边界只能通过版本化端口和快照协作，不得共享表、跨库写或让 Workbench 成为 Owner。本轮不新增服务、数据库、API、Capability、Grant、路由或 Suite Manifest。
+
 2026-10-22 BF-179 Workbench 操作列投影：列表末列是表现层导航 affordance，不拥有业务事实。Workbench 通过表头末列和 `tr[data-oms-v1-row] > td:last-child` 建立统一 76px 右对齐边界，保持动态模板无需复制列样式，并显式排除没有 `data-oms-v1-row` 的空状态行。该变化不新增服务、数据库、API、Capability、Grant、路由或跨应用读取。
 
 2026-10-22 BF-178 Workbench 金额列投影：金额列是前端对既有精确金额字符串的排版语义，不成为新的计算或事实层。Workbench 在应收、应付、Billing 和 Money 的列表投影中给金额表头与数值单元格增加 `is-money`，统一列宽、右边界和 tabular lining figures；排序 accessors、Owner 返回值、整数最小货币单位及两位小数格式保持不变。项目状态列和非金额数字不复用该语义。该变化不新增服务、数据库、共享表、API、Capability、Grant 或跨应用读取。
