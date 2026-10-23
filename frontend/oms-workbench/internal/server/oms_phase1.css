@@ -242,6 +242,7 @@ body.oms-v1-active.oms-v1-dialog-open{overflow:hidden}body.oms-v1-active.oms-v1-
 .oms-v1__internal-batch span{margin-right:auto;color:#53615a;font-size:11px}.oms-v1__internal-batch strong{color:var(--ink)}
 .oms-v1__internal-batch button{min-height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#53615a;font-size:11px;font-weight:700}
 .oms-v1__internal-batch button.is-primary{border-color:var(--green);background:var(--green);color:#fff}
+.oms-v1__internal-batch button:disabled{cursor:not-allowed;opacity:.46}
 .oms-v1__form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .oms-v1__form-grid>.is-wide{grid-column:1/-1}
 .oms-v1__rate-table{display:grid;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}

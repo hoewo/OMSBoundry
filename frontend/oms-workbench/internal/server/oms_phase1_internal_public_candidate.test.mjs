@@ -15,3 +15,11 @@ test('public internal candidate does not silently fail closed after login',()=>{
   assert.doesNotMatch(script,/dataset\.demoPreview!=='true'/);
   assert.doesNotMatch(script,/尚未接入正式业务服务/);
 });
+
+test('batch tables expose explicit select all and clear controls',()=>{
+  for(const marker of ['data-internal-payroll-select-all','data-internal-payroll-clear','data-internal-finance-select-all','data-internal-finance-clear'])assert.match(html,new RegExp(marker));
+  assert.match(script,/view\.selectablePayroll=items\.filter\(item=>!item\.line\.paid_at\)/);
+  assert.match(script,/view\.selectableFinance=items\.filter\(item=>item\.status==='pending'\)/);
+  assert.match(script,/data-internal-payroll-select-all[^\n]+view\.selectablePayroll/);
+  assert.match(script,/data-internal-finance-select-all[^\n]+view\.selectableFinance/);
+});

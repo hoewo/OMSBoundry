@@ -578,7 +578,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261023.2",
+		"assets/oms-phase1.css?v=20261023.3",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
 		"assets/oms-phase1.js?v=20261023.2",
 		`data-oms-v1-flow="receivable-total"`,
@@ -614,11 +614,15 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"data-internal-member-body",
 		"data-internal-payroll-body",
 		"data-internal-payroll-sync",
+		"data-internal-payroll-select-all",
+		"data-internal-payroll-clear",
 		"data-internal-finance-body",
+		"data-internal-finance-select-all",
+		"data-internal-finance-clear",
 		`data-subject-id="88888888-8888-4888-8888-888888888888"`,
 		"体验版数据仅保存在当前登录账号的本浏览器中",
 		"assets/oms-phase1-internal-model.js?v=20261023.2",
-		"assets/oms-phase1-internal.js?v=20261023.3",
+		"assets/oms-phase1-internal.js?v=20261023.4",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -683,7 +687,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261023.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261023.3", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261023.3", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261023.4", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
