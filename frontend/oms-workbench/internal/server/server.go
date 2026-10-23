@@ -438,7 +438,7 @@ const pageHTML = `<!doctype html>
 <body class="{{if and .Authenticated .OMSPhase1}}oms-v1-active{{end}}" data-demo-preview="{{.DemoPreview}}">{{if .Authenticated}}{{if .DemoPreview}}<div class="demo-preview-badge" role="status"><strong>OA 界面演示</strong><span>演示数据 · 不读取或写入真实业务</span></div>{{end}}{{if .OMSPhase1}}
 <div class="ant-layout app-shell"><section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content"><section class="oa-view is-active" data-view="oms-v1" data-page-hydrated="true">{{template "oms-phase1-body" .}}</section></div></main></section></div>
 <script src="assets/oms-phase1-pagination.js?v=20261022.6" defer></script>
-<script src="assets/oms-phase1.js?v=20261023.1" defer></script>
+<script src="assets/oms-phase1.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.1" defer></script>
 <script src="assets/oms-phase1-internal.js?v=20261023.1" defer></script>
 {{else}}<div class="ant-layout app-shell">

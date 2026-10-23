@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发决策总表
 
-2026-10-23 BF-180（已接受／本地候选／未发布）：OMS 侧栏可以在独立分支加入“公司内部管理”，二级入口固定为成员管理、工资管理和财务管理。成员保存固定工资和缴费基数，绩效属于月度工资；计划发薪日只能触发待确认，不能制造已发放事实；报销和付款申请允许草稿、待支付及外部付款后的确认。金额、比例和计算必须使用整数最小单位／整数万分比。当前实现仅允许本地演示预览使用 `localStorage`，正式环境必须失败关闭；不新增 Owner、数据库、API、Capability、Grant、统计、审批、个税、银行支付或 Money 写入。目标所有权仍分别归 People & Groups、未来 Payroll、申请来源应用和 Money Flow。[规格](./specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)
+2026-10-23 BF-180（已接受／本地候选／未发布）：OMS 侧栏可以在独立分支加入“公司内部管理”，二级入口固定为成员管理、工资管理和财务管理。成员保存固定工资和缴费基数，绩效属于月度工资；计划发薪日只能触发待确认，不能制造已发放事实；报销和付款申请允许草稿、待支付及外部付款后的确认。金额、比例和计算必须使用整数最小单位／整数万分比。所有录入弹窗只允许显式关闭、取消或成功保存关闭，点击半透明遮罩不得丢弃表单。当前实现仅允许本地演示预览使用 `localStorage`，正式环境必须失败关闭；不新增 Owner、数据库、API、Capability、Grant、统计、审批、个税、银行支付或 Money 写入。目标所有权仍分别归 People & Groups、未来 Payroll、申请来源应用和 Money Flow。[规格](./specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)
 
 2026-10-22 BF-179（已接受／已发布／列表操作列视觉基线）：项目、甲方、施工方、应收、应付、开票、收票、回款和支付表格的最后一列是详情操作列，统一使用 76px 最小宽度、右对齐和单行按钮；表头空占位与按钮沿表格最右边界排列。规则只作用于真实数据行，不能压缩空状态的跨列提示。整行点击和“详情”按钮继续进入同一详情，不改变 Owner、API、schema、Capability、Grant 或业务数据。公网 Workbench v1.30 已发布并完成 D1 与正式只读链路复验。[发布证据](./reports/oms-phase1-detail-action-column-publication-20261022.md)
 
