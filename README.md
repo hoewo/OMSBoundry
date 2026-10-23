@@ -1,6 +1,6 @@
 # OMSBizFoundry
 
-当前公司内部管理体验版（BF-181）：用户确认把 BF-180 的成员、工资和财务管理候选发布到 `oatest` 继续体验。页面仍需正式 IAM 登录，但这些新增记录只按 Tenant＋登录 Subject 保存在当前浏览器，不写入服务端、不跨浏览器或设备同步，也不代表新 Owner、审批、Money 或银行接入；页面必须持续显示这一边界。[范围说明](./docs/specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)
+当前公司内部管理体验版（BF-181）：BF-180 的成员、工资和财务管理候选已随公网 Workbench v1.31 发布到 `oatest`。页面仍需正式 IAM 登录，但这些新增记录只按 Tenant＋登录 Subject 保存在当前浏览器，不写入服务端、不跨浏览器或设备同步，也不代表新 Owner、审批、Money 或银行接入；页面持续显示这一边界。[发布报告](./docs/reports/oms-company-internal-browser-candidate-publication-20261023.md)
 
 当前 OMS 列表操作列规则（BF-179）：项目、甲方、施工方、应收、应付、票据、回款和支付列表的“详情”固定在最右侧 76px 操作列并右对齐；空状态不套用该列宽。整行进入详情的既有交互保持不变。该规则已由公网 Workbench v1.30 验证并发布。[发布报告](./docs/reports/oms-phase1-detail-action-column-publication-20261022.md)
 
