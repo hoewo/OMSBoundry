@@ -1,6 +1,8 @@
 # OMSBizFoundry 开发决策总表
 
-2026-10-23 BF-182（已接受／本地交互修复）：工资和财务两个支持批量处理的列表必须持续显示选择操作条，并提供明确的“全选”和“取消全选”。全选只作用于当前搜索／筛选结果中的可操作记录，可跨当前分页选择；已发放工资、草稿或已支付申请等不可进入当前批量动作的记录不得被选中。搜索或筛选条件改变时清空原选择，避免对当前不可见记录误操作；批量动作在选择数为 0 时禁用。该修复只改变 Workbench 浏览器交互，不新增业务事实、后端 Owner、API、Capability、Grant 或自动支付行为。[规格](./specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)
+2026-10-24 BF-183（已接受／已发布／筛选控件布局基线）：统一自定义选择器在工具栏中是实际输入控件，不得继承普通说明文字的自动左边距或窄视口隐藏规则。财务管理的“全部类型”必须紧邻搜索框；右侧“全部状态”和新增动作继续由列表操作区承载。该规则适用于工具栏内全部统一选择器，只改变 Workbench 展示，不改变筛选含义、浏览器存储、Owner、API、schema、Capability、Grant 或业务数据。公网 Workbench v1.32 已发布并完成备份、D1、正式登录、五 Owner 只读与不可变 CSS 复验。[发布报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)
+
+2026-10-23 BF-182（已接受／已发布／批量选择交互）：工资和财务两个支持批量处理的列表必须持续显示选择操作条，并提供明确的“全选”和“取消全选”。全选只作用于当前搜索／筛选结果中的可操作记录，可跨当前分页选择；已发放工资、草稿或已支付申请等不可进入当前批量动作的记录不得被选中。搜索或筛选条件改变时清空原选择，避免对当前不可见记录误操作；批量动作在选择数为 0 时禁用。该修复只改变 Workbench 浏览器交互，不新增业务事实、后端 Owner、API、Capability、Grant 或自动支付行为。该交互随 Workbench v1.32 发布。[规格](./specs/assembly/oms-company-internal-management-local-mvp-v0.1.md) [发布报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)
 
 2026-10-23 BF-181（已接受／已发布／公网浏览器体验边界）：用户确认把 BF-180 公司内部管理候选部署到 `oatest` 继续体验。该调整只把浏览器交互表面放入正式登录后的 OMS，不把 `localStorage` 提升为正式业务事实：存储 Key 必须同时包含 Tenant 与登录 Subject，页面必须明确“只保存在当前浏览器、不跨设备同步”，脚本不得把成员、工资或财务申请发送给现有 Owner。真实成员、Payroll、申请／审批和 Money 接入仍需独立设计；未接正式后端前不得用于生产工资或财务记账。公网 Workbench v1.31 已发布并完成备份、D1、正式登录与资源复验。[发布报告](./reports/oms-company-internal-browser-candidate-publication-20261023.md)
 

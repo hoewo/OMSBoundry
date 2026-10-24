@@ -18,6 +18,7 @@
 
 ## 产品边界
 
+- 2026-10-24 财务筛选控件排版修复已发布（BF-183）：工具栏中的统一自定义选择器必须紧邻搜索框排列，通用统计文字才可使用自动左边距；窄视口规则不得把自定义选择器当成普通说明文字隐藏。BF-182 的工资／财务“全选、取消全选”也随同一 Workbench v1.32 发布。该批只改变 Workbench 展示和浏览器交互，不新增 Owner、API、schema、Capability、Grant，不修改或清除业务数据；证据见 [`docs/reports/oms-finance-filter-toolbar-publication-20261024.md`](./docs/reports/oms-finance-filter-toolbar-publication-20261024.md)。
 - 2026-10-23 用户要求在独立分支验证 OMS“公司内部管理”（BF-180）：侧栏新增一级入口，下设成员管理、工资管理和财务管理；成员保存固定工资与社保／公积金基数，绩效按月录入；工资以计划发薪日区分待发放／待确认，只能在外部实际发薪后单条或批量确认已发放；报销和付款申请按草稿／待支付／已支付流转并记录操作人。当前只实现浏览器本地交互和精确金额计算，不做统计、审批、个税、银行支付或公网部署，不新增 Owner、数据库、API、Capability、Grant 或 Suite Manifest。People & Groups 仍只拥有人与组织事实；未来 Payroll 拥有工资期间与计算快照，申请来源应用拥有草稿／审批，Money 只接收确认后的义务建议或实际资金。范围见 [`docs/specs/assembly/oms-company-internal-management-local-mvp-v0.1.md`](./docs/specs/assembly/oms-company-internal-management-local-mvp-v0.1.md)。
 
 - 2026-10-22 用户确认列表“详情”是最右侧操作列（BF-179）：项目、主体、应收、应付、票据和实际收付款列表的末列必须使用统一 76px 宽度并右对齐，表头占位与按钮共用同一右边界；空状态行不得误套操作列宽度。该修复只改变 Workbench 排版，不改变整行进入详情的交互、Owner、API、schema、Grant 或业务数据。

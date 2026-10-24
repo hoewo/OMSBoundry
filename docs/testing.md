@@ -1,6 +1,8 @@
 # OMSBizFoundry 验证入口
 
-2026-10-23 BF-182 本地交互验证：252 项 Node 回归全部通过，新增静态断言覆盖工资／财务批量条的全选和取消全选标记、工资只纳入未发放行、财务只纳入待支付申请；`node --check`、Workbench Go test／vet 和 `git diff --check` 通过。本地浏览器在工资管理页确认初始显示“已选择 0 条”，取消全选、批量录入绩效和确认已发放均禁用；点击全选后只勾选 2 条未发放工资，1 条已发放工资保持禁用，选择数变为 2，批量动作启用；点击取消全选后复原为 0。财务页现有 2 条均为已支付，因此全选和批量确认保持禁用。静态资源更新为 CSS `.3`、内部管理脚本 `.4`；本轮尚未部署公网。
+2026-10-24 BF-183 已发布并验证：新增 Go 静态回归断言工具栏普通说明与 `.oms-v1__select` 分流，禁止通用 `span` 规则推开或隐藏统一选择器；Workbench Go test／vet、脚本语法、内部管理模型与公网页面 8/8 定向 Node 回归、`git diff --check` 和本地视觉复核通过。公网 Workbench v1.32 镜像为 `sha256:5f3e3a25396c7b7b0ec803646bc1ff85301ba3b8e2f38c42d6767549f70ca291`，备份 `20261024T034034Z` 校验通过；只替换 Workbench，其他 16 个容器 ID 不变，D1 `check` 与 17/17 healthy 通过。正式 IAM 登录、五次 Gateway 授权和 Owner 只读返回 Party 5、Project 1、Billing 2、Money 2、Contract workspace 6；版本化 CSS `20261024.1` 返回 immutable 且包含新规则，业务写入为 0。[报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)
+
+2026-10-23 BF-182 本地交互验证并于 2026-10-24 发布：252 项 Node 回归全部通过，新增静态断言覆盖工资／财务批量条的全选和取消全选标记、工资只纳入未发放行、财务只纳入待支付申请；`node --check`、Workbench Go test／vet 和 `git diff --check` 通过。本地浏览器在工资管理页确认初始显示“已选择 0 条”，取消全选、批量录入绩效和确认已发放均禁用；点击全选后只勾选 2 条未发放工资，1 条已发放工资保持禁用，选择数变为 2，批量动作启用；点击取消全选后复原为 0。财务页现有 2 条均为已支付，因此全选和批量确认保持禁用。该交互随 Workbench v1.32 发布，公网边界和运行证据见 [BF-183 报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)。
 
 2026-10-23 BF-181 已发布并验证：源码 `codex/company-internal-management@13a704d` 的 251 项 Node 回归、Workbench Go test／vet、语法和 diff 检查通过；新增回归断言公网页面按 Tenant＋Subject 形成浏览器存储 Key、展示不落服务端提示且不再执行旧的正式环境失败关闭。公网 Workbench v1.31 发布前人工备份和 D1 自动备份均完成并通过 checksum；发布后 D1 `check`、17/17 长运行容器 healthy、正式 IAM 登录／会话／Workbench 页面和 `.3` 内部管理脚本均返回 200。线上 HTML 与脚本确认账号隔离标记、边界提示和新资产生效，脚本不存在旧失败关闭文案。本次没有写入任何 Owner；成员、工资和财务体验记录继续只在当前账号的当前浏览器保存。[报告](./reports/oms-company-internal-browser-candidate-publication-20261023.md)
 
