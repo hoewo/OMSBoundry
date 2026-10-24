@@ -578,7 +578,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261023.3",
+		"assets/oms-phase1.css?v=20261024.1",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
 		"assets/oms-phase1.js?v=20261023.2",
 		`data-oms-v1-flow="receivable-total"`,
@@ -687,7 +687,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261023.3", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261023.4", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261024.1", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261023.4", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -784,6 +784,14 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		if !strings.Contains(omsPhase1CSS, marker) {
 			t.Fatalf("OMS phase 1 unified detail/select style missing %q", marker)
 		}
+	}
+	for _, marker := range []string{".oms-v1__toolbar>span:not(.oms-v1__select){margin-left:auto", ".oms-v1__toolbar>span:not(.oms-v1__select){display:none}"} {
+		if !strings.Contains(omsPhase1CSS, marker) {
+			t.Fatalf("OMS phase 1 toolbar select alignment regression; missing %q", marker)
+		}
+	}
+	if strings.Contains(omsPhase1CSS, ".oms-v1__toolbar>span{margin-left:auto") || strings.Contains(omsPhase1CSS, ".oms-v1__toolbar>span{display:none}") {
+		t.Fatal("OMS phase 1 toolbar generic span styles must not displace or hide unified selects")
 	}
 	for _, marker := range []string{"BF-168: navigation groups expand independently", ".oms-v1__nav-group.is-expanded .oms-v1__nav-sub", ".oms-v1__pagination>.oms-v1__select{flex:0 0 112px", ".oms-v1__pagination .oms-v1__select-trigger>i{flex:0 0 7px"} {
 		if !strings.Contains(omsPhase1CSS, marker) {
