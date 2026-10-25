@@ -659,10 +659,11 @@ digest_text() {
   openssl dgst -sha256 -r | awk '{print $1}'
 }
 
-# Record only table counts, row counts and SHA-256 values.  The canonical row
-# stream is reduced to one SHA-256 per row inside PostgreSQL before it crosses
-# the container boundary, so password hashes, API Key verifiers, account
-# details and other business values never enter the backup evidence file.
+# Record only table/row counts and database-level SHA-256 values. Canonical
+# table rows and public sequence state are reduced to individual SHA-256 values
+# inside PostgreSQL before crossing the container boundary, so password hashes,
+# API Key verifiers, sequence positions and other business values never enter
+# the backup evidence file.
 fingerprint_database_names() {
   printf '%s\n' identity_access
   [ "$1" != true ] || printf '%s\n' contract_ledger
@@ -752,6 +753,14 @@ WITH metadata AS (
   )
   FROM information_schema.triggers
   WHERE trigger_schema='public'
+  UNION ALL
+  SELECT jsonb_build_object(
+    'kind','sequence','schema',schemaname,'name',sequencename,
+    'data_type',data_type::text,'start',start_value,'min',min_value,
+    'max',max_value,'increment',increment_by,'cycle',cycle,'cache',cache_size
+  )
+  FROM pg_sequences
+  WHERE schemaname='public'
 )
 SELECT item::text FROM metadata ORDER BY item::text;
 SQL
@@ -786,6 +795,19 @@ BEGIN
       'INSERT INTO d1_fingerprint_rows(record_kind,table_name,row_digest) '
       'SELECT ''R'',%L,encode(sha256(convert_to(to_jsonb(value)::text,''UTF8'')),''hex'') FROM %I AS value',
       item.table_name,item.table_name
+    );
+  END LOOP;
+
+  FOR item IN
+    SELECT schemaname,sequencename
+    FROM pg_sequences
+    WHERE schemaname='public'
+    ORDER BY schemaname,sequencename
+  LOOP
+    EXECUTE format(
+      'INSERT INTO d1_fingerprint_rows(record_kind,table_name,row_digest) '
+      'SELECT ''S'',%L,encode(sha256(convert_to(jsonb_build_array(last_value,is_called)::text,''UTF8'')),''hex'') FROM %I.%I',
+      item.schemaname || '.' || item.sequencename,item.schemaname,item.sequencename
     );
   END LOOP;
 END $$;

@@ -26,6 +26,8 @@ BF-248 在同一门禁中增加受 checksum 保护的 `database-fingerprints.tsv
 
 BF-249 又覆盖恢复前破坏性边界：mock 篡改 Payroll 表数为 0、重新生成正确外层 checksum，Restore 仍在任何 `down --volumes` 调用前拒绝；另复制成无指纹旧格式并重算清单，兼容恢复正例通过。
 
+BF-250 将 public sequence 的定义以及 `last_value`／`is_called` 加入同一 schema／事实摘要。使用无发布端口、tmpfs 数据目录的 PostgreSQL 18.6 临时容器建立 `bigserial` 表，实际运行生产同形 SQL；调用 `nextval` 前后均输出单条 64 位摘要且两者不同，测试值没有离开数据库，退出 trap 删除容器。P9 mock 另以表事实不变、仅 sequence 状态变化证明 Restore 拒绝。该结果证明 SQL 和漂移检测有效，不替代真实十五库恢复后的有界续写。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

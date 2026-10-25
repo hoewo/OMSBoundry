@@ -213,6 +213,9 @@ case " $* " in
   *' exec -T postgres sh -eu -c '*psql*)
     printf 'T|test_table%s|%s\n' "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}"
     printf 'R|test_table%s|%s\n' "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}"
+    printf 'S|public.test_sequence%s%s|%s%s\n' \
+      "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_SEQUENCE_SUFFIX:-}" \
+      "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_SEQUENCE_SUFFIX:-}"
     exit 0
     ;;
 esac
@@ -323,6 +326,18 @@ if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_DOCKER_MOCK_FINGERPR
   exit 1
 fi
 grep -Fq 'restored database fingerprints do not match the quiesced backup checkpoint' "$test_dir/restore-mismatch.err"
+
+# A sequence-only drift must also change the fact digest. Matching table rows
+# are insufficient because the next generated identifier is checkpoint state.
+if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_DOCKER_MOCK_SEQUENCE_SUFFIX=-advanced \
+  D1_TEST_BACKUP_DIR="$test_dir/backups" D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" \
+  D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" restore "$backup_id" \
+  >"$test_dir/restore-sequence-mismatch.out" 2>"$test_dir/restore-sequence-mismatch.err"; then
+  echo 'P9 restore accepted a sequence-only fingerprint mismatch' >&2
+  exit 1
+fi
+grep -Fq 'restored database fingerprints do not match the quiesced backup checkpoint' \
+  "$test_dir/restore-sequence-mismatch.err"
 
 # A failed Owner dump must still restore the public edge through the trap.
 failure_env="$test_dir/failure.env"

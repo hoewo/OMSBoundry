@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-250：P9 联合恢复指纹已补入 public sequence 的结构参数与 `last_value`／`is_called` 状态，避免只比对表事实却遗漏下一次自增写入位置。短生命周期、无发布端口的 PostgreSQL 18 实测证明 `nextval` 改变摘要，原始业务值未输出，容器已删除；真实十五库恢复与恢复后续写仍未执行。
+
 2026-10-26 BF-249：D1 Restore 现于删除目标卷前校验新指纹的格式、唯一数据库名、表／行计数、摘要和 Suite 选择集合。新增 mock 把 Payroll 表数改成 0 并重算外层 checksum，仍在任何 `down --volumes` 前失败；同时保留无指纹旧备份恢复正例。该源码门禁降低误删风险，但尚未执行真实空目标恢复。
 
 2026-10-26 BF-248：P9 新格式联合备份现在生成受 checksum 保护的 `database-fingerprints.tsv`；全选组合覆盖 IAM＋十四 Owner，记录表／行数量及 schema／事实 SHA-256，原始行先在 PostgreSQL 内散列，不把账号、密码哈希、API Key verifier、金额或业务内容写入证据。空目标 restore 在服务开放前重算，任何漂移失败关闭；旧备份仍可恢复。无状态 mock 的匹配／故意漂移两路和短生命周期 PostgreSQL 18 的 2 表／1 行／零敏感输出均通过，临时容器已删除。真实十五库恢复、Evidence 字节及恢复后业务复跑仍未执行，P9 结论不变。

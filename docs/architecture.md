@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 D1 sequence checkpoint boundary（BF-250）：数据库 checkpoint 不只包含表中当前行，也包含决定下一次自增写入的 public sequence 定义和运行状态。D1 指纹把 sequence 的数据类型、起止／步长／循环／缓存配置纳入 schema 摘要，把 `last_value`／`is_called` 的 PostgreSQL 内 SHA-256 纳入事实摘要；恢复前后任一漂移均在业务服务开放前失败关闭。该门禁只增强恢复一致性，不改变 Owner 数据所有权或以指纹替代恢复后的业务续写验证。
+
 2026-10-26 P9 D1 pre-destructive restore gate（BF-249）：新格式数据库指纹不是被动报告。Restore 在删除目标卷前先校验格式、摘要、唯一数据库集合及与恢复 Suite 选择一致性，只有通过后才可进入空目标重建；外层 checksum 被重新计算也不能放过语义畸形。旧备份没有指纹时保持兼容，但仍受原 selection、artifact 和 checksum 门禁。该顺序降低错误备份破坏目标环境的风险，不把恢复变成自动生产切换。
 
 2026-10-26 P9 D1 recovery fingerprint boundary（BF-248；真实恢复待执行）：D1 新联合备份在 BF-247 停写窗口内，对 IAM 与实际选装 Owner 的 public schema 和事实生成无秘密 SHA-256 指纹；原始行先在 PostgreSQL 内散列，跨容器只传表名和行摘要，最终制品只保留数据库级 schema／事实摘要及表／行计数。IAM Session 数据按既有 dump 语义排除，其他 Tenant、Subject、Person、业务 ID、revision、金额、文件元数据、Money 引用、Key 元数据和审计均由各 Owner 整库事实覆盖。空目标恢复在业务服务启动前逐字比较，差异失败关闭；这不建立共享数据库或跨库事务，也不替代 Evidence 对象字节及恢复后 API 业务复验。
