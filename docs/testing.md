@@ -24,6 +24,8 @@ make d1-p9-composition-test
 
 BF-248 在同一门禁中增加受 checksum 保护的 `database-fingerprints.tsv`：无状态 mock 验证匹配恢复通过、故意漂移在业务服务启动前失败；短生命周期 PostgreSQL 18 又实际执行 schema／事实 SQL，覆盖 2 张表（含空表）、1 行事实和原始敏感值不出库，退出后临时容器已删除。指纹覆盖全选时的 IAM＋十四 Owner，IAM `suite_sessions` 数据按原 dump 契约排除。该 SQL／编排证据仍不等于真实十五库联合恢复、Evidence 字节、恢复后续写或连续浏览器旅程通过。
 
+BF-249 又覆盖恢复前破坏性边界：mock 篡改 Payroll 表数为 0、重新生成正确外层 checksum，Restore 仍在任何 `down --volumes` 调用前拒绝；另复制成无指纹旧格式并重算清单，兼容恢复正例通过。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

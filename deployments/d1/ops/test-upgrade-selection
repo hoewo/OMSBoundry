@@ -13,6 +13,9 @@ cat >"$mock_bin/docker" <<'MOCK'
 set -eu
 printf '%s\n' "$*" >>"$D1_DOCKER_MOCK_LOG"
 case " $* " in
+  *' exec -T postgres sh -eu -c '*psql*)
+    printf '%s\n' 'T|test_table|' 'R|test_table|test-row-digest'
+    ;;
   *' bonus-distribution sh -c '*)
     printf '%s\n' "${D1_DOCKER_MOCK_BONUS_PROFILE:-}"
     ;;

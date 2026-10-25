@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-249：D1 Restore 现于删除目标卷前校验新指纹的格式、唯一数据库名、表／行计数、摘要和 Suite 选择集合。新增 mock 把 Payroll 表数改成 0 并重算外层 checksum，仍在任何 `down --volumes` 前失败；同时保留无指纹旧备份恢复正例。该源码门禁降低误删风险，但尚未执行真实空目标恢复。
+
 2026-10-26 BF-248：P9 新格式联合备份现在生成受 checksum 保护的 `database-fingerprints.tsv`；全选组合覆盖 IAM＋十四 Owner，记录表／行数量及 schema／事实 SHA-256，原始行先在 PostgreSQL 内散列，不把账号、密码哈希、API Key verifier、金额或业务内容写入证据。空目标 restore 在服务开放前重算，任何漂移失败关闭；旧备份仍可恢复。无状态 mock 的匹配／故意漂移两路和短生命周期 PostgreSQL 18 的 2 表／1 行／零敏感输出均通过，临时容器已删除。真实十五库恢复、Evidence 字节及恢复后业务复跑仍未执行，P9 结论不变。
 
 2026-10-26 BF-247：P9 联合备份不再在公网入口开放时顺序 dump。D1 现在记录 Nginx 原运行态，关闭唯一发布端口、执行 0～30 秒有界 drain，再生成全 Owner／Evidence 检查点；`backup-consistency.env` 与全部对象一起进入 checksum。普通备份成功或任一 Owner dump 失败均恢复原入口；升级预备份成功后保持停写直到 Compose 替换。P9 mock 已覆盖顺序、异常 trap、非法 drain、Finance／Payroll dump、checksum 和空目标 restore 命令图；upgrade selection 与 release bundle 回归通过。未启动容器，真实联合恢复和恢复后业务复跑仍待执行。

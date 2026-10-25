@@ -663,6 +663,24 @@ digest_text() {
 # stream is reduced to one SHA-256 per row inside PostgreSQL before it crosses
 # the container boundary, so password hashes, API Key verifiers, account
 # details and other business values never enter the backup evidence file.
+fingerprint_database_names() {
+  printf '%s\n' identity_access
+  [ "$1" != true ] || printf '%s\n' contract_ledger
+  [ "$2" != true ] || printf '%s\n' money_flow
+  [ "$3" != true ] || printf '%s\n' people_groups
+  [ "$4" != true ] || printf '%s\n' party_directory
+  [ "$5" != true ] || printf '%s\n' project_workspace
+  [ "$6" != true ] || printf '%s\n' evidence_service
+  [ "$7" != true ] || printf '%s\n' business_engagement
+  [ "$8" != true ] || printf '%s\n' billing_invoice
+  [ "$9" != true ] || printf '%s\n' design_operations
+  [ "${10}" != true ] || printf '%s\n' approval_audit_results
+  [ "${11}" != true ] || printf '%s\n' cost_outsourcing
+  [ "${12}" != true ] || printf '%s\n' bonus_distribution
+  [ "${13}" != true ] || printf '%s\n' internal_finance_requests
+  [ "${14}" != true ] || printf '%s\n' payroll
+}
+
 capture_database_fingerprints() {
   output=$1
   shift
@@ -681,21 +699,11 @@ capture_database_fingerprints() {
   fingerprint_internal_finance_requests=${13}
   fingerprint_payroll=${14}
 
-  databases=identity_access
-  [ "$fingerprint_contract" != true ] || databases="$databases contract_ledger"
-  [ "$fingerprint_money" != true ] || databases="$databases money_flow"
-  [ "$fingerprint_people" != true ] || databases="$databases people_groups"
-  [ "$fingerprint_party" != true ] || databases="$databases party_directory"
-  [ "$fingerprint_project" != true ] || databases="$databases project_workspace"
-  [ "$fingerprint_evidence" != true ] || databases="$databases evidence_service"
-  [ "$fingerprint_business_engagement" != true ] || databases="$databases business_engagement"
-  [ "$fingerprint_billing" != true ] || databases="$databases billing_invoice"
-  [ "$fingerprint_production" != true ] || databases="$databases design_operations"
-  [ "$fingerprint_approval_audit_results" != true ] || databases="$databases approval_audit_results"
-  [ "$fingerprint_cost_outsourcing" != true ] || databases="$databases cost_outsourcing"
-  [ "$fingerprint_bonus_distribution" != true ] || databases="$databases bonus_distribution"
-  [ "$fingerprint_internal_finance_requests" != true ] || databases="$databases internal_finance_requests"
-  [ "$fingerprint_payroll" != true ] || databases="$databases payroll"
+  databases=$(fingerprint_database_names \
+    "$fingerprint_contract" "$fingerprint_money" "$fingerprint_people" "$fingerprint_party" \
+    "$fingerprint_project" "$fingerprint_evidence" "$fingerprint_business_engagement" "$fingerprint_billing" \
+    "$fingerprint_production" "$fingerprint_approval_audit_results" "$fingerprint_cost_outsourcing" \
+    "$fingerprint_bonus_distribution" "$fingerprint_internal_finance_requests" "$fingerprint_payroll")
 
   temporary="$output.tmp"
   rm -f "$temporary"
@@ -796,6 +804,35 @@ SQL
 
   mv "$temporary" "$output"
   chmod 600 "$output"
+}
+
+verify_database_fingerprints() {
+  input=$1
+  shift
+  [ -f "$input" ] || { echo "database fingerprint artifact is missing: $input" >&2; exit 1; }
+
+  actual_databases=$(awk -F '\t' '
+    NR==1 { if ($0!="FORMAT\tomsbizfoundry.d1-database-fingerprints/v1") exit 10; next }
+    NR==2 { if ($0!="EXCLUDED_DATA\tidentity_access.public.suite_sessions") exit 11; next }
+    NR==3 { if ($0!="DATABASE\tTABLE_COUNT\tROW_COUNT\tSCHEMA_SHA256\tFACT_SHA256") exit 12; next }
+    NR>=4 {
+      if (NF!=5 || $1!~/^[a-z][a-z0-9_]*$/ || $2!~/^[1-9][0-9]*$/ || $3!~/^[0-9]+$/ ||
+          length($4)!=64 || $4!~/^[0-9a-f]+$/ || length($5)!=64 || $5!~/^[0-9a-f]+$/ || seen[$1]++) exit 13
+      print $1
+      databases++
+    }
+    END { if (NR<4 || databases<1) exit 14 }
+  ' "$input") || {
+    echo 'database fingerprint artifact has an invalid or duplicate record' >&2
+    exit 1
+  }
+  expected_databases=$(fingerprint_database_names "$@")
+  actual_sorted=$(printf '%s\n' "$actual_databases" | sort)
+  expected_sorted=$(printf '%s\n' "$expected_databases" | sort)
+  [ "$actual_sorted" = "$expected_sorted" ] || {
+    echo 'database fingerprint selection does not match the restore application selection' >&2
+    exit 1
+  }
 }
 
 create_backup() {
@@ -1033,6 +1070,11 @@ create_backup() {
     "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" \
     "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" \
     "$backup_enable_bonus_distribution" "$backup_enable_internal_finance_requests" "$backup_enable_payroll"
+  verify_database_fingerprints "$target/database-fingerprints.tsv" \
+    "$backup_enable_contract" "$backup_enable_money" "$backup_enable_people" "$backup_enable_party" \
+    "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" \
+    "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" \
+    "$backup_enable_bonus_distribution" "$backup_enable_internal_finance_requests" "$backup_enable_payroll"
 
   manifest="$target/checksums.sha256"
   : >"$manifest"
@@ -1163,6 +1205,13 @@ restore_backup() {
   [ -d "$target" ] || { echo "backup not found: $target" >&2; exit 2; }
   verify_backup "$target"
   verify_backup_selection "$target/suite-selection.env"
+  if [ -f "$target/database-fingerprints.tsv" ]; then
+    verify_database_fingerprints "$target/database-fingerprints.tsv" \
+      "$enable_contract" "$enable_money" "$enable_people" "$enable_party" \
+      "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" \
+      "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" \
+      "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll"
+  fi
   [ -f "$target/identity-access.dump" ] && [ -f "$target/signing-keys.json" ] || {
     echo "IAM backup artifacts are incomplete" >&2; exit 1;
   }

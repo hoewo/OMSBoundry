@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 D1 pre-destructive restore gate（BF-249）：新格式数据库指纹不是被动报告。Restore 在删除目标卷前先校验格式、摘要、唯一数据库集合及与恢复 Suite 选择一致性，只有通过后才可进入空目标重建；外层 checksum 被重新计算也不能放过语义畸形。旧备份没有指纹时保持兼容，但仍受原 selection、artifact 和 checksum 门禁。该顺序降低错误备份破坏目标环境的风险，不把恢复变成自动生产切换。
+
 2026-10-26 P9 D1 recovery fingerprint boundary（BF-248；真实恢复待执行）：D1 新联合备份在 BF-247 停写窗口内，对 IAM 与实际选装 Owner 的 public schema 和事实生成无秘密 SHA-256 指纹；原始行先在 PostgreSQL 内散列，跨容器只传表名和行摘要，最终制品只保留数据库级 schema／事实摘要及表／行计数。IAM Session 数据按既有 dump 语义排除，其他 Tenant、Subject、Person、业务 ID、revision、金额、文件元数据、Money 引用、Key 元数据和审计均由各 Owner 整库事实覆盖。空目标恢复在业务服务启动前逐字比较，差异失败关闭；这不建立共享数据库或跨库事务，也不替代 Evidence 对象字节及恢复后 API 业务复验。
 
 2026-10-26 P9 D1 checkpoint boundary（BF-247；真实恢复待执行）：D1 联合备份以 Nginx 作为唯一公网写入口屏障。显式备份先记录入口运行态、停止 Nginx并等待有界 drain，再顺序备份各 Owner 与 Evidence；checksum 覆盖 `backup-consistency.env`、Suite selection 和全部备份对象，异常 trap 只在入口原本运行时恢复它。升级的预变更备份保持入口关闭直到新组合完成，避免回滚点之后出现新写入。Owner 事实仍各自独立保存，停入口不制造跨库事务，也不把连接器引用迁入共享表；恢复验收必须核对两侧稳定引用、revision、金额和审计。该边界依赖 C0 证明 Nginx 是唯一主机发布端口，并且当前 Owner 没有独立后台业务写任务；未来新增直连端口或后台写入前必须扩展停写协议。

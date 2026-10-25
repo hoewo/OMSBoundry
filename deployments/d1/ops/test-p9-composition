@@ -289,6 +289,32 @@ PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_
   "$d1" restore "$legacy_backup_id" >"$test_dir/restore-legacy.out"
 grep -Fq "backup restored and verified: $legacy_backup_id" "$test_dir/restore-legacy.out"
 
+# A structurally invalid fingerprint must fail before the destructive empty-
+# target cleanup, even when its outer checksum was recomputed.
+malformed_backup_id="$backup_id-malformed"
+malformed_backup="$test_dir/backups/$malformed_backup_id"
+malformed_log="$test_dir/malformed-docker.log"
+cp -R "$backup" "$malformed_backup"
+awk -F '\t' 'BEGIN { OFS="\t" } $1=="payroll" { $2=0 } { print }' \
+  "$malformed_backup/database-fingerprints.tsv" >"$malformed_backup/database-fingerprints.tsv.tmp"
+mv "$malformed_backup/database-fingerprints.tsv.tmp" "$malformed_backup/database-fingerprints.tsv"
+fingerprint_sha=$(openssl dgst -sha256 -r "$malformed_backup/database-fingerprints.tsv" | awk '{print $1}')
+awk -v sha="$fingerprint_sha" '$2=="database-fingerprints.tsv" {$1=sha} {print}' \
+  "$malformed_backup/checksums.sha256" >"$malformed_backup/checksums.sha256.tmp"
+mv "$malformed_backup/checksums.sha256.tmp" "$malformed_backup/checksums.sha256"
+: >"$malformed_log"
+if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$malformed_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
+  D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static \
+  "$d1" restore "$malformed_backup_id" >"$test_dir/restore-malformed.out" 2>"$test_dir/restore-malformed.err"; then
+  echo 'P9 restore accepted a malformed database fingerprint artifact' >&2
+  exit 1
+fi
+grep -Fq 'database fingerprint artifact has an invalid or duplicate record' "$test_dir/restore-malformed.err"
+if grep -q ' down --volumes --remove-orphans' "$malformed_log"; then
+  echo 'P9 restore performed destructive cleanup before rejecting malformed fingerprints' >&2
+  exit 1
+fi
+
 if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_DOCKER_MOCK_FINGERPRINT_SUFFIX=-changed \
   D1_TEST_BACKUP_DIR="$test_dir/backups" D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" \
   D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" restore "$backup_id" \
