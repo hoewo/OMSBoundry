@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-247：P9 联合备份不再在公网入口开放时顺序 dump。D1 现在记录 Nginx 原运行态，关闭唯一发布端口、执行 0～30 秒有界 drain，再生成全 Owner／Evidence 检查点；`backup-consistency.env` 与全部对象一起进入 checksum。普通备份成功或任一 Owner dump 失败均恢复原入口；升级预备份成功后保持停写直到 Compose 替换。P9 mock 已覆盖顺序、异常 trap、非法 drain、Finance／Payroll dump、checksum 和空目标 restore 命令图；upgrade selection 与 release bundle 回归通过。未启动容器，真实联合恢复和恢复后业务复跑仍待执行。
+
 2026-10-26 BF-246：P8 新增低资源真实浏览器验收。真实 Chromium 在两个随机回环端口加载生产 Feedback 宿主并通过 29 项断言，覆盖跨 origin 单 iframe、项目 115 运行配置形状、诊断 allowlist、提交／状态、未读、迟到响应拒绝、精确 source／origin、关闭／换票、退出清理、403 不可发现与 503 局部降级；其他业务按钮始终可操作。脚本退出已关闭浏览器和临时服务，未启动 Docker。该夹具不连接外部项目，项目 115 通知、有效凭证、双账号／双租户、附件／回复／单条已读和公网 Console 仍待一次真实窗口，P8／P9 状态不提高为完成。
 
 2026-10-26 BF-245：P9 运行前审计发现 D1 把 `FEEDBACK_SDK_URL` 错放在 Bonus 环境而未交给 Workbench，且部分 Feedback 参数会延迟到容器启动才失败。现已修正配置归属，并在 `d1` 状态变化前成组校验首发 `apiKey`、项目 115、HTTPS／回环 URL、HMAC、通知布尔值及单／双 Key 轮换；实际 Compose JSON 正例和七组负例通过。另新增只读 P9 C0 入口与 mock 自测，真实窗口将先核对十四应用、十九服务、19／19 健康、镜像、入口与 schema，且不落盘原始 Compose／inspect 或 Feedback secret。本批未启动容器；P8 真实运行和 P9 全组合仍待执行。

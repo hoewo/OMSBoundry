@@ -54,6 +54,7 @@ PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
 EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
 EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE
 D1_BACKUP_DIR=$test_dir/backups
+D1_BACKUP_DRAIN_SECONDS=0
 ENV
 }
 
@@ -100,6 +101,15 @@ assert_invalid_selection finance-without-money 'ENABLE_MONEY=false' 'ENABLE_INTE
 assert_invalid_selection finance-without-evidence 'ENABLE_EVIDENCE=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
 assert_invalid_selection payroll-without-people 'ENABLE_PEOPLE=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
 assert_invalid_selection payroll-without-money 'ENABLE_MONEY=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+
+invalid_drain_env="$test_dir/invalid-drain.env"
+cp "$env_file" "$invalid_drain_env"
+printf '%s\n' 'D1_BACKUP_DRAIN_SECONDS=31' >>"$invalid_drain_env"
+if D1_ENV_FILE="$invalid_drain_env" D1_PROJECT_NAME=omsbizfoundry-p9-invalid-drain "$d1" config >"$test_dir/invalid-drain.out" 2>"$test_dir/invalid-drain.err"; then
+  echo 'P9 accepted an out-of-range backup drain interval' >&2
+  exit 1
+fi
+grep -Fq 'D1_BACKUP_DRAIN_SECONDS must be an integer from 0 to 30' "$test_dir/invalid-drain.err"
 
 feedback_key='ak_test_0123456789abcdef0123456789abcdef0123456789abcdef'
 feedback_hmac='0123456789abcdef0123456789abcdef'
@@ -180,6 +190,30 @@ cat >"$mock_bin/docker" <<'MOCK'
 #!/bin/sh
 set -eu
 printf '%s\n' "$*" >>"$D1_DOCKER_MOCK_LOG"
+case " $* " in
+  *' ps --status running --services '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_RUNNING_SERVICES-nginx}"
+    exit 0
+    ;;
+  *' ps --all --services '*)
+    printf '%s\n' "${D1_DOCKER_MOCK_ALL_SERVICES-identity-access
+money-flow-ledger
+people-groups
+evidence-service
+internal-finance-requests
+payroll
+unified-workbench
+gateway
+nginx
+postgres}"
+    exit 0
+    ;;
+esac
+if [ "${D1_DOCKER_MOCK_FAIL_PAYROLL:-}" = 1 ]; then
+  case " $* " in
+    *' payroll sh -eu -c '*pg_dump*) exit 17 ;;
+  esac
+fi
 backup_id=''
 for argument in "$@"; do
   case "$argument" in BACKUP_ID=*) backup_id=${argument#BACKUP_ID=};; esac
@@ -196,12 +230,25 @@ chmod +x "$mock_bin/docker"
 : >"$mock_log"
 PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
   D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" backup >"$test_dir/backup.out"
+cp "$mock_log" "$test_dir/backup-docker.log"
 backup=$(find "$test_dir/backups" -mindepth 1 -maxdepth 1 -type d -print -quit)
 [ -n "$backup" ] && [ -f "$backup/checksums.sha256" ] && [ -f "$backup/suite-selection.env" ]
 grep -qx 'ENABLE_INTERNAL_FINANCE_REQUESTS=true' "$backup/suite-selection.env"
 grep -qx 'ENABLE_PAYROLL=true' "$backup/suite-selection.env"
 grep -q 'internal-finance-requests.dump' "$backup/checksums.sha256"
 grep -q 'payroll.dump' "$backup/checksums.sha256"
+grep -q 'backup-consistency.env' "$backup/checksums.sha256"
+grep -qx 'CONSISTENCY_MODE=public-ingress-quiesced-v1' "$backup/backup-consistency.env"
+grep -qx 'PUBLIC_INGRESS_WAS_RUNNING=true' "$backup/backup-consistency.env"
+stop_line=$(grep -n ' stop nginx' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
+first_dump_line=$(grep -n 'identity-access sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
+last_dump_line=$(grep -n 'payroll sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
+restart_line=$(grep -n ' up --detach --no-deps --no-build --wait nginx' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
+[ -n "$stop_line" ] && [ -n "$first_dump_line" ] && [ -n "$last_dump_line" ] && [ -n "$restart_line" ] \
+  && [ "$stop_line" -lt "$first_dump_line" ] && [ "$restart_line" -gt "$last_dump_line" ] || {
+  echo 'P9 joint backup did not quiesce public ingress around every Owner dump' >&2
+  exit 1
+}
 backup_id=$(basename "$backup")
 PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
   D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static \
@@ -210,5 +257,60 @@ grep -q 'internal-finance-requests sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'payroll sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'run --rm --no-deps .*internal-finance-requests sh -eu -c .*pg_restore' "$mock_log"
 grep -q 'run --rm --no-deps .*payroll sh -eu -c .*pg_restore' "$mock_log"
+
+# A failed Owner dump must still restore the public edge through the trap.
+failure_env="$test_dir/failure.env"
+failure_log="$test_dir/failure-docker.log"
+cp "$env_file" "$failure_env"
+printf '%s\n' "D1_BACKUP_DIR=$test_dir/failure-backups" >>"$failure_env"
+: >"$failure_log"
+if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$failure_log" D1_DOCKER_MOCK_FAIL_PAYROLL=1 \
+  D1_TEST_BACKUP_DIR="$test_dir/failure-backups" D1_ENV_FILE="$failure_env" D1_PROJECT_NAME=omsbizfoundry-p9-failure \
+  "$d1" backup >"$test_dir/failure.out" 2>"$test_dir/failure.err"; then
+  echo 'P9 joint backup ignored an injected Payroll dump failure' >&2
+  exit 1
+fi
+failure_stop_line=$(grep -n ' stop nginx' "$failure_log" | head -n 1 | cut -d: -f1)
+failure_restart_line=$(grep -n ' up --detach --no-deps --no-build --wait nginx' "$failure_log" | tail -n 1 | cut -d: -f1)
+[ -n "$failure_stop_line" ] && [ -n "$failure_restart_line" ] && [ "$failure_restart_line" -gt "$failure_stop_line" ] || {
+  echo 'P9 failed backup did not restore public ingress' >&2
+  exit 1
+}
+
+# An intentionally closed edge stays closed after a successful explicit
+# backup; the operation must preserve its original running state.
+closed_env="$test_dir/closed.env"
+closed_log="$test_dir/closed-docker.log"
+cp "$env_file" "$closed_env"
+printf '%s\n' "D1_BACKUP_DIR=$test_dir/closed-backups" >>"$closed_env"
+: >"$closed_log"
+PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$closed_log" D1_DOCKER_MOCK_RUNNING_SERVICES='' \
+  D1_TEST_BACKUP_DIR="$test_dir/closed-backups" D1_ENV_FILE="$closed_env" D1_PROJECT_NAME=omsbizfoundry-p9-closed \
+  "$d1" backup >"$test_dir/closed.out"
+if grep -q ' stop nginx\| up --detach --no-deps --no-build --wait nginx' "$closed_log"; then
+  echo 'P9 backup changed an ingress that was already stopped' >&2
+  exit 1
+fi
+
+# Upgrade owns the stopped edge after a successful pre-mutation backup. It
+# must proceed directly to Compose teardown without a backup/write gap.
+upgrade_env="$test_dir/upgrade.env"
+upgrade_log="$test_dir/upgrade-docker.log"
+cp "$env_file" "$upgrade_env"
+printf '%s\n' "D1_BACKUP_DIR=$test_dir/upgrade-backups" >>"$upgrade_env"
+: >"$upgrade_log"
+PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$upgrade_log" D1_TEST_BACKUP_DIR="$test_dir/upgrade-backups" \
+  D1_ENV_FILE="$upgrade_env" D1_PROJECT_NAME=omsbizfoundry-p9-upgrade "$d1" upgrade >"$test_dir/upgrade.out"
+upgrade_stop_line=$(grep -n ' stop nginx' "$upgrade_log" | head -n 1 | cut -d: -f1)
+upgrade_down_line=$(grep -n ' down --remove-orphans' "$upgrade_log" | head -n 1 | cut -d: -f1)
+[ -n "$upgrade_stop_line" ] && [ -n "$upgrade_down_line" ] && [ "$upgrade_down_line" -gt "$upgrade_stop_line" ] || {
+  echo 'P9 upgrade did not preserve the pre-mutation stop boundary' >&2
+  exit 1
+}
+if sed -n "${upgrade_stop_line},${upgrade_down_line}p" "$upgrade_log" | grep -q ' up --detach --no-deps --no-build --wait nginx'; then
+  echo 'P9 upgrade reopened ingress between its backup and Compose teardown' >&2
+  exit 1
+fi
+tail -n "+$((upgrade_down_line + 1))" "$upgrade_log" | grep -q ' up --detach --no-build --wait'
 
 echo 'PASS D1 P9 composition test'

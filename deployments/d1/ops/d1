@@ -57,6 +57,7 @@ ingress_mode=$(env_value D1_INGRESS_MODE http)
 evidence_storage_mode=$(env_value D1_EVIDENCE_STORAGE_PROVIDER local)
 tenant_id=$(env_value TENANT_ID)
 backup_setting=$(env_value D1_BACKUP_DIR ./.runtime/backups)
+backup_drain_seconds=$(env_value D1_BACKUP_DRAIN_SECONDS 5)
 if [ -f "$d1_dir/.release-bundle" ] && [ "$image_mode" != pull ]; then
   echo "D1 release bundles only support D1_IMAGE_MODE=pull; target hosts must not rebuild application images" >&2
   exit 2
@@ -138,6 +139,8 @@ validate_feedback_config() {
 
 validate_env() {
   validate_feedback_config
+  case "$backup_drain_seconds" in ''|*[!0-9]*) echo "D1_BACKUP_DRAIN_SECONDS must be an integer from 0 to 30" >&2; exit 2;; esac
+  [ "$backup_drain_seconds" -le 30 ] || { echo "D1_BACKUP_DRAIN_SECONDS must be an integer from 0 to 30" >&2; exit 2; }
   case "$reference_oa_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE" >&2; exit 2 ;; esac
@@ -743,12 +746,21 @@ create_backup() {
   host_uid=$(id -u)
   host_gid=$(id -g)
   evidence_stopped=false
+  ingress_was_running=false
+  ingress_stopped=false
   backup_owner=host
+
+  running_services=$(compose_all ps --status running --services)
+  service_in_selection "$running_services" nginx && ingress_was_running=true
 
   restore_backup_state() {
     if [ "$evidence_stopped" = true ]; then
       compose_all up --detach --no-deps --no-build --wait evidence-service >/dev/null 2>&1 || true
       evidence_stopped=false
+    fi
+    if [ "$ingress_stopped" = true ]; then
+      compose_all up --detach --no-deps --no-build --wait nginx >/dev/null 2>&1 || true
+      ingress_stopped=false
     fi
     if [ "$backup_owner" = container ]; then
       compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" -e HOST_UID="$host_uid" -e HOST_GID="$host_gid" \
@@ -767,6 +779,21 @@ create_backup() {
   compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
     'chown postgres:postgres "/backups/$BACKUP_ID"; chmod 0700 "/backups/$BACKUP_ID"'
   backup_owner=container
+
+  # Nginx is the only supported public D1 edge. Quiesce it before the first
+  # Owner dump and leave the private application containers running so their
+  # backup commands remain available. The bounded drain lets requests already
+  # handed to an Owner settle before the sequential cross-Owner checkpoint.
+  if [ "$ingress_was_running" = true ]; then
+    ingress_stopped=true
+    compose_all stop nginx >/dev/null
+    [ "$backup_drain_seconds" -eq 0 ] || sleep "$backup_drain_seconds"
+  fi
+  {
+    printf 'CONSISTENCY_MODE=public-ingress-quiesced-v1\n'
+    printf 'PUBLIC_INGRESS_WAS_RUNNING=%s\n' "$ingress_was_running"
+    printf 'DRAIN_SECONDS=%s\n' "$backup_drain_seconds"
+  } >"$target/backup-consistency.env"
 
   compose exec -T -e BACKUP_ID="$backup_id" identity-access sh -eu -c \
     'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --exclude-table-data=public.suite_sessions --file="/backups/$BACKUP_ID/identity-access.dump"; install -m 600 /data/iam/signing-keys.json "/backups/$BACKUP_ID/signing-keys.json"'
@@ -865,6 +892,13 @@ create_backup() {
     printf '%s  %s\n' "$(digest_file "$artifact")" "$(basename "$artifact")" >>"$manifest"
   done
   chmod 600 "$target"/*
+  if [ "$ingress_stopped" = true ] && [ "$selection_source" = configured ]; then
+    compose_all up --detach --no-deps --no-build --wait nginx >/dev/null
+    ingress_stopped=false
+  fi
+  # Upgrade immediately tears down the current composition. Do not reopen a
+  # write window between its pre-mutation backup and that teardown.
+  [ "$selection_source" != running ] || ingress_stopped=false
   trap - EXIT HUP INT TERM
   echo "backup created: $backup_id ($target)"
 }
@@ -983,6 +1017,17 @@ restore_backup() {
   [ -f "$target/identity-access.dump" ] && [ -f "$target/signing-keys.json" ] || {
     echo "IAM backup artifacts are incomplete" >&2; exit 1;
   }
+  if [ -f "$target/backup-consistency.env" ]; then
+    grep -qx 'CONSISTENCY_MODE=public-ingress-quiesced-v1' "$target/backup-consistency.env" || {
+      echo "backup consistency declaration is invalid" >&2; exit 1;
+    }
+    grep -Eq '^PUBLIC_INGRESS_WAS_RUNNING=(true|false)$' "$target/backup-consistency.env" || {
+      echo "backup ingress declaration is invalid" >&2; exit 1;
+    }
+    grep -Eq '^DRAIN_SECONDS=([0-9]|[12][0-9]|30)$' "$target/backup-consistency.env" || {
+      echo "backup drain declaration is invalid" >&2; exit 1;
+    }
+  fi
   [ "$enable_contract" != true ] || [ -f "$target/contract-ledger.zip" ] || { echo "Contract backup is missing" >&2; exit 1; }
   [ "$enable_money" != true ] || [ -f "$target/money-flow-ledger.zip" ] || { echo "Money Flow backup is missing" >&2; exit 1; }
   [ "$enable_people" != true ] || [ -f "$target/people-groups.dump" ] || { echo "People & Groups backup is missing" >&2; exit 1; }

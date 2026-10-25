@@ -54,7 +54,10 @@ COOKIE_SECURE=true
 PUBLIC_ISSUER=https://你的域名/auth
 EVIDENCE_PUBLIC_BASE_URL=https://你的域名/evidence
 D1_BACKUP_DIR=/独立挂载点/omsbizfoundry-backups
+D1_BACKUP_DRAIN_SECONDS=5
 ```
+
+`d1 backup` 会先确认当前 Nginx 是否运行；若运行，则先关闭这个唯一公网入口并等待 `D1_BACKUP_DRAIN_SECONDS`（允许 0～30 秒，正式环境默认 5 秒）让已经进入 Owner 的请求收敛，再顺序生成联合检查点。所有 dump、Evidence 对象清单和 checksum 完成后才恢复 Nginx；任一备份步骤失败也通过清理 trap 恢复入口。备份目录中的 `backup-consistency.env` 记录这一停写边界并进入 checksum。数据库越大，入口维护窗口会超过 drain 秒数，应在业务低峰执行并提前公告。升级的预变更备份成功后不会短暂重开入口，而是直接进入 Compose 替换，避免备份后又接受无法包含在回滚点中的新写入。
 
 HTTPS 模式由 `compose.https.yaml` 覆盖基础 HTTP 配置。`d1` 会在任何操作前校验证书有效期、主机名、私钥权限和证书／私钥匹配关系；私钥必须是未加密 PEM 且权限为 `0400` 或 `0600`。具体端口、证书落盘和验收规则以 [D1 公网 HTTPS 入口实施方案](./d1-https-ingress.md)为准。证书私钥不得进入仓库、镜像或 `.env`。
 

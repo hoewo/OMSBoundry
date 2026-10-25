@@ -1,10 +1,12 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P9 联合检查点基线（BF-247；真实恢复待执行）：D1 当前只有 Nginx 发布主机端口，Owner 没有后台业务写循环，因此联合备份必须把这个入口作为停写屏障。普通备份记录原运行态、停 Nginx、等待 0～30 秒 drain、顺序生成 Owner／Evidence 检查点和 checksum，再按原状态恢复入口；异常也恢复。升级预备份成功后不重开入口，直接替换组合。`backup-consistency.env` 进入 checksum；该运维编排已过 mock，不能替代真实跨库空目标恢复和事实比对。
+
 2026-10-26 Feedback D1 配置失败关闭基线（BF-245）：SDK URL 属于 Workbench 宿主配置，不得注入 Bonus 或其他业务 Owner；Gateway 的项目、认证、Key、脱敏身份和通知参数与 Workbench SDK URL 必须成组配置。首发固定项目 115 和 `apiKey` 模式，只接受 HTTPS／本机回环、独立身份 HMAC、单 Key 或至多两把轮换 Key；任何部分／歧义／不安全配置在 D1 状态变化前拒绝。本门禁不包含有效 Key 或真实 Feedback 运行证据。
 
 2026-10-26 P9 装配源码基线（BF-244；运行／恢复验收待执行）：D1 的 Finance 与 Payroll 不再允许“Owner 健康但下游闭环未接线”。Finance 以独立工作负载身份取得 Evidence File 与 Money Payment Command 的精确短期能力，Payroll 同样以自身身份读取 People 并登记 Money；D1 选择器分别强制 Finance→Money＋Evidence、Payroll→People＋Money，且 Finance key lifecycle、pull 镜像和停用清理均进入同一装配。静态 Compose、Owner／IAM／Payroll 测试和 release bundle 已通过，未启动容器；全组合连续旅程、备份／空目标恢复、恢复后复跑、digest 和浏览器证据仍待 P9 运行验收，P8 的真实 Feedback 门禁也未完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
-2026-10-26 P8 Feedback V2 源码基线（BF-243；运行验收待执行）：OMS 只拥有受 `feedback.use` 门禁的宿主入口和运行适配，Feedback 平台继续独占反馈、附件、消息、未读与处理状态。Gateway 从可信 Tenant＋Subject 派生版本化 HMAC 身份，Workbench 只保存内存配置并以单一 iframe 和精确 origin／source 通信；桌面、移动、未读、退出清理和故障降级均已接线。部署 Key／HMAC 只允许环境注入，Arckit SDK 另以闭集 allowlist 接收最小非标识诊断。源码、构建和 release bundle 门禁已过，但项目 115 通知、有效凭证、双账号／双租户和真实浏览器尚未验收，P8 未完成、未上线。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+2026-10-26 P8 Feedback V2 源码基线（BF-243／BF-246；外部运行验收待执行）：OMS 只拥有受 `feedback.use` 门禁的宿主入口和运行适配，Feedback 平台继续独占反馈、附件、消息、未读与处理状态。Gateway 从可信 Tenant＋Subject 派生版本化 HMAC 身份，Workbench 只保存内存配置并以单一 iframe 和精确 origin／source 通信；桌面、移动、未读、退出清理和故障降级均已接线。部署 Key／HMAC 只允许环境注入，Arckit SDK 另以闭集 allowlist 接收最小非标识诊断。源码、构建、release bundle 和本地真实 Chromium 跨 origin 宿主门禁已过，但项目 115 通知、有效凭证、双账号／双租户和外部浏览器仍未验收，P8 未完成、未上线。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 
 2026-10-26 P7 实现基线（BF-242）：`/open-api/v1/` 已从凭证底座扩展为员工本人发票报销闭环。Evidence 在独立数据库保存发票 File Version 校验与清理事实，Finance 保存本人申请、发票指纹、提交／撤回／归档／恢复／软删除 revision 和 Money 引用，Money 保存实际资金与核销；三者继续通过版本化端口连接而不共享表。正式 TLS 本地验收覆盖 Evidence／Finance／Money 故障恢复、强重复、危险 PDF、付款唯一性、本人 paid 查询与 Key 撤销。格式／结构和危险主动内容校验不等同通用杀毒；本批未部署 D1／公网，P8／P9 仍待实施。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
