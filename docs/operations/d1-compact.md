@@ -158,7 +158,17 @@ docker compose --env-file deployments/d1/.env -f deployments/d1/compose.yaml log
 
 若多个真实用户同时出现 `429`，先检查 Nginx 渲染配置是否使用单值 `$remote_addr`，以及 Gateway 是否只在私网且启用了可信代理模式。不要改回 `$proxy_add_x_forwarded_for`，它会把客户端可伪造的转发链带入信任边界。完成拓扑变更后至少运行 `go test ./backend/platform/gateway/...`、`sh deployments/d1/ops/test-ingress-mode` 和对应 D1 入口验收。
 
-### 5.1 Contract／Money Party 人工映射
+### 5.1 开放 API 使用记录保留
+
+开放 API 使用记录固定保留 180 天。由受控运维任务定期执行以下命令；`OPERATOR_ID` 使用能回溯到本次运维任务的非秘密标识，不填写账号密码、API Key 或工单正文：
+
+```bash
+deployments/d1/ops/d1 purge-open-api-usage retention-job-20261025
+```
+
+命令只删除到期的脱敏调用元数据，并追加不可变清理记录；不会删除 API Key 元数据、报销、Evidence 或 Money 事实。运行结果必须保存 `run_id`、cutoff 和删除数量。该命令要求已有运行中的 Identity & Access 容器，不会启动全套服务。
+
+### 5.2 Contract／Money Party 人工映射
 
 该操作只记录人工确认的兼容映射，不会切换 Contract／Money 的运行时 Party 来源。先分别在台账容器内运行 `party-migration-preflight`，保存完整 JSON，并逐条人工核对来源摘要、业务引用计数、目标 Directory Party ID／revision 和理由。禁止按名称或登记标识自动合并。
 

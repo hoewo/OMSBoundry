@@ -115,6 +115,12 @@ var omsPhase1PayrollOwnerJS string
 //go:embed oms_phase1_finance_owner.js
 var omsPhase1FinanceOwnerJS string
 
+// omsPhase1OpenAPI lets each authenticated employee manage only their own API
+// keys and inspect masked usage metadata through the IAM-owned API.
+//
+//go:embed oms_phase1_open_api.js
+var omsPhase1OpenAPIJS string
+
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string
 

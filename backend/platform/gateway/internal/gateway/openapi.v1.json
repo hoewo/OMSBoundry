@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OMS1 Employee Invoice Reimbursement API",
+    "version": "1.0.0",
+    "description": "P6 credential and audit boundary. Invoice upload and reimbursement commands are added in P7 without changing this major path."
+  },
+  "servers": [{"url": "/open-api/v1"}],
+  "components": {
+    "securitySchemes": {
+      "employeeApiKey": {"type": "apiKey", "in": "header", "name": "Authorization", "description": "ApiKey <one-time-secret>"}
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["code", "message", "request_id", "retryable", "field_errors"],
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "request_id": {"type": "string"},
+          "retryable": {"type": "boolean"},
+          "field_errors": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Validate the employee API credential and return its bounded context",
+        "security": [{"employeeApiKey": []}],
+        "responses": {"200": {"description": "Current API context"}, "401": {"description": "Invalid credential", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "429": {"description": "Rate limited"}}
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Return the current Tenant, Subject, Person and Key references",
+        "security": [{"employeeApiKey": []}],
+        "responses": {"200": {"description": "Current API context"}, "401": {"description": "Invalid credential"}}
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Return versioned feature availability; Webhook remains unavailable in V1",
+        "security": [{"employeeApiKey": []}],
+        "responses": {"200": {"description": "Open API feature settings"}}
+      }
+    }
+  }
+}

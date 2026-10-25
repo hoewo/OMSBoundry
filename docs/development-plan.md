@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-25 P6 已完成本地门禁（BF-241）：IAM migration 7 已建立员工 API Key、事件、脱敏调用记录和 180 天清理审计；正式 People Reference、当前 Grant／账号复验、一次 secret、期限／数量上限和不可逆撤销已接通。Gateway 已提供 `/open-api/v1/` allowlist、HTTPS、Key／Tenant 限流、统一错误、OpenAPI／中文示例及审计回写；Workbench 已提供开放平台页面和 Webhook 未开放占位。下一阶段进入 P7 Evidence 发票上传、报销命令、本人记录查询和 Finance→Money 纵向闭环；P6 未部署 D1／公网。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
+
 2026-10-25 P5 已完成本地门禁（BF-240）：Internal Finance Requests 的报销／付款草稿、明细、类别、收款与费用归属快照、Evidence 引用、无需审批快照、撤回 revision、敏感访问审计及逐笔／批量付款已经形成独立 PostgreSQL 事实；Finance 经版本化端口把实际付款交付 Money，Money 稳定建立义务、Payment、整单 Allocation 和超额未分配余额。双进程隔离验收覆盖分次／超额、批量部分成功、撤回重提、普通／敏感导出及空目标恢复；Workbench 已切换正式 Owner。下一阶段进入 P6 员工 API Key 与 `/open-api/v1/`；本批未部署 D1／公网。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
 
 2026-10-25 P4 已完成本地门禁（BF-239）：Payroll 的月度工资表、冻结成员／薪酬／账户／方案快照、整数计算、导入预览、核对、同步、状态机和调整批次已形成独立 PostgreSQL 事实；逐人／批量实际发放经版本化连接器进入 Money，形成稳定工资义务、实际资金、核销和超额未分配事实。三进程隔离验收覆盖部分成功、缺账户、二次超额确认和幂等引用；Owner 集成测试覆盖同月并发、未知恢复、零／负实发、作废／替代、补发／扣回和本人可见性。Workbench 正式工资页已接 Owner API。下一阶段进入 P5 财务申请、审批占位与付款确认；本批未部署 D1／公网。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)

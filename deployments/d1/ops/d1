@@ -12,7 +12,7 @@ project=${D1_PROJECT_NAME:-omsbizfoundry}
 compose_override_file=${D1_COMPOSE_OVERRIDE_FILE:-}
 
 usage() {
-  echo "usage: D1_ENV_FILE=path $0 up|apply|status|check|config|images|prepare-images|preflight-upgrade|party-map contract|money INPUT_JSON|backup|upgrade|restore BACKUP_ID|down" >&2
+  echo "usage: D1_ENV_FILE=path $0 up|apply|status|check|config|images|prepare-images|preflight-upgrade|party-map contract|money INPUT_JSON|purge-open-api-usage OPERATOR_ID|backup|upgrade|restore BACKUP_ID|down" >&2
   exit 2
 }
 
@@ -572,6 +572,13 @@ run_party_map() {
   compose_all exec -T "$service" sh -eu -c 'temporary=$(mktemp); trap '\''rm -f "$temporary"'\'' EXIT; cat >"$temporary"; /app/ops party-migration-map --input "$temporary"' <"$input"
 }
 
+purge_open_api_usage() {
+  operator_id=${1:-}
+  [ -n "$operator_id" ] || { echo "purge-open-api-usage requires OPERATOR_ID" >&2; exit 2; }
+  [ "${#operator_id}" -le 128 ] || { echo "purge-open-api-usage OPERATOR_ID is too long" >&2; exit 2; }
+  compose exec -T -e IAM_OPERATOR_ID="$operator_id" identity-access /app/ops purge-open-api-usage
+}
+
 digest_file() {
   openssl dgst -sha256 -r "$1" | awk '{print $1}'
 }
@@ -1047,6 +1054,7 @@ case "$command" in
   prepare-images) prepare_images ;;
   preflight-upgrade) preflight_upgrade ;;
   party-map) run_party_map "${2:-}" "${3:-}" ;;
+  purge-open-api-usage) purge_open_api_usage "${2:-}" ;;
   backup) create_backup ;;
   upgrade)
     preflight_upgrade

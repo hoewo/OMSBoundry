@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"omsbizfoundry/identity-access/internal/apikey"
 	"omsbizfoundry/identity-access/internal/capability"
 	"omsbizfoundry/identity-access/internal/database"
 	"omsbizfoundry/identity-access/internal/httpserver"
@@ -36,6 +37,12 @@ const otherTenantID = "33333333-3333-4333-8333-333333333333"
 const testProjectID = "55555555-5555-4555-8555-555555555555"
 const otherProjectID = "66666666-6666-4666-8666-666666666666"
 
+type echoPersonResolver struct{}
+
+func (echoPersonResolver) ResolveBySubject(_ context.Context, tenantID, _ string) (apikey.PersonReference, error) {
+	return apikey.PersonReference{ID: "77777777-7777-4777-8777-777777777777", TenantID: tenantID, Status: "active", Revision: 1}, nil
+}
+
 func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	pool := openIsolatedDatabase(t)
 	if err := database.Migrate(context.Background(), pool); err != nil {
@@ -44,14 +51,14 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000006_multi_tenant_runtime.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000007_open_api_credentials.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/identity-access-capabilities.json", "../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
+	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/identity-access-capabilities.json", "../../../../../contracts/access/v1/examples/open-api-capabilities.json", "../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +85,11 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := httpserver.New(pool, service, keys, httpserver.Options{})
+	apiKeys, err := apikey.New(pool, keys, echoPersonResolver{}, "https://oms.example.test/auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := httpserver.New(pool, service, keys, httpserver.Options{APIKeys: apiKeys})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +163,26 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": inviteToken, "password": "operator password 123"}, http.StatusOK)
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": inviteToken, "password": "operator password 123"}, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "operator", "operator password 123", http.StatusOK)
+	getJSON(t, operator, server.URL+"/api/v1/api-keys", http.StatusForbidden)
+	for _, action := range []string{apikey.ActionUse, apikey.ActionKeyManage, apikey.ActionSelfAudit} {
+		postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "open-api", "action": action}, http.StatusNoContent)
+	}
+	createdKey := postJSON(t, operator, server.URL+"/api/v1/api-keys", operatorCSRF, map[string]any{"label": "员工报销 CLI", "ttl_days": 180}, http.StatusCreated)
+	keyID := stringField(t, createdKey, "id")
+	if secret := stringField(t, createdKey, "secret"); !strings.HasPrefix(secret, "bfk_") {
+		t.Fatalf("created API Key secret = %q", secret)
+	}
+	keyList := getJSON(t, operator, server.URL+"/api/v1/api-keys", http.StatusOK)
+	items, ok := keyList["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("API Key list = %#v", keyList)
+	}
+	listed, ok := items[0].(map[string]any)
+	if !ok || listed["id"] != keyID || listed["secret"] != nil || listed["tenant_id"] != nil || listed["subject_id"] != nil {
+		t.Fatalf("listed API Key leaked private fields: %#v", listed)
+	}
+	getJSON(t, operator, server.URL+"/api/v1/open-api-usage?scope=tenant", http.StatusForbidden)
+	postJSON(t, operator, server.URL+"/api/v1/api-keys/"+keyID+"/revoke", operatorCSRF, map[string]any{}, http.StatusOK)
 
 	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
 	credentialResponse := postJSON(t, operator, server.URL+"/api/v1/credentials", operatorCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusOK)

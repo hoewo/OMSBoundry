@@ -10,11 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"omsbizfoundry/identity-access/internal/apikey"
 	"omsbizfoundry/identity-access/internal/capability"
 	"omsbizfoundry/identity-access/internal/config"
 	"omsbizfoundry/identity-access/internal/database"
 	"omsbizfoundry/identity-access/internal/httpserver"
 	"omsbizfoundry/identity-access/internal/identity"
+	"omsbizfoundry/identity-access/internal/personreference"
 	"omsbizfoundry/identity-access/internal/policy"
 	"omsbizfoundry/identity-access/internal/signing"
 	"omsbizfoundry/identity-access/internal/workload"
@@ -86,10 +88,21 @@ func run(logger *slog.Logger) error {
 			return err
 		}
 	}
+	var apiKeys *apikey.Service
+	if cfg.PolicyEnabled() {
+		people, err := personreference.New(cfg.PeoplePolicyBaseURL, cfg.PolicyServiceSubjectID, cfg.PublicIssuer, keys, cfg.PolicyTimeout)
+		if err != nil {
+			return err
+		}
+		apiKeys, err = apikey.New(pool, keys, people, cfg.PublicIssuer)
+		if err != nil {
+			return err
+		}
+	}
 	if _, err := service.EnsureBootstrap(startup, identity.BootstrapInput{Username: cfg.BootstrapAdminUsername, DisplayName: cfg.BootstrapAdminDisplayName, Password: cfg.BootstrapAdminPassword}); err != nil {
 		return err
 	}
-	handler, err := httpserver.New(pool, service, keys, httpserver.Options{SessionCookieSecure: cfg.SessionCookieSecure, Workloads: workloads})
+	handler, err := httpserver.New(pool, service, keys, httpserver.Options{SessionCookieSecure: cfg.SessionCookieSecure, Workloads: workloads, APIKeys: apiKeys})
 	if err != nil {
 		return err
 	}

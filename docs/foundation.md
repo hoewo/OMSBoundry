@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P6 实现基线（BF-241）：员工开放凭证已经进入正式 IAM／Gateway 边界。Key 绑定唯一 Tenant、Subject 与当前 People Person，完整 secret 只在创建响应展示一次，数据库仅保存 bcrypt verifier；有效期只允许 30／90／180／365 天且默认 180 天，每人每租户最多 5 个有效 Key。Gateway 只开放版本化 allowlist，经 HTTPS 验证后删除外部认证头、签发 5 分钟有界上下文，并执行每 Key 60／分钟、每 Tenant 600／分钟和来源 IP 防护。员工可在 Workbench 管理 Key、查看本人脱敏调用记录，Webhook 只显示未开放占位；180 天调用元数据有独立清理审计。该阶段没有开放发票上传或报销写入，P7 才实现 BF-221～BF-225、BF-230～BF-234 的业务闭环；未部署 D1／公网。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)
+
 2026-10-25 P5 实现基线（BF-240；取代 BF-185、BF-191～BF-203 的“尚未实施”状态）：Internal Finance Requests 已独立拥有报销／付款申请的正式明细、类别、收款与费用归属快照、Evidence 稳定引用、无需审批快照、撤回 revision、敏感访问审计和 Payment Delivery；Money 独立拥有对应义务、实际付款、整单核销及超额未分配余额。普通读取、全部写响应和普通导出只返回账号尾号，完整读取与敏感导出分别授权并逐条审计；批量付款部分失败不回滚成功项。正式 Workbench 财务页已切换 Owner API。本地双数据库／双进程、空目标恢复和敏感边界门禁通过；未部署 D1／公网，Evidence 实时校验与开放 API 分别留待 P7／P6。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)
 
 2026-10-25 P4 实现基线（BF-239）：Payroll 已独立拥有月度工资期间、成员工资行、冻结计算快照、导入预览、核对、同步、作废／替代、调整批次和逐人／批量实际发放历史；个人与单位五险一金、外部个税、绩效和调整全部以整数精确计算并追加 revision。Payroll 通过版本化 Money Payment Delivery 交付实际付款，Money 为每个工资行稳定建立一个义务并独立保存 Payment／Allocation／超额未分配事实；部分失败不回滚成功项，未知结果只能沿原命令恢复。正式 Workbench 工资页在 People＋Payroll 装配时改用 Owner API。本地 P4 门禁通过，未部署 D1／公网；P5 财务申请仍待实施。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)

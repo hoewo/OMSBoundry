@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"omsbizfoundry/identity-access/internal/apikey"
 	"omsbizfoundry/identity-access/internal/capability"
 	"omsbizfoundry/identity-access/internal/config"
 	"omsbizfoundry/identity-access/internal/database"
@@ -24,8 +26,8 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) != 2 || (os.Args[1] != "check" && os.Args[1] != "migrate" && os.Args[1] != "validate-contracts") {
-		return fmt.Errorf("usage: ops check|migrate|validate-contracts")
+	if len(os.Args) != 2 || (os.Args[1] != "check" && os.Args[1] != "migrate" && os.Args[1] != "validate-contracts" && os.Args[1] != "purge-open-api-usage") {
+		return fmt.Errorf("usage: ops check|migrate|validate-contracts|purge-open-api-usage")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -54,6 +56,17 @@ func run() error {
 	version, err := database.RequireCurrentSchema(ctx, pool)
 	if err != nil {
 		return err
+	}
+	if os.Args[1] == "purge-open-api-usage" {
+		operatorID := strings.TrimSpace(os.Getenv("IAM_OPERATOR_ID"))
+		if operatorID == "" {
+			return fmt.Errorf("IAM_OPERATOR_ID is required for purge-open-api-usage")
+		}
+		result, err := apikey.PurgeUsageRecords(ctx, pool, time.Now().UTC(), operatorID)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"service": "identity-access", "schema_version": version, "status": "usage-purged", "retention_days": 180, "result": result})
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"service": "identity-access", "schema_version": version, "status": "current"})
 }

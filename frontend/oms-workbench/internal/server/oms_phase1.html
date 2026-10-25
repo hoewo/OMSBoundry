@@ -22,6 +22,7 @@
           <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="internal" aria-expanded="false"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V7l7-4 7 4v10M7 17v-5h6v5M6 8h1M10 8h1M14 8h1"/></svg></i><span><strong>公司内部管理</strong></span><b>⌄</b></button>
           <div class="oms-v1__nav-sub" aria-label="公司内部管理二级菜单"><button class="is-active" type="button" data-oms-v1-tab="members" data-oms-v1-tab-page="internal">成员管理</button><button type="button" data-oms-v1-tab="payroll" data-oms-v1-tab-page="internal">工资管理</button><button type="button" data-oms-v1-tab="finance" data-oms-v1-tab-page="internal">财务管理</button></div>
         </div>
+        <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="open-api"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 12a4 4 0 1 1 3-3l7 0v3h-2v2h-2v2h-3v-4zM5 8h.01"/></svg></i><span><strong>开放平台</strong></span></button>
       </nav>
       <div class="oms-v1__rail-foot"><span class="oms-v1__live-dot"></span><span>经营工作台</span></div>
     </aside>
@@ -153,10 +154,20 @@
             <div class="oms-v1__pagination" data-internal-pager="finance"></div>
           </div>
         </section>
+
+        <section class="oms-v1__page" data-oms-v1-page="open-api">
+          <header class="oms-v1__page-head"><div><h1>开放平台</h1><p>为本人发票报销工具创建和管理独立 API Key</p></div><div class="oms-v1__list-actions"><a class="oms-v1__export" href="/open-api/v1/docs" target="_blank" rel="noopener">中文说明</a><a class="oms-v1__export" href="/open-api/v1/openapi.json" download>OpenAPI</a><button class="oms-v1__primary" type="button" data-open-api-new-key>＋ 创建 API Key</button></div></header>
+          <div class="oms-v1__notice" data-open-api-notice><span></span><p>正在读取 API Key。完整 secret 只会在创建成功时显示一次。</p></div>
+          <div class="oms-v1__result-line"><span>本人 API Key · 最多 5 个有效凭证</span></div>
+          <div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th>名称</th><th>前缀</th><th>创建时间</th><th>到期时间</th><th>最后使用</th><th>状态</th><th></th></tr></thead><tbody data-open-api-key-body><tr><td colspan="7"><div class="oms-v1__empty"><strong>正在读取 API Key</strong><span>请稍候。</span></div></td></tr></tbody></table></div>
+          <div class="oms-v1__result-line"><span>本人 API 使用记录 · 仅保留脱敏元数据</span></div>
+          <div class="oms-v1__table-wrap"><table class="oms-v1__table oms-v1__table--plain"><thead><tr><th>调用时间</th><th>Key</th><th>接口动作</th><th>结果</th><th>请求 ID</th><th>来源网络</th></tr></thead><tbody data-open-api-usage-body><tr><td colspan="6"><div class="oms-v1__empty"><strong>正在读取调用记录</strong><span>不保存认证 Header、请求正文或发票内容。</span></div></td></tr></tbody></table></div>
+          <div class="oms-v1__notice is-warning"><span></span><p><strong>Webhook 通知（暂未开放）</strong>　当前不接受或保存回调地址；CLI／Skill 通过本人列表和详情接口轮询状态。</p></div>
+        </section>
       </main>
 
       <nav class="oms-v1__mobile-nav" aria-label="OMS 一期移动导航">
-        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button><button type="button" data-oms-v1-nav="internal"><i>内</i><span>内部</span></button>
+        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button><button type="button" data-oms-v1-nav="internal"><i>内</i><span>内部</span></button><button type="button" data-oms-v1-nav="open-api"><i>钥</i><span>开放</span></button>
       </nav>
     </div>
 

@@ -1,6 +1,16 @@
 # OMSBizFoundry 验证入口
 
-## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4／P5
+## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4／P5／P6
+
+P6 员工 API Key 与开放 API 本地门禁：Identity & Access、Gateway、Workbench 分别以 `GOMAXPROCS=2 go test -p 1 -count=1 ./...` 和 `go vet` 通过；`node --check` 与 `node frontend/oms-workbench/internal/server/oms_phase1_open_api.test.mjs` 验证一次 secret 必须先展示再刷新、嵌套错误码、默认 180／可选 365 天。一次性 PostgreSQL 18.6 中 `go test -tags=integration ./internal/apikey ./internal/httpserver` 验证 migration 7、bcrypt verifier、期限／上限、撤销、撤权、Person 停用、IAM HTTP、本人／租户审计和 180 天清理；Gateway 契约测试覆盖 HTTPS 先于凭证解析、allowlist、签名 scope、60／600 双层及来源限流、统一错误、脱敏 IP、审计回写和内部 IAM 路由不可公网访问。测试容器已停止删除；没有运行 D1 或公网发布。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)
+
+使用记录到期清理在已有 D1 IAM 运行时执行，不启动额外全套服务：
+
+```sh
+D1_ENV_FILE=/受限目录/目标.env deployments/d1/ops/d1 purge-open-api-usage retention-job-YYYYMMDD
+```
+
+输出必须含 `run_id`、固定 180 天 cutoff 和删除数量；清理记录不可修改或删除。
 
 P5 财务申请与付款确认提供双 Owner 隔离重复验收入口：
 

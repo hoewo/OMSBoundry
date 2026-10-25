@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"omsbizfoundry/identity-access/internal/apikey"
 	"omsbizfoundry/identity-access/internal/capabilityauth"
 	"omsbizfoundry/identity-access/internal/identity"
 	"omsbizfoundry/identity-access/internal/signing"
@@ -31,6 +33,7 @@ type principalKey struct{}
 type Options struct {
 	SessionCookieSecure bool
 	Workloads           *workload.Authenticator
+	APIKeys             *apikey.Service
 }
 
 type Server struct {
@@ -38,6 +41,7 @@ type Server struct {
 	identities   *identity.Service
 	keys         *signing.Store
 	workloads    *workload.Authenticator
+	apiKeys      *apikey.Service
 	capabilities *capabilityauth.Verifier
 	secureCookie bool
 	handler      http.Handler
@@ -51,7 +55,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{pool: pool, identities: identities, keys: keys, workloads: options.Workloads, capabilities: capabilities, secureCookie: options.SessionCookieSecure}
+	server := &Server{pool: pool, identities: identities, keys: keys, workloads: options.Workloads, apiKeys: options.APIKeys, capabilities: capabilities, secureCookie: options.SessionCookieSecure}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.home)
 	mux.HandleFunc("GET /health/live", server.live)
@@ -66,6 +70,14 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.Handle("GET /api/v1/session", server.authenticate(http.HandlerFunc(server.currentSession)))
 	mux.Handle("POST /api/v1/logout", server.authenticate(http.HandlerFunc(server.requireCSRF(server.logout))))
 	mux.Handle("POST /api/v1/credentials", server.authenticate(http.HandlerFunc(server.requireCSRF(server.issueCredential))))
+	if server.apiKeys != nil {
+		mux.Handle("GET /api/v1/api-keys", server.authenticate(http.HandlerFunc(server.listAPIKeys)))
+		mux.Handle("POST /api/v1/api-keys", server.authenticate(http.HandlerFunc(server.requireCSRF(server.createAPIKey))))
+		mux.Handle("POST /api/v1/api-keys/{keyID}/revoke", server.authenticate(http.HandlerFunc(server.requireCSRF(server.revokeAPIKey))))
+		mux.Handle("GET /api/v1/open-api-usage", server.authenticate(http.HandlerFunc(server.listOpenAPIUsage)))
+		mux.HandleFunc("POST /api/v1/internal/open-api/authenticate", server.authenticateAPIKey)
+		mux.HandleFunc("POST /api/v1/internal/open-api/usage-result", server.completeAPIUsage)
+	}
 	mux.Handle("GET /api/v1/admin/subjects", server.authenticate(server.requireAdmin(http.HandlerFunc(server.listSubjects))))
 	mux.Handle("POST /api/v1/admin/invitations", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.invite)))))
 	mux.Handle("POST /api/v1/admin/password-resets", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.createPasswordReset)))))
@@ -244,6 +256,112 @@ func (s *Server) issueCredential(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	values, err := s.apiKeys.List(r.Context(), currentPrincipal(r.Context()))
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": values})
+}
+
+func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Label   string `json:"label"`
+		TTLDays int    `json:"ttl_days"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.TTLDays == 0 {
+		input.TTLDays = 180
+	}
+	value, err := s.apiKeys.Create(r.Context(), currentPrincipal(r.Context()), input.Label, input.TTLDays)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, value)
+}
+
+func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	value, err := s.apiKeys.Revoke(r.Context(), currentPrincipal(r.Context()), strings.ToLower(strings.TrimSpace(r.PathValue("keyID"))))
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
+
+func (s *Server) listOpenAPIUsage(w http.ResponseWriter, r *http.Request) {
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, http.StatusUnprocessableEntity, "invalid_page_size", "每页数量无效")
+			return
+		}
+		limit = parsed
+	}
+	tenantWide := r.URL.Query().Get("scope") == "tenant"
+	page, err := s.apiKeys.ListUsage(r.Context(), currentPrincipal(r.Context()), tenantWide, r.URL.Query().Get("cursor"), limit)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (s *Server) authenticateAPIKey(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		RequestID      string `json:"request_id"`
+		Action         string `json:"action"`
+		SourceIPMasked string `json:"source_ip_masked"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	secret := apiKeySecret(r)
+	value, err := s.apiKeys.Authenticate(r.Context(), secret, input.RequestID, input.Action, input.SourceIPMasked)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, value)
+}
+
+func (s *Server) completeAPIUsage(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		KeyID      string `json:"key_id"`
+		RequestID  string `json:"request_id"`
+		ResultCode string `json:"result_code"`
+		HTTPStatus int    `json:"http_status"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	claims, err := s.capabilities.Authenticate(r, "open-api", apikey.ActionUse, "api_key", strings.ToLower(strings.TrimSpace(input.KeyID)))
+	if err != nil {
+		writeProblem(w, http.StatusUnauthorized, "invalid_open_api_exchange", "开放 API 调用上下文无效")
+		return
+	}
+	if err := s.apiKeys.CompleteUsage(r.Context(), claims.Tenant, claims.Subject, input.KeyID, input.RequestID, input.ResultCode, input.HTTPStatus); err != nil {
+		mapError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func apiKeySecret(r *http.Request) string {
+	raw := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(raw) > 7 && strings.EqualFold(raw[:7], "ApiKey ") {
+		return strings.TrimSpace(raw[7:])
+	}
+	return ""
 }
 func (s *Server) listSubjects(w http.ResponseWriter, r *http.Request) {
 	values, err := s.identities.ListSubjects(r.Context(), currentPrincipal(r.Context()))
@@ -426,6 +544,7 @@ func writeProblem(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 func mapError(w http.ResponseWriter, err error) {
+	var apiKeyError *apikey.DomainError
 	var validation *identity.ValidationError
 	var authentication *identity.AuthenticationError
 	var authorization *identity.AuthorizationError
@@ -433,6 +552,23 @@ func mapError(w http.ResponseWriter, err error) {
 	var conflict *identity.ConflictError
 	var notFound *identity.NotFoundError
 	switch {
+	case errors.As(err, &apiKeyError):
+		status := http.StatusInternalServerError
+		switch apiKeyError.Kind {
+		case apikey.KindValidation:
+			status = http.StatusUnprocessableEntity
+		case apikey.KindUnauthorized:
+			status = http.StatusUnauthorized
+		case apikey.KindForbidden:
+			status = http.StatusForbidden
+		case apikey.KindNotFound:
+			status = http.StatusNotFound
+		case apikey.KindConflict:
+			status = http.StatusConflict
+		case apikey.KindDependency:
+			status = http.StatusServiceUnavailable
+		}
+		writeProblem(w, status, apiKeyError.Code, apiKeyError.Message)
 	case errors.As(err, &validation):
 		writeProblem(w, 422, "validation_error", validation.Error())
 	case errors.As(err, &authentication):

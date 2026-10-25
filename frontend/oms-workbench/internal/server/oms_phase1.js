@@ -6,7 +6,7 @@
   document.body.classList.add('oms-v1-active');
 
   const state={projects:[],parties:[],partyCandidates:[],partyCache:new Map(),operatingParty:null,invoices:[],cash:[],moneyContext:null,contractContext:null,commercial:new Map(),projectPage:1,projectPageSize:20,listPages:{},listPageSizes:{},filters:{},sorts:{projects:{key:'start_date',direction:'desc'},'party-client':{key:'usage',direction:'desc'},'party-contractor':{key:'usage',direction:'desc'},'commitment-receivable':{key:'linked_at',direction:'desc'},'commitment-payable':{key:'linked_at',direction:'desc'},'invoice-outgoing':{key:'date',direction:'desc'},'invoice-incoming':{key:'date',direction:'desc'},'cash-receipt':{key:'date',direction:'desc'},'cash-payment':{key:'date',direction:'desc'}},authorized:new Set(),errors:[],projectActions:new Set(),partyActions:new Set(),invoiceActions:new Set(),contractActions:new Set(),selectedProjectID:'',projectDetailToken:0,moneyAvailable:false,contractAvailable:false,evidenceTransfer:null};
-  const labels={overview:'经营总览',projects:'项目经营',receivable:'应收回款',payable:'应付支付',internal:'公司内部管理'};
+  const labels={overview:'经营总览',projects:'项目经营',receivable:'应收回款',payable:'应付支付',internal:'公司内部管理','open-api':'开放平台'};
   const tabLabels={'project-list':'项目列表',clients:'甲方管理',contractors:'施工方管理',receivables:'应收管理','outgoing-invoices':'开票管理',receipts:'回款记录',payables:'应付管理',payments:'支付记录','incoming-invoices':'发票管理',members:'成员管理',payroll:'工资管理',finance:'财务管理'};
   const defaultTabs={projects:'project-list',receivable:'receivables',payable:'payables',internal:'members'};
   const invoiceDateLabel=direction=>direction==='incoming'?'收票日期':'开票日期';

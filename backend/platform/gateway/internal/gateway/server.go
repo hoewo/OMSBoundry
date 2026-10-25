@@ -27,21 +27,27 @@ const sessionCookieName = "oms_suite_session"
 const csrfCookieName = "oms_iam_csrf"
 
 type Options struct {
-	CookieSecure       bool
-	TrustProxyClientIP bool
-	RequestsPerMinute  int
+	CookieSecure                   bool
+	TrustProxyClientIP             bool
+	RequestsPerMinute              int
+	OpenAPIKeyRequestsPerMinute    int
+	OpenAPITenantRequestsPerMinute int
+	OpenAPIRequireHTTPS            bool
 }
 type Server struct {
-	suite              manifest.Suite
-	verifier           *credential.Verifier
-	logger             *slog.Logger
-	client             *http.Client
-	proxies            map[string]*httputil.ReverseProxy
-	iam                manifest.Application
-	cookieSecure       bool
-	trustProxyClientIP bool
-	limiter            *rateLimiter
-	handler            http.Handler
+	suite                manifest.Suite
+	verifier             *credential.Verifier
+	logger               *slog.Logger
+	client               *http.Client
+	proxies              map[string]*httputil.ReverseProxy
+	iam                  manifest.Application
+	cookieSecure         bool
+	trustProxyClientIP   bool
+	limiter              *rateLimiter
+	openAPIKeyLimiter    *rateLimiter
+	openAPITenantLimiter *rateLimiter
+	openAPIRequireHTTPS  bool
+	handler              http.Handler
 }
 type sessionResponse struct {
 	Principal struct {
@@ -72,7 +78,16 @@ func New(suite manifest.Suite, verifier *credential.Verifier, logger *slog.Logge
 	if options.RequestsPerMinute < 10 {
 		return nil, fmt.Errorf("request rate limit must be at least 10")
 	}
-	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute)}
+	if options.OpenAPIKeyRequestsPerMinute == 0 {
+		options.OpenAPIKeyRequestsPerMinute = 60
+	}
+	if options.OpenAPITenantRequestsPerMinute == 0 {
+		options.OpenAPITenantRequestsPerMinute = 600
+	}
+	if options.OpenAPIKeyRequestsPerMinute < 1 || options.OpenAPITenantRequestsPerMinute < options.OpenAPIKeyRequestsPerMinute {
+		return nil, fmt.Errorf("open API rate limits are invalid")
+	}
+	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute), openAPIKeyLimiter: newRateLimiter(options.OpenAPIKeyRequestsPerMinute), openAPITenantLimiter: newRateLimiter(options.OpenAPITenantRequestsPerMinute), openAPIRequireHTTPS: options.OpenAPIRequireHTTPS}
 	for _, app := range suite.Applications {
 		if app.Enabled {
 			proxy, err := server.proxyFor(app)
@@ -82,12 +97,15 @@ func New(suite manifest.Suite, verifier *credential.Verifier, logger *slog.Logge
 			server.proxies[app.ID] = proxy
 		}
 	}
-	server.handler = server.accessLog(server.limit(server.sanitize(http.HandlerFunc(server.route))))
+	server.handler = server.accessLog(server.limit(server.openAPI(server.sanitize(http.HandlerFunc(server.route)))))
 	return server, nil
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
 
 func (s *Server) route(w http.ResponseWriter, r *http.Request) {
+	if s.serveOpenAPI(w, r) {
+		return
+	}
 	switch {
 	case r.URL.Path == "/health/live":
 		writeJSON(w, 200, map[string]string{"status": "live"})
@@ -133,6 +151,11 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		// runtime surfaces. This also prevents stale bookmarks from reconstructing
 		// the former OA/OMS prototype outside the current product entry.
 		writeProblem(w, http.StatusGone, "retired_ui_asset", "旧版界面资源已停止提供")
+		return
+	case strings.HasPrefix(r.URL.Path, s.iam.RoutePrefix+"/api/v1/internal/"):
+		// IAM's API-key exchange and usage-completion routes are reachable only
+		// over the internal service network. Never expose them through the edge.
+		writeProblem(w, http.StatusNotFound, "route_not_found", "路由不存在")
 		return
 	case r.URL.Path == "/gateway/login" && r.Method == http.MethodPost:
 		s.login(w, r)
@@ -516,6 +539,11 @@ func (s *Server) limit(next http.Handler) http.Handler {
 			return
 		}
 		if !s.limiter.Allow(rateLimitClientKey(r, s.trustProxyClientIP), time.Now()) {
+			if strings.HasPrefix(r.URL.Path, "/open-api/v1/") {
+				w.Header().Set("Retry-After", "60")
+				openAPIProblem(w, http.StatusTooManyRequests, "RATE_LIMITED", "请求超过开放 API 限额，请稍后重试", w.Header().Get("X-Request-ID"), true, nil)
+				return
+			}
 			writeProblem(w, 429, "rate_limited", "请求过于频繁")
 			return
 		}
