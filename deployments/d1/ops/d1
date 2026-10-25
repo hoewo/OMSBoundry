@@ -40,6 +40,8 @@ enable_production=$(env_value ENABLE_PRODUCTION false)
 enable_approval_audit_results=$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)
 enable_cost_outsourcing=$(env_value ENABLE_COST_OUTSOURCING false)
 enable_bonus_distribution=$(env_value ENABLE_BONUS_DISTRIBUTION false)
+enable_internal_finance_requests=$(env_value ENABLE_INTERNAL_FINANCE_REQUESTS false)
+enable_payroll=$(env_value ENABLE_PAYROLL false)
 reference_oa_bonus_profile=$(env_value REFERENCE_OA_BONUS_PROFILE)
 reference_oa_personnel_profile=$(env_value REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE)
 reference_oa_stage_profile=$(env_value REFERENCE_OA_PRODUCTION_STAGE_PROFILE)
@@ -89,7 +91,7 @@ validate_env() {
   if [ -n "$reference_oa_stage_profile" ] && { [ "$enable_production" != true ] || [ "$enable_project" != true ] || [ "$enable_people" != true ] || [ "$enable_evidence" != true ]; }; then echo "production stage requires Production, Project, People and Evidence" >&2; exit 2; fi
   if [ -n "$reference_oa_personnel_profile" ] && { [ "$enable_project" != true ] || [ "$enable_people" != true ]; }; then echo "production personnel requires Project and People" >&2; exit 2; fi
   if [ "$reference_oa_bonus_profile" = reference-oa-bonus-v3 ] && { [ "$reference_oa_personnel_profile" != reference-oa-production-personnel-v1 ] || [ "$enable_bonus_distribution" != true ]; }; then echo "professional Bonus requires explicit personnel profile and Bonus selection" >&2; exit 2; fi
-  for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution"; do
+  for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll"; do
     case "$value" in true|false) ;; *) echo "application enable flags must be true or false" >&2; exit 2 ;; esac
   done
   case "$image_mode" in build|pull) ;; *) echo "D1_IMAGE_MODE must be build or pull" >&2; exit 2 ;; esac
@@ -112,6 +114,8 @@ validate_env() {
     [ "$enable_approval_audit_results" != true ] || validate_digest_image D1_APPROVAL_AUDIT_RESULTS_IMAGE
     [ "$enable_cost_outsourcing" != true ] || validate_digest_image D1_COST_OUTSOURCING_IMAGE
     [ "$enable_bonus_distribution" != true ] || validate_digest_image D1_BONUS_DISTRIBUTION_IMAGE
+    [ "$enable_internal_finance_requests" != true ] || validate_digest_image D1_INTERNAL_FINANCE_REQUESTS_IMAGE
+    [ "$enable_payroll" != true ] || validate_digest_image D1_PAYROLL_IMAGE
   fi
   if [ "$enable_business_engagement" = true ] && { [ "$enable_project" != true ] || [ "$enable_evidence" != true ]; }; then
     echo "ENABLE_BUSINESS_ENGAGEMENT=true requires ENABLE_PROJECT=true and ENABLE_EVIDENCE=true" >&2
@@ -202,7 +206,9 @@ validate_env() {
   approval_audit_results_password=$(env_value APPROVAL_AUDIT_RESULTS_DB_PASSWORD)
   cost_outsourcing_password=$(env_value COST_OUTSOURCING_DB_PASSWORD)
   bonus_distribution_password=$(env_value BONUS_DISTRIBUTION_DB_PASSWORD)
-  for secret in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password" "$bonus_distribution_password"; do
+  internal_finance_requests_password=$(env_value INTERNAL_FINANCE_REQUESTS_DB_PASSWORD)
+  payroll_password=$(env_value PAYROLL_DB_PASSWORD)
+  for secret in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password" "$bonus_distribution_password" "$internal_finance_requests_password" "$payroll_password"; do
     case "$secret" in
       replace-with-*|'') echo "replace every database password placeholder" >&2; exit 2 ;;
       *[!A-Za-z0-9_.~-]*) echo "database passwords must be URL-safe characters: A-Z a-z 0-9 _ . ~ -" >&2; exit 2 ;;
@@ -244,6 +250,12 @@ validate_env() {
   done
   for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password"; do
     [ "$bonus_distribution_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password" "$bonus_distribution_password"; do
+    [ "$internal_finance_requests_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
+  done
+  for other in "$superuser_password" "$identity_password" "$contract_password" "$money_password" "$people_password" "$party_password" "$project_password" "$evidence_password" "$business_engagement_password" "$billing_password" "$production_password" "$approval_audit_results_password" "$cost_outsourcing_password" "$bonus_distribution_password" "$internal_finance_requests_password"; do
+    [ "$payroll_password" != "$other" ] || { echo "database accounts must not share passwords" >&2; exit 2; }
   done
   party_cursor_key=$(env_value PARTY_CURSOR_HMAC_KEY)
   case "$party_cursor_key" in replace-with-*|'') echo "replace PARTY_CURSOR_HMAC_KEY" >&2; exit 2;; esac
@@ -340,13 +352,15 @@ compose_enabled() {
   [ "$enable_approval_audit_results" != true ] || profiles="$profiles --profile approval-audit-results"
   [ "$enable_cost_outsourcing" != true ] || profiles="$profiles --profile cost-outsourcing"
   [ "$enable_bonus_distribution" != true ] || profiles="$profiles --profile bonus-distribution"
+  [ "$enable_internal_finance_requests" != true ] || profiles="$profiles --profile internal-finance-requests"
+  [ "$enable_payroll" != true ] || profiles="$profiles --profile payroll"
   # The profile words are fixed literals selected above, not user input.
   # shellcheck disable=SC2086
   compose $profiles "$@"
 }
 
 compose_all() {
-  compose --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution "$@"
+  compose --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution --profile internal-finance-requests --profile payroll "$@"
 }
 
 render_manifest() {
@@ -358,6 +372,8 @@ render_manifest() {
     ENABLE_APPROVAL_AUDIT_RESULTS="$enable_approval_audit_results" \
     ENABLE_COST_OUTSOURCING="$enable_cost_outsourcing" \
     ENABLE_BONUS_DISTRIBUTION="$enable_bonus_distribution" \
+    ENABLE_INTERNAL_FINANCE_REQUESTS="$enable_internal_finance_requests" \
+    ENABLE_PAYROLL="$enable_payroll" \
     REFERENCE_OA_BONUS_PROFILE="$reference_oa_bonus_profile" \
     "$script_dir/render-suite-manifest" "$d1_dir/.runtime/suite-manifest.json"
   ENABLE_EVIDENCE="$enable_evidence" D1_INGRESS_MODE="$ingress_mode" \
@@ -419,6 +435,12 @@ remove_disabled() {
   if [ "$enable_bonus_distribution" != true ]; then
     disabled_services="$disabled_services bonus-distribution bonus-distribution-migrate bonus-distribution-workload-keys bonus-distribution-workload-key-permissions"
   fi
+  if [ "$enable_internal_finance_requests" != true ]; then
+    disabled_services="$disabled_services internal-finance-requests internal-finance-requests-migrate"
+  fi
+  if [ "$enable_payroll" != true ]; then
+    disabled_services="$disabled_services payroll payroll-migrate"
+  fi
   if [ -n "$disabled_services" ]; then
     # Service names are fixed literals selected above, not user input.
     # shellcheck disable=SC2086
@@ -467,6 +489,8 @@ check_stack_selection() {
   check_approval_audit_results=${10}
   check_cost_outsourcing=${11}
   check_bonus_distribution=${12}
+  check_internal_finance_requests=${13}
+  check_payroll=${14}
 
   compose exec -T identity-access /app/ops check
   if [ "$check_contract" = true ]; then
@@ -505,6 +529,12 @@ check_stack_selection() {
   if [ "$check_bonus_distribution" = true ]; then
     compose_all exec -T bonus-distribution /app/ops check
   fi
+  if [ "$check_internal_finance_requests" = true ]; then
+    compose_all exec -T internal-finance-requests /app/ops check
+  fi
+  if [ "$check_payroll" = true ]; then
+    compose_all exec -T payroll /app/ops check
+  fi
 }
 
 check_stack() {
@@ -513,7 +543,7 @@ check_stack() {
   fi
   check_stack_selection \
     "$enable_contract" "$enable_money" "$enable_people" "$enable_party" \
-    "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution"
+    "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll"
 }
 
 service_in_selection() {
@@ -560,6 +590,8 @@ create_backup() {
   backup_enable_approval_audit_results=$enable_approval_audit_results
   backup_enable_cost_outsourcing=$enable_cost_outsourcing
   backup_enable_bonus_distribution=$enable_bonus_distribution
+  backup_enable_internal_finance_requests=$enable_internal_finance_requests
+  backup_enable_payroll=$enable_payroll
   if [ "$selection_source" = running ]; then
     running_selection=$(compose_all ps --all --services)
     service_in_selection "$running_selection" identity-access || {
@@ -578,6 +610,8 @@ create_backup() {
     backup_enable_approval_audit_results=false
     backup_enable_cost_outsourcing=false
     backup_enable_bonus_distribution=false
+    backup_enable_internal_finance_requests=false
+    backup_enable_payroll=false
     service_in_selection "$running_selection" contract-ledger && backup_enable_contract=true
     service_in_selection "$running_selection" money-flow-ledger && backup_enable_money=true
     service_in_selection "$running_selection" people-groups && backup_enable_people=true
@@ -590,6 +624,8 @@ create_backup() {
     service_in_selection "$running_selection" approval-audit-results && backup_enable_approval_audit_results=true
     service_in_selection "$running_selection" cost-outsourcing && backup_enable_cost_outsourcing=true
     service_in_selection "$running_selection" bonus-distribution && backup_enable_bonus_distribution=true
+    service_in_selection "$running_selection" internal-finance-requests && backup_enable_internal_finance_requests=true
+    service_in_selection "$running_selection" payroll && backup_enable_payroll=true
   elif [ "$selection_source" != configured ]; then
     echo "unsupported backup selection source: $selection_source" >&2
     exit 2
@@ -597,7 +633,7 @@ create_backup() {
 
   check_stack_selection \
     "$backup_enable_contract" "$backup_enable_money" "$backup_enable_people" "$backup_enable_party" \
-    "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" "$backup_enable_bonus_distribution" \
+    "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" "$backup_enable_bonus_distribution" "$backup_enable_internal_finance_requests" "$backup_enable_payroll" \
     >/dev/null
   # Capture the running owners, not a candidate env that may select a new
   # overlay during upgrade. These are public version choices, never secrets.
@@ -710,6 +746,14 @@ create_backup() {
     compose_all exec -T -e BACKUP_ID="$backup_id" bonus-distribution sh -eu -c \
       'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/bonus-distribution.dump"'
   fi
+  if [ "$backup_enable_internal_finance_requests" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" internal-finance-requests sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/internal-finance-requests.dump"'
+  fi
+  if [ "$backup_enable_payroll" = true ]; then
+    compose_all exec -T -e BACKUP_ID="$backup_id" payroll sh -eu -c \
+      'pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backups/$BACKUP_ID/payroll.dump"'
+  fi
 
   compose exec -T --user 0:0 -e BACKUP_ID="$backup_id" -e HOST_UID="$host_uid" -e HOST_GID="$host_gid" \
     identity-access sh -eu -c \
@@ -730,6 +774,8 @@ create_backup() {
     printf 'ENABLE_APPROVAL_AUDIT_RESULTS=%s\n' "$backup_enable_approval_audit_results"
     printf 'ENABLE_COST_OUTSOURCING=%s\n' "$backup_enable_cost_outsourcing"
     printf 'ENABLE_BONUS_DISTRIBUTION=%s\n' "$backup_enable_bonus_distribution"
+    printf 'ENABLE_INTERNAL_FINANCE_REQUESTS=%s\n' "$backup_enable_internal_finance_requests"
+    printf 'ENABLE_PAYROLL=%s\n' "$backup_enable_payroll"
     printf 'REFERENCE_OA_BONUS_PROFILE=%s\n' "$backup_bonus_profile"
     printf 'REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE=%s\n' "$backup_personnel_profile"
     printf 'REFERENCE_OA_PRODUCTION_STAGE_PROFILE=%s\n' "$backup_stage_profile"
@@ -770,6 +816,19 @@ verify_backup_selection_value() {
     echo "backup application selection mismatch for $key: backup=$backed_up_value configured=$configured_value" >&2
     exit 1
   }
+}
+
+verify_optional_backup_selection_value() {
+  selection_file=$1
+  key=$2
+  configured_value=$3
+  count=$(awk -F= -v key="$key" '$1 == key {n++} END {print n+0}' "$selection_file")
+  if [ "$count" = 0 ]; then
+    [ "$configured_value" = false ] || { echo "backup application selection is missing for enabled $key" >&2; exit 1; }
+    return 0
+  fi
+  [ "$count" = 1 ] || { echo "duplicate backup application selection for $key" >&2; exit 1; }
+  verify_backup_selection_value "$selection_file" "$key" "$configured_value"
 }
 
 verify_backup_profile_value() {
@@ -825,6 +884,8 @@ verify_backup_selection() {
   verify_backup_selection_value "$selection_file" ENABLE_APPROVAL_AUDIT_RESULTS "$enable_approval_audit_results"
   verify_backup_selection_value "$selection_file" ENABLE_COST_OUTSOURCING "$enable_cost_outsourcing"
   verify_backup_selection_value "$selection_file" ENABLE_BONUS_DISTRIBUTION "$enable_bonus_distribution"
+  verify_optional_backup_selection_value "$selection_file" ENABLE_INTERNAL_FINANCE_REQUESTS "$enable_internal_finance_requests"
+  verify_optional_backup_selection_value "$selection_file" ENABLE_PAYROLL "$enable_payroll"
   verify_backup_profile_value "$selection_file" REFERENCE_OA_BONUS_PROFILE "$reference_oa_bonus_profile"
   verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE "$reference_oa_personnel_profile"
   verify_backup_profile_value "$selection_file" REFERENCE_OA_PRODUCTION_STAGE_PROFILE "$reference_oa_stage_profile"
@@ -858,6 +919,8 @@ restore_backup() {
   [ "$enable_approval_audit_results" != true ] || [ -f "$target/approval-audit-results.dump" ] || { echo "Approval & Audit Results backup is missing" >&2; exit 1; }
   [ "$enable_cost_outsourcing" != true ] || [ -f "$target/cost-outsourcing.dump" ] || { echo "Cost & Outsourcing backup is missing" >&2; exit 1; }
   [ "$enable_bonus_distribution" != true ] || [ -f "$target/bonus-distribution.dump" ] || { echo "Bonus Distribution backup is missing" >&2; exit 1; }
+  [ "$enable_internal_finance_requests" != true ] || [ -f "$target/internal-finance-requests.dump" ] || { echo "Internal Finance Requests backup is missing" >&2; exit 1; }
+  [ "$enable_payroll" != true ] || [ -f "$target/payroll.dump" ] || { echo "Payroll backup is missing" >&2; exit 1; }
 
   restore_host_uid=$(id -u)
   restore_host_gid=$(id -g)
@@ -950,6 +1013,14 @@ restore_backup() {
   if [ "$enable_bonus_distribution" = true ]; then
     compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" bonus-distribution sh -eu -c \
       'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/bonus-distribution.dump"'
+  fi
+  if [ "$enable_internal_finance_requests" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" internal-finance-requests sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/internal-finance-requests.dump"'
+  fi
+  if [ "$enable_payroll" = true ]; then
+    compose_all run --rm --no-deps -e BACKUP_ID="$backup_id" payroll sh -eu -c \
+      'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/payroll.dump"'
   fi
   restore_backup_permissions
   trap - EXIT HUP INT TERM

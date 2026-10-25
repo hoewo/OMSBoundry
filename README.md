@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前 OMS1 迭代 P2：`Internal Finance Requests` 与 `Payroll` 已形成两个独立、可运行的服务端 Owner 骨架，分别拥有 PostgreSQL schema、版本化 API、IAM／Tenant／Capability／资源范围校验、幂等命令、不可变 revision／审计、Docker 镜像及备份／空目标恢复。隔离验收已完成两个镜像的写入、重放、冲突、恢复和恢复后续写，D1 可选装配与 19 镜像发布链路测试通过；尚未部署 D1／公网，也尚未实现成员薪酬、工资计算发放或财务付款闭环。当前进入 P3。[P2 验证报告](./docs/reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)
+
 当前财务筛选与批量选择规则（BF-182／BF-183）：财务管理的“全部类型”使用统一自定义选择器并紧邻搜索框，不再被工具栏的自动左边距推到中间；窄视口也不误隐藏选择器。工资和财务批量操作条提供明确的“全选／取消全选”，仅选择当前筛选结果中的可操作记录。两项已随公网 Workbench v1.32 发布；不改变任何 Owner 数据或正式业务边界。[发布报告](./docs/reports/oms-finance-filter-toolbar-publication-20261024.md)
 
 当前公司内部管理体验版（BF-181）：BF-180 的成员、工资和财务管理候选已随公网 Workbench v1.31 发布到 `oatest`。页面仍需正式 IAM 登录，但这些新增记录只按 Tenant＋登录 Subject 保存在当前浏览器，不写入服务端、不跨浏览器或设备同步，也不代表新 Owner、审批、Money 或银行接入；页面持续显示这一边界。[发布报告](./docs/reports/oms-company-internal-browser-candidate-publication-20261023.md)
@@ -16,7 +18,7 @@
 OMSBoundry/
 ├── frontend/oms-workbench/       # OMS／OA 统一前端工作台及其 Go 静态服务
 ├── backend/platform/             # Gateway、Identity & Access
-├── backend/services/             # 12 个可独立迁移、测试和部署的业务事实服务
+├── backend/services/             # 14 个可独立迁移、测试和部署的业务事实服务
 ├── contracts/                    # 稳定的版本化 API／能力／投影契约
 ├── packages/                     # 明确复用的机制包和 wire contract
 ├── deployments/                  # D1、演示、本地 OA 和阿里云部署装配

@@ -25,8 +25,9 @@
 - `party-directory`、`project-workspace`、`contract-ledger`、`billing-invoice`、`money-flow-ledger`、`evidence-service`
 - `people-groups`、`business-engagement`、`design-operations`、`approval-audit-results`
 - `cost-outsourcing`、`bonus-distribution`
+- `internal-finance-requests`、`payroll`
 
-OMS 一期当前主要组合前六个业务事实 Owner；其余服务保留在同一代码基线中，但不会仅为了“看起来完整”被强制接入 OMS 一期。
+OMS 一期经营工作面当前主要组合前六个业务事实 Owner；`internal-finance-requests` 与 `payroll` 是 2026-10-25 P2 新增、默认关闭的公司内部管理 Owner 骨架，尚未切换 Workbench 页面。其余服务保留在同一代码基线中，但不会仅为了“看起来完整”被强制接入 OMS 一期。
 
 ## 本地验证
 

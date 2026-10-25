@@ -1,0 +1,124 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+suffix="$(date +%s)-$$"
+network="oms-p2-owner-$suffix"
+postgres="oms-p2-postgres-$suffix"
+finance_image="oms-p2-finance:$suffix"
+payroll_image="oms-p2-payroll:$suffix"
+finance_server="oms-p2-finance-$suffix"
+payroll_server="oms-p2-payroll-$suffix"
+temporary=$(mktemp -d)
+
+cleanup() {
+  docker rm -f "$finance_server" "$payroll_server" "$postgres" >/dev/null 2>&1 || true
+  docker network rm "$network" >/dev/null 2>&1 || true
+  docker image rm "$finance_image" "$payroll_image" >/dev/null 2>&1 || true
+  case "$temporary" in /tmp/*|/private/tmp/*|/var/folders/*) rm -rf "$temporary";; esac
+}
+trap cleanup EXIT HUP INT TERM
+
+for command_name in docker curl jq; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 1; }
+done
+
+docker network create "$network" >/dev/null
+docker run -d --name "$postgres" --network "$network" --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=512m \
+  -e POSTGRES_PASSWORD=postgres postgres:18.6-alpine >/dev/null
+ready=false
+for _ in $(seq 1 60); do
+  if docker exec "$postgres" pg_isready -U postgres >/dev/null 2>&1; then ready=true; break; fi
+  sleep 1
+done
+[ "$ready" = true ] || { docker logs "$postgres" >&2; exit 1; }
+for database in finance_source finance_restore payroll_source payroll_restore; do
+  docker exec "$postgres" createdb -U postgres "$database"
+done
+
+docker build -q -f "$repo/deployments/d1/docker/Dockerfile.internal-finance-requests" -t "$finance_image" "$repo" >/dev/null
+docker build -q -f "$repo/deployments/d1/docker/Dockerfile.payroll" -t "$payroll_image" "$repo" >/dev/null
+
+finance_source="postgres://postgres:postgres@$postgres:5432/finance_source?sslmode=disable"
+finance_restore="postgres://postgres:postgres@$postgres:5432/finance_restore?sslmode=disable"
+payroll_source="postgres://postgres:postgres@$postgres:5432/payroll_source?sslmode=disable"
+payroll_restore="postgres://postgres:postgres@$postgres:5432/payroll_restore?sslmode=disable"
+docker run --rm --network "$network" -e DATABASE_URL="$finance_source" "$finance_image" /app/ops migrate >/dev/null
+docker run --rm --network "$network" -e DATABASE_URL="$payroll_source" "$payroll_image" /app/ops migrate >/dev/null
+
+finance_token="p2-finance-template-token-123456"
+payroll_token="p2-payroll-template-token-123456"
+tenant="11111111-1111-4111-8111-111111111111"
+subject="22222222-2222-4222-8222-222222222222"
+
+start_finance() {
+  database=$1
+  docker run -d --name "$finance_server" --network "$network" -p 127.0.0.1::8092 \
+    -e HTTP_ADDR=:8092 -e DATABASE_URL="$database" -e MIGRATION_MODE=verify -e IDENTITY_PROVIDER=template \
+    -e TEMPLATE_TENANT_ID="$tenant" -e TEMPLATE_SUBJECT_ID="$subject" -e TEMPLATE_DISPLAY_NAME='P2 Finance' \
+    -e TEMPLATE_ACCESS_TOKEN="$finance_token" "$finance_image" >/dev/null
+  finance_port=$(docker port "$finance_server" 8092/tcp | sed 's/.*://')
+  finance_base="http://127.0.0.1:$finance_port"
+}
+start_payroll() {
+  database=$1
+  docker run -d --name "$payroll_server" --network "$network" -p 127.0.0.1::8093 \
+    -e HTTP_ADDR=:8093 -e DATABASE_URL="$database" -e MIGRATION_MODE=verify -e IDENTITY_PROVIDER=template \
+    -e TEMPLATE_TENANT_ID="$tenant" -e TEMPLATE_SUBJECT_ID="$subject" -e TEMPLATE_DISPLAY_NAME='P2 Payroll' \
+    -e TEMPLATE_ACCESS_TOKEN="$payroll_token" "$payroll_image" >/dev/null
+  payroll_port=$(docker port "$payroll_server" 8093/tcp | sed 's/.*://')
+  payroll_base="http://127.0.0.1:$payroll_port"
+}
+wait_ready() {
+  base=$1
+  container=$2
+  ready=false
+  for _ in $(seq 1 60); do
+    if curl -fsS "$base/health/ready" >/dev/null 2>&1; then ready=true; break; fi
+    sleep 1
+  done
+  [ "$ready" = true ] || { docker logs "$container" >&2; exit 1; }
+}
+
+start_finance "$finance_source"
+start_payroll "$payroll_source"
+wait_ready "$finance_base" "$finance_server"
+wait_ready "$payroll_base" "$payroll_server"
+[ "$(curl -sS -o /dev/null -w '%{http_code}' "$finance_base/api/v1/finance-requests")" = 401 ]
+[ "$(curl -sS -o /dev/null -w '%{http_code}' "$payroll_base/api/v1/payroll-runs")" = 401 ]
+
+finance_payload='{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","request_type":"reimbursement","title":"P2恢复验证报销","amount_minor":12000,"currency":"CNY"}'
+finance_created=$(curl -fsS -X POST "$finance_base/api/v1/finance-requests" -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' -d "$finance_payload")
+finance_id=$(printf '%s' "$finance_created" | jq -er 'select(.revision == 1) | .id')
+finance_replayed=$(curl -fsS -X POST "$finance_base/api/v1/finance-requests" -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' -d "$finance_payload")
+[ "$(printf '%s' "$finance_replayed" | jq -r '.id')" = "$finance_id" ]
+finance_conflict=$(curl -sS -o "$temporary/finance-conflict.json" -w '%{http_code}' -X POST "$finance_base/api/v1/finance-requests" -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' -d '{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","request_type":"payment","title":"冲突","amount_minor":1,"currency":"CNY"}')
+[ "$finance_conflict" = 409 ] && jq -e '.code == "COMMAND_PAYLOAD_CONFLICT"' "$temporary/finance-conflict.json" >/dev/null
+curl -fsS -X PUT "$finance_base/api/v1/finance-requests/$finance_id" -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' -d '{"command_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","expected_revision":1,"title":"P2恢复验证报销更正","amount_minor":11800}' | jq -e '.revision == 2' >/dev/null
+
+payroll_payload='{"command_id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","period":"2026-10","label":"P2恢复验证工资"}'
+payroll_created=$(curl -fsS -X POST "$payroll_base/api/v1/payroll-runs" -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' -d "$payroll_payload")
+payroll_id=$(printf '%s' "$payroll_created" | jq -er 'select(.revision == 1) | .id')
+payroll_replayed=$(curl -fsS -X POST "$payroll_base/api/v1/payroll-runs" -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' -d "$payroll_payload")
+[ "$(printf '%s' "$payroll_replayed" | jq -r '.id')" = "$payroll_id" ]
+payroll_conflict=$(curl -sS -o "$temporary/payroll-conflict.json" -w '%{http_code}' -X POST "$payroll_base/api/v1/payroll-runs" -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' -d '{"command_id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","period":"2026-11","label":"冲突"}')
+[ "$payroll_conflict" = 409 ] && jq -e '.code == "COMMAND_PAYLOAD_CONFLICT"' "$temporary/payroll-conflict.json" >/dev/null
+curl -fsS -X PUT "$payroll_base/api/v1/payroll-runs/$payroll_id" -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' -d '{"command_id":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","expected_revision":1,"label":"P2恢复验证工资更正"}' | jq -e '.revision == 2' >/dev/null
+
+chmod 0777 "$temporary"
+docker run --rm --network "$network" -v "$temporary:/work" "$finance_image" /app/backup "$finance_source" /work/finance.dump
+docker run --rm --network "$network" -v "$temporary:/work" "$payroll_image" /app/backup "$payroll_source" /work/payroll.dump
+docker rm -f "$finance_server" "$payroll_server" >/dev/null
+docker run --rm --network "$network" -v "$temporary:/work:ro" "$finance_image" /app/restore-empty "$finance_restore" /work/finance.dump
+docker run --rm --network "$network" -v "$temporary:/work:ro" "$payroll_image" /app/restore-empty "$payroll_restore" /work/payroll.dump
+start_finance "$finance_restore"
+start_payroll "$payroll_restore"
+wait_ready "$finance_base" "$finance_server"
+wait_ready "$payroll_base" "$payroll_server"
+curl -fsS "$finance_base/api/v1/finance-requests/$finance_id" -H "Authorization: Bearer $finance_token" | jq -e '.revision == 2 and .amount_minor == 11800' >/dev/null
+curl -fsS "$payroll_base/api/v1/payroll-runs/$payroll_id" -H "Authorization: Bearer $payroll_token" | jq -e '.revision == 2 and .period == "2026-10"' >/dev/null
+curl -fsS -X POST "$finance_base/api/v1/finance-requests" -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' -d '{"command_id":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","request_type":"payment","title":"恢复后继续写","amount_minor":500,"currency":"CNY"}' | jq -e '.revision == 1' >/dev/null
+curl -fsS -X POST "$payroll_base/api/v1/payroll-runs" -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' -d '{"command_id":"ffffffff-ffff-4fff-8fff-ffffffffffff","period":"2026-11","label":"恢复后继续写"}' | jq -e '.revision == 1' >/dev/null
+
+echo 'P2 owner skeleton acceptance passed: two independent images + write/replay/conflict + revision + backup/empty restore + continuation write'

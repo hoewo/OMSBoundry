@@ -1,6 +1,14 @@
 # OMSBizFoundry 验证入口
 
-## 2026-10-25 OMS1 迭代 P0／P1
+## 2026-10-25 OMS1 迭代 P0／P1／P2
+
+P2 新增两个独立 Owner，并提供一键隔离验收：
+
+```sh
+./acceptance/p2-owner-skeleton/run-isolated
+```
+
+该入口构建 `Internal Finance Requests` 与 `Payroll` 两个独立镜像，启动一次性 PostgreSQL 18.6 和两个服务，验证匿名拒绝、草稿写入、同命令重放／冲突、revision 更新、分别备份、恢复到新空库及恢复后继续写入，结束后清理自身资源。两个服务的 PostgreSQL 集成测试还覆盖跨租户读取拒绝、当前投影直接修改拒绝和不可变历史修改拒绝；IAM 单元测试使用签名 JWT／JWK。D1 Compose、Suite Manifest 和发布／提升／升级选择／发布包脚本已通过本地门禁，但没有启动正式 D1 或部署公网。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)
 
 P0 需求和命名基线已冻结，记录见 [`oms-v1-iteration-p0-baseline-validation-20261025.md`](./reports/oms-v1-iteration-p0-baseline-validation-20261025.md)。P1 验证见 [`oms-v1-iteration-p1-multitenant-validation-20261025.md`](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)，可重复入口为：
 
@@ -8,7 +16,7 @@ P0 需求和命名基线已冻结，记录见 [`oms-v1-iteration-p0-baseline-val
 ./acceptance/p1-multitenant/run-isolated
 ```
 
-该入口创建随机命名的一次性 PostgreSQL 18.6 容器和临时目录，构建并启动真实 IAM／People 二进制，完成双租户、工作负载换票、Subject↔Person、跨租户负例、撤权／停用、分库备份、空目标恢复和恢复后续写；不会使用或停止 `oms-v1-integration-*`、D1 或开发数据库。P1 同时复验全部受影响 Go modules、Capability Manifest、Compose 和镜像构建，以及 12 个现有受保护 Owner 的代表性 PostgreSQL 租户隔离、搜索／分页／导出／附件路径。此结论不表示 P2、新 D1 组合或公网已发布。
+该入口创建随机命名的一次性 PostgreSQL 18.6 容器和临时目录，构建并启动真实 IAM／People 二进制，完成双租户、工作负载换票、Subject↔Person、跨租户负例、撤权／停用、分库备份、空目标恢复和恢复后续写；不会使用或停止 `oms-v1-integration-*`、D1 或开发数据库。P1 同时复验全部受影响 Go modules、Capability Manifest、Compose 和镜像构建，以及当时 12 个既有受保护 Owner 的代表性 PostgreSQL 租户隔离、搜索／分页／导出／附件路径。该段只陈述 P1 历史证据；P2 证据见上文，二者均不表示 D1／公网已发布。
 
 2026-10-24 BF-183 已发布并验证：新增 Go 静态回归断言工具栏普通说明与 `.oms-v1__select` 分流，禁止通用 `span` 规则推开或隐藏统一选择器；Workbench Go test／vet、脚本语法、内部管理模型与公网页面 8/8 定向 Node 回归、`git diff --check` 和本地视觉复核通过。公网 Workbench v1.32 镜像为 `sha256:5f3e3a25396c7b7b0ec803646bc1ff85301ba3b8e2f38c42d6767549f70ca291`，备份 `20261024T034034Z` 校验通过；只替换 Workbench，其他 16 个容器 ID 不变，D1 `check` 与 17/17 healthy 通过。正式 IAM 登录、五次 Gateway 授权和 Owner 只读返回 Party 5、Project 1、Billing 2、Money 2、Contract workspace 6；版本化 CSS `20261024.1` 返回 immutable 且包含新规则，业务写入为 0。[报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)
 

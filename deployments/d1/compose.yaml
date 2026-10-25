@@ -18,6 +18,8 @@ services:
       APPROVAL_AUDIT_RESULTS_DB_PASSWORD: ${APPROVAL_AUDIT_RESULTS_DB_PASSWORD:?set APPROVAL_AUDIT_RESULTS_DB_PASSWORD}
       COST_OUTSOURCING_DB_PASSWORD: ${COST_OUTSOURCING_DB_PASSWORD:?set COST_OUTSOURCING_DB_PASSWORD}
       BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
+      INTERNAL_FINANCE_REQUESTS_DB_PASSWORD: ${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD:?set INTERNAL_FINANCE_REQUESTS_DB_PASSWORD}
+      PAYROLL_DB_PASSWORD: ${PAYROLL_DB_PASSWORD:?set PAYROLL_DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
       interval: 2s
@@ -48,6 +50,8 @@ services:
       APPROVAL_AUDIT_RESULTS_DB_PASSWORD: ${APPROVAL_AUDIT_RESULTS_DB_PASSWORD:?set APPROVAL_AUDIT_RESULTS_DB_PASSWORD}
       COST_OUTSOURCING_DB_PASSWORD: ${COST_OUTSOURCING_DB_PASSWORD:?set COST_OUTSOURCING_DB_PASSWORD}
       BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
+      INTERNAL_FINANCE_REQUESTS_DB_PASSWORD: ${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD:?set INTERNAL_FINANCE_REQUESTS_DB_PASSWORD}
+      PAYROLL_DB_PASSWORD: ${PAYROLL_DB_PASSWORD:?set PAYROLL_DB_PASSWORD}
     command: ["/provision.sh"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -1052,6 +1056,88 @@ services:
     volumes:
       - iam-public-keys:/public:ro
       - bonus-distribution-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  internal-finance-requests-migrate:
+    profiles: [internal-finance-requests]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.internal-finance-requests
+    image: omsbizfoundry/internal-finance-requests:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &internal-finance-requests-environment
+      HTTP_ADDR: :8092
+      DATABASE_URL: postgres://internal_finance_requests:${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD}@postgres:5432/internal_finance_requests?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes: [iam-public-keys:/public:ro]
+    networks: [data]
+    restart: "no"
+
+  internal-finance-requests:
+    profiles: [internal-finance-requests]
+    image: omsbizfoundry/internal-finance-requests:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *internal-finance-requests-environment
+    depends_on:
+      internal-finance-requests-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8092/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  payroll-migrate:
+    profiles: [payroll]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.payroll
+    image: omsbizfoundry/payroll:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &payroll-environment
+      HTTP_ADDR: :8093
+      DATABASE_URL: postgres://payroll:${PAYROLL_DB_PASSWORD}@postgres:5432/payroll?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+    volumes: [iam-public-keys:/public:ro]
+    networks: [data]
+    restart: "no"
+
+  payroll:
+    profiles: [payroll]
+    image: omsbizfoundry/payroll:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *payroll-environment
+    depends_on:
+      payroll-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8093/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
       - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
     networks: [app, data]
     restart: unless-stopped

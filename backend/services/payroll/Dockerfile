@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1.7
+ARG GO_IMAGE=golang:1.26.0-alpine
+ARG RUNTIME_IMAGE=postgres:18.6-alpine
+FROM ${GO_IMAGE} AS build
+WORKDIR /src
+COPY backend/services/payroll/go.mod backend/services/payroll/go.sum ./
+RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked GOWORK=off go mod download
+COPY backend/services/payroll/ ./
+RUN --mount=type=cache,id=oms-go-build,target=/root/.cache/go-build,sharing=locked GOWORK=off CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/server ./cmd/server \
+ && GOWORK=off CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/ops ./cmd/ops
+FROM ${RUNTIME_IMAGE}
+RUN mkdir -p /app /backups && chown -R postgres:postgres /app /backups
+COPY --from=build /out/server /out/ops /app/
+COPY --chown=postgres:postgres backend/services/payroll/ops/backup backend/services/payroll/ops/restore-empty /app/
+USER postgres
+EXPOSE 8093
+ENTRYPOINT []
+CMD ["/app/server"]

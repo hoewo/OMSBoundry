@@ -1,6 +1,6 @@
 # OMS1 2026-10-25 迭代实施拆解
 
-状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0 与 P1 已于 2026-10-25 通过，证据见[P0 记录](../../reports/oms-v1-iteration-p0-baseline-validation-20261025.md)和[P1 验证报告](../../reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)。当前进入 P2 两个独立 Owner 骨架；P1 的本地通过不表示 D1 或公网已经发布新版本。
+状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0、P1 与 P2 已于 2026-10-25 通过，证据见[P0 记录](../../reports/oms-v1-iteration-p0-baseline-validation-20261025.md)、[P1 验证报告](../../reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)和[P2 验证报告](../../reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)。当前进入 P3 成员与薪酬档案；本地通过不表示 D1 或公网已经发布新版本。
 
 问题 A → 可验证结果 B：本轮同时涉及租户、两个新业务 Owner、开放 API、跨系统资金闭环和外部 Feedback SDK，若按页面并行堆功能会重新形成浏览器事实和隐式耦合 → 按所有权与依赖顺序交付可独立验证的纵向切片，每阶段都有迁移、授权、故障恢复和运行证据。
 
@@ -17,10 +17,10 @@
 
 | 能力 | 当前证据 | 缺口 |
 | --- | --- | --- |
-| 租户与账号 | IAM 和各 Owner 已普遍携带 Tenant 字段 | 尚未证明同域名、同服务进程下两个真实租户的创建、登录、授权、资源隔离与恢复 |
-| 成员 | 已有 People & Groups | 需正式 Subject↔Person 唯一映射、成员生命周期及 Workbench 管理旅程 |
-| 财务申请 | 当前只有 Workbench 演示页面／浏览器状态 | 缺少独立 `Internal Finance Requests` Owner、数据库、API、IAM、Money／Evidence 连接和恢复 |
-| 工资 | 当前只有 Workbench 演示页面／浏览器状态 | 缺少独立 `Payroll` Owner、薪酬档案、比例方案、工资批次、Money 连接和恢复 |
+| 租户与账号 | P1 已证明同进程 Tenant A／B 的创建、登录、授权、资源隔离、撤权和恢复 | 尚未进入新 D1／公网组合，也未实现后续多租户账号切换 |
+| 成员 | P1 已有正式 Subject↔Person 唯一映射；People & Groups 继续拥有人员事实 | 需成员生命周期、任职 revision、Payroll 档案挂载及 Workbench 管理旅程 |
+| 财务申请 | P2 已有独立 `Internal Finance Requests` Owner、数据库、草稿 API、IAM、幂等和恢复 | 缺少正式明细、附件、审批、财务确认及 Money／Evidence 连接 |
+| 工资 | P2 已有独立 `Payroll` Owner、数据库、工资批次草稿 API、IAM、幂等和恢复 | 缺少薪酬档案、比例方案、人员快照、计算、发放及 Money 连接 |
 | 开放平台 | 尚无员工 Key 管理与 `/open-api/v1/` 报销契约 | 缺少 Key 生命周期、Gateway 鉴权／限流／审计、OpenAPI 和调用端恢复契约 |
 | 发票报销闭环 | Evidence 和 Money 已独立存在 | 缺少财务申请 Owner 及三者之间的幂等连接、未知结果恢复和端到端验收 |
 | Feedback V2 | 旧参考 OA 只有占位入口；主 OMS1 无正式入口 | 缺少正式 IAM 能力、配置、iframe bridge、未读角标、Arckit 白名单／通知开关和端到端验证 |
@@ -76,6 +76,8 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 验收门：同进程 Tenant A／B 正反例覆盖登录、搜索、分页、导出、附件、稳定 ID 猜测、撤权、停用和备份恢复；跨租户请求全部拒绝且目标数据无变化。
 
 ### P2：两个新 Owner 的最小可运行骨架
+
+状态：2026-10-25 本地通过；未部署 D1／公网。完整证据见[P2 验证报告](../../reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)。
 
 交付：
 

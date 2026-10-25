@@ -29,6 +29,8 @@ D1_PRODUCTION_IMAGE=$registry/production-operations@sha256:$digest
 D1_APPROVAL_AUDIT_RESULTS_IMAGE=$registry/approval-audit-results@sha256:$digest
 D1_COST_OUTSOURCING_IMAGE=$registry/cost-outsourcing@sha256:$digest
 D1_BONUS_DISTRIBUTION_IMAGE=$registry/bonus-distribution@sha256:$digest
+D1_INTERNAL_FINANCE_REQUESTS_IMAGE=$registry/internal-finance-requests@sha256:$digest
+D1_PAYROLL_IMAGE=$registry/payroll@sha256:$digest
 D1_WORKBENCH_IMAGE=$registry/unified-workbench@sha256:$digest
 D1_GATEWAY_IMAGE=$registry/gateway@sha256:$digest
 D1_NGINX_IMAGE=$registry/base-nginx@sha256:$digest
@@ -51,6 +53,8 @@ PRODUCTION_DB_PASSWORD=ProductionPassword_123
 APPROVAL_AUDIT_RESULTS_DB_PASSWORD=ApprovalAuditResultsPassword_123
 COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123
 BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123
+INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=InternalFinancePassword_123
+PAYROLL_DB_PASSWORD=PayrollPassword_123
 BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
 ENABLE_CONTRACT=true
 ENABLE_MONEY=true
@@ -64,6 +68,8 @@ ENABLE_PRODUCTION=true
 ENABLE_APPROVAL_AUDIT_RESULTS=true
 ENABLE_COST_OUTSOURCING=true
 ENABLE_BONUS_DISTRIBUTION=true
+ENABLE_INTERNAL_FINANCE_REQUESTS=true
+ENABLE_PAYROLL=true
 PROJECT_PARTY_BASE_URL=http://party-directory:8090
 PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
 EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
@@ -77,7 +83,7 @@ D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
 
 for image in \
   base-postgres identity-access contract-ledger money-flow-ledger people-groups party-directory project-workspace \
-  evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution unified-workbench gateway base-nginx; do
+  evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution internal-finance-requests payroll unified-workbench gateway base-nginx; do
   grep -qx "$registry/$image@sha256:$digest" "$test_dir/images" || {
     echo "missing digest-pinned image in rendered pull mode: $image" >&2
     exit 1
@@ -99,6 +105,28 @@ D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
   "$d1" images >"$test_dir/build-images"
 grep -qx 'omsbizfoundry/contract-ledger:test' "$test_dir/build-images" || {
   echo 'build mode no longer renders the existing local image name' >&2
+  exit 1
+}
+
+cp "$test_dir/d1.env" "$test_dir/placeholder-password.env"
+printf '%s\n' 'INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=replace-with-finance-password' >>"$test_dir/placeholder-password.env"
+if D1_ENV_FILE="$test_dir/placeholder-password.env" "$d1" images >"$test_dir/placeholder-password.out" 2>"$test_dir/placeholder-password.err"; then
+  echo 'Internal Finance Requests database password placeholder was accepted' >&2
+  exit 1
+fi
+grep -q 'replace every database password placeholder' "$test_dir/placeholder-password.err" || {
+  echo 'Internal Finance Requests password rejection did not explain the placeholder' >&2
+  exit 1
+}
+
+cp "$test_dir/d1.env" "$test_dir/shared-password.env"
+printf '%s\n' 'PAYROLL_DB_PASSWORD=InternalFinancePassword_123' >>"$test_dir/shared-password.env"
+if D1_ENV_FILE="$test_dir/shared-password.env" "$d1" images >"$test_dir/shared-password.out" 2>"$test_dir/shared-password.err"; then
+  echo 'shared Internal Finance Requests and Payroll database password was accepted' >&2
+  exit 1
+fi
+grep -q 'database accounts must not share passwords' "$test_dir/shared-password.err" || {
+  echo 'shared new-owner password rejection did not explain the conflict' >&2
   exit 1
 }
 

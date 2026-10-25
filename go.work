@@ -26,8 +26,10 @@ use (
 	./backend/services/cost-outsourcing
 	./backend/services/design-operations
 	./backend/services/evidence-service
+	./backend/services/internal-finance-requests
 	./backend/services/money-flow-ledger
 	./backend/services/party-directory
+	./backend/services/payroll
 	./backend/services/people-groups
 	./backend/services/project-workspace
 	./frontend/oms-workbench

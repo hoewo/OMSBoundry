@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P2 实现基线：`Internal Finance Requests` 与 `Payroll` 是两个独立事实 Owner，而不是 Workbench 浏览器状态或同一个“内部管理后端”。两者各自拥有数据库、ID、Tenant、revision、命令幂等和审计；第一条可运行切片分别是报销／付款申请草稿与月度工资批次草稿。Owner 从可信 IAM 凭证取得 Actor、Tenant、Capability 和资源范围，并在资源层执行本人／租户授权；当前投影必须与最新不可变 revision 一致。P2 只建立演进和恢复骨架，成员薪酬、工资计算／发放、财务附件／审批／Money 连接仍待 P3～P7。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)
+
 2026-10-25 P1 实现基线：同一 OMS1 服务域允许多个组织共享 IAM 和各 Owner 进程，Tenant 由登录账号／已验证凭证唯一确定，首版无租户切换。平台运维创建 Tenant 与首管理员；租户管理员管理本租户账号和能力。IAM Subject 与 People Person 是两个独立稳定身份，通过租户内唯一、带状态与 revision 的版本化引用关联；账号停用不删除 Person，人员状态也不改写 IAM 账号。业务服务和工作负载调用必须使用请求 Tenant，不得使用浏览器参数或部署默认 Tenant 扩权。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)
 
 2026-10-25 Feedback 自动诊断上下文基线（BF-237，需求确认／尚未实施）：反馈只自动附带 release／build、模块、无业务标识路由模板、粗粒度客户端类型、语言、时间和 request ID。显式排除身份、租户、资源、表单、金额、文件地址、完整 UA、凭证、Header／Cookie、堆栈、业务正文和自动截图；实现逐字段 allowlist 映射，不透传全局状态。该决定关闭本轮需求待确认清单并触发 P0／P1 实施。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)

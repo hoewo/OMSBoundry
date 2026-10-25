@@ -109,6 +109,16 @@ services:
   bonus-distribution:
     image: ${D1_BONUS_DISTRIBUTION_IMAGE:-omsbizfoundry/bonus-distribution:disabled}
 
+  internal-finance-requests-migrate:
+    image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
+  internal-finance-requests:
+    image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
+
+  payroll-migrate:
+    image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
+  payroll:
+    image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
+
   unified-workbench:
     image: ${D1_WORKBENCH_IMAGE:?set D1_WORKBENCH_IMAGE to a digest-pinned image}
   gateway:
