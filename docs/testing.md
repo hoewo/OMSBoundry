@@ -1,5 +1,15 @@
 # OMSBizFoundry 验证入口
 
+## 2026-10-26 OMS1 迭代 P9 D1 装配源码门禁
+
+低资源、无容器启动的 P9 组合门禁：
+
+```sh
+make d1-p9-composition-test
+```
+
+该入口渲染 Finance＋Payroll＋People＋Money＋Evidence 的实际 Compose，核对 Finance 工作负载 key、两个下游端点和 Payroll 装配，并验证四种缺失依赖的配置在 Docker 调用前失败。另已实际通过 Finance、Payroll、IAM、workload-identity 的 Go test／vet 和 D1 release bundle。它不替代 P9 的全组合连续旅程、联合备份／空目标恢复、恢复后复跑、镜像 digest 或浏览器 Console 记录；当前没有启动常驻容器。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+
 ## 2026-10-26 OMS1 迭代 P7
 
 P7 员工发票报销闭环提供低资源、退出自动清理的独立入口：

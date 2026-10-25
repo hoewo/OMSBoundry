@@ -10,27 +10,40 @@ import (
 )
 
 type Config struct {
-	HTTPAddress, DatabaseURL                                                                                                                                                                                                        string
-	ShutdownTimeout, ReferenceTimeout                                                                                                                                                                                               time.Duration
-	MigrationMode, IdentityProvider, IAMIssuer, IAMTenantID, IAMPublicKeysPath, TemplateTenantID, TemplateSubjectID, TemplateDisplayName, TemplateAccessToken, MoneyBaseURL, MoneyAccessToken, EvidenceBaseURL, EvidenceAccessToken string
+	HTTPAddress, DatabaseURL string
+	ShutdownTimeout          time.Duration
+	ReferenceTimeout         time.Duration
+	WorkloadRefreshBefore    time.Duration
+
+	MigrationMode, IdentityProvider, IAMIssuer, IAMTenantID, IAMPublicKeysPath    string
+	TemplateTenantID, TemplateSubjectID, TemplateDisplayName, TemplateAccessToken string
+	MoneyBaseURL, MoneyAccessToken, EvidenceBaseURL, EvidenceAccessToken          string
+	IAMServiceCredentialURL, WorkloadID, WorkloadSubjectID, WorkloadKeyFile       string
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 func Load() (Config, error) {
-	c := Config{HTTPAddress: env("HTTP_ADDR", ":8092"), DatabaseURL: env("DATABASE_URL", "postgres://internal_finance_requests:internal_finance_requests_dev@127.0.0.1:55442/internal_finance_requests?sslmode=disable"), ShutdownTimeout: 10 * time.Second, ReferenceTimeout: 3 * time.Second, MigrationMode: strings.ToLower(env("MIGRATION_MODE", "auto")), IdentityProvider: strings.ToLower(env("IDENTITY_PROVIDER", "template")), IAMIssuer: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_ISSUER")), "/"), IAMTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("IAM_TENANT_ID"))), IAMPublicKeysPath: strings.TrimSpace(os.Getenv("IAM_PUBLIC_KEYS_PATH")), TemplateTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_TENANT_ID"))), TemplateSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_SUBJECT_ID"))), TemplateDisplayName: strings.TrimSpace(os.Getenv("TEMPLATE_DISPLAY_NAME")), TemplateAccessToken: os.Getenv("TEMPLATE_ACCESS_TOKEN"), MoneyBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("MONEY_BASE_URL")), "/"), MoneyAccessToken: os.Getenv("MONEY_ACCESS_TOKEN"), EvidenceBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EVIDENCE_BASE_URL")), "/"), EvidenceAccessToken: os.Getenv("EVIDENCE_ACCESS_TOKEN")}
-	if raw := strings.TrimSpace(os.Getenv("REFERENCE_TIMEOUT")); raw != "" {
-		value, err := time.ParseDuration(raw)
-		if err != nil || value <= 0 || value > 30*time.Second {
-			return Config{}, fmt.Errorf("REFERENCE_TIMEOUT is invalid")
+	c := Config{
+		HTTPAddress: env("HTTP_ADDR", ":8092"), DatabaseURL: env("DATABASE_URL", "postgres://internal_finance_requests:internal_finance_requests_dev@127.0.0.1:55442/internal_finance_requests?sslmode=disable"),
+		ShutdownTimeout: 10 * time.Second, ReferenceTimeout: 3 * time.Second, WorkloadRefreshBefore: 15 * time.Second,
+		MigrationMode: strings.ToLower(env("MIGRATION_MODE", "auto")), IdentityProvider: strings.ToLower(env("IDENTITY_PROVIDER", "template")),
+		IAMIssuer: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_ISSUER")), "/"), IAMTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("IAM_TENANT_ID"))), IAMPublicKeysPath: strings.TrimSpace(os.Getenv("IAM_PUBLIC_KEYS_PATH")),
+		TemplateTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_TENANT_ID"))), TemplateSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_SUBJECT_ID"))), TemplateDisplayName: strings.TrimSpace(os.Getenv("TEMPLATE_DISPLAY_NAME")), TemplateAccessToken: os.Getenv("TEMPLATE_ACCESS_TOKEN"),
+		MoneyBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("MONEY_BASE_URL")), "/"), MoneyAccessToken: os.Getenv("MONEY_ACCESS_TOKEN"), EvidenceBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EVIDENCE_BASE_URL")), "/"), EvidenceAccessToken: os.Getenv("EVIDENCE_ACCESS_TOKEN"),
+		IAMServiceCredentialURL: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_SERVICE_CREDENTIAL_URL")), "/"), WorkloadID: strings.TrimSpace(os.Getenv("WORKLOAD_ID")), WorkloadSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("WORKLOAD_SUBJECT_ID"))), WorkloadKeyFile: strings.TrimSpace(os.Getenv("WORKLOAD_KEY_FILE")),
+	}
+	for name, item := range map[string]struct {
+		value *time.Duration
+		max   time.Duration
+	}{"REFERENCE_TIMEOUT": {&c.ReferenceTimeout, 30 * time.Second}, "WORKLOAD_REFRESH_BEFORE": {&c.WorkloadRefreshBefore, time.Minute}} {
+		if raw := strings.TrimSpace(os.Getenv(name)); raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil || value <= 0 || value > item.max {
+				return Config{}, fmt.Errorf("%s is invalid", name)
+			}
+			*item.value = value
 		}
-		c.ReferenceTimeout = value
-	}
-	if (c.MoneyBaseURL == "") != (c.MoneyAccessToken == "") {
-		return Config{}, fmt.Errorf("MONEY_BASE_URL and MONEY_ACCESS_TOKEN must be configured together")
-	}
-	if (c.EvidenceBaseURL == "") != (c.EvidenceAccessToken == "") {
-		return Config{}, fmt.Errorf("EVIDENCE_BASE_URL and EVIDENCE_ACCESS_TOKEN must be configured together")
 	}
 	for label, raw := range map[string]string{"MONEY_BASE_URL": c.MoneyBaseURL, "EVIDENCE_BASE_URL": c.EvidenceBaseURL} {
 		if raw == "" {
@@ -48,6 +61,15 @@ func Load() (Config, error) {
 		if !uuidPattern.MatchString(c.TemplateTenantID) || !uuidPattern.MatchString(c.TemplateSubjectID) || c.TemplateDisplayName == "" || len(c.TemplateAccessToken) < 24 {
 			return Config{}, fmt.Errorf("template mode requires valid template identity and a 24+ byte token")
 		}
+		if c.IAMServiceCredentialURL != "" || c.WorkloadID != "" || c.WorkloadSubjectID != "" || c.WorkloadKeyFile != "" {
+			return Config{}, fmt.Errorf("template mode does not accept IAM workload credentials")
+		}
+		if (c.MoneyBaseURL == "") != (c.MoneyAccessToken == "") {
+			return Config{}, fmt.Errorf("MONEY_BASE_URL and MONEY_ACCESS_TOKEN must be configured together")
+		}
+		if (c.EvidenceBaseURL == "") != (c.EvidenceAccessToken == "") {
+			return Config{}, fmt.Errorf("EVIDENCE_BASE_URL and EVIDENCE_ACCESS_TOKEN must be configured together")
+		}
 		return c, nil
 	}
 	if c.IdentityProvider != "iam" {
@@ -57,8 +79,22 @@ func Load() (Config, error) {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || !uuidPattern.MatchString(c.IAMTenantID) || c.IAMPublicKeysPath == "" {
 		return Config{}, fmt.Errorf("iam mode requires HTTPS issuer, tenant and public keys")
 	}
+	if c.MoneyAccessToken != "" || c.EvidenceAccessToken != "" {
+		return Config{}, fmt.Errorf("IAM mode does not accept static downstream tokens")
+	}
+	downstreamConfigured := c.MoneyBaseURL != "" || c.EvidenceBaseURL != ""
+	credentialConfigured := c.IAMServiceCredentialURL != "" || c.WorkloadID != "" || c.WorkloadSubjectID != "" || c.WorkloadKeyFile != ""
+	if downstreamConfigured != credentialConfigured || (downstreamConfigured && (!validURL(c.MoneyBaseURL) || !validURL(c.EvidenceBaseURL) || !validURL(c.IAMServiceCredentialURL) || c.WorkloadID != "internal-finance-requests" || !uuidPattern.MatchString(c.WorkloadSubjectID) || c.WorkloadKeyFile == "")) {
+		return Config{}, fmt.Errorf("IAM downstream Evidence and Money settings must be complete")
+	}
 	return c, nil
 }
+
+func validURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
 func env(name, fallback string) string {
 	if value := os.Getenv(name); value != "" {
 		return value

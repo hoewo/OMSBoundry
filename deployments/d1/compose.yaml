@@ -565,6 +565,33 @@ services:
       - iam-workload-public:/workload-public
     restart: "no"
 
+  internal-finance-requests-workload-key-permissions:
+    profiles: [internal-finance-requests]
+    image: omsbizfoundry/internal-finance-requests:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - internal-finance-requests-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  internal-finance-requests-workload-keys:
+    profiles: [internal-finance-requests]
+    image: omsbizfoundry/internal-finance-requests:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: internal-finance-requests
+      WORKLOAD_SUBJECT_ID: ${INTERNAL_FINANCE_REQUESTS_WORKLOAD_SUBJECT_ID:-ffffffff-ffff-4fff-bfff-ffffffffffff}
+      WORKLOAD_KEY_FILE: /workload-private/internal-finance-requests.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/internal-finance-requests.json
+    depends_on:
+      internal-finance-requests-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - internal-finance-requests-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
   payroll-workload-key-permissions:
     profiles: [payroll]
     image: omsbizfoundry/payroll:${SUITE_VERSION:-dev}
@@ -1105,9 +1132,20 @@ services:
       IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
       IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      MONEY_BASE_URL: http://money-flow-ledger:8083
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: internal-finance-requests
+      WORKLOAD_SUBJECT_ID: ${INTERNAL_FINANCE_REQUESTS_WORKLOAD_SUBJECT_ID:-ffffffff-ffff-4fff-bfff-ffffffffffff}
+      WORKLOAD_KEY_FILE: /workload-private/internal-finance-requests.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      REFERENCE_TIMEOUT: ${REFERENCE_TIMEOUT:-3s}
     depends_on:
       postgres-provision: {condition: service_completed_successfully}
-    volumes: [iam-public-keys:/public:ro]
+      internal-finance-requests-workload-keys: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - internal-finance-requests-workload-private:/workload-private:ro
     networks: [data]
     restart: "no"
 
@@ -1120,6 +1158,9 @@ services:
     depends_on:
       internal-finance-requests-migrate: {condition: service_completed_successfully}
       public-keys: {condition: service_completed_successfully}
+      internal-finance-requests-workload-keys: {condition: service_completed_successfully}
+      money-flow-ledger: {condition: service_healthy}
+      evidence-service: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8092/health/ready >/dev/null"]
       interval: 2s
@@ -1127,6 +1168,7 @@ services:
       retries: 30
     volumes:
       - iam-public-keys:/public:ro
+      - internal-finance-requests-workload-private:/workload-private:ro
       - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
     networks: [app, data]
     restart: unless-stopped
@@ -1147,6 +1189,7 @@ services:
       IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
       IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
       PEOPLE_BASE_URL: ${PAYROLL_PEOPLE_BASE_URL:-http://people-groups:8084}
+      MONEY_BASE_URL: http://money-flow-ledger:8083
       IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
       WORKLOAD_ID: payroll
       WORKLOAD_SUBJECT_ID: ${PAYROLL_WORKLOAD_SUBJECT_ID:-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee}
@@ -1170,6 +1213,8 @@ services:
       payroll-migrate: {condition: service_completed_successfully}
       public-keys: {condition: service_completed_successfully}
       payroll-workload-keys: {condition: service_completed_successfully}
+      people-groups: {condition: service_healthy}
+      money-flow-ledger: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8093/health/ready >/dev/null"]
       interval: 2s
@@ -1345,6 +1390,7 @@ volumes:
   contract-workload-private:
   money-workload-private:
   people-workload-private:
+  internal-finance-requests-workload-private:
   payroll-workload-private:
   contract-evidence:
   evidence-data:

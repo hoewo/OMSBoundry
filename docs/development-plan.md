@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-26 当前实施检查点：P8 Feedback V2 的 OMS／Arckit 源码和 D1 配置边界已完成本地门禁（BF-243），但 P8 的项目 115 通知、真实运行凭证、双账号／双租户与浏览器跨域验收仍未完成。下一步先关闭这些运行门禁，再进入 P9 D1 全组合、联合恢复和连续业务验收；不得以源码构建通过替代 P8／P9 运行结论。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+2026-10-26 当前实施检查点：P9 的 D1 源码装配门禁已补齐 Finance／Payroll 下游短期凭证、依赖选择、key lifecycle 与静态组合回归（BF-244），但没有启动全组合，不能登记 P9 完成。P8 的项目 115 通知、真实运行凭证、双账号／双租户与浏览器跨域验收仍未完成；P9 还需一次有界全组合连续旅程、联合备份／空目标恢复、恢复后复跑、镜像 digest 和浏览器 Console 证据。由于当前开发机资源紧张，先保持常驻容器为零，在具备运行配置后再一次性执行并清理，不得以源码／Compose 通过替代 P8／P9 运行结论。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)、[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 
 2026-10-26 P7 已完成本地门禁（BF-242）：开放 API 已提供 Evidence 发票上传完成、本人报销草稿／提交／撤回／归档恢复／删除、稳定列表／详情及已支付投影；Evidence、Finance、Money 保持独立事实所有权。真实 TLS 五进程／四库验收 13 个 HTTP 断言零偏差，覆盖 Evidence／Finance／Money 故障与原幂等标识恢复、危险 PDF、强重复、唯一资金／核销、本人 paid 查询和 Key 撤销；相关单元、vet 与 PostgreSQL 集成测试通过。下一阶段进入 P8 Feedback SDK V2，P7 未部署 D1／公网。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
 

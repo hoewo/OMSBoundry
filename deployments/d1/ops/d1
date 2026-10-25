@@ -141,6 +141,14 @@ validate_env() {
     echo "ENABLE_BONUS_DISTRIBUTION=true requires ENABLE_PROJECT=true, ENABLE_PEOPLE=true and at least one of ENABLE_CONTRACT=true or ENABLE_MONEY=true" >&2
     exit 2
   fi
+  if [ "$enable_internal_finance_requests" = true ] && { [ "$enable_money" != true ] || [ "$enable_evidence" != true ]; }; then
+    echo "ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true" >&2
+    exit 2
+  fi
+  if [ "$enable_payroll" = true ] && { [ "$enable_people" != true ] || [ "$enable_money" != true ]; }; then
+    echo "ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true" >&2
+    exit 2
+  fi
   project_party_base_url=$(env_value PROJECT_PARTY_BASE_URL)
   if [ "$enable_project" = true ] && [ "$enable_party" = true ]; then
     case "$project_party_base_url" in http://*|https://*) ;; *) echo "PROJECT_PARTY_BASE_URL is required when Project and Party are enabled" >&2; exit 2;; esac
@@ -436,7 +444,7 @@ remove_disabled() {
     disabled_services="$disabled_services bonus-distribution bonus-distribution-migrate bonus-distribution-workload-keys bonus-distribution-workload-key-permissions"
   fi
   if [ "$enable_internal_finance_requests" != true ]; then
-    disabled_services="$disabled_services internal-finance-requests internal-finance-requests-migrate"
+    disabled_services="$disabled_services internal-finance-requests internal-finance-requests-migrate internal-finance-requests-workload-keys internal-finance-requests-workload-key-permissions"
   fi
   if [ "$enable_payroll" != true ]; then
     disabled_services="$disabled_services payroll payroll-migrate payroll-workload-keys payroll-workload-key-permissions"

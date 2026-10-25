@@ -12,7 +12,7 @@ import (
 )
 
 func TestRecordClassifiesDeterministicRejectionAndUnknownOutcome(t *testing.T) {
-	input := finance.MoneyPaymentRequest{SchemaVersion: "1", CommandID: "11111111-1111-4111-8111-111111111111"}
+	input := finance.MoneyPaymentRequest{SchemaVersion: "1", CommandID: "11111111-1111-4111-8111-111111111111", TenantID: "22222222-2222-4222-8222-222222222222"}
 	tests := []struct {
 		name string
 		code int
@@ -36,7 +36,7 @@ func TestRecordClassifiesDeterministicRejectionAndUnknownOutcome(t *testing.T) {
 				_, _ = w.Write([]byte(tt.body))
 			}))
 			defer server.Close()
-			client, err := NewHTTPClient(server.URL, "test-money-token-1234567890", time.Second)
+			client, err := NewHTTPClient(server.URL, "test-money-token-1234567890", nil, time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -53,3 +53,56 @@ func TestRecordClassifiesDeterministicRejectionAndUnknownOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestRecordRefreshesExactWorkloadCredentialOnce(t *testing.T) {
+	const tenantID = "22222222-2222-4222-8222-222222222222"
+	const commandID = "11111111-1111-4111-8111-111111111111"
+	credentials := &credentialSpy{tokens: []string{"expired", "fresh"}}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer fresh" {
+			t.Fatalf("unexpected refreshed token %q", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"status":"recorded","money_payment_id":"33333333-3333-4333-8333-333333333333"}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(server.URL, "", credentials, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Record(context.Background(), finance.MoneyPaymentRequest{SchemaVersion: "1", CommandID: commandID, TenantID: tenantID}); err != nil {
+		t.Fatal(err)
+	}
+	want := tenantID + "|money-flow-ledger|money-flow-ledger.internal-finance-payment.record|internal_finance_payment|" + commandID
+	if requests != 2 || credentials.invalidations != 1 || len(credentials.calls) != 2 {
+		t.Fatalf("requests=%d calls=%d invalidations=%d", requests, len(credentials.calls), credentials.invalidations)
+	}
+	for _, call := range credentials.calls {
+		if call != want {
+			t.Fatalf("unexpected credential scope %q", call)
+		}
+	}
+}
+
+type credentialSpy struct {
+	tokens        []string
+	calls         []string
+	invalidations int
+}
+
+func (s *credentialSpy) CredentialForTenant(_ context.Context, tenantID, audience, action, resourceType, resourceID string) (string, error) {
+	s.calls = append(s.calls, tenantID+"|"+audience+"|"+action+"|"+resourceType+"|"+resourceID)
+	if len(s.tokens) == 0 {
+		return "", errors.New("no token")
+	}
+	token := s.tokens[0]
+	s.tokens = s.tokens[1:]
+	return token, nil
+}
+
+func (s *credentialSpy) InvalidateForTenant(_, _, _, _, _ string) { s.invalidations++ }

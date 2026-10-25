@@ -12,6 +12,7 @@ import (
 	"omsbizfoundry/internal-finance-requests/internal/finance"
 	"omsbizfoundry/internal-finance-requests/internal/httpserver"
 	"omsbizfoundry/internal-finance-requests/internal/moneypayment"
+	workloadidentity "omsbizfoundry/workload-identity"
 	"os"
 	"os/signal"
 	"syscall"
@@ -47,15 +48,26 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var credentials *workloadidentity.TokenSource
+	if (cfg.MoneyBaseURL != "" || cfg.EvidenceBaseURL != "") && cfg.IdentityProvider == "iam" {
+		credentials, err = workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
+		if err != nil {
+			return err
+		}
+	}
 	var paymentPort finance.MoneyPayments
-	if cfg.MoneyBaseURL != "" {
-		paymentPort, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, cfg.MoneyAccessToken, 5*time.Second)
+	if cfg.MoneyBaseURL != "" && cfg.IdentityProvider == "iam" {
+		paymentPort, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, "", credentials, cfg.ReferenceTimeout)
+	} else if cfg.MoneyBaseURL != "" {
+		paymentPort, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, cfg.MoneyAccessToken, nil, cfg.ReferenceTimeout)
 		if err != nil {
 			return err
 		}
 	}
 	var evidencePort finance.EvidenceReferences
-	if cfg.EvidenceBaseURL != "" {
+	if cfg.EvidenceBaseURL != "" && cfg.IdentityProvider == "iam" {
+		evidencePort, err = evidenceref.New(cfg.EvidenceBaseURL, "", credentials, cfg.ReferenceTimeout)
+	} else if cfg.EvidenceBaseURL != "" {
 		evidencePort, err = evidenceref.New(cfg.EvidenceBaseURL, cfg.EvidenceAccessToken, nil, cfg.ReferenceTimeout)
 		if err != nil {
 			return err

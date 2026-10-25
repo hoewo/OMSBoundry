@@ -15,18 +15,33 @@ import (
 	"omsbizfoundry/internal-finance-requests/internal/finance"
 )
 
-type HTTPClient struct {
-	client         *http.Client
-	baseURL, token string
+const (
+	maxResponseBytes = 64 << 10
+	audience         = "money-flow-ledger"
+	action           = "money-flow-ledger.internal-finance-payment.record"
+	resourceType     = "internal_finance_payment"
+)
+
+type CredentialSource interface {
+	CredentialForTenant(context.Context, string, string, string, string, string) (string, error)
+	InvalidateForTenant(string, string, string, string, string)
 }
 
-func NewHTTPClient(baseURL, token string, timeout time.Duration) (*HTTPClient, error) {
+type HTTPClient struct {
+	client               *http.Client
+	baseURL, staticToken string
+	credentials          CredentialSource
+}
+
+func NewHTTPClient(baseURL, staticToken string, credentials CredentialSource, timeout time.Duration) (*HTTPClient, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	parsed, err := url.Parse(baseURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || len(strings.TrimSpace(token)) < 24 || timeout <= 0 || timeout > 30*time.Second {
+	hasStatic := strings.TrimSpace(staticToken) != ""
+	hasDynamic := credentials != nil
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || hasStatic == hasDynamic || (hasStatic && len(strings.TrimSpace(staticToken)) < 24) || timeout <= 0 || timeout > 30*time.Second {
 		return nil, fmt.Errorf("Money payment configuration is invalid")
 	}
-	return &HTTPClient{client: &http.Client{Timeout: timeout}, baseURL: baseURL, token: token}, nil
+	return &HTTPClient{client: &http.Client{Timeout: timeout}, baseURL: baseURL, staticToken: staticToken, credentials: credentials}, nil
 }
 func (c *HTTPClient) Record(ctx context.Context, input finance.MoneyPaymentRequest) (finance.MoneyPaymentResult, error) {
 	body, err := json.Marshal(struct {
@@ -61,11 +76,22 @@ func (c *HTTPClient) Record(ctx context.Context, input finance.MoneyPaymentReque
 	if err != nil {
 		return finance.MoneyPaymentResult{}, err
 	}
+	token := c.staticToken
+	if c.credentials != nil {
+		token, err = c.credentials.CredentialForTenant(ctx, input.TenantID, audience, action, resourceType, input.CommandID)
+		if err != nil || strings.TrimSpace(token) == "" {
+			return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
+		}
+	}
+	return c.record(ctx, input, body, token, true)
+}
+
+func (c *HTTPClient) record(ctx context.Context, input finance.MoneyPaymentRequest, body []byte, token string, retry bool) (finance.MoneyPaymentResult, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/internal-finance-payments", bytes.NewReader(body))
 	if err != nil {
 		return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
 	}
-	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.client.Do(request)
@@ -73,15 +99,24 @@ func (c *HTTPClient) Record(ctx context.Context, input finance.MoneyPaymentReque
 		return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusUnauthorized && retry && c.credentials != nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		c.credentials.InvalidateForTenant(input.TenantID, audience, action, resourceType, input.CommandID)
+		fresh, credentialErr := c.credentials.CredentialForTenant(ctx, input.TenantID, audience, action, resourceType, input.CommandID)
+		if credentialErr != nil || strings.TrimSpace(fresh) == "" {
+			return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
+		}
+		return c.record(ctx, input, body, fresh, false)
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		if response.StatusCode >= 400 && response.StatusCode < 500 && response.StatusCode != http.StatusRequestTimeout && response.StatusCode != http.StatusTooManyRequests {
 			return finance.MoneyPaymentResult{}, fmt.Errorf("%w: Money returned status %d", finance.ErrPaymentRejected, response.StatusCode)
 		}
 		return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
 	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
-	if err != nil || len(raw) > 64<<10 {
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(raw) > maxResponseBytes {
 		return finance.MoneyPaymentResult{}, finance.ErrPaymentUnknown
 	}
 	var result finance.MoneyPaymentResult

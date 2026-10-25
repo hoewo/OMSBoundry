@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+d1="$script_dir/d1"
+test_dir=$(mktemp -d "${TMPDIR:-/tmp}/omsbizfoundry-p9-composition.XXXXXX")
+trap 'rm -rf -- "$test_dir"' EXIT HUP INT TERM
+
+write_env() {
+  target=$1
+  cat >"$target" <<ENV
+SUITE_VERSION=p9-test
+D1_IMAGE_MODE=build
+D1_INGRESS_MODE=http
+PUBLIC_BIND=127.0.0.1
+PUBLIC_PORT=18000
+COOKIE_SECURE=false
+PUBLIC_ISSUER=https://oms.example.test/auth
+TENANT_ID=22222222-2222-4222-8222-222222222222
+POSTGRES_SUPERUSER=oms_admin
+POSTGRES_SUPERUSER_PASSWORD=AdminPassword_123
+IDENTITY_DB_PASSWORD=IdentityPassword_123
+CONTRACT_DB_PASSWORD=ContractPassword_123
+MONEY_DB_PASSWORD=MoneyPassword_123
+PEOPLE_DB_PASSWORD=PeoplePassword_123
+PARTY_DB_PASSWORD=PartyPassword_1234
+PROJECT_DB_PASSWORD=ProjectPassword_123
+EVIDENCE_DB_PASSWORD=EvidencePassword_123
+BUSINESS_ENGAGEMENT_DB_PASSWORD=BusinessEngagementPassword_123
+BILLING_DB_PASSWORD=BillingInvoicePassword_123
+PRODUCTION_DB_PASSWORD=ProductionPassword_123
+APPROVAL_AUDIT_RESULTS_DB_PASSWORD=ApprovalAuditResultsPassword_123
+COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123
+BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123
+INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=InternalFinancePassword_123
+PAYROLL_DB_PASSWORD=PayrollPassword_123
+BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
+ENABLE_CONTRACT=false
+ENABLE_MONEY=true
+ENABLE_PEOPLE=true
+ENABLE_PARTY=true
+ENABLE_PROJECT=false
+ENABLE_EVIDENCE=true
+ENABLE_BUSINESS_ENGAGEMENT=false
+ENABLE_BILLING=false
+ENABLE_PRODUCTION=false
+ENABLE_APPROVAL_AUDIT_RESULTS=false
+ENABLE_COST_OUTSOURCING=false
+ENABLE_BONUS_DISTRIBUTION=false
+ENABLE_INTERNAL_FINANCE_REQUESTS=true
+ENABLE_PAYROLL=true
+PROJECT_PARTY_BASE_URL=
+PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
+EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
+EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE
+D1_BACKUP_DIR=$test_dir/backups
+ENV
+}
+
+env_file="$test_dir/d1.env"
+write_env "$env_file"
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" config >"$test_dir/rendered.yaml"
+
+for expected in \
+  'internal-finance-requests-workload-keys:' \
+  'internal-finance-requests-workload-key-permissions:' \
+  'internal-finance-requests-workload-private:' \
+  'WORKLOAD_ID: internal-finance-requests' \
+  'WORKLOAD_SUBJECT_ID: ffffffff-ffff-4fff-bfff-ffffffffffff' \
+  'MONEY_BASE_URL: http://money-flow-ledger:8083' \
+  'EVIDENCE_BASE_URL: http://evidence-service:8085' \
+  'WORKLOAD_ID: payroll'; do
+  grep -Fq "$expected" "$test_dir/rendered.yaml" || {
+    echo "P9 rendered composition is missing: $expected" >&2
+    exit 1
+  }
+done
+
+assert_invalid_selection() {
+  name=$1
+  setting=$2
+  expected=$3
+  prerequisite=${4:-}
+  invalid_env="$test_dir/$name.env"
+  cp "$env_file" "$invalid_env"
+  [ -z "$prerequisite" ] || printf '%s\n' "$prerequisite" >>"$invalid_env"
+  printf '%s\n' "$setting" >>"$invalid_env"
+  if D1_ENV_FILE="$invalid_env" D1_PROJECT_NAME="omsbizfoundry-p9-$name" "$d1" config >"$test_dir/$name.out" 2>"$test_dir/$name.err"; then
+    echo "P9 accepted invalid selection: $setting" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$test_dir/$name.err"
+}
+
+assert_invalid_selection finance-without-money 'ENABLE_MONEY=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
+assert_invalid_selection finance-without-evidence 'ENABLE_EVIDENCE=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
+assert_invalid_selection payroll-without-people 'ENABLE_PEOPLE=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+assert_invalid_selection payroll-without-money 'ENABLE_MONEY=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+
+echo 'PASS D1 P9 composition test'

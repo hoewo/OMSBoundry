@@ -294,6 +294,24 @@
       ]
     },
     {
+      "id": "internal-finance-requests",
+      "subject_id": "ffffffff-ffff-4fff-bfff-ffffffffffff",
+      "display_name": "Internal Finance Requests",
+      "public_keys_path": "/workload-public/internal-finance-requests.json",
+      "permissions": [
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.internal-finance-payment.record",
+          "resource_types": ["internal_finance_payment"]
+        }
+      ]
+    },
+    {
       "id": "payroll",
       "subject_id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
       "display_name": "Payroll",

@@ -113,6 +113,10 @@ services:
     image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
   internal-finance-requests:
     image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
+  internal-finance-requests-workload-key-permissions:
+    image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
+  internal-finance-requests-workload-keys:
+    image: ${D1_INTERNAL_FINANCE_REQUESTS_IMAGE:-omsbizfoundry/internal-finance-requests:disabled}
 
   payroll-migrate:
     image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
