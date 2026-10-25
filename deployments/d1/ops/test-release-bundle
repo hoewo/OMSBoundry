@@ -83,6 +83,8 @@ for path in \
   acceptance/p9-full-composition/verify-c5-evidence \
   acceptance/p9-full-composition/verify-c6-invoice-reimbursements \
   acceptance/p9-full-composition/verify-c6-evidence \
+  acceptance/p9-full-composition/verify-c7-reimbursement-payments \
+  acceptance/p9-full-composition/verify-c7-evidence \
   docs/operations/d1-environment-promotion.md \
   RELEASE-CHECKSUMS.sha256; do
   grep -q "/$path$" "$listing" || { echo "D1 release is missing $path" >&2; exit 1; }

@@ -22,7 +22,7 @@
 | 财务申请 | P7 已完成 Evidence 实时复验、员工本人开放 API、重复识别、草稿保留与 Finance→Money 闭环；BF-258 已提供绑定 C0～C3 的双 Tenant 付款申请 C4 驱动 | C4 尚未在真实 D1 执行，且只验证无附件显式确认、无需审批和未支付；Evidence 报销、实际付款与恢复仍待连续旅程 |
 | 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接；BF-257 已提供绑定 C0～C2 的双 Tenant 工资周期 C3 驱动 | C3 尚未在真实 D1 执行，且只验证零比例、待核对、未支付；实际发放、Money、恢复／导出仍待公网连续旅程 |
 | 开放平台 | P7 已开放 profile／settings、Evidence 发票上传和本人报销命令／查询，并同步 OpenAPI 与中文说明；BF-259 已提供绑定 C0～C4 的双 Tenant 员工 Key C5 驱动 | C5 尚未在真实 D1 执行且只验证 Key、profile／settings 与本人审计；发票报销业务写和恢复留待后续连续阶段，其他业务 API 不在本轮 |
-| 发票报销闭环 | P7 已用真实 TLS、IAM、Gateway、三个 Owner 和四库完成上传→提交→付款→本人 paid 查询及故障恢复；BF-260 已提供绑定 C0～C5 的双 Tenant 发票上传／本人报销 C6 驱动 | C6 尚未在真实 D1 执行且停在待支付；商业杀毒／OCR、自动代付和审批不在本轮，实际付款与恢复由后续连续阶段验证 |
+| 发票报销闭环 | P7 已用真实 TLS、IAM、Gateway、三个 Owner 和四库完成上传→提交→付款→本人 paid 查询及故障恢复；BF-260 已提供绑定 C0～C5 的双 Tenant 发票上传／本人报销 C6 驱动，BF-261 已提供绑定 C0～C6 的双 Tenant Finance→Money 实际付款 C7 驱动 | C6／C7 尚未在真实 D1 执行；C7 使用 Money 当前本地兼容 Party 且不代表 Party Directory 已统一，商业杀毒／OCR、自动代付和审批不在本轮，恢复仍待后续连续阶段验证 |
 | Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist、OMS Origin 模板及本地真实 Chromium 跨 origin 宿主门禁 | 项目 115 服务端通知开关、有效运行凭证、双账号／双租户、附件／回复／单条已读和外部端到端浏览器仍待验 |
 
 ## 3. 依赖顺序
@@ -186,7 +186,7 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 - D1 增加两个服务、两个数据库、路由、Grant bootstrap、备份恢复与镜像清单；
 - 本地与 D1 使用同一 API、migration 和镜像，配置只决定端点和放置；
 - 连续完成 Tenant 创建、成员、薪酬、工资、财务申请、开放 API 报销闭环和 Feedback；
-- C0／C1／C2／C3／C4／C5／C6 运行驱动依次绑定固定证据摘要；C2 覆盖成员稳定引用到薪酬档案，C3 用明确非法律依据的六项零比例 fixture 验证工资周期、快照、无需审批与未支付边界，C4 以付款申请验证 Person 快照、无附件显式确认、无需审批与租户隔离，C5 验证默认 180 天员工 Key、证据外一次性 Secret、自助脱敏列表、身份绑定、Webhook 占位与本人调用审计，C6 验证 PDF 实字节上传、Evidence 发票校验、报销引用冻结、本人查询与跨 Tenant 隔离；C3 不冒充真实缴费规则或发薪，C4 不放松报销 Evidence 规则或冒充实际付款，C5 不把 Key 建立冒充发票报销业务写，C6 不把待支付冒充 Money 事实；
+- C0／C1／C2／C3／C4／C5／C6／C7 运行驱动依次绑定固定证据摘要；C2 覆盖成员稳定引用到薪酬档案，C3 用明确非法律依据的六项零比例 fixture 验证工资周期、快照、无需审批与未支付边界，C4 以付款申请验证 Person 快照、无附件显式确认、无需审批与租户隔离，C5 验证默认 180 天员工 Key、证据外一次性 Secret、自助脱敏列表、身份绑定、Webhook 占位与本人调用审计，C6 验证 PDF 实字节上传、Evidence 发票校验、报销引用冻结、本人查询与跨 Tenant 隔离，C7 验证授权财务实际付款、Money Obligation／Payment／Allocation 引用、本人 `paid` 回读及跨 Tenant 隔离；C3 不冒充真实缴费规则或发薪，C4 不放松报销 Evidence 规则或冒充实际付款，C5 不把 Key 建立冒充发票报销业务写，C6 不把待支付冒充 Money 事实，C7 的 Money 本地兼容 Party 不冒充 Party Directory 已统一；
 - 生成逐项证据报告、回滚点、镜像 digest、容器健康、数据库恢复和浏览器 console 记录。
 - 新联合备份在停写窗口内生成无秘密数据库事实指纹；空目标恢复必须在业务服务启动前与原 checkpoint 严格一致，随后仍要完成 Evidence 字节和关键业务读取／续写。
 

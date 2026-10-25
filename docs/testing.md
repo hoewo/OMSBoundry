@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C7 报销实际付款连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/verify-c7-reimbursement-payments` 会重新验证并绑定 C0～C6 固定证据，在同一公网 Origin 下为两个 Tenant 的授权财务管理员补齐 Money 当前本地兼容账簿主体和精确 Person 收款映射，再分别确认 C6 报销的完整实际付款。断言覆盖 Finance→Money Obligation／Payment／Allocation 稳定引用、23456 分完整核销、本人 Open API `paid` 详情／列表、跨 Tenant 404，以及 Party Directory 未统一和无直接数据库写入的真实边界。
+
+`make p9-reimbursement-payment-driver-test` 已实际通过：离线 curl／Docker fixture 覆盖两套 Money Party 公网命令、Money 审计 ops、Finance 付款、员工回读及付款成功后的相同命令恢复重跑，并验证固定证据 checksum 漂移拒绝、删掉跨租户断言后重算 checksum 仍失败，以及注入完整 Key 后重算 checksum 仍失败。该测试不启动服务、容器或数据库，不构成真实 D1／公网、工资发放、联合恢复或 P9 完成证据。
+
 ## P9 C6 员工发票报销连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/verify-c6-invoice-reimbursements` 会重新验证并绑定 C0～C5 固定证据，核对 C5 受限恢复文件与 Key prefix 后，让两个 Tenant 的员工分别上传一份虚构 PDF 实字节、完成 Evidence `invoice-v1` 校验、创建并提交本人报销。断言覆盖 File ID／Version 冻结、`payable`、无需审批、账号脱敏、本人列表／详情、交叉 Tenant 404 和零付款／零 Money；API Key 与签名 URL 仅进入受限临时 curl 配置。

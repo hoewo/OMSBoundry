@@ -1,0 +1,125 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR); c1_dir=$(required_env P9_C1_EVIDENCE_DIR); c2_dir=$(required_env P9_C2_EVIDENCE_DIR)
+c3_dir=$(required_env P9_C3_EVIDENCE_DIR); c4_dir=$(required_env P9_C4_EVIDENCE_DIR); c5_dir=$(required_env P9_C5_EVIDENCE_DIR)
+c6_dir=$(required_env P9_C6_EVIDENCE_DIR); evidence_dir=$(required_env P9_C7_EVIDENCE_DIR); secret_dir=$(required_env P9_C5_SECRET_DIR)
+primary_username=$(required_env P9_PRIMARY_ADMIN_USERNAME); primary_password_file=$(required_env P9_PRIMARY_ADMIN_PASSWORD_FILE)
+secondary_username=$(required_env P9_SECONDARY_ADMIN_USERNAME); secondary_password_file=$(required_env P9_SECONDARY_ADMIN_PASSWORD_FILE)
+ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+for command_name in curl docker jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null; "$script_dir/verify-c1-evidence" "$c1_dir" >/dev/null
+"$script_dir/verify-c2-evidence" "$c2_dir" >/dev/null; "$script_dir/verify-c3-evidence" "$c3_dir" >/dev/null
+"$script_dir/verify-c4-evidence" "$c4_dir" >/dev/null; "$script_dir/verify-c5-evidence" "$c5_dir" >/dev/null
+"$script_dir/verify-c6-evidence" "$c6_dir" >/dev/null
+case "$evidence_dir" in /*) ;; *) echo 'P9_C7_EVIDENCE_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir" in /*) ;; *) echo 'P9_C5_SECRET_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir/" in "$evidence_dir/"*|"$evidence_dir/") echo 'P9 C5 secrets must not be inside C7 evidence' >&2; exit 2;; esac
+case "$evidence_dir/" in "$secret_dir/"*|"$secret_dir/") echo 'P9 C7 evidence must not be inside the C5 secret directory' >&2; exit 2;; esac
+[ ! -e "$evidence_dir" ] || { [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || { echo "P9 C7 evidence directory must be absent or empty: $evidence_dir" >&2; exit 2; }; }
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+[ -d "$secret_dir" ] && [ "$(file_mode "$secret_dir")" = 700 ] || { echo 'P9 C5 secret directory must be mode 0700' >&2; exit 2; }
+for file in "$secret_dir/primary.api-key" "$secret_dir/secondary.api-key" "$primary_password_file" "$secondary_password_file"; do [ -f "$file" ] && [ "$(file_mode "$file")" = 600 ] || { echo "protected input must exist with mode 0600: $file" >&2; exit 2; }; done
+if [ -n "$ca_bundle" ]; then [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }; fi
+
+c0_state="$c0_dir/state-after-c0.json"; c1_state="$c1_dir/state-after-c1.json"; c6_state="$c6_dir/state-after-c6.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state"); base_url=$(jq -er '.deployment.public_url | sub("/+$";"")' "$c0_state")
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not an allowed HTTPS or loopback origin' >&2; exit 1;; esac
+c0_sha=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256" | awk '{print $1}'); c1_sha=$(openssl dgst -sha256 -r "$c1_dir/checksums.sha256" | awk '{print $1}')
+c2_sha=$(openssl dgst -sha256 -r "$c2_dir/checksums.sha256" | awk '{print $1}'); c3_sha=$(openssl dgst -sha256 -r "$c3_dir/checksums.sha256" | awk '{print $1}')
+c4_sha=$(openssl dgst -sha256 -r "$c4_dir/checksums.sha256" | awk '{print $1}'); c5_sha=$(openssl dgst -sha256 -r "$c5_dir/checksums.sha256" | awk '{print $1}'); c6_sha=$(openssl dgst -sha256 -r "$c6_dir/checksums.sha256" | awk '{print $1}')
+for phase in 1 2 3 4 5 6; do eval state_dir=\$c${phase}_dir; [ "$(jq -er '.deployment.compose_project' "$state_dir/state-after-c$phase.json")" = "$compose_project" ] || { echo "continuous phase C$phase Compose project changed" >&2; exit 1; }; done
+[ "$(jq -er '.deployment.public_url | sub("/+$";"")' "$c6_state")" = "$base_url" ] || { echo 'C6 public origin does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.c0_checksums_sha256' "$c6_state")" = "$c0_sha" ] && [ "$(jq -er '.deployment.c1_checksums_sha256' "$c6_state")" = "$c1_sha" ] &&
+  [ "$(jq -er '.deployment.c2_checksums_sha256' "$c6_state")" = "$c2_sha" ] && [ "$(jq -er '.deployment.c3_checksums_sha256' "$c6_state")" = "$c3_sha" ] &&
+  [ "$(jq -er '.deployment.c4_checksums_sha256' "$c6_state")" = "$c4_sha" ] && [ "$(jq -er '.deployment.c5_checksums_sha256' "$c6_state")" = "$c5_sha" ] || { echo 'C6 evidence chain is invalid' >&2; exit 1; }
+
+primary_tenant=$(jq -er '.tenants[0].id' "$c6_state"); secondary_tenant=$(jq -er '.tenants[1].id' "$c6_state")
+primary_person=$(jq -er '.tenants[0].person_id' "$c6_state"); secondary_person=$(jq -er '.tenants[1].person_id' "$c6_state")
+primary_request=$(jq -er '.tenants[0].reimbursement.id' "$c6_state"); secondary_request=$(jq -er '.tenants[1].reimbursement.id' "$c6_state")
+primary_revision=$(jq -er '.tenants[0].reimbursement.revision' "$c6_state"); secondary_revision=$(jq -er '.tenants[1].reimbursement.revision' "$c6_state")
+jq -e --arg a "$primary_tenant" --arg b "$secondary_tenant" --arg pa "$primary_person" --arg pb "$secondary_person" '.tenants[0].id==$a and .tenants[1].id==$b and .tenants[0].person.id==$pa and .tenants[1].person.id==$pb' "$c1_state" >/dev/null || { echo 'C1/C6 Tenant or Person continuity is invalid' >&2; exit 1; }
+
+money_container=$(docker ps --all --quiet --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=money-flow-ledger')
+[ -n "$money_container" ] && [ "$(printf '%s\n' "$money_container" | awk 'NF{n++} END{print n+0}')" -eq 1 ] || { echo 'P9 C7 requires exactly one Money container' >&2; exit 1; }
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); workspace=$(mktemp -d "$tmp_root/oms-p9-c7.XXXXXX"); evidence_stage=
+trap 'rm -rf -- "$workspace"; if [ -n "$evidence_stage" ]; then rm -rf -- "$evidence_stage"; fi' EXIT HUP INT TERM
+chmod 700 "$workspace"; http_evidence="$workspace/http-evidence.tsv"; operations="$workspace/operations.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"; printf 'tenant_role\toperation\tresult\n' >"$operations"
+stable_uuid() { digest=$(printf '%s' "$1" | openssl dgst -sha256 -r | awk '{print $1}'); printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$digest"|cut -c1-8)" "$(printf '%s' "$digest"|cut -c9-12)" "$(printf '%s' "$digest"|cut -c14-16)" "$(printf '%s' "$digest"|cut -c18-20)" "$(printf '%s' "$digest"|cut -c21-32)"; }
+curl_result() { output=$1; shift; set -- --silent --show-error --connect-timeout 10 --max-time 45 --output "$output" --write-out '%{http_code} %{time_total}' "$@"; [ -z "$ca_bundle" ] || set -- --cacert "$ca_bundle" "$@"; curl "$@"; }
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+expect_status() { case "$1:$2" in 204/409:204|204/409:409) return 0;; esac; [ "$2" = "$1" ] || { echo "$3 returned HTTP $2, expected $1" >&2; exit 1; }; }
+request() { method=$1; path=$2; cookies=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8; set -- --request "$method" --cookie "$cookies" --cookie-jar "$cookies"; [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"; [ -z "$payload" ] || set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload"; result=$(curl_result "$output" "$@" "$base_url$path"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "$label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$label"; printf '%s' "$actual"; }
+fetch_csrf() { result=$(curl_result "$2" --cookie-jar "$1" "$base_url/auth/api/v1/csrf"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "GET $3 auth CSRF" 200 "$actual" "$duration"; expect_status 200 "$actual" 'fetch CSRF'; chmod 600 "$1"; jq -er '.csrf_token' "$2"; }
+login() { payload="$workspace/$1-login-request.json"; jq -Rs --arg username "$4" '{username:$username,password:(rtrimstr("\n")|rtrimstr("\r"))}' "$5" >"$payload"; chmod 600 "$payload"; request POST /auth/api/v1/login "$2" "$3" "$payload" "$workspace/$1-login.json" 200 "POST $1 login" >/dev/null; rm -f "$payload"; }
+grant() { actor=$1; cookies=$2; csrf=$3; subject=$4; audience=$5; action=$6; suffix=$(printf '%s' "$action"|tr '.-' '__'); jq -n --arg subject "$subject" --arg audience "$audience" --arg action "$action" '{subject_id:$subject,audience:$audience,action:$action}' >"$workspace/$actor-grant-$suffix.json"; status=$(request POST /auth/api/v1/admin/grants "$cookies" "$csrf" "$workspace/$actor-grant-$suffix.json" "$workspace/$actor-grant-$suffix.out" 204/409 "POST $actor $action grant"); [ "$status" != 409 ] || jq -e '.error.code=="conflict"' "$workspace/$actor-grant-$suffix.out" >/dev/null; }
+authorize() { result=$(curl_result "$workspace/$1-authorize-$4.out" --request POST --cookie "$2" --cookie-jar "$2" --data-urlencode "csrf_token=$3" "$base_url/gateway/authorize/$4"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "POST $1 authorize $4" 303 "$actual" "$duration"; expect_status 303 "$actual" "authorize $4"; }
+hidden_value() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$2" | head -1; }
+create_money_party() { actor=$1; cookies=$2; csrf=$3; tenant=$4; kind=$5; label=$6; registration=$7; command=$(stable_uuid "oms-v1-p9-c7-$actor-money-$kind:$tenant"); prefix="$workspace/$actor-$kind-party"; result=$(curl_result "$prefix.body" --dump-header "$prefix.headers" --request POST --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" --data-urlencode "command_id=$command" --data-urlencode "kind=$kind" --data-urlencode "legal_name=$label" --data-urlencode "registration_identifier=$registration" "$base_url/money/parties"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "POST $actor Money $kind Party" 303 "$actual" "$duration"; expect_status 303 "$actual" "create $actor Money $kind Party"; sed -n 's/^[Ll]ocation:.*[?&]party_id=\([^&[:space:]\r]*\).*/\1/p' "$prefix.headers" | head -1; }
+open_request() { actor=$1; method=$2; path=$3; key_file=$4; output=$5; label=$6; config="$workspace/$actor-open.conf"; { printf 'header = "Authorization: ApiKey '; tr -d '\r\n' <"$key_file"; printf '"\n'; } >"$config"; chmod 600 "$config"; result=$(curl_result "$output" --config "$config" --request "$method" "$base_url$path"); rm -f "$config"; actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "$label" 200 "$actual" "$duration"; expect_status 200 "$actual" "$label"; }
+money_ops() { actor=$1; tenant=$2; operation=$3; output=$4; shift 4; docker exec -e "IAM_TENANT_ID=$tenant" "$money_container" /app/ops "$operation" "$@" >"$output"; printf '%s\t%s\tpass\n' "$actor" "$operation" >>"$operations"; }
+
+run_actor() {
+  actor=$1; tenant=$2; person=$3; request_id=$4; request_revision=$5; username=$6; password_file=$7; key_file=$8
+  cookies="$workspace/$actor.cookies"; csrf=$(fetch_csrf "$cookies" "$workspace/$actor-csrf.json" "$actor"); login "$actor" "$cookies" "$csrf" "$username" "$password_file"
+  request GET /auth/api/v1/session "$cookies" '' '' "$workspace/$actor-session.json" 200 "GET $actor session" >/dev/null
+  subject=$(jq -er --arg tenant "$tenant" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/$actor-session.json"); display=$(jq -r '.principal.display_name // .principal.name // "P9 财务管理员"' "$workspace/$actor-session.json")
+  for action in money-flow-ledger.view money-flow-ledger.party.register; do grant "$actor" "$cookies" "$csrf" "$subject" money-flow-ledger "$action"; done
+  for action in internal-finance-requests.tenant.read internal-finance-requests.payment.confirm; do grant "$actor" "$cookies" "$csrf" "$subject" internal-finance-requests "$action"; done
+  authorize "$actor" "$cookies" "$csrf" money-flow-ledger
+  request GET /money/parties "$cookies" '' '' "$workspace/$actor-money-parties.html" 200 "GET $actor Money Party form" >/dev/null
+  money_csrf=$(hidden_value csrf_token "$workspace/$actor-money-parties.html"); [ -n "$money_csrf" ] || { echo "$actor Money CSRF is missing" >&2; exit 1; }
+  owner=$(create_money_party "$actor" "$cookies" "$money_csrf" "$tenant" organization "P9 C7 $actor 验收公司" "P9C7${actor}OWNER")
+  payee=$(create_money_party "$actor" "$cookies" "$money_csrf" "$tenant" individual "P9 C7 $actor 验收员工" "P9C7${actor}EMPLOYEE")
+  uuid='[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+  printf '%s\n' "$owner" | grep -Eq "^$uuid$" || { echo "$actor Money owner Party response is invalid" >&2; exit 1; }
+  printf '%s\n' "$payee" | grep -Eq "^$uuid$" || { echo "$actor Money payee Party response is invalid" >&2; exit 1; }
+  payment_command=$(stable_uuid "oms-v1-p9-c7-$actor-reimbursement-payment:$tenant:$request_id")
+  open_request "$actor" GET "/open-api/v1/reimbursements/$request_id" "$key_file" "$workspace/$actor-before.json" "GET $actor employee reimbursement before payment"
+  person_revision=$(jq -er --arg request "$request_id" --arg person "$person" --arg command "$payment_command" 'select(.id==$request and .amount_minor==23456 and .details.applicant.id==$person and ((.status=="payable" and .paid_minor==0) or (.status=="paid" and .paid_minor==23456 and (.payments|length)==1 and .payments[0].command_id==$command))) | .details.applicant.revision' "$workspace/$actor-before.json")
+  person_digest=$(jq -er '.details.applicant.digest|select(test("^sha256:[0-9a-f]{64}$"))' "$workspace/$actor-before.json")
+  owner_command=$(stable_uuid "oms-v1-p9-c7-$actor-owner-setting:$tenant"); map_command=$(stable_uuid "oms-v1-p9-c7-$actor-payee-map:$tenant:$person")
+  money_ops "$actor" "$tenant" internal-finance-owner-set "$workspace/$actor-owner-setting.json" --command-id "$owner_command" --tenant-id "$tenant" --local-party-id "$owner" --actor-kind iam_subject --actor-id "$subject" --actor-display-name "$display" --reason 'P9 C7 报销付款账簿主体复核'
+  jq -e --arg tenant "$tenant" --arg owner "$owner" '.tenant_id==$tenant and .local_party_id==$owner and .revision>=1' "$workspace/$actor-owner-setting.json" >/dev/null
+  money_ops "$actor" "$tenant" payable-party-map "$workspace/$actor-payee-map.json" --command-id "$map_command" --tenant-id "$tenant" --person-id "$person" --person-revision "$person_revision" --person-digest "$person_digest" --local-party-id "$payee" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$subject" --reviewed-by-display-name "$display" --reason 'P9 C7 成员与 Money 收款主体精确映射复核'
+  jq -e --arg tenant "$tenant" --arg person "$person" --arg payee "$payee" '.tenant_id==$tenant and .person_id==$person and .local_party_id==$payee and .local_party_revision>=1' "$workspace/$actor-payee-map.json" >/dev/null
+  authorize "$actor" "$cookies" "$csrf" internal-finance-requests
+  jq -n --arg command "$payment_command" --argjson revision "$request_revision" '{command_id:$command,expected_revision:$revision,actual_amount_minor:23456,occurred_on:"2026-10-26",note:"P9 C7 发票报销实际付款",overage_confirmed:false,overage_reason:""}' >"$workspace/$actor-payment-request.json"
+  request POST "/internal-finance/v1/finance-requests/$request_id/payments" "$cookies" "$csrf" "$workspace/$actor-payment-request.json" "$workspace/$actor-paid.json" 200 "POST $actor reimbursement payment" >/dev/null
+  jq -e --arg request "$request_id" --arg command "$payment_command" '.id==$request and .status=="paid" and .amount_minor==23456 and .paid_minor==23456 and .allocated_minor==23456 and .overage_minor==0 and .payment_unknown_count==0 and (.payments|length)==1 and .payments[0].command_id==$command and .payments[0].status=="succeeded" and .payments[0].actual_amount_minor==23456 and .payments[0].allocated_amount_minor==23456 and .payments[0].overage_amount_minor==0 and (.payments[0].money_payment_id|test("^[0-9a-f-]{36}$")) and (.payments[0].money_obligation_id|test("^[0-9a-f-]{36}$"))' "$workspace/$actor-paid.json" >/dev/null || { echo "$actor paid reimbursement is invalid" >&2; exit 1; }
+  open_request "$actor" GET "/open-api/v1/reimbursements/$request_id" "$key_file" "$workspace/$actor-employee-paid.json" "GET $actor employee reimbursement after payment"
+  open_request "$actor" GET '/open-api/v1/reimbursements?status=paid&limit=20' "$key_file" "$workspace/$actor-employee-list.json" "GET $actor employee paid list"
+  jq -e --arg request "$request_id" '.id==$request and .status=="paid" and .paid_minor==23456 and (.payments|length)==1' "$workspace/$actor-employee-paid.json" >/dev/null
+  jq -e --arg request "$request_id" 'any(.items[];.id==$request and .status=="paid" and .paid_minor==23456)' "$workspace/$actor-employee-list.json" >/dev/null
+  jq -n --arg tenant "$tenant" --arg person "$person" --arg request "$request_id" --arg owner "$owner" --arg payee "$payee" --arg command "$payment_command" --slurpfile paid "$workspace/$actor-paid.json" '{tenant_id:$tenant,person_id:$person,money_compatibility_parties:{owner_id:$owner,payee_id:$payee},reimbursement:{id:$request,revision:$paid[0].revision,status:$paid[0].status,amount_minor:$paid[0].amount_minor,paid_minor:$paid[0].paid_minor},payment:{command_id:$command,money_payment_id:$paid[0].payments[0].money_payment_id,money_payment_revision:$paid[0].payments[0].money_payment_revision,money_allocation_id:$paid[0].payments[0].money_allocation_id,money_allocation_revision:$paid[0].payments[0].money_allocation_revision,money_obligation_id:$paid[0].payments[0].money_obligation_id,money_obligation_revision:$paid[0].payments[0].money_obligation_revision}}' >"$workspace/$actor-result.json"
+}
+
+run_actor primary "$primary_tenant" "$primary_person" "$primary_request" "$primary_revision" "$primary_username" "$primary_password_file" "$secret_dir/primary.api-key"
+run_actor secondary "$secondary_tenant" "$secondary_person" "$secondary_request" "$secondary_revision" "$secondary_username" "$secondary_password_file" "$secret_dir/secondary.api-key"
+jq -n --arg command "$(stable_uuid "oms-v1-p9-c7-cross-tenant:$primary_tenant:$secondary_request")" --argjson revision "$secondary_revision" '{command_id:$command,expected_revision:$revision,actual_amount_minor:23456,occurred_on:"2026-10-26",note:"must not cross tenant",overage_confirmed:false,overage_reason:""}' >"$workspace/cross-payment.json"
+request POST "/internal-finance/v1/finance-requests/$secondary_request/payments" "$workspace/primary.cookies" "$(jq -er .csrf_token "$workspace/primary-csrf.json")" "$workspace/cross-payment.json" "$workspace/cross-response.json" 404 'POST primary cross-tenant reimbursement payment' >/dev/null
+jq -e '.error.code=="FINANCE_REQUEST_NOT_FOUND" or .error.code=="NOT_FOUND"' "$workspace/cross-response.json" >/dev/null || { echo 'cross-Tenant payment was not hidden as not found' >&2; exit 1; }
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" --arg c6 "$c6_sha" --slurpfile a "$workspace/primary-result.json" --slurpfile b "$workspace/secondary-result.json" '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C7",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5,c6_checksums_sha256:$c6},party_runtime:{mode:"local_compatibility",party_directory_unified:false},tenants:[$a[0],$b[0]],checks:{owner_configuration_via_money_ops:"pass",person_payee_mapping_via_money_ops:"pass",finance_to_money_write:"pass",employee_paid_projection:"pass",cross_tenant_payment_not_found:"pass",direct_database_write:false,secrets_recorded:false}}' >"$workspace/state-after-c7.json"
+cat >"$workspace/result.md" <<EOF
+# P9 C7 reimbursement payment result
+
+- Result: pass
+- Captured at: $captured_at
+- Checks: two Tenant-bound reimbursements paid through Finance to Money, employee paid projections and cross-Tenant 404.
+- Party runtime: reviewed local compatibility Parties; Party Directory unification is not claimed.
+- Direct database write: no
+- Secrets recorded in evidence: no
+EOF
+mkdir -p "$(dirname -- "$evidence_dir")"; evidence_stage=$(mktemp -d "$(dirname -- "$evidence_dir")/.p9-c7-evidence.XXXXXX"); chmod 700 "$evidence_stage"
+cp "$http_evidence" "$operations" "$workspace/result.md" "$workspace/state-after-c7.json" "$evidence_stage/"; chmod 600 "$evidence_stage/"*; : >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv operations.tsv result.md state-after-c7.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact"|awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"; done
+chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c7-evidence" "$evidence_stage" >/dev/null
+if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi; mv "$evidence_stage" "$evidence_dir"; evidence_stage=
+echo 'PASS P9 C7 Finance to Money reimbursement payment isolation'

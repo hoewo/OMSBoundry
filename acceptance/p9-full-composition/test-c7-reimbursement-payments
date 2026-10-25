@@ -1,0 +1,133 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); runtime=$(mktemp -d "$tmp_root/oms-p9-c7-test.XXXXXX")
+trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+mkdir -p "$runtime/bin" "$runtime/mock-state"; artifact_dir=${P9_C7_TEST_ARTIFACT_DIR:-}
+P9_C6_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c6-invoice-reimbursements" >/dev/null
+primary_secret=$(cat "$runtime/fixture/secrets/primary.api-key"); secondary_secret=$(cat "$runtime/fixture/secrets/secondary.api-key")
+
+cat >"$runtime/bin/curl" <<'MOCK'
+#!/bin/sh
+set -eu
+output= headers= method=GET url= data_file= config= cookies= cookie_jar= form_values=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2;; --dump-header) headers=$2; shift 2;; --config) config=$2; shift 2;;
+    --request) method=$2; shift 2;; --cookie) cookies=$2; shift 2;; --cookie-jar) cookie_jar=$2; shift 2;;
+    --data-binary) data_file=${2#@}; shift 2;; --data-urlencode) form_values="$form_values
+$2"; shift 2;;
+    --write-out|--connect-timeout|--max-time|--cacert|-H) shift 2;; --silent|--show-error) shift;;
+    http://*|https://*) url=$1; shift;; *) shift;;
+  esac
+done
+[ -n "$output" ] || exit 2; : >"$output"; [ -z "$headers" ] || : >"$headers"; [ -z "$cookie_jar" ] || printf '# mock cookie\n' >"$cookie_jar"
+actor=primary; case "$cookies$cookie_jar$config" in *secondary*) actor=secondary;; esac
+if [ "$actor" = primary ]; then
+  tenant=11111111-1111-4111-8111-111111111111; person=aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa; subject=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+  request=aaaaaaaa-aaaa-4aaa-8aaa-333333333333; other=bbbbbbbb-bbbb-4bbb-8bbb-333333333333
+  owner=aaaaaaaa-aaaa-4aaa-8aaa-444444444444; payee=aaaaaaaa-aaaa-4aaa-8aaa-555555555555
+  payment=aaaaaaaa-aaaa-4aaa-8aaa-666666666666; allocation=aaaaaaaa-aaaa-4aaa-8aaa-777777777777; obligation=aaaaaaaa-aaaa-4aaa-8aaa-888888888888
+else
+  tenant=22222222-2222-4222-8222-222222222222; person=bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb; subject=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+  request=bbbbbbbb-bbbb-4bbb-8bbb-333333333333; other=aaaaaaaa-aaaa-4aaa-8aaa-333333333333
+  owner=bbbbbbbb-bbbb-4bbb-8bbb-444444444444; payee=bbbbbbbb-bbbb-4bbb-8bbb-555555555555
+  payment=bbbbbbbb-bbbb-4bbb-8bbb-666666666666; allocation=bbbbbbbb-bbbb-4bbb-8bbb-777777777777; obligation=bbbbbbbb-bbbb-4bbb-8bbb-888888888888
+fi
+status=200; path=$(printf '%s' "$url"|sed -E 's#^https?://[^/]+##'); digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+paid=false; [ ! -f "$P9_C7_MOCK_STATE/$actor-paid" ] || paid=true
+stable_uuid_mock() { value=$(printf '%s' "$1" | openssl dgst -sha256 -r | awk '{print $1}'); printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$value"|cut -c1-8)" "$(printf '%s' "$value"|cut -c9-12)" "$(printf '%s' "$value"|cut -c14-16)" "$(printf '%s' "$value"|cut -c18-20)" "$(printf '%s' "$value"|cut -c21-32)"; }
+request_json() {
+  state=payable; revision=2; paid_minor=0; payments='[]'
+  if [ "$paid" = true ]; then
+    state=paid; revision=3; paid_minor=23456
+    payments=$(printf '[{"command_id":"%s","request_id":"%s","source_request_revision":2,"actual_amount_minor":23456,"allocated_amount_minor":23456,"overage_amount_minor":0,"occurred_on":"2026-10-26","note":"P9 C7 发票报销实际付款","status":"succeeded","attempt_count":1,"money_payment_id":"%s","money_payment_revision":1,"money_allocation_id":"%s","money_allocation_revision":1,"money_obligation_id":"%s","money_obligation_revision":2,"operator_subject_id":"%s"}]' "$(stable_uuid_mock "oms-v1-p9-c7-$actor-reimbursement-payment:$tenant:$request")" "$request" "$payment" "$allocation" "$obligation" "$subject")
+  fi
+  printf '{"id":"%s","tenant_id":"%s","applicant_subject_id":"%s","request_type":"reimbursement","title":"P9 C6 reimbursement","amount_minor":23456,"currency":"CNY","status":"%s","details":{"applicant":{"id":"%s","revision":1,"digest":"%s","display_name":"P9 employee"},"payee":{"kind":"person","display_name":"P9 employee","bank_name":"P9 bank","account_last4":"7890"},"lines":[]},"approval_policy":"not_required","approval_status":"not_applicable","paid_minor":%s,"allocated_minor":%s,"overage_minor":0,"payment_unknown_count":0,"revision":%s,"payments":%s}\n' "$request" "$tenant" "$subject" "$state" "$person" "$digest" "$paid_minor" "$paid_minor" "$revision" "$payments"
+}
+case "$method $path" in
+  'GET /auth/api/v1/csrf') printf '{"csrf_token":"csrf-%s"}\n' "$actor" >"$output";;
+  'POST /auth/api/v1/login') jq -e '.username!="" and .password!=""' "$data_file" >/dev/null; printf '{"principal":{"subject_id":"%s"}}\n' "$subject" >"$output";;
+  'GET /auth/api/v1/session') printf '{"principal":{"tenant_id":"%s","subject_id":"%s","display_name":"P9 %s 管理员"}}\n' "$tenant" "$subject" "$actor" >"$output";;
+  'POST /auth/api/v1/admin/grants') jq -e '(.audience=="money-flow-ledger" and (.action=="money-flow-ledger.view" or .action=="money-flow-ledger.party.register")) or (.audience=="internal-finance-requests" and (.action=="internal-finance-requests.tenant.read" or .action=="internal-finance-requests.payment.confirm"))' "$data_file" >/dev/null; status=204;;
+  'POST /gateway/authorize/money-flow-ledger'|'POST /gateway/authorize/internal-finance-requests') status=303;;
+  'GET /money/parties') printf '<html><input type="hidden" name="csrf_token" value="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"></html>\n' >"$output";;
+  'POST /money/parties')
+    status=303; selected=$owner; printf '%s' "$form_values"|grep -Fq 'kind=individual' && selected=$payee
+    [ -z "$headers" ] || printf 'HTTP/1.1 303 See Other\r\nLocation: /money/parties?created=1&party_id=%s\r\n\r\n' "$selected" >"$headers";;
+  "GET /open-api/v1/reimbursements/$request") request_json >"$output";;
+  'GET /open-api/v1/reimbursements?status=paid&limit=20') printf '{"items":[' >"$output"; request_json | tr -d '\n' >>"$output"; printf ']}\n' >>"$output";;
+  "POST /internal-finance/v1/finance-requests/$request/payments")
+    jq -e '.expected_revision==2 and .actual_amount_minor==23456 and .overage_confirmed==false' "$data_file" >/dev/null || exit 2
+    touch "$P9_C7_MOCK_STATE/$actor-paid"; paid=true; request_json >"$output";;
+  "POST /internal-finance/v1/finance-requests/$other/payments") status=404; printf '{"error":{"code":"FINANCE_REQUEST_NOT_FOUND"}}\n' >"$output";;
+  *) echo "unexpected mock curl request: $method $path" >&2; exit 2;;
+esac
+case "$path" in /open-api/*) [ -f "$config" ] || exit 2; if [ "$actor" = primary ]; then grep -Fq 'Authorization: ApiKey bfk_primary000_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' "$config" || exit 2; else grep -Fq 'Authorization: ApiKey bfk_secondar00_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' "$config" || exit 2; fi;; esac
+printf '%s 0.001' "$status"
+MOCK
+chmod 0755 "$runtime/bin/curl"
+
+cat >"$runtime/bin/docker" <<'MOCK'
+#!/bin/sh
+set -eu
+case "$1" in
+  ps) printf 'money-container\n';;
+  exec)
+    shift; tenant=
+    if [ "$1" = -e ]; then tenant=${2#IAM_TENANT_ID=}; shift 2; fi
+    [ "$1" = money-container ]; shift; [ "$1" = /app/ops ]; shift; operation=$1; shift
+    local_party= person= command=
+    while [ "$#" -gt 0 ]; do
+      case "$1" in --local-party-id) local_party=$2; shift 2;; --person-id) person=$2; shift 2;; --command-id) command=$2; shift 2;; *) shift;; esac
+    done
+    case "$operation" in
+      internal-finance-owner-set) printf '{"tenant_id":"%s","revision":1,"local_party_id":"%s","replayed":false}\n' "$tenant" "$local_party";;
+      payable-party-map) printf '{"service":"money-flow-ledger","tenant_id":"%s","command_id":"%s","person_id":"%s","person_revision":1,"person_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","local_party_id":"%s","local_party_revision":1,"replayed":false}\n' "$tenant" "$command" "$person" "$local_party";;
+      *) echo "unexpected Money ops operation: $operation" >&2; exit 2;;
+    esac;;
+  *) echo "unexpected mock docker command: $1" >&2; exit 2;;
+esac
+MOCK
+chmod 0755 "$runtime/bin/docker"
+
+env PATH="$runtime/bin:$PATH" P9_C7_MOCK_STATE="$runtime/mock-state" \
+  P9_C0_EVIDENCE_DIR="$runtime/fixture/c0" P9_C1_EVIDENCE_DIR="$runtime/fixture/c1" P9_C2_EVIDENCE_DIR="$runtime/fixture/c2" \
+  P9_C3_EVIDENCE_DIR="$runtime/fixture/c3" P9_C4_EVIDENCE_DIR="$runtime/fixture/c4" P9_C5_EVIDENCE_DIR="$runtime/fixture/c5" \
+  P9_C6_EVIDENCE_DIR="$runtime/fixture/c6" P9_C7_EVIDENCE_DIR="$runtime/c7" P9_C5_SECRET_DIR="$runtime/fixture/secrets" \
+  P9_PRIMARY_ADMIN_USERNAME=p9-primary P9_PRIMARY_ADMIN_PASSWORD_FILE="$runtime/fixture/primary.password" \
+  P9_SECONDARY_ADMIN_USERNAME=p9-secondary P9_SECONDARY_ADMIN_PASSWORD_FILE="$runtime/fixture/secondary.password" \
+  "$script_dir/verify-c7-reimbursement-payments" >"$runtime/c7.out"
+grep -Fq 'PASS P9 C7' "$runtime/c7.out"; "$script_dir/verify-c7-evidence" "$runtime/c7" >/dev/null
+jq -e '.phase=="C7" and ([.tenants[].reimbursement.status]|all(.=="paid")) and ([.tenants[].reimbursement.paid_minor]|all(.==23456)) and .checks.direct_database_write==false and .party_runtime.party_directory_unified==false' "$runtime/c7/state-after-c7.json" >/dev/null
+if grep -R -F "$primary_secret" "$runtime/c7" >/dev/null 2>&1 || grep -R -F "$secondary_secret" "$runtime/c7" >/dev/null 2>&1; then echo 'P9 C7 leaked an API Key into evidence' >&2; exit 1; fi
+
+env PATH="$runtime/bin:$PATH" P9_C7_MOCK_STATE="$runtime/mock-state" \
+  P9_C0_EVIDENCE_DIR="$runtime/fixture/c0" P9_C1_EVIDENCE_DIR="$runtime/fixture/c1" P9_C2_EVIDENCE_DIR="$runtime/fixture/c2" \
+  P9_C3_EVIDENCE_DIR="$runtime/fixture/c3" P9_C4_EVIDENCE_DIR="$runtime/fixture/c4" P9_C5_EVIDENCE_DIR="$runtime/fixture/c5" \
+  P9_C6_EVIDENCE_DIR="$runtime/fixture/c6" P9_C7_EVIDENCE_DIR="$runtime/c7-replay" P9_C5_SECRET_DIR="$runtime/fixture/secrets" \
+  P9_PRIMARY_ADMIN_USERNAME=p9-primary P9_PRIMARY_ADMIN_PASSWORD_FILE="$runtime/fixture/primary.password" \
+  P9_SECONDARY_ADMIN_USERNAME=p9-secondary P9_SECONDARY_ADMIN_PASSWORD_FILE="$runtime/fixture/secondary.password" \
+  "$script_dir/verify-c7-reimbursement-payments" >"$runtime/c7-replay.out"
+grep -Fq 'PASS P9 C7' "$runtime/c7-replay.out"; "$script_dir/verify-c7-evidence" "$runtime/c7-replay" >/dev/null
+jq -s -e '.[0].tenants==.[1].tenants' "$runtime/c7/state-after-c7.json" "$runtime/c7-replay/state-after-c7.json" >/dev/null || { echo 'P9 C7 replay changed stable business results' >&2; exit 1; }
+
+tampered="$runtime/c7-tampered"; cp -R "$runtime/c7" "$tampered"; printf 'tamper\n' >>"$tampered/result.md"
+if "$script_dir/verify-c7-evidence" "$tampered" >/dev/null 2>&1; then echo 'P9 C7 accepted digest drift' >&2; exit 1; fi
+incomplete="$runtime/c7-incomplete"; cp -R "$runtime/c7" "$incomplete"
+awk -F '\t' '$1!="POST primary cross-tenant reimbursement payment"' "$incomplete/http-evidence.tsv" >"$incomplete/http.tmp"; mv "$incomplete/http.tmp" "$incomplete/http-evidence.tsv"
+http_sha=$(openssl dgst -sha256 -r "$incomplete/http-evidence.tsv"|awk '{print $1}'); awk -v sha="$http_sha" '$2=="http-evidence.tsv"{$1=sha}{print $1"  "$2}' "$incomplete/checksums.sha256" >"$incomplete/checksums.tmp"; mv "$incomplete/checksums.tmp" "$incomplete/checksums.sha256"
+if "$script_dir/verify-c7-evidence" "$incomplete" >/dev/null 2>&1; then echo 'P9 C7 accepted incomplete HTTP evidence' >&2; exit 1; fi
+leaked="$runtime/c7-leaked"; cp -R "$runtime/c7" "$leaked"; printf '\n%s\n' "$primary_secret" >>"$leaked/result.md"
+result_sha=$(openssl dgst -sha256 -r "$leaked/result.md"|awk '{print $1}'); awk -v sha="$result_sha" '$2=="result.md"{$1=sha}{print $1"  "$2}' "$leaked/checksums.sha256" >"$leaked/checksums.tmp"; mv "$leaked/checksums.tmp" "$leaked/checksums.sha256"
+if "$script_dir/verify-c7-evidence" "$leaked" >/dev/null 2>&1; then echo 'P9 C7 accepted an API Key leak' >&2; exit 1; fi
+
+if [ -n "$artifact_dir" ]; then
+  [ ! -e "$artifact_dir" ] || { echo "P9 C7 test artifact directory already exists: $artifact_dir" >&2; exit 2; }
+  mkdir -p "$artifact_dir/secrets"; chmod 0700 "$artifact_dir/secrets"
+  for phase in c0 c1 c2 c3 c4 c5 c6; do cp -R "$runtime/fixture/$phase" "$artifact_dir/$phase"; done
+  cp -R "$runtime/c7" "$artifact_dir/c7"; cp "$runtime/fixture/primary.password" "$runtime/fixture/secondary.password" "$artifact_dir/"
+  cp "$runtime/fixture/secrets/"* "$artifact_dir/secrets/"; chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password" "$artifact_dir/secrets/"*
+fi
+echo 'PASS P9 C7 offline reimbursement payment and evidence regression'

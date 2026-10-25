@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C7 报销付款边界（BF-261）：Finance 继续独占报销申请、付款编排状态和 Money 稳定引用，Money 独占账簿主体、Person→收款主体映射、义务、实际支付与核销；员工 Open API 只读 Finance 投影，不直接查询或改写 Money。C7 通过 Money 公网命令登记本地兼容 Party，通过 Money 自有审计 ops 按 Tenant 配置 Finance owner 和精确 Person revision／digest 映射，再由 Finance 的版本化连接器写入 Money，全程禁止跨库或直接 SQL。该路径明确为 `local_compatibility`，不得被描述为 Party Directory 统一或迁移完成。固定证据串联 C0～C6 checksum，只保存稳定 ID／revision／状态而不保存密码、API Key、账号正文或响应；真实 D1 仍待执行。
+
 2026-10-26 P9 C6 发票报销边界（BF-260）：员工 Key 只在 Gateway 换取短期 Open API／Owner Capability；Evidence 独占 PDF 字节、上传会话、校验状态与 File Version，Finance 独占报销、Person／发票／收款／Evidence 快照和审批占位，二者不共享表或数据库。签名上传 URL 只授权一个有界数据面动作，不进入业务证据；Finance 通过版本化端口复验 Evidence 后才提交。`payable`／`not_applicable` 仍不形成资金事实，C6 不调用 Money。固定证据以 C0～C5 checksum 串联稳定 ID／revision／摘要，但不保存 Key、签名 URL、账号正文或业务响应。真实 D1 仍待执行。
 
 2026-10-26 P9 C5 开放 API 身份边界（BF-259）：API Key 由 IAM 拥有，绑定签名 Tenant／Subject 和 People 解析出的当前 Person 引用；Gateway 只把有效 Key 换成短期、有界的 Open API／Owner Capability，不拥有账号、Person 或业务事实。一次性 Secret 只允许进入证据外的受限恢复文件，固定证据只保存不可用来认证的 Key ID／prefix／status／TTL；重跑依靠恢复文件而非重复签发。`/open-api/v1/me` 和本人 usage audit 用于验证绑定与隔离，settings 的 Webhook 字段只是未来能力占位。C5 不调用 Evidence／Finance／Money，因此不能冒充发票报销或资金闭环已经发生；真实 D1 仍待执行。

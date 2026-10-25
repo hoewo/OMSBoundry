@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+[ "$#" -eq 1 ] || { echo 'usage: verify-c7-evidence EVIDENCE_DIR' >&2; exit 2; }; evidence_dir=$1
+[ -d "$evidence_dir" ] || { echo "P9 C7 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C7 evidence must not contain symbolic links' >&2; exit 1; }
+expected_entries='checksums.sha256
+http-evidence.tsv
+operations.tsv
+result.md
+state-after-c7.json'
+actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort); [ "$actual_entries" = "$expected_entries" ] || { echo 'P9 C7 evidence has an invalid artifact set' >&2; exit 1; }
+expected_files='http-evidence.tsv
+operations.tsv
+result.md
+state-after-c7.json'
+actual_files=$(awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ {exit 1} {print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C7 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual_files" = "$expected_files" ] || { echo 'P9 C7 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r expected artifact; do actual=$(openssl dgst -sha256 -r "$evidence_dir/$artifact"|awk '{print $1}'); [ "$actual" = "$expected" ] || { echo "P9 C7 checksum mismatch for $artifact" >&2; exit 1; }; done <"$evidence_dir/checksums.sha256"
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C7" and .result=="pass" and .deployment.profile=="D1" and
+  ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c2_checksums_sha256,.deployment.c3_checksums_sha256,.deployment.c4_checksums_sha256,.deployment.c5_checksums_sha256,.deployment.c6_checksums_sha256]|all(test("^[0-9a-f]{64}$"))) and
+  .party_runtime.mode=="local_compatibility" and .party_runtime.party_directory_unified==false and (.tenants|length)==2 and .tenants[0].tenant_id!=.tenants[1].tenant_id and
+  all(.tenants[]; (.tenant_id|test($uuid)) and (.person_id|test($uuid)) and (.money_compatibility_parties.owner_id|test($uuid)) and (.money_compatibility_parties.payee_id|test($uuid)) and
+    (.reimbursement.id|test($uuid)) and .reimbursement.revision>=3 and .reimbursement.status=="paid" and .reimbursement.amount_minor==23456 and .reimbursement.paid_minor==23456 and
+    (.payment.command_id|test($uuid)) and (.payment.money_payment_id|test($uuid)) and .payment.money_payment_revision>=1 and (.payment.money_allocation_id|test($uuid)) and .payment.money_allocation_revision>=1 and (.payment.money_obligation_id|test($uuid)) and .payment.money_obligation_revision>=1) and
+  .checks.owner_configuration_via_money_ops=="pass" and .checks.person_payee_mapping_via_money_ops=="pass" and .checks.finance_to_money_write=="pass" and .checks.employee_paid_projection=="pass" and .checks.cross_tenant_payment_not_found=="pass" and .checks.direct_database_write==false and .checks.secrets_recorded==false
+' "$evidence_dir/state-after-c7.json" >/dev/null || { echo 'P9 C7 state has an invalid schema or failed check' >&2; exit 1; }
+awk -F '\t' 'NR==1{if($0!="tenant_role\toperation\tresult")exit 1;next} NF!=3||$3!="pass"{exit 1} $2=="internal-finance-owner-set"{owner[$1]++} $2=="payable-party-map"{payee[$1]++} END{if(owner["primary"]!=1||owner["secondary"]!=1||payee["primary"]!=1||payee["secondary"]!=1)exit 1}' "$evidence_dir/operations.tsv" || { echo 'P9 C7 operations evidence is incomplete' >&2; exit 1; }
+awk -F '\t' '
+  NR==1{if($0!="request\texpected_status\tactual_status\ttime_seconds")exit 1;next} NF!=4||$4!~/^[0-9]+([.][0-9]+)?$/{exit 1}
+  $1=="POST primary reimbursement payment"{ap++} $1=="POST secondary reimbursement payment"{bp++}
+  $1=="GET primary employee reimbursement after payment"{ad++} $1=="GET secondary employee reimbursement after payment"{bd++}
+  $1=="GET primary employee paid list"{al++} $1=="GET secondary employee paid list"{bl++}
+  $1=="POST primary cross-tenant reimbursement payment"{cross++}
+  $2=="204/409"{if($3!=204&&$3!=409)exit 1;next} $2!=$3{exit 1}
+  END{if(ap!=1||bp!=1||ad!=1||bd!=1||al!=1||bl!=1||cross!=1)exit 1}
+' "$evidence_dir/http-evidence.tsv" || { echo 'P9 C7 HTTP evidence contains a failed or incomplete matrix' >&2; exit 1; }
+if grep -REq 'bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}|Authorization:|account_number|password' "$evidence_dir"; then echo 'P9 C7 evidence contains a protected value' >&2; exit 1; fi
+echo 'PASS P9 C7 evidence integrity, payment matrix and secret exclusion'
