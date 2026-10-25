@@ -55,6 +55,15 @@ type iamClaims struct {
 	ExpiresAt int64    `json:"exp"`
 	AuthTime  int64    `json:"auth_time"`
 	ID        string   `json:"jti"`
+	Person    *struct {
+		ID            string `json:"id"`
+		TenantID      string `json:"tenant_id"`
+		Status        string `json:"status"`
+		Revision      int64  `json:"revision"`
+		ReferenceCode string `json:"reference_code,omitempty"`
+		DisplayName   string `json:"display_name"`
+		Digest        string `json:"digest"`
+	} `json:"person,omitempty"`
 }
 type IAMProvider struct {
 	issuer, keyPath string
@@ -89,7 +98,14 @@ func (p *IAMProvider) Authenticate(r *http.Request) (Principal, error) {
 		}
 		resources[value.Type][value.ID] = true
 	}
-	return Principal{SubjectID: claims.Subject, TenantID: claims.Tenant, DisplayName: claims.Name, Provider: "iam", CredentialID: claims.ID, ScopeKind: claims.Scope.Kind, AllowedActions: actions, Resources: resources}, nil
+	principal := Principal{SubjectID: claims.Subject, TenantID: claims.Tenant, DisplayName: claims.Name, Provider: "iam", CredentialID: claims.ID, ScopeKind: claims.Scope.Kind, AllowedActions: actions, Resources: resources}
+	if claims.Person != nil {
+		principal.PersonID = claims.Person.ID
+		principal.PersonRevision = claims.Person.Revision
+		principal.PersonDisplayName = claims.Person.DisplayName
+		principal.PersonDigest = claims.Person.Digest
+	}
+	return principal, nil
 }
 func (p *IAMProvider) verify(token string) (iamClaims, error) {
 	parts := strings.Split(token, ".")
@@ -146,6 +162,9 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 			return iamClaims{}, fmt.Errorf("invalid capability")
 		}
 		seen[value] = true
+	}
+	if claims.Person != nil && (claims.Person.TenantID != claims.Tenant || claims.Person.Status != "active" || !uuidPattern.MatchString(claims.Person.ID) || claims.Person.Revision < 1 || strings.TrimSpace(claims.Person.DisplayName) == "" || !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(claims.Person.Digest)) {
+		return iamClaims{}, fmt.Errorf("invalid Person claim")
 	}
 	return claims, nil
 }

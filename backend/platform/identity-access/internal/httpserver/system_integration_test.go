@@ -40,7 +40,7 @@ const otherProjectID = "66666666-6666-4666-8666-666666666666"
 type echoPersonResolver struct{}
 
 func (echoPersonResolver) ResolveBySubject(_ context.Context, tenantID, _ string) (apikey.PersonReference, error) {
-	return apikey.PersonReference{ID: "77777777-7777-4777-8777-777777777777", TenantID: tenantID, Status: "active", Revision: 1}, nil
+	return apikey.PersonReference{ID: "77777777-7777-4777-8777-777777777777", TenantID: tenantID, Status: "active", Revision: 1, ReferenceCode: "EMP-001", DisplayName: "测试员工", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, nil
 }
 
 func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {

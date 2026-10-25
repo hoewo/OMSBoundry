@@ -59,6 +59,10 @@ type Config struct {
 	OSSSTSDuration         time.Duration
 	CleanupStaleAfter      time.Duration
 	CleanupBatchSize       int
+	UnreferencedRetention  time.Duration
+	ReferenceProtectionURL string
+	ReferenceAccessToken   string
+	ReferenceTimeout       time.Duration
 }
 
 func Load() (Config, error) {
@@ -100,6 +104,10 @@ func Load() (Config, error) {
 		OSSSTSDuration:         15 * time.Minute,
 		CleanupStaleAfter:      30 * time.Minute,
 		CleanupBatchSize:       100,
+		UnreferencedRetention:  7 * 24 * time.Hour,
+		ReferenceProtectionURL: strings.TrimSpace(os.Getenv("REFERENCE_PROTECTION_URL")),
+		ReferenceAccessToken:   os.Getenv("REFERENCE_PROTECTION_ACCESS_TOKEN"),
+		ReferenceTimeout:       5 * time.Second,
 	}
 	var err error
 	if raw := strings.TrimSpace(os.Getenv("OSS_BROWSER_CNAME")); raw != "" {
@@ -127,6 +135,12 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.CleanupStaleAfter, err = durationEnv("CLEANUP_STALE_AFTER", cfg.CleanupStaleAfter); err != nil {
+		return Config{}, err
+	}
+	if cfg.UnreferencedRetention, err = durationEnv("UNREFERENCED_RETENTION", cfg.UnreferencedRetention); err != nil {
+		return Config{}, err
+	}
+	if cfg.ReferenceTimeout, err = durationEnv("REFERENCE_PROTECTION_TIMEOUT", cfg.ReferenceTimeout); err != nil {
 		return Config{}, err
 	}
 	if raw := strings.TrimSpace(os.Getenv("MAX_UPLOAD_BYTES")); raw != "" {
@@ -172,6 +186,9 @@ func Load() (Config, error) {
 	}
 	if cfg.AccessGrantTTL < time.Minute || cfg.AccessGrantTTL > 15*time.Minute {
 		return Config{}, fmt.Errorf("ACCESS_GRANT_TTL must be between 1m and 15m")
+	}
+	if cfg.UnreferencedRetention < 24*time.Hour || cfg.ReferenceTimeout < time.Second || cfg.ReferenceTimeout > 30*time.Second {
+		return Config{}, fmt.Errorf("UNREFERENCED_RETENTION must be at least 24h and REFERENCE_PROTECTION_TIMEOUT must be between 1s and 30s")
 	}
 	if cfg.IdentityProvider == IdentityIAM {
 		if cfg.IAMIssuer == "" || !uuidPattern.MatchString(cfg.IAMTenantID) || cfg.IAMPublicKeysPath == "" {

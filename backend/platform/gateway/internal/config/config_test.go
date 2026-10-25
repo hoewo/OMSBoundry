@@ -36,17 +36,18 @@ func TestLoadOpenAPIDefaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.OpenAPIKeyRequestsPerMinute != 60 || value.OpenAPITenantRequestsPerMinute != 600 || !value.OpenAPIRequireHTTPS {
+	if value.OpenAPIKeyRequestsPerMinute != 60 || value.OpenAPITenantRequestsPerMinute != 600 || value.OpenAPIUploadConcurrency != 4 || !value.OpenAPIRequireHTTPS {
 		t.Fatalf("open API defaults = %#v", value)
 	}
 	t.Setenv("OPEN_API_KEY_REQUESTS_PER_MINUTE", "75")
 	t.Setenv("OPEN_API_TENANT_REQUESTS_PER_MINUTE", "900")
+	t.Setenv("OPEN_API_UPLOAD_CONCURRENCY", "8")
 	t.Setenv("OPEN_API_REQUIRE_HTTPS", "false")
 	value, err = Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.OpenAPIKeyRequestsPerMinute != 75 || value.OpenAPITenantRequestsPerMinute != 900 || value.OpenAPIRequireHTTPS {
+	if value.OpenAPIKeyRequestsPerMinute != 75 || value.OpenAPITenantRequestsPerMinute != 900 || value.OpenAPIUploadConcurrency != 8 || value.OpenAPIRequireHTTPS {
 		t.Fatalf("open API overrides = %#v", value)
 	}
 }

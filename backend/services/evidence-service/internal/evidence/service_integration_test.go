@@ -21,6 +21,17 @@ import (
 	"omsbizfoundry/evidence-service/internal/storage"
 )
 
+type fixedReferenceProtector struct {
+	referenced bool
+	err        error
+	calls      int
+}
+
+func (p *fixedReferenceProtector) IsReferenced(context.Context, string, string, int) (bool, error) {
+	p.calls++
+	return p.referenced, p.err
+}
+
 func TestLocalProviderFullLifecycleAndCleanup(t *testing.T) {
 	pool := integrationPool(t)
 	provider, err := storage.NewLocalProvider(t.TempDir(), "http://127.0.0.1:8085", []byte(strings.Repeat("k", 32)), 5*time.Minute)
@@ -228,6 +239,94 @@ func TestLocalProviderFullLifecycleAndCleanup(t *testing.T) {
 	_, err = pool.Exec(context.Background(), `UPDATE idempotency_commands SET created_at=created_at + interval '1 second' WHERE action='upload.complete'`)
 	if !errors.As(err, &pgErr) || pgErr.Code != "55000" {
 		t.Fatalf("immutable idempotency update was not rejected: %v", err)
+	}
+}
+
+func TestCompletedUnreferencedVersionCleanupIsProtectedAndFailsClosed(t *testing.T) {
+	pool := integrationPool(t)
+	provider, err := storage.NewLocalProvider(t.TempDir(), "http://127.0.0.1:8085", []byte(strings.Repeat("k", 32)), 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protector := &fixedReferenceProtector{}
+	service, err := NewServiceWithReferenceProtector(pool, provider, 15*time.Minute, 10<<20, protector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().Add(-8 * 24 * time.Hour)
+	actor := Actor{TenantID: "33333333-3333-4333-8333-333333333333", SubjectID: "44444444-4444-4444-8444-444444444444", DisplayName: "Evidence Admin", Kind: "template_subject"}
+	content := []byte("%PDF-1.7\nold unreferenced evidence")
+	digestBytes := sha256.Sum256(content)
+	digest := hex.EncodeToString(digestBytes[:])
+	session, err := service.CreateUploadSession(context.Background(), actor, "unreferenced-create", CreateUploadInput{FileName: "old.pdf", SizeBytes: int64(len(content)), MediaType: "application/pdf", SHA256: digest, ClientContext: ClientContext{Purpose: "invoice"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent, _, err := service.GetUploadIntentByGlobalID(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.Put(context.Background(), intent, strings.NewReader(string(content)), int64(len(content))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.CompleteUpload(context.Background(), actor, session.SessionID, "unreferenced-complete", CompleteUploadInput{ObservedSizeBytes: int64(len(content)), ObservedSHA256: digest}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `DROP TRIGGER file_versions_immutable ON file_versions`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `UPDATE file_versions SET created_at=$1 WHERE tenant_id=$2 AND file_id=$3`, old, actor.TenantID, session.FileID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `CREATE TRIGGER file_versions_immutable BEFORE UPDATE OR DELETE ON file_versions FOR EACH ROW EXECUTE FUNCTION reject_evidence_immutable_change()`); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.CleanupUnreferenced(context.Background(), 10, time.Now().UTC().Add(-7*24*time.Hour))
+	if err != nil || result.Cleaned != 1 || protector.calls != 2 {
+		t.Fatalf("cleanup=%#v calls=%d err=%v", result, protector.calls, err)
+	}
+	if _, err = provider.Open(context.Background(), intent.Object); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("unreferenced bytes survived cleanup: %v", err)
+	}
+	if _, err = service.GetVersion(context.Background(), actor.TenantID, session.FileID, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cleaned version remained readable: %v", err)
+	}
+
+	protector.referenced = true
+	protectedSession, err := service.CreateUploadSession(context.Background(), actor, "protected-create", CreateUploadInput{FileName: "protected.pdf", SizeBytes: int64(len(content)), MediaType: "application/pdf", SHA256: digest, ClientContext: ClientContext{Purpose: "invoice"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	protectedIntent, _, _ := service.GetUploadIntentByGlobalID(context.Background(), protectedSession.SessionID)
+	if _, err = provider.Put(context.Background(), protectedIntent, strings.NewReader(string(content)), int64(len(content))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.CompleteUpload(context.Background(), actor, protectedSession.SessionID, "protected-complete", CompleteUploadInput{ObservedSizeBytes: int64(len(content)), ObservedSHA256: digest}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `DROP TRIGGER file_versions_immutable ON file_versions`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `UPDATE file_versions SET created_at=$1 WHERE tenant_id=$2 AND file_id=$3`, old, actor.TenantID, protectedSession.FileID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `CREATE TRIGGER file_versions_immutable BEFORE UPDATE OR DELETE ON file_versions FOR EACH ROW EXECUTE FUNCTION reject_evidence_immutable_change()`); err != nil {
+		t.Fatal(err)
+	}
+	result, err = service.CleanupUnreferenced(context.Background(), 10, time.Now().UTC().Add(-7*24*time.Hour))
+	if err != nil || result.Protected != 1 {
+		t.Fatalf("protected cleanup=%#v err=%v", result, err)
+	}
+	if object, openErr := provider.Open(context.Background(), protectedIntent.Object); openErr != nil {
+		t.Fatalf("protected bytes were deleted: %v", openErr)
+	} else {
+		_ = object.Reader.Close()
+	}
+
+	service.references = nil
+	result, err = service.CleanupUnreferenced(context.Background(), 10, time.Now().UTC().Add(-7*24*time.Hour))
+	if err != nil || result.Failed != 1 {
+		t.Fatalf("missing protector must fail closed: %#v err=%v", result, err)
 	}
 }
 

@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P7 实现基线（BF-242）：`/open-api/v1/` 已从凭证底座扩展为员工本人发票报销闭环。Evidence 在独立数据库保存发票 File Version 校验与清理事实，Finance 保存本人申请、发票指纹、提交／撤回／归档／恢复／软删除 revision 和 Money 引用，Money 保存实际资金与核销；三者继续通过版本化端口连接而不共享表。正式 TLS 本地验收覆盖 Evidence／Finance／Money 故障恢复、强重复、危险 PDF、付款唯一性、本人 paid 查询与 Key 撤销。格式／结构和危险主动内容校验不等同通用杀毒；本批未部署 D1／公网，P8／P9 仍待实施。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
+
 2026-10-25 P6 实现基线（BF-241）：员工开放凭证已经进入正式 IAM／Gateway 边界。Key 绑定唯一 Tenant、Subject 与当前 People Person，完整 secret 只在创建响应展示一次，数据库仅保存 bcrypt verifier；有效期只允许 30／90／180／365 天且默认 180 天，每人每租户最多 5 个有效 Key。Gateway 只开放版本化 allowlist，经 HTTPS 验证后删除外部认证头、签发 5 分钟有界上下文，并执行每 Key 60／分钟、每 Tenant 600／分钟和来源 IP 防护。员工可在 Workbench 管理 Key、查看本人脱敏调用记录，Webhook 只显示未开放占位；180 天调用元数据有独立清理审计。该阶段没有开放发票上传或报销写入，P7 才实现 BF-221～BF-225、BF-230～BF-234 的业务闭环；未部署 D1／公网。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)
 
 2026-10-25 P5 实现基线（BF-240；取代 BF-185、BF-191～BF-203 的“尚未实施”状态）：Internal Finance Requests 已独立拥有报销／付款申请的正式明细、类别、收款与费用归属快照、Evidence 稳定引用、无需审批快照、撤回 revision、敏感访问审计和 Payment Delivery；Money 独立拥有对应义务、实际付款、整单核销及超额未分配余额。普通读取、全部写响应和普通导出只返回账号尾号，完整读取与敏感导出分别授权并逐条审计；批量付款部分失败不回滚成功项。正式 Workbench 财务页已切换 Owner API。本地双数据库／双进程、空目标恢复和敏感边界门禁通过；未部署 D1／公网，Evidence 实时校验与开放 API 分别留待 P7／P6。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)

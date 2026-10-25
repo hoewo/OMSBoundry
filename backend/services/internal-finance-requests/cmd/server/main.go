@@ -8,6 +8,7 @@ import (
 	"omsbizfoundry/internal-finance-requests/internal/auth"
 	"omsbizfoundry/internal-finance-requests/internal/config"
 	"omsbizfoundry/internal-finance-requests/internal/database"
+	"omsbizfoundry/internal-finance-requests/internal/evidenceref"
 	"omsbizfoundry/internal-finance-requests/internal/finance"
 	"omsbizfoundry/internal-finance-requests/internal/httpserver"
 	"omsbizfoundry/internal-finance-requests/internal/moneypayment"
@@ -53,7 +54,17 @@ func run() error {
 			return err
 		}
 	}
-	service, _ := finance.NewServiceWithPayments(store, paymentPort)
+	var evidencePort finance.EvidenceReferences
+	if cfg.EvidenceBaseURL != "" {
+		evidencePort, err = evidenceref.New(cfg.EvidenceBaseURL, cfg.EvidenceAccessToken, nil, cfg.ReferenceTimeout)
+		if err != nil {
+			return err
+		}
+	}
+	service, err := finance.NewServiceWithDependencies(store, paymentPort, evidencePort)
+	if err != nil {
+		return err
+	}
 	var authenticator auth.Authenticator
 	if cfg.IdentityProvider == "template" {
 		authenticator, err = auth.NewTemplateProvider(cfg.TemplateTenantID, cfg.TemplateSubjectID, cfg.TemplateDisplayName, cfg.TemplateAccessToken)

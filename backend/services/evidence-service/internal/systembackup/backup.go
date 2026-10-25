@@ -232,7 +232,7 @@ func snapshotMetadata(ctx context.Context, pool *pgxpool.Pool) (sourceMetadata, 
 	if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM files),(SELECT count(*) FROM file_versions),(SELECT count(*) FROM upload_sessions),(SELECT count(*) FROM evidence_audit_entries)`).Scan(&value.counts.Files, &value.counts.Versions, &value.counts.UploadSessions, &value.counts.AuditEntries); err != nil {
 		return fail(err)
 	}
-	rows, err := tx.Query(ctx, `SELECT provider,COALESCE(bucket,''),object_key,size_bytes,sha256 FROM file_versions ORDER BY provider,bucket,object_key`)
+	rows, err := tx.Query(ctx, `SELECT v.provider,COALESCE(v.bucket,''),v.object_key,v.size_bytes,v.sha256 FROM file_versions v WHERE NOT EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded') ORDER BY v.provider,v.bucket,v.object_key`)
 	if err != nil {
 		return fail(err)
 	}
@@ -759,7 +759,7 @@ func verifyRestored(ctx context.Context, pool *pgxpool.Pool, root string, manife
 	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM files),(SELECT count(*) FROM file_versions),(SELECT count(*) FROM upload_sessions),(SELECT count(*) FROM evidence_audit_entries)`).Scan(&counts.Files, &counts.Versions, &counts.UploadSessions, &counts.AuditEntries); err != nil || counts != manifest.Database.Counts {
 		return fmt.Errorf("restored counts do not match manifest")
 	}
-	rows, err := pool.Query(ctx, `SELECT provider,COALESCE(bucket,''),object_key,size_bytes,sha256 FROM file_versions ORDER BY provider,bucket,object_key`)
+	rows, err := pool.Query(ctx, `SELECT v.provider,COALESCE(v.bucket,''),v.object_key,v.size_bytes,v.sha256 FROM file_versions v WHERE NOT EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded') ORDER BY v.provider,v.bucket,v.object_key`)
 	if err != nil {
 		return err
 	}

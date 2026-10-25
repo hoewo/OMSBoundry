@@ -53,10 +53,13 @@ func (e *DomainError) Error() string { return e.Message }
 func (e *DomainError) Unwrap() error { return e.Err }
 
 type PersonReference struct {
-	ID       string `json:"id"`
-	TenantID string `json:"tenant_id"`
-	Status   string `json:"status"`
-	Revision int64  `json:"revision"`
+	ID            string `json:"id"`
+	TenantID      string `json:"tenant_id"`
+	Status        string `json:"status"`
+	Revision      int64  `json:"revision"`
+	ReferenceCode string `json:"reference_code,omitempty"`
+	DisplayName   string `json:"display_name"`
+	Digest        string `json:"digest"`
 }
 
 type PersonResolver interface {
@@ -112,14 +115,21 @@ type PurgeResult struct {
 }
 
 type Authentication struct {
-	Credential string    `json:"credential"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	TenantID   string    `json:"tenant_id"`
-	SubjectID  string    `json:"subject_id"`
-	PersonID   string    `json:"person_id"`
-	KeyID      string    `json:"key_id"`
-	KeyPrefix  string    `json:"key_prefix"`
-	RequestID  string    `json:"request_id"`
+	Credential      string    `json:"credential"`
+	OwnerCredential string    `json:"owner_credential,omitempty"`
+	OwnerAudience   string    `json:"owner_audience,omitempty"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	TenantID        string    `json:"tenant_id"`
+	SubjectID       string    `json:"subject_id"`
+	PersonID        string    `json:"person_id"`
+	KeyID           string    `json:"key_id"`
+	KeyPrefix       string    `json:"key_prefix"`
+	RequestID       string    `json:"request_id"`
+}
+
+type ownerCapabilityClaims struct {
+	identity.CapabilityClaims
+	Person PersonReference `json:"person"`
 }
 
 type cursor struct {
@@ -267,7 +277,7 @@ func (s *Service) Revoke(ctx context.Context, actor identity.Principal, keyID st
 func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, sourceIPMasked string) (Authentication, error) {
 	requestID, action, sourceIPMasked = strings.TrimSpace(requestID), strings.TrimSpace(action), strings.TrimSpace(sourceIPMasked)
 	matches := secretPattern.FindStringSubmatch(strings.TrimSpace(secret))
-	if len(matches) != 3 || len(requestID) < 8 || len(requestID) > 128 || !actionPattern.MatchString(action) || sourceIPMasked == "" || len(sourceIPMasked) > 80 {
+	if len(matches) != 3 || len(requestID) < 8 || len(requestID) > 128 || !allowedRequestAction(action) || sourceIPMasked == "" || len(sourceIPMasked) > 80 {
 		return Authentication{}, problem(KindUnauthorized, "invalid_api_key", "API Key 无效或不可用", nil)
 	}
 	var value Key
@@ -306,6 +316,28 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 	if err != nil {
 		return Authentication{}, err
 	}
+	ownerAudience, ownerActions := ownerAccess(action)
+	ownerCredential := ""
+	if ownerAudience != "" {
+		ownerID, err := s.newID()
+		if err != nil {
+			return Authentication{}, err
+		}
+		baseOwnerClaims := identity.CapabilityClaims{
+			Version: "1", Issuer: s.issuer, Subject: value.SubjectID, Tenant: value.TenantID,
+			Audience: ownerAudience, Name: person.DisplayName, Actions: ownerActions,
+			Scope: identity.Scope{Kind: "tenant"}, IssuedAt: now.Unix(), NotBefore: now.Unix(),
+			ExpiresAt: expires.Unix(), AuthTime: now.Unix(), ID: ownerID,
+		}
+		claimsToSign := any(baseOwnerClaims)
+		if ownerAudience == "internal-finance-requests" {
+			claimsToSign = ownerCapabilityClaims{CapabilityClaims: baseOwnerClaims, Person: person}
+		}
+		ownerCredential, err = s.signer.Sign(claimsToSign)
+		if err != nil {
+			return Authentication{}, err
+		}
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Authentication{}, err
@@ -320,7 +352,7 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 	if err := tx.Commit(ctx); err != nil {
 		return Authentication{}, err
 	}
-	return Authentication{Credential: credential, ExpiresAt: expires, TenantID: value.TenantID, SubjectID: value.SubjectID, PersonID: value.PersonID, KeyID: value.ID, KeyPrefix: value.Prefix, RequestID: requestID}, nil
+	return Authentication{Credential: credential, OwnerCredential: ownerCredential, OwnerAudience: ownerAudience, ExpiresAt: expires, TenantID: value.TenantID, SubjectID: value.SubjectID, PersonID: value.PersonID, KeyID: value.ID, KeyPrefix: value.Prefix, RequestID: requestID}, nil
 }
 
 func (s *Service) CompleteUsage(ctx context.Context, tenantID, subjectID, keyID, requestID, resultCode string, httpStatus int) error {
@@ -455,6 +487,33 @@ func validActor(actor identity.Principal) bool {
 }
 
 func allowedTTL(days int) bool { return days == 30 || days == 90 || days == 180 || days == 365 }
+
+func allowedRequestAction(action string) bool {
+	switch action {
+	case "open-api.profile.read", "open-api.settings.read",
+		"open-api.evidence.upload.create", "open-api.evidence.upload.complete", "open-api.evidence.upload.abort",
+		"open-api.reimbursement.create", "open-api.reimbursement.update", "open-api.reimbursement.submit",
+		"open-api.reimbursement.withdraw", "open-api.reimbursement.restore", "open-api.reimbursement.delete",
+		"open-api.reimbursement.read", "open-api.reimbursement.list":
+		return true
+	default:
+		return false
+	}
+}
+
+func ownerAccess(action string) (string, []string) {
+	switch {
+	case strings.HasPrefix(action, "open-api.evidence.upload."):
+		return "evidence-service", []string{"evidence-service.upload"}
+	case strings.HasPrefix(action, "open-api.reimbursement."):
+		if action == "open-api.reimbursement.read" || action == "open-api.reimbursement.list" {
+			return "internal-finance-requests", []string{"internal-finance-requests.self.read"}
+		}
+		return "internal-finance-requests", []string{"internal-finance-requests.self.manage", "internal-finance-requests.self.read"}
+	default:
+		return "", nil
+	}
+}
 
 func newSecret() (string, string, error) {
 	prefixBytes := make([]byte, 8)

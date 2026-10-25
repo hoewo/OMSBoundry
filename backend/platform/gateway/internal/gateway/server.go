@@ -32,6 +32,7 @@ type Options struct {
 	RequestsPerMinute              int
 	OpenAPIKeyRequestsPerMinute    int
 	OpenAPITenantRequestsPerMinute int
+	OpenAPIUploadConcurrency       int
 	OpenAPIRequireHTTPS            bool
 }
 type Server struct {
@@ -47,6 +48,7 @@ type Server struct {
 	openAPIKeyLimiter    *rateLimiter
 	openAPITenantLimiter *rateLimiter
 	openAPIRequireHTTPS  bool
+	openAPIUploadSlots   chan struct{}
 	handler              http.Handler
 }
 type sessionResponse struct {
@@ -84,10 +86,13 @@ func New(suite manifest.Suite, verifier *credential.Verifier, logger *slog.Logge
 	if options.OpenAPITenantRequestsPerMinute == 0 {
 		options.OpenAPITenantRequestsPerMinute = 600
 	}
-	if options.OpenAPIKeyRequestsPerMinute < 1 || options.OpenAPITenantRequestsPerMinute < options.OpenAPIKeyRequestsPerMinute {
+	if options.OpenAPIUploadConcurrency == 0 {
+		options.OpenAPIUploadConcurrency = 4
+	}
+	if options.OpenAPIKeyRequestsPerMinute < 1 || options.OpenAPITenantRequestsPerMinute < options.OpenAPIKeyRequestsPerMinute || options.OpenAPIUploadConcurrency < 1 || options.OpenAPIUploadConcurrency > 128 {
 		return nil, fmt.Errorf("open API rate limits are invalid")
 	}
-	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute), openAPIKeyLimiter: newRateLimiter(options.OpenAPIKeyRequestsPerMinute), openAPITenantLimiter: newRateLimiter(options.OpenAPITenantRequestsPerMinute), openAPIRequireHTTPS: options.OpenAPIRequireHTTPS}
+	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute), openAPIKeyLimiter: newRateLimiter(options.OpenAPIKeyRequestsPerMinute), openAPITenantLimiter: newRateLimiter(options.OpenAPITenantRequestsPerMinute), openAPIRequireHTTPS: options.OpenAPIRequireHTTPS, openAPIUploadSlots: make(chan struct{}, options.OpenAPIUploadConcurrency)}
 	for _, app := range suite.Applications {
 		if app.Enabled {
 			proxy, err := server.proxyFor(app)
@@ -190,6 +195,24 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.proxies[app.ID].ServeHTTP(w, r)
 		return
 	}
+	if app.ID == "evidence-service" && signedEvidenceDataPlaneRequest(app.RoutePrefix, r) {
+		// Evidence signs short-lived, single-target upload/download URLs. API
+		// clients do not have browser capability cookies, so the edge forwards
+		// only these exact data-plane methods and lets Evidence verify the token,
+		// target, action and expiry before touching object bytes.
+		if r.Method == http.MethodPut {
+			select {
+			case s.openAPIUploadSlots <- struct{}{}:
+				defer func() { <-s.openAPIUploadSlots }()
+			default:
+				w.Header().Set("Retry-After", "1")
+				openAPIProblem(w, http.StatusTooManyRequests, "UPLOAD_CONCURRENCY_LIMITED", "发票上传请求较多，请稍后重试", w.Header().Get("X-Request-ID"), true, nil)
+				return
+			}
+		}
+		s.proxies[app.ID].ServeHTTP(w, r)
+		return
+	}
 	cookie, err := r.Cookie(capabilityCookieName(app.ID))
 	if err != nil {
 		requireLogin(w, r)
@@ -204,6 +227,17 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Header.Set("Authorization", "Bearer "+cookie.Value)
 	s.proxies[app.ID].ServeHTTP(w, r)
+}
+
+func signedEvidenceDataPlaneRequest(prefix string, r *http.Request) bool {
+	path := strings.TrimPrefix(r.URL.Path, prefix)
+	if r.Method == http.MethodPut && strings.HasPrefix(path, "/v1/local-uploads/") {
+		return r.URL.Query().Get("token") != ""
+	}
+	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(path, "/v1/local-files/") {
+		return r.URL.Query().Get("token") != ""
+	}
+	return false
 }
 
 func retiredWorkbenchView(r *http.Request) bool {

@@ -14,6 +14,7 @@ import (
 	"omsbizfoundry/evidence-service/internal/config"
 	"omsbizfoundry/evidence-service/internal/database"
 	"omsbizfoundry/evidence-service/internal/evidence"
+	"omsbizfoundry/evidence-service/internal/referencecheck"
 )
 
 func main() {
@@ -83,7 +84,26 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeJSON(result)
+		if cfg.ReferenceProtectionURL == "" || len(cfg.ReferenceAccessToken) < 24 {
+			writeJSON(map[string]any{"upload_sessions": result, "unreferenced_versions": map[string]any{"status": "failed_closed", "reason": "reference protection is not configured"}})
+			fail(fmt.Errorf("REFERENCE_PROTECTION_URL and REFERENCE_PROTECTION_ACCESS_TOKEN are required for unreferenced cleanup"))
+		}
+		references, err := referencecheck.New(cfg.ReferenceProtectionURL, cfg.ReferenceAccessToken, cfg.ReferenceTimeout)
+		if err != nil {
+			fail(err)
+		}
+		service, err = evidence.NewServiceWithReferenceProtector(pool, provider, cfg.UploadSessionTTL, cfg.MaxUploadBytes, references)
+		if err != nil {
+			fail(err)
+		}
+		unreferenced, err := service.CleanupUnreferenced(ctx, cfg.CleanupBatchSize, time.Now().UTC().Add(-cfg.UnreferencedRetention))
+		if err != nil {
+			fail(err)
+		}
+		writeJSON(map[string]any{"upload_sessions": result, "unreferenced_versions": unreferenced})
+		if unreferenced.Failed > 0 {
+			fail(fmt.Errorf("unreferenced cleanup has %d failed item(s)", unreferenced.Failed))
+		}
 	default:
 		fmt.Fprintln(os.Stderr, "usage: evidence-ops check|cleanup|migrate|version")
 		os.Exit(2)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"omsbizfoundry/internal-finance-requests/internal/auth"
 	"omsbizfoundry/internal-finance-requests/internal/finance"
@@ -34,10 +35,15 @@ type fakeCases struct {
 	err              error
 	sensitiveReads   int
 	sensitivePurpose string
+	createdInput     finance.CreateInput
+	listFilter       finance.ListFilter
+	restoreInput     finance.RestoreInput
+	deleteInput      finance.DeleteDraftInput
 }
 
 func (f *fakeCases) Ping(context.Context) error { return f.err }
-func (f *fakeCases) Create(context.Context, finance.Actor, finance.CreateInput) (finance.Request, error) {
+func (f *fakeCases) Create(_ context.Context, _ finance.Actor, input finance.CreateInput) (finance.Request, error) {
+	f.createdInput = input
 	return f.value, f.err
 }
 func (f *fakeCases) Update(context.Context, finance.Actor, string, finance.UpdateInput) (finance.Request, error) {
@@ -47,6 +53,14 @@ func (f *fakeCases) Submit(context.Context, finance.Actor, string, finance.Submi
 	return f.value, f.err
 }
 func (f *fakeCases) Withdraw(context.Context, finance.Actor, string, finance.WithdrawInput) (finance.Request, error) {
+	return f.value, f.err
+}
+func (f *fakeCases) Restore(_ context.Context, _ finance.Actor, _ string, input finance.RestoreInput) (finance.Request, error) {
+	f.restoreInput = input
+	return f.value, f.err
+}
+func (f *fakeCases) DeleteDraft(_ context.Context, _ finance.Actor, _ string, input finance.DeleteDraftInput) (finance.Request, error) {
+	f.deleteInput = input
 	return f.value, f.err
 }
 func (f *fakeCases) ConfirmPayment(context.Context, finance.Actor, string, finance.ConfirmPaymentInput) (finance.Request, error) {
@@ -63,10 +77,92 @@ func (f *fakeCases) GetSensitive(_ context.Context, _ finance.Actor, _ string, p
 	f.sensitivePurpose = purpose
 	return f.value, f.err
 }
-func (f *fakeCases) List(context.Context, string, finance.ListFilter) (finance.Page, error) {
+func (f *fakeCases) List(_ context.Context, _ string, filter finance.ListFilter) (finance.Page, error) {
+	f.listFilter = filter
 	value := f.value
 	value.Details.Payee.AccountNumber = ""
 	return finance.Page{Items: []finance.Request{value}}, f.err
+}
+func (f *fakeCases) IsEvidenceReferenced(context.Context, string, string, int) (bool, error) {
+	return true, f.err
+}
+
+func TestOpenAPICreateDerivesPersonAndCommandFromTrustedContext(t *testing.T) {
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "draft", Revision: 1}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, Provider: "iam", CredentialID: "44444444-4444-4444-8444-444444444444", ScopeKind: "tenant", PersonID: "55555555-5555-4555-8555-555555555555", PersonRevision: 3, PersonDisplayName: "张三", PersonDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", AllowedActions: map[string]bool{auth.ActionSelfManage: true}}}
+	server, _ := New(cases, a)
+	body := bytes.NewBufferString(`{"title":"差旅报销","lines":[{"business_date":"2026-10-25","category_key":"travel","category_name":"差旅费","category_revision":1,"purpose":"出差","amount_minor":10000,"evidence":[{"file_id":"66666666-6666-4666-8666-666666666666","version":1,"purpose":"发票"}],"invoice":{"issuer_name":"测试开票方","invoice_date":"2026-10-24","amount_minor":10000}}],"payee":{"bank_name":"测试银行","account_number":"6222021234567890"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/open-api/reimbursements", body)
+	req.Header.Set("Idempotency-Key", "employee-create-0001")
+	res := httptest.NewRecorder()
+	server.ServeHTTP(res, req)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+	}
+	input := cases.createdInput
+	if input.CommandID == "" || input.RequestType != "reimbursement" || input.AmountMinor != 10000 || input.Details.Applicant.ID != a.principal.PersonID || input.Details.Payee.Reference.ID != a.principal.PersonID || len(input.Details.Lines) != 1 || input.Details.Lines[0].ID == "" {
+		t.Fatalf("trusted create input=%#v", input)
+	}
+	firstCommand, firstLine := input.CommandID, input.Details.Lines[0].ID
+	body = bytes.NewBufferString(`{"title":"差旅报销","lines":[{"business_date":"2026-10-25","category_key":"travel","category_name":"差旅费","category_revision":1,"purpose":"出差","amount_minor":10000,"evidence":[{"file_id":"66666666-6666-4666-8666-666666666666","version":1,"purpose":"发票"}],"invoice":{"issuer_name":"测试开票方","invoice_date":"2026-10-24","amount_minor":10000}}],"payee":{"bank_name":"测试银行","account_number":"6222021234567890"}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/open-api/reimbursements", body)
+	req.Header.Set("Idempotency-Key", "employee-create-0001")
+	server.ServeHTTP(httptest.NewRecorder(), req)
+	if cases.createdInput.CommandID != firstCommand || cases.createdInput.Details.Lines[0].ID != firstLine {
+		t.Fatal("same employee/action/key did not derive stable identifiers")
+	}
+}
+
+func TestOpenAPIListBindsEmployeeAndParsesStableFilters(t *testing.T) {
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "draft", Revision: 1}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, Provider: "iam", ScopeKind: "tenant", PersonID: "55555555-5555-4555-8555-555555555555", PersonRevision: 1, PersonDisplayName: "张三", PersonDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", AllowedActions: map[string]bool{auth.ActionSelfRead: true}}}
+	server, _ := New(cases, a)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/open-api/reimbursements?status=draft&submitted_from=2026-10-01&submitted_to=2026-10-31&limit=25&archived=include", nil)
+	res := httptest.NewRecorder()
+	server.ServeHTTP(res, req)
+	if res.Code != http.StatusOK || cases.listFilter.ApplicantSubjectID != testSubject || cases.listFilter.RequestType != "reimbursement" || cases.listFilter.Status != "draft" || cases.listFilter.Limit != 25 || !cases.listFilter.IncludeArchived || res.Header().Get("ETag") == "" {
+		t.Fatalf("status=%d filter=%#v etag=%q body=%s", res.Code, cases.listFilter, res.Header().Get("ETag"), res.Body.String())
+	}
+}
+
+func TestOpenAPIRestoreAndDeleteUseStableCommandsAndConfirmation(t *testing.T) {
+	now := time.Now().UTC()
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "draft", Revision: 2, ArchivedAt: &now}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, Provider: "iam", ScopeKind: "tenant", PersonID: "55555555-5555-4555-8555-555555555555", PersonRevision: 1, PersonDisplayName: "张三", PersonDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", AllowedActions: map[string]bool{auth.ActionSelfManage: true}}}
+	server, _ := New(cases, a)
+	restore := httptest.NewRequest(http.MethodPost, "/api/v1/open-api/reimbursements/"+testRequest+"/restore", nil)
+	restore.Header.Set("Idempotency-Key", "restore-draft-0001")
+	restoreResult := httptest.NewRecorder()
+	server.ServeHTTP(restoreResult, restore)
+	if restoreResult.Code != http.StatusOK || cases.restoreInput.CommandID == "" {
+		t.Fatalf("restore status=%d input=%#v body=%s", restoreResult.Code, cases.restoreInput, restoreResult.Body.String())
+	}
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/open-api/reimbursements/"+testRequest, bytes.NewBufferString(`{"confirmation":"DELETE"}`))
+	deleteRequest.Header.Set("Idempotency-Key", "delete-draft-0001")
+	deleteResult := httptest.NewRecorder()
+	server.ServeHTTP(deleteResult, deleteRequest)
+	if deleteResult.Code != http.StatusOK || cases.deleteInput.CommandID == "" || cases.deleteInput.Confirmation != "DELETE" {
+		t.Fatalf("delete status=%d input=%#v body=%s", deleteResult.Code, cases.deleteInput, deleteResult.Body.String())
+	}
+}
+
+func TestEvidenceReferenceUsageRequiresTenantReferenceCapability(t *testing.T) {
+	cases := &fakeCases{}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionReferenceRead: true}}}
+	server, _ := New(cases, a)
+	fileID := "66666666-6666-4666-8666-666666666666"
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/references/evidence-files/"+fileID+"/versions/1/usage", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"tenant_id":"`+testTenant+`"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"referenced":true`)) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	a.principal.ScopeKind = "resources"
+	denied := httptest.NewRecorder()
+	server.ServeHTTP(denied, request)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("resource scope status=%d body=%s", denied.Code, denied.Body.String())
+	}
 }
 func (f *fakeCases) ListCategories(context.Context, string) (finance.CategoryPage, error) {
 	return finance.CategoryPage{}, f.err

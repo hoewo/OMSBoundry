@@ -325,6 +325,8 @@ services:
       PROJECT_POLICY_BASE_URL: http://project-workspace:8086
       PEOPLE_POLICY_BASE_URL: http://people-groups:8084
       POLICY_SERVICE_SUBJECT_ID: ${POLICY_SERVICE_SUBJECT_ID:-33333333-3333-4333-8333-333333333333}
+      PERSON_REFERENCE_BASE_URL: http://people-groups:8084
+      PERSON_REFERENCE_SERVICE_SUBJECT_ID: ${POLICY_SERVICE_SUBJECT_ID:-33333333-3333-4333-8333-333333333333}
       PROJECT_ASSIGNMENT_POLICY_PATHS: /config/project-assignment-policy.json,/config/business-engagement-project-assignment-policy.json,/config/production-operations-project-assignment-policy.json
       POLICY_TIMEOUT: ${POLICY_TIMEOUT:-3s}
       WORKLOAD_IDENTITY_POLICY_PATH: /config/workload-identity-policy.json

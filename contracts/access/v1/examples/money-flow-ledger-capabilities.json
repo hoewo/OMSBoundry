@@ -22,6 +22,7 @@
     { "id": "money-flow-ledger.payable-suggestion.read", "description": "读取精确付款建议 intake 与独立决定", "risk": "read", "resource_types": ["payable_suggestion"] },
     { "id": "money-flow-ledger.payable-suggestion.withdraw", "description": "在 Money 尚未决定前撤回精确付款建议", "risk": "privileged", "resource_types": ["payable_suggestion"] },
     { "id": "money-flow-ledger.payable-suggestion.decide", "description": "Money 独立接受或拒绝付款建议并在接受时拥有义务", "risk": "privileged", "resource_types": ["payable_suggestion", "obligation"] },
-    { "id": "money-flow-ledger.payroll-payment.record", "description": "供 Payroll 工作负载按精确命令登记工资实付、应付义务与核销", "risk": "privileged", "resource_types": ["payroll_payment"] }
+    { "id": "money-flow-ledger.payroll-payment.record", "description": "供 Payroll 工作负载按精确命令登记工资实付、应付义务与核销", "risk": "privileged", "resource_types": ["payroll_payment"] },
+    { "id": "money-flow-ledger.internal-finance-payment.record", "description": "供 Internal Finance Requests 工作负载按精确命令登记财务申请实付、应付义务与核销", "risk": "privileged", "resource_types": ["internal_finance_payment"] }
   ]
 }

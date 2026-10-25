@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -72,6 +73,9 @@ func (s *PostgresStore) Update(ctx context.Context, actor Actor, id string, inpu
 	if value.ApplicantSubjectID != actor.ID {
 		return Request{}, ErrNotFound
 	}
+	if value.ArchivedAt != nil || value.DeletedAt != nil {
+		return Request{}, ErrStateConflict
+	}
 	if value.Revision != input.ExpectedRevision {
 		return Request{}, ErrRevisionConflict
 	}
@@ -125,6 +129,9 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 	if value.ApplicantSubjectID != actor.ID {
 		return Request{}, ErrNotFound
 	}
+	if value.ArchivedAt != nil || value.DeletedAt != nil {
+		return Request{}, ErrStateConflict
+	}
 	if value.Revision != input.ExpectedRevision {
 		return Request{}, ErrRevisionConflict
 	}
@@ -133,6 +140,20 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 	}
 	source := value.Revision
 	now := time.Now().UTC()
+	if input.ValidatedDetails != nil {
+		value.Details = *input.ValidatedDetails
+	}
+	assessment, err := assessInvoiceDuplicates(ctx, tx, value)
+	if err != nil {
+		return Request{}, err
+	}
+	value.Details.Duplicate = assessment
+	if assessment.Status == "strong" {
+		return Request{}, &DuplicateError{Strong: true, MatchedRequestIDs: assessment.MatchedRequestIDs}
+	}
+	if assessment.Status == "suspected" && !input.SuspectedDuplicateAcknowledged {
+		return Request{}, &DuplicateError{MatchedRequestIDs: assessment.MatchedRequestIDs}
+	}
 	value.Details.MissingEvidenceAcknowledged = input.MissingEvidenceAcknowledged
 	value.Details.Approval = ApprovalSnapshot{Policy: "not_required", Status: "not_applicable", Revision: 1, FrozenAt: now}
 	value.ApprovalPolicy = "not_required"
@@ -151,6 +172,9 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 	if err = insertRevision(ctx, tx, value, actor, input.CommandID, "submitted"); err != nil {
 		return Request{}, err
 	}
+	if err = insertInvoiceFingerprints(ctx, tx, value); err != nil {
+		return Request{}, err
+	}
 	if err = insertAudit(ctx, tx, value, actor, input.CommandID, source, "finance_request_submitted"); err != nil {
 		return Request{}, err
 	}
@@ -161,6 +185,108 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 		return Request{}, err
 	}
 	return value, nil
+}
+
+func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (DuplicateAssessment, error) {
+	now := time.Now().UTC()
+	result := DuplicateAssessment{Status: "clear", CheckedAt: now}
+	if value.RequestType != "reimbursement" {
+		return result, nil
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "invoice-duplicates:"+value.TenantID); err != nil {
+		return DuplicateAssessment{}, err
+	}
+	strong, suspected := map[string]bool{}, map[string]bool{}
+	for _, line := range value.Details.Lines {
+		if line.Invoice == nil {
+			continue
+		}
+		for _, evidence := range line.Evidence {
+			if evidence.SHA256 == "" {
+				continue
+			}
+			rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND evidence_sha256=$3`, value.TenantID, value.ID, evidence.SHA256)
+			if err != nil {
+				return DuplicateAssessment{}, err
+			}
+			if err = collectRequestIDs(rows, strong); err != nil {
+				return DuplicateAssessment{}, err
+			}
+		}
+		invoice := line.Invoice
+		if invoice.Code != "" && invoice.Number != "" {
+			rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND invoice_code=$3 AND invoice_number=$4`, value.TenantID, value.ID, invoice.Code, invoice.Number)
+			if err != nil {
+				return DuplicateAssessment{}, err
+			}
+			if err = collectRequestIDs(rows, strong); err != nil {
+				return DuplicateAssessment{}, err
+			}
+		}
+		rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND issuer_name=$3 AND invoice_date=$4::date AND amount_minor=$5`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
+		if err != nil {
+			return DuplicateAssessment{}, err
+		}
+		if err = collectRequestIDs(rows, suspected); err != nil {
+			return DuplicateAssessment{}, err
+		}
+	}
+	if len(strong) > 0 {
+		result.Status, result.MatchedRequestIDs = "strong", sortedKeys(strong)
+		return result, nil
+	}
+	if len(suspected) > 0 {
+		result.Status, result.MatchedRequestIDs = "suspected", sortedKeys(suspected)
+	}
+	return result, nil
+}
+
+func collectRequestIDs(rows pgx.Rows, target map[string]bool) error {
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		target[id] = true
+	}
+	return rows.Err()
+}
+
+func sortedKeys(values map[string]bool) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	slices.Sort(result)
+	return result
+}
+
+func insertInvoiceFingerprints(ctx context.Context, tx pgx.Tx, value Request) error {
+	if value.RequestType != "reimbursement" {
+		return nil
+	}
+	for _, line := range value.Details.Lines {
+		if line.Invoice == nil {
+			continue
+		}
+		hashes := make([]string, 0, len(line.Evidence))
+		for _, evidence := range line.Evidence {
+			if evidence.SHA256 != "" {
+				hashes = append(hashes, evidence.SHA256)
+			}
+		}
+		if len(hashes) == 0 {
+			hashes = append(hashes, "")
+		}
+		for _, digest := range hashes {
+			_, err := tx.Exec(ctx, `INSERT INTO finance_invoice_fingerprints(tenant_id,request_id,request_revision,line_id,evidence_sha256,invoice_code,invoice_number,issuer_name,invoice_date,amount_minor,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::date,$10,$11)`, value.TenantID, value.ID, value.Revision, line.ID, digest, line.Invoice.Code, line.Invoice.Number, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor, value.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *PostgresStore) Withdraw(ctx context.Context, actor Actor, id string, input WithdrawInput, requestHash string) (Request, error) {
@@ -178,6 +304,9 @@ func (s *PostgresStore) Withdraw(ctx context.Context, actor Actor, id string, in
 	}
 	if value.ApplicantSubjectID != actor.ID {
 		return Request{}, ErrNotFound
+	}
+	if value.ArchivedAt != nil || value.DeletedAt != nil {
+		return Request{}, ErrStateConflict
 	}
 	if value.Revision != input.ExpectedRevision {
 		return Request{}, ErrRevisionConflict
@@ -217,6 +346,134 @@ func (s *PostgresStore) Withdraw(ctx context.Context, actor Actor, id string, in
 		return Request{}, err
 	}
 	return value, nil
+}
+
+func (s *PostgresStore) Restore(ctx context.Context, actor Actor, id string, input RestoreInput, requestHash string) (Request, error) {
+	tx, err := s.begin(ctx, actor.TenantID, input.CommandID)
+	if err != nil {
+		return Request{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if value, found, replayErr := replay(ctx, tx, actor, input.CommandID, requestHash); replayErr != nil || found {
+		return value, replayErr
+	}
+	value, err := load(ctx, tx, actor.TenantID, id, "FOR UPDATE")
+	if err != nil {
+		return Request{}, err
+	}
+	if value.ApplicantSubjectID != actor.ID {
+		return Request{}, ErrNotFound
+	}
+	if value.ArchivedAt == nil || value.DeletedAt != nil {
+		return Request{}, ErrStateConflict
+	}
+	source := value.Revision
+	now := time.Now().UTC()
+	value.ArchivedAt, value.UpdatedAt = nil, now
+	value.Revision++
+	if _, err = tx.Exec(ctx, `UPDATE finance_requests SET archived_at=NULL,revision=$3,updated_at=$4 WHERE tenant_id=$1 AND id=$2`, value.TenantID, value.ID, value.Revision, now); err != nil {
+		return Request{}, err
+	}
+	if err = insertRevision(ctx, tx, value, actor, input.CommandID, "restored"); err != nil {
+		return Request{}, err
+	}
+	if err = insertAudit(ctx, tx, value, actor, input.CommandID, source, "finance_request_draft_restored"); err != nil {
+		return Request{}, err
+	}
+	if err = insertRetentionEvent(ctx, tx, value, actor, input.CommandID, "restored", `{}`); err != nil {
+		return Request{}, err
+	}
+	if err = record(ctx, tx, actor, input.CommandID, requestHash, value); err != nil {
+		return Request{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Request{}, err
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) DeleteDraft(ctx context.Context, actor Actor, id string, input DeleteDraftInput, requestHash string) (Request, error) {
+	tx, err := s.begin(ctx, actor.TenantID, input.CommandID)
+	if err != nil {
+		return Request{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if value, found, replayErr := replay(ctx, tx, actor, input.CommandID, requestHash); replayErr != nil || found {
+		return value, replayErr
+	}
+	value, err := load(ctx, tx, actor.TenantID, id, "FOR UPDATE")
+	if err != nil {
+		return Request{}, err
+	}
+	if value.ApplicantSubjectID != actor.ID {
+		return Request{}, ErrNotFound
+	}
+	var submitted, paymentStarted bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM finance_request_revisions WHERE tenant_id=$1 AND request_id=$2 AND event_kind='submitted'), EXISTS(SELECT 1 FROM finance_payment_deliveries WHERE tenant_id=$1 AND request_id=$2 AND status IN ('unknown','succeeded'))`, actor.TenantID, id).Scan(&submitted, &paymentStarted); err != nil {
+		return Request{}, err
+	}
+	if value.Status != "draft" || value.DeletedAt != nil || submitted || paymentStarted {
+		return Request{}, ErrStateConflict
+	}
+	now := time.Now().UTC()
+	value.DeletedAt, value.UpdatedAt = &now, now
+	if _, err = tx.Exec(ctx, `UPDATE finance_requests SET deleted_at=$3,updated_at=$3 WHERE tenant_id=$1 AND id=$2`, value.TenantID, value.ID, now); err != nil {
+		return Request{}, err
+	}
+	if err = insertRetentionEvent(ctx, tx, value, actor, input.CommandID, "deleted", `{"confirmed":true}`); err != nil {
+		return Request{}, err
+	}
+	if err = record(ctx, tx, actor, input.CommandID, requestHash, value); err != nil {
+		return Request{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Request{}, err
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) ArchiveStaleDrafts(ctx context.Context, before time.Time, limit int) (int, error) {
+	rows, err := s.pool.Query(ctx, `SELECT tenant_id::text,id::text FROM finance_requests WHERE request_type='reimbursement' AND status='draft' AND archived_at IS NULL AND deleted_at IS NULL AND updated_at<$1 ORDER BY updated_at,id LIMIT $2`, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	var targets [][2]string
+	for rows.Next() {
+		var target [2]string
+		if err = rows.Scan(&target[0], &target[1]); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		targets = append(targets, target)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	archived := 0
+	for _, target := range targets {
+		tx, beginErr := s.pool.Begin(ctx)
+		if beginErr != nil {
+			return archived, beginErr
+		}
+		now := time.Now().UTC()
+		tag, updateErr := tx.Exec(ctx, `UPDATE finance_requests SET archived_at=$3,updated_at=$3 WHERE tenant_id=$1 AND id=$2 AND request_type='reimbursement' AND status='draft' AND archived_at IS NULL AND deleted_at IS NULL AND updated_at<$4`, target[0], target[1], now, before)
+		if updateErr == nil && tag.RowsAffected() == 1 {
+			_, updateErr = tx.Exec(ctx, `INSERT INTO finance_request_retention_events(id,tenant_id,request_id,action,command_id,actor_subject_id,credential_id,occurred_at,details) VALUES($1,$2,$3,'archived',NULL,NULL,'system:stale-draft-archive',$4,jsonb_build_object('stale_before',$5::timestamptz))`, newUUID(), target[0], target[1], now, before)
+		}
+		if updateErr != nil {
+			_ = tx.Rollback(ctx)
+			return archived, updateErr
+		}
+		if tag.RowsAffected() == 1 {
+			archived++
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return archived, err
+		}
+	}
+	return archived, nil
 }
 
 func (s *PostgresStore) PreparePayment(ctx context.Context, actor Actor, id string, input ConfirmPaymentInput, requestHash string) (Request, PaymentDelivery, error) {
@@ -426,10 +683,28 @@ func (s *PostgresStore) CompletePayment(ctx context.Context, actor Actor, id, co
 }
 
 func (s *PostgresStore) Get(ctx context.Context, tenant, id string) (Request, error) {
-	return load(ctx, s.pool, tenant, id, "")
+	value, err := load(ctx, s.pool, tenant, id, "")
+	if err == nil && value.DeletedAt != nil {
+		return Request{}, ErrNotFound
+	}
+	return value, err
 }
 func (s *PostgresStore) List(ctx context.Context, tenant string, filter ListFilter) ([]Request, error) {
-	rows, err := s.pool.Query(ctx, selectRequest+` WHERE tenant_id=$1 AND ($2='' OR applicant_subject_id=$2::uuid) ORDER BY updated_at DESC,id`, tenant, filter.ApplicantSubjectID)
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	rows, err := s.pool.Query(ctx, selectRequest+` WHERE tenant_id=$1
+		AND ($2='' OR applicant_subject_id=NULLIF($2,'')::uuid)
+		AND ($3='' OR request_type=$3)
+		AND ($4='' OR status=$4)
+		AND ($5='' OR submitted_at::date >= NULLIF($5,'')::date)
+		AND ($6='' OR submitted_at::date <= NULLIF($6,'')::date)
+		AND ($7::timestamptz IS NULL OR updated_at > $7::timestamptz)
+		AND ($8::timestamptz IS NULL OR updated_at < $8::timestamptz OR (updated_at=$8::timestamptz AND id<NULLIF($9,'')::uuid))
+		AND ($10 OR archived_at IS NULL)
+		AND ($11 OR deleted_at IS NULL)
+		ORDER BY updated_at DESC,id DESC LIMIT $12`, tenant, filter.ApplicantSubjectID, filter.RequestType, filter.Status, filter.SubmittedFrom, filter.SubmittedTo, filter.UpdatedSince, filter.BeforeUpdatedAt, filter.BeforeID, filter.IncludeArchived, filter.IncludeDeleted, limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -451,6 +726,20 @@ func (s *PostgresStore) List(ctx context.Context, tenant string, filter ListFilt
 func (s *PostgresStore) RecordSensitiveAccess(ctx context.Context, actor Actor, id, purpose, result string) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO finance_sensitive_access_audit_events(id,tenant_id,request_id,actor_subject_id,credential_id,purpose,result,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, newUUID(), actor.TenantID, id, actor.ID, actor.CredentialID, purpose, result, time.Now().UTC())
 	return err
+}
+
+func (s *PostgresStore) IsEvidenceReferenced(ctx context.Context, tenant, fileID string, version int) (bool, error) {
+	var referenced bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1
+		FROM finance_request_revisions r
+		CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.detail_snapshot->'lines','[]'::jsonb)) line
+		CROSS JOIN LATERAL jsonb_array_elements(COALESCE(line->'evidence','[]'::jsonb)) evidence
+		WHERE r.tenant_id=$1
+		  AND evidence->>'file_id'=$2
+		  AND CASE WHEN evidence->>'version' ~ '^[0-9]+$' THEN (evidence->>'version')::integer=$3 ELSE false END
+	)`, tenant, fileID, version).Scan(&referenced)
+	return referenced, err
 }
 
 func (s *PostgresStore) CreateCategory(ctx context.Context, actor Actor, id string, input CategoryCreateInput, requestHash string) (ExpenseCategory, error) {
@@ -636,14 +925,19 @@ func insertPaymentEvent(ctx context.Context, tx pgx.Tx, actor Actor, d PaymentDe
 	return err
 }
 
-const selectRequest = `SELECT id,tenant_id,applicant_subject_id,request_type,title,amount_minor,currency,status,detail_snapshot,approval_policy,approval_status,paid_minor,allocated_minor,overage_minor,payment_unknown_count,submitted_at,withdrawn_at,COALESCE(withdrawal_reason,''),revision,created_at,updated_at FROM finance_requests`
+func insertRetentionEvent(ctx context.Context, tx pgx.Tx, value Request, actor Actor, command, action, details string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO finance_request_retention_events(id,tenant_id,request_id,action,command_id,actor_subject_id,credential_id,occurred_at,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`, newUUID(), value.TenantID, value.ID, action, command, actor.ID, actor.CredentialID, value.UpdatedAt, details)
+	return err
+}
+
+const selectRequest = `SELECT id,tenant_id,applicant_subject_id,request_type,title,amount_minor,currency,status,detail_snapshot,approval_policy,approval_status,paid_minor,allocated_minor,overage_minor,payment_unknown_count,submitted_at,withdrawn_at,COALESCE(withdrawal_reason,''),revision,created_at,updated_at,archived_at,deleted_at FROM finance_requests`
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner) (Request, error) {
 	var value Request
 	var details []byte
-	err := row.Scan(&value.ID, &value.TenantID, &value.ApplicantSubjectID, &value.RequestType, &value.Title, &value.AmountMinor, &value.Currency, &value.Status, &details, &value.ApprovalPolicy, &value.ApprovalStatus, &value.PaidMinor, &value.AllocatedMinor, &value.OverageMinor, &value.PaymentUnknownCount, &value.SubmittedAt, &value.WithdrawnAt, &value.WithdrawalReason, &value.Revision, &value.CreatedAt, &value.UpdatedAt)
+	err := row.Scan(&value.ID, &value.TenantID, &value.ApplicantSubjectID, &value.RequestType, &value.Title, &value.AmountMinor, &value.Currency, &value.Status, &details, &value.ApprovalPolicy, &value.ApprovalStatus, &value.PaidMinor, &value.AllocatedMinor, &value.OverageMinor, &value.PaymentUnknownCount, &value.SubmittedAt, &value.WithdrawnAt, &value.WithdrawalReason, &value.Revision, &value.CreatedAt, &value.UpdatedAt, &value.ArchivedAt, &value.DeletedAt)
 	if err == nil {
 		err = json.Unmarshal(details, &value.Details)
 	}

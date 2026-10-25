@@ -22,15 +22,17 @@ type ObjectRef struct {
 }
 
 type UploadIntent struct {
-	SessionID      string
-	FileID         string
-	Version        int
-	FileName       string
-	MediaType      string
-	ExpectedSHA256 string
-	ExpectedSize   int64
-	ExpiresAt      time.Time
-	Object         ObjectRef
+	SessionID         string
+	FileID            string
+	Version           int
+	FileName          string
+	MediaType         string
+	ExpectedSHA256    string
+	ExpectedSize      int64
+	ValidationProfile string
+	CreatedBySubject  string
+	ExpiresAt         time.Time
+	Object            ObjectRef
 }
 
 type UploadAuthorization struct {

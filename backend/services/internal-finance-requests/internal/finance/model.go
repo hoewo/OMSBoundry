@@ -6,14 +6,35 @@ import (
 )
 
 var (
-	ErrNotFound         = errors.New("finance request not found")
-	ErrRevisionConflict = errors.New("finance request revision conflict")
-	ErrCommandConflict  = errors.New("command payload conflict")
-	ErrStateConflict    = errors.New("finance request state conflict")
-	ErrPaymentUnknown   = errors.New("finance payment outcome is unknown")
-	ErrPaymentRejected  = errors.New("finance payment was rejected")
-	ErrDependency       = errors.New("finance dependency is unavailable")
+	ErrNotFound           = errors.New("finance request not found")
+	ErrRevisionConflict   = errors.New("finance request revision conflict")
+	ErrCommandConflict    = errors.New("command payload conflict")
+	ErrStateConflict      = errors.New("finance request state conflict")
+	ErrPaymentUnknown     = errors.New("finance payment outcome is unknown")
+	ErrPaymentRejected    = errors.New("finance payment was rejected")
+	ErrDependency         = errors.New("finance dependency is unavailable")
+	ErrStrongDuplicate    = errors.New("strong invoice duplicate")
+	ErrSuspectedDuplicate = errors.New("suspected invoice duplicate requires acknowledgement")
 )
+
+type DuplicateError struct {
+	Strong            bool
+	MatchedRequestIDs []string
+}
+
+func (e *DuplicateError) Error() string {
+	if e.Strong {
+		return ErrStrongDuplicate.Error()
+	}
+	return ErrSuspectedDuplicate.Error()
+}
+
+func (e *DuplicateError) Unwrap() error {
+	if e.Strong {
+		return ErrStrongDuplicate
+	}
+	return ErrSuspectedDuplicate
+}
 
 type Actor struct{ ID, TenantID, DisplayName, Kind, CredentialID string }
 
@@ -25,20 +46,34 @@ type ReferenceSnapshot struct {
 }
 
 type EvidenceRef struct {
-	FileID  string `json:"file_id"`
-	Version int64  `json:"version"`
-	Purpose string `json:"purpose"`
+	FileID            string `json:"file_id"`
+	Version           int64  `json:"version"`
+	Purpose           string `json:"purpose"`
+	SHA256            string `json:"sha256,omitempty"`
+	MediaType         string `json:"media_type,omitempty"`
+	SizeBytes         int64  `json:"size_bytes,omitempty"`
+	ValidationProfile string `json:"validation_profile,omitempty"`
+	SecurityStatus    string `json:"security_status,omitempty"`
+}
+
+type InvoiceSnapshot struct {
+	Code        string `json:"code,omitempty"`
+	Number      string `json:"number,omitempty"`
+	IssuerName  string `json:"issuer_name"`
+	InvoiceDate string `json:"invoice_date"`
+	AmountMinor int64  `json:"amount_minor"`
 }
 
 type Line struct {
-	ID           string        `json:"id"`
-	BusinessDate string        `json:"business_date,omitempty"`
-	CategoryKey  string        `json:"category_key,omitempty"`
-	CategoryName string        `json:"category_name,omitempty"`
-	CategoryRev  int64         `json:"category_revision,omitempty"`
-	Purpose      string        `json:"purpose"`
-	AmountMinor  int64         `json:"amount_minor"`
-	Evidence     []EvidenceRef `json:"evidence,omitempty"`
+	ID           string           `json:"id"`
+	BusinessDate string           `json:"business_date,omitempty"`
+	CategoryKey  string           `json:"category_key,omitempty"`
+	CategoryName string           `json:"category_name,omitempty"`
+	CategoryRev  int64            `json:"category_revision,omitempty"`
+	Purpose      string           `json:"purpose"`
+	AmountMinor  int64            `json:"amount_minor"`
+	Evidence     []EvidenceRef    `json:"evidence,omitempty"`
+	Invoice      *InvoiceSnapshot `json:"invoice,omitempty"`
 }
 
 type PayeeSnapshot struct {
@@ -73,6 +108,13 @@ type DetailSnapshot struct {
 	Attribution                 AttributionSnapshot `json:"attribution,omitempty"`
 	MissingEvidenceAcknowledged bool                `json:"missing_evidence_acknowledged"`
 	Approval                    ApprovalSnapshot    `json:"approval"`
+	Duplicate                   DuplicateAssessment `json:"duplicate"`
+}
+
+type DuplicateAssessment struct {
+	Status            string    `json:"status"`
+	MatchedRequestIDs []string  `json:"matched_request_ids,omitempty"`
+	CheckedAt         time.Time `json:"checked_at,omitempty"`
 }
 
 type PaymentDelivery struct {
@@ -122,6 +164,8 @@ type Request struct {
 	Revision            int64             `json:"revision"`
 	CreatedAt           time.Time         `json:"created_at"`
 	UpdatedAt           time.Time         `json:"updated_at"`
+	ArchivedAt          *time.Time        `json:"archived_at,omitempty"`
+	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
 	AllowedActions      []string          `json:"allowed_actions,omitempty"`
 }
 type CreateInput struct {
@@ -141,15 +185,26 @@ type UpdateInput struct {
 }
 
 type SubmitInput struct {
-	CommandID                   string `json:"command_id"`
-	ExpectedRevision            int64  `json:"expected_revision"`
-	MissingEvidenceAcknowledged bool   `json:"missing_evidence_acknowledged"`
+	CommandID                      string          `json:"command_id"`
+	ExpectedRevision               int64           `json:"expected_revision"`
+	MissingEvidenceAcknowledged    bool            `json:"missing_evidence_acknowledged"`
+	SuspectedDuplicateAcknowledged bool            `json:"suspected_duplicate_acknowledged"`
+	ValidatedDetails               *DetailSnapshot `json:"-"`
 }
 
 type WithdrawInput struct {
 	CommandID        string `json:"command_id"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	Reason           string `json:"reason"`
+}
+
+type RestoreInput struct {
+	CommandID string `json:"command_id"`
+}
+
+type DeleteDraftInput struct {
+	CommandID    string `json:"command_id"`
+	Confirmation string `json:"confirmation"`
 }
 
 type ConfirmPaymentInput struct {
@@ -206,9 +261,33 @@ type MoneyPaymentResult struct {
 	OverageAmountMinor      int64  `json:"overage_amount_minor"`
 	Replayed                bool   `json:"replayed"`
 }
-type ListFilter struct{ ApplicantSubjectID string }
+type ListFilter struct {
+	ApplicantSubjectID string
+	RequestType        string
+	Status             string
+	SubmittedFrom      string
+	SubmittedTo        string
+	UpdatedSince       *time.Time
+	BeforeUpdatedAt    *time.Time
+	BeforeID           string
+	Limit              int
+	IncludeArchived    bool
+	IncludeDeleted     bool
+}
 type Page struct {
-	Items []Request `json:"items"`
+	Items      []Request `json:"items"`
+	NextCursor string    `json:"next_cursor,omitempty"`
+}
+
+type EvidenceVersion struct {
+	FileID            string
+	Version           int64
+	Status            string
+	SHA256            string
+	MediaType         string
+	SizeBytes         int64
+	ValidationProfile string
+	SecurityStatus    string
 }
 
 type ExpenseCategory struct {

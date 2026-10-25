@@ -24,6 +24,8 @@ var ErrUnauthenticated = errors.New("authentication required")
 
 type Principal struct {
 	SubjectID, TenantID, DisplayName, Provider, CredentialID, ScopeKind string
+	PersonID, PersonDisplayName, PersonDigest                           string
+	PersonRevision                                                      int64
 	AllowedActions                                                      map[string]bool
 	Resources                                                           map[string]map[string]bool
 }

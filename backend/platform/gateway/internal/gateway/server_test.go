@@ -404,6 +404,61 @@ func TestWorkbenchAssetsDoNotConsumeBusinessRequestBudget(t *testing.T) {
 	_ = response.Body.Close()
 }
 
+func TestSignedEvidenceDataPlaneDoesNotRequireBrowserCapabilityCookie(t *testing.T) {
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := writeKeys(t, publicKey)
+	var receivedPath, receivedToken string
+	evidence := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath, receivedToken = r.URL.Path, r.URL.Query().Get("token")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer evidence.Close()
+	iam := httptest.NewServer(http.NotFoundHandler())
+	defer iam.Close()
+	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer workbench.Close()
+	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "signed-evidence-test", TenantID: testTenant, Applications: []manifest.Application{
+		{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"},
+		{ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"},
+		{ID: "evidence-service", Enabled: true, RoutePrefix: "/evidence", Upstream: evidence.URL, Audience: "evidence-service", EntryAction: "evidence-service.view"},
+	}}
+	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, OpenAPIUploadConcurrency: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPut, "https://oms.example.test/evidence/v1/local-uploads/11111111-1111-4111-8111-111111111111?token=signed", strings.NewReader("invoice"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || receivedPath != "/v1/local-uploads/11111111-1111-4111-8111-111111111111" || receivedToken != "signed" {
+		t.Fatalf("status=%d path=%q token=%q", response.Code, receivedPath, receivedToken)
+	}
+	handler.openAPIUploadSlots <- struct{}{}
+	limited := httptest.NewRecorder()
+	handler.ServeHTTP(limited, httptest.NewRequest(http.MethodPut, "https://oms.example.test/evidence/v1/local-uploads/11111111-1111-4111-8111-111111111111?token=signed", strings.NewReader("invoice")))
+	<-handler.openAPIUploadSlots
+	if limited.Code != http.StatusTooManyRequests || limited.Header().Get("Retry-After") != "1" {
+		t.Fatalf("saturated signed upload status=%d retry-after=%q body=%s", limited.Code, limited.Header().Get("Retry-After"), limited.Body.String())
+	}
+
+	for _, test := range []struct {
+		method, path string
+		expected     int
+	}{
+		{http.MethodPost, "/evidence/v1/local-uploads/11111111-1111-4111-8111-111111111111?token=signed", http.StatusUnauthorized},
+		{http.MethodPut, "/evidence/v1/local-uploads/11111111-1111-4111-8111-111111111111", http.StatusUnauthorized},
+		{http.MethodGet, "/evidence/v1/files?token=signed", http.StatusSeeOther},
+	} {
+		result := httptest.NewRecorder()
+		handler.ServeHTTP(result, httptest.NewRequest(test.method, "https://oms.example.test"+test.path, nil))
+		if result.Code != test.expected {
+			t.Fatalf("%s %s unexpectedly bypassed browser authorization: %d", test.method, test.path, result.Code)
+		}
+	}
+}
+
 func writeKeys(t *testing.T, publicKey ed25519.PublicKey) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "keys.json")

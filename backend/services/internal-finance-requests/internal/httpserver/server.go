@@ -2,6 +2,8 @@ package httpserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"net/http"
 	"omsbizfoundry/internal-finance-requests/internal/auth"
 	"omsbizfoundry/internal-finance-requests/internal/finance"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +24,8 @@ type UseCases interface {
 	Update(context.Context, finance.Actor, string, finance.UpdateInput) (finance.Request, error)
 	Submit(context.Context, finance.Actor, string, finance.SubmitInput) (finance.Request, error)
 	Withdraw(context.Context, finance.Actor, string, finance.WithdrawInput) (finance.Request, error)
+	Restore(context.Context, finance.Actor, string, finance.RestoreInput) (finance.Request, error)
+	DeleteDraft(context.Context, finance.Actor, string, finance.DeleteDraftInput) (finance.Request, error)
 	ConfirmPayment(context.Context, finance.Actor, string, finance.ConfirmPaymentInput) (finance.Request, error)
 	ConfirmPayments(context.Context, finance.Actor, finance.BatchPaymentInput) finance.BatchPaymentResult
 	Get(context.Context, string, string) (finance.Request, error)
@@ -29,6 +34,7 @@ type UseCases interface {
 	ListCategories(context.Context, string) (finance.CategoryPage, error)
 	CreateCategory(context.Context, finance.Actor, finance.CategoryCreateInput) (finance.ExpenseCategory, error)
 	UpdateCategory(context.Context, finance.Actor, string, finance.CategoryUpdateInput) (finance.ExpenseCategory, error)
+	IsEvidenceReferenced(context.Context, string, string, int) (bool, error)
 }
 type Server struct {
 	useCases      UseCases
@@ -57,9 +63,18 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /api/v1/finance-request-exports", s.protected(auth.ActionExport, http.HandlerFunc(s.exportRequests)))
 	mux.Handle("GET /api/v1/finance-request-sensitive-exports", s.protected(auth.ActionSensitiveExport, http.HandlerFunc(s.exportSensitiveRequests)))
 	mux.Handle("GET /api/v1/references/finance-requests/{request_id}", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.reference)))
+	mux.Handle("GET /api/v1/references/evidence-files/{file_id}/versions/{version}/usage", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.evidenceReferenceUsage)))
 	mux.Handle("GET /api/v1/expense-categories", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionSelfManage, auth.ActionTenantRead}, http.HandlerFunc(s.listCategories)))
 	mux.Handle("POST /api/v1/expense-categories", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.createCategory)))
 	mux.Handle("PUT /api/v1/expense-categories/{category_id}", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.updateCategory)))
+	mux.Handle("POST /api/v1/open-api/reimbursements", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openCreateReimbursement)))
+	mux.Handle("GET /api/v1/open-api/reimbursements", s.protected(auth.ActionSelfRead, http.HandlerFunc(s.openListReimbursements)))
+	mux.Handle("GET /api/v1/open-api/reimbursements/{request_id}", s.protected(auth.ActionSelfRead, http.HandlerFunc(s.openGetReimbursement)))
+	mux.Handle("PUT /api/v1/open-api/reimbursements/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openUpdateReimbursement)))
+	mux.Handle("POST /api/v1/open-api/reimbursements/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openSubmitReimbursement)))
+	mux.Handle("POST /api/v1/open-api/reimbursements/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openWithdrawReimbursement)))
+	mux.Handle("POST /api/v1/open-api/reimbursements/{request_id}/restore", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openRestoreReimbursement)))
+	mux.Handle("DELETE /api/v1/open-api/reimbursements/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.openDeleteReimbursement)))
 	// Gateway strips the public, versioned /internal-finance/v1 prefix.
 	mux.Handle("POST /finance-requests", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.create)))
 	mux.Handle("GET /finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
@@ -79,6 +94,288 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	s.handler = securityHeaders(mux)
 	return s, nil
 }
+
+type openReimbursementWrite struct {
+	ExpectedRevision int64                       `json:"expected_revision,omitempty"`
+	Title            string                      `json:"title"`
+	Lines            []finance.Line              `json:"lines"`
+	Payee            openReimbursementPayee      `json:"payee"`
+	Attribution      finance.AttributionSnapshot `json:"attribution,omitempty"`
+}
+
+type openReimbursementPayee struct {
+	BankName      string `json:"bank_name"`
+	AccountNumber string `json:"account_number"`
+}
+
+func (s *Server) openCreateReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	key, command, ok := openCommand(w, r, p, "reimbursements.create")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	var input openReimbursementWrite
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	prepareOpenLines(input.Lines, p, key, "reimbursements.create")
+	details, ok := openDetails(w, p, input)
+	if !ok {
+		return
+	}
+	value, err := s.useCases.Create(r.Context(), actorFrom(p), finance.CreateInput{CommandID: command, RequestType: "reimbursement", Title: input.Title, AmountMinor: sumOpenLines(input.Lines), Currency: "CNY", Details: details})
+	s.writeOpenRequest(w, http.StatusCreated, value, p, err)
+}
+
+func (s *Server) openUpdateReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	key, command, ok := openCommand(w, r, p, "reimbursements.update")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	var input openReimbursementWrite
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	prepareOpenLines(input.Lines, p, key, "reimbursements.update")
+	details, ok := openDetails(w, p, input)
+	if !ok {
+		return
+	}
+	value, err := s.useCases.Update(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.UpdateInput{CommandID: command, ExpectedRevision: input.ExpectedRevision, Title: input.Title, AmountMinor: sumOpenLines(input.Lines), Details: details})
+	s.writeOpenRequest(w, http.StatusOK, value, p, err)
+}
+
+func (s *Server) openSubmitReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	_, command, ok := openCommand(w, r, p, "reimbursements.submit")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	var input struct {
+		ExpectedRevision               int64 `json:"expected_revision"`
+		SuspectedDuplicateAcknowledged bool  `json:"suspected_duplicate_acknowledged"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.Submit(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.SubmitInput{CommandID: command, ExpectedRevision: input.ExpectedRevision, SuspectedDuplicateAcknowledged: input.SuspectedDuplicateAcknowledged})
+	s.writeOpenRequest(w, http.StatusOK, value, p, err)
+}
+
+func (s *Server) openWithdrawReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	_, command, ok := openCommand(w, r, p, "reimbursements.withdraw")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	var input struct {
+		ExpectedRevision int64  `json:"expected_revision"`
+		Reason           string `json:"reason"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.Withdraw(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.WithdrawInput{CommandID: command, ExpectedRevision: input.ExpectedRevision, Reason: input.Reason})
+	s.writeOpenRequest(w, http.StatusOK, value, p, err)
+}
+
+func (s *Server) openRestoreReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	_, command, ok := openCommand(w, r, p, "reimbursements.restore")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	value, err := s.useCases.Restore(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.RestoreInput{CommandID: command})
+	s.writeOpenRequest(w, http.StatusOK, value, p, err)
+}
+
+func (s *Server) openDeleteReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	_, command, ok := openCommand(w, r, p, "reimbursements.delete")
+	if !ok || !requireOpenPerson(w, p) {
+		return
+	}
+	var input struct {
+		Confirmation string `json:"confirmation"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.DeleteDraft(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.DeleteDraftInput{CommandID: command, Confirmation: input.Confirmation})
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	value.AllowedActions = nil
+	w.Header().Set("ETag", requestETag(value))
+	writeJSON(w, http.StatusOK, value)
+}
+
+func (s *Server) openGetReimbursement(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if !requireOpenPerson(w, p) {
+		return
+	}
+	value, err := s.useCases.Get(r.Context(), p.TenantID, strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))))
+	if err == nil && (value.ApplicantSubjectID != p.SubjectID || value.RequestType != "reimbursement") {
+		err = finance.ErrNotFound
+	}
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	value.AllowedActions = allowedActions(value, p)
+	value.Details.Duplicate.MatchedRequestIDs = nil
+	writeETagJSON(w, r, requestETag(value), value)
+}
+
+func (s *Server) openListReimbursements(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if !requireOpenPerson(w, p) {
+		return
+	}
+	filter, err := openListFilter(r)
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false)
+		return
+	}
+	filter.ApplicantSubjectID = p.SubjectID
+	filter.RequestType = "reimbursement"
+	page, err := s.useCases.List(r.Context(), p.TenantID, filter)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	items := page.Items[:0]
+	for _, value := range page.Items {
+		if value.RequestType != "reimbursement" {
+			continue
+		}
+		value.AllowedActions = allowedActions(value, p)
+		value.Details.Duplicate.MatchedRequestIDs = nil
+		items = append(items, value)
+	}
+	page.Items = items
+	raw, _ := json.Marshal(page)
+	digest := sha256.Sum256(raw)
+	writeETagJSON(w, r, fmt.Sprintf("\"reimbursements-%x\"", digest[:16]), page)
+}
+
+func openDetails(w http.ResponseWriter, p auth.Principal, input openReimbursementWrite) (finance.DetailSnapshot, bool) {
+	for _, line := range input.Lines {
+		if line.Invoice == nil || len(line.Evidence) == 0 {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVOICE_REQUIRED", "每条报销明细必须包含发票信息和附件", false)
+			return finance.DetailSnapshot{}, false
+		}
+	}
+	person := finance.ReferenceSnapshot{ID: p.PersonID, Revision: p.PersonRevision, Digest: p.PersonDigest, DisplayName: p.PersonDisplayName}
+	return finance.DetailSnapshot{Applicant: person, Payee: finance.PayeeSnapshot{Kind: "person", Reference: person, DisplayName: p.PersonDisplayName, BankName: input.Payee.BankName, AccountNumber: input.Payee.AccountNumber}, Lines: input.Lines, Attribution: input.Attribution}, true
+}
+
+func requireOpenPerson(w http.ResponseWriter, p auth.Principal) bool {
+	if p.Provider != "iam" || p.ScopeKind != "tenant" || p.PersonID == "" || p.PersonRevision < 1 || p.PersonDisplayName == "" || p.PersonDigest == "" {
+		writeProblem(w, http.StatusForbidden, "PERSON_BINDING_REQUIRED", "当前凭证未绑定有效成员", false)
+		return false
+	}
+	return true
+}
+
+func openCommand(w http.ResponseWriter, r *http.Request, p auth.Principal, action string) (string, string, bool) {
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(key) < 8 || len(key) > 128 {
+		writeProblem(w, http.StatusBadRequest, "IDEMPOTENCY_KEY_REQUIRED", "写请求必须提供 8 到 128 字符的 Idempotency-Key", false)
+		return "", "", false
+	}
+	return key, deterministicUUID(p.TenantID + ":" + p.SubjectID + ":" + action + ":" + key), true
+}
+
+func prepareOpenLines(lines []finance.Line, p auth.Principal, key, action string) {
+	for i := range lines {
+		if strings.TrimSpace(lines[i].ID) == "" {
+			lines[i].ID = deterministicUUID(p.TenantID + ":" + p.SubjectID + ":" + action + ":" + key + ":line:" + strconv.Itoa(i))
+		}
+	}
+}
+
+func deterministicUUID(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	digest[6] = (digest[6] & 0x0f) | 0x50
+	digest[8] = (digest[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16])
+}
+
+func sumOpenLines(lines []finance.Line) int64 {
+	var total int64
+	for _, line := range lines {
+		total += line.AmountMinor
+	}
+	return total
+}
+
+func openListFilter(r *http.Request) (finance.ListFilter, error) {
+	query := r.URL.Query()
+	filter := finance.ListFilter{Status: strings.TrimSpace(query.Get("status")), SubmittedFrom: strings.TrimSpace(query.Get("submitted_from")), SubmittedTo: strings.TrimSpace(query.Get("submitted_to"))}
+	if raw := strings.TrimSpace(query.Get("archived")); raw != "" {
+		if raw != "include" {
+			return finance.ListFilter{}, fmt.Errorf("archived 只接受 include")
+		}
+		filter.IncludeArchived = true
+	}
+	if raw := strings.TrimSpace(query.Get("updated_since")); raw != "" {
+		value, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return finance.ListFilter{}, fmt.Errorf("updated_since 必须是 RFC3339 时间")
+		}
+		filter.UpdatedSince = &value
+	}
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 100 {
+			return finance.ListFilter{}, fmt.Errorf("limit 必须为 1 到 100")
+		}
+		filter.Limit = value
+	}
+	if raw := strings.TrimSpace(query.Get("cursor")); raw != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(raw)
+		if err != nil {
+			return finance.ListFilter{}, fmt.Errorf("cursor 无效")
+		}
+		var cursor struct {
+			UpdatedAt time.Time `json:"updated_at"`
+			ID        string    `json:"id"`
+		}
+		if json.Unmarshal(decoded, &cursor) != nil || cursor.UpdatedAt.IsZero() || cursor.ID == "" {
+			return finance.ListFilter{}, fmt.Errorf("cursor 无效")
+		}
+		filter.BeforeUpdatedAt, filter.BeforeID = &cursor.UpdatedAt, cursor.ID
+	}
+	return filter, nil
+}
+
+func (s *Server) writeOpenRequest(w http.ResponseWriter, status int, value finance.Request, p auth.Principal, err error) {
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	value.AllowedActions = allowedActions(value, p)
+	value.Details.Duplicate.MatchedRequestIDs = nil
+	w.Header().Set("ETag", requestETag(value))
+	writeJSON(w, status, value)
+}
+
+func requestETag(value finance.Request) string {
+	return fmt.Sprintf("\"finance-%s-r%d\"", value.ID, value.Revision)
+}
+
+func writeETagJSON(w http.ResponseWriter, r *http.Request, etag string, value any) {
+	w.Header().Set("ETag", etag)
+	if strings.TrimSpace(r.Header.Get("If-None-Match")) == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
 func (s *Server) live(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, map[string]string{"service": "internal-finance-requests", "status": "live"})
@@ -90,6 +387,27 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]string{"service": "internal-finance-requests", "status": "ready"})
 }
+
+func (s *Server) evidenceReferenceUsage(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, http.StatusForbidden, "SCOPE_DENIED", "引用保护查询需要租户范围", false)
+		return
+	}
+	fileID := strings.ToLower(strings.TrimSpace(r.PathValue("file_id")))
+	version, err := strconv.Atoi(strings.TrimSpace(r.PathValue("version")))
+	if err != nil || version < 1 {
+		writeProblem(w, http.StatusBadRequest, "INVALID_REQUEST", "文件版本无效", false)
+		return
+	}
+	referenced, err := s.useCases.IsEvidenceReferenced(r.Context(), p.TenantID, fileID, version)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenant_id": p.TenantID, "file_id": fileID, "version": version, "referenced": referenced})
+}
+
 func (s *Server) protected(action string, next http.Handler) http.Handler {
 	return s.protectedAny([]string{action}, next)
 }
@@ -368,14 +686,20 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeProblem(w, 409, "FINANCE_REQUEST_REVISION_CONFLICT", err.Error(), true)
 	case errors.Is(err, finance.ErrCommandConflict):
 		writeProblem(w, 409, "COMMAND_PAYLOAD_CONFLICT", err.Error(), false)
+	case errors.Is(err, finance.ErrStrongDuplicate):
+		writeProblem(w, 409, "INVOICE_STRONG_DUPLICATE", "发票已在其他报销中提交", false)
+	case errors.Is(err, finance.ErrSuspectedDuplicate):
+		writeProblem(w, 409, "INVOICE_SUSPECTED_DUPLICATE", "发票疑似重复，确认核对后可使用原幂等键并显式确认", false)
 	case errors.Is(err, finance.ErrStateConflict):
 		writeProblem(w, 409, "FINANCE_REQUEST_STATE_CONFLICT", err.Error(), false)
 	case errors.Is(err, finance.ErrPaymentUnknown):
 		writeProblem(w, 503, "PAYMENT_OUTCOME_UNKNOWN", err.Error(), true)
 	case errors.Is(err, finance.ErrPaymentRejected):
 		writeProblem(w, 422, "PAYMENT_REJECTED", err.Error(), false)
+	case errors.Is(err, finance.ErrDependency):
+		writeProblem(w, 503, "DEPENDENCY_UNAVAILABLE", "依赖服务暂不可用", true)
 	case strings.Contains(err.Error(), "invalid"):
-		writeProblem(w, 400, "INVALID_REQUEST", err.Error(), false)
+		writeProblem(w, 422, "VALIDATION_FAILED", err.Error(), false)
 	default:
 		writeProblem(w, 503, "DEPENDENCY_UNAVAILABLE", "服务暂不可用", true)
 	}
@@ -385,13 +709,19 @@ func allowedActions(value finance.Request, p auth.Principal) []string {
 	if p.Can(auth.ActionTenantRead) || (p.Can(auth.ActionSelfRead) && value.ApplicantSubjectID == p.SubjectID) {
 		actions = append(actions, "read")
 	}
-	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" {
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt != nil && value.DeletedAt == nil {
+		actions = append(actions, "restore", "delete")
+	}
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
 		actions = append(actions, "update")
 	}
-	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && (value.Status == "draft" || value.Status == "withdrawn") {
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
+		actions = append(actions, "delete")
+	}
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && (value.Status == "draft" || value.Status == "withdrawn") {
 		actions = append(actions, "submit")
 	}
-	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "payable" && value.PaidMinor == 0 && value.PaymentUnknownCount == 0 {
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && value.Status == "payable" && value.PaidMinor == 0 && value.PaymentUnknownCount == 0 {
 		actions = append(actions, "withdraw")
 	}
 	if p.Can(auth.ActionPaymentConfirm) && value.PaymentUnknownCount == 0 && (value.Status == "payable" || value.Status == "partially_paid") {

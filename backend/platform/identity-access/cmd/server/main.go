@@ -89,8 +89,8 @@ func run(logger *slog.Logger) error {
 		}
 	}
 	var apiKeys *apikey.Service
-	if cfg.PolicyEnabled() {
-		people, err := personreference.New(cfg.PeoplePolicyBaseURL, cfg.PolicyServiceSubjectID, cfg.PublicIssuer, keys, cfg.PolicyTimeout)
+	if cfg.PersonReferenceEnabled() {
+		people, err := personreference.New(cfg.PersonReferenceBaseURL, cfg.PersonReferenceSubjectID, cfg.PublicIssuer, keys, cfg.PolicyTimeout)
 		if err != nil {
 			return err
 		}

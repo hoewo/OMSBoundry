@@ -1,0 +1,275 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-p7-reimbursement.XXXXXX")
+pg_container="oms-p7-pg18-$$"
+edge_container="oms-p7-edge-$$"
+evidence_dir=${P7_REIMBURSEMENT_EVIDENCE_DIR:-"$repo/deployments/d1/.runtime/p7-invoice-reimbursement-evidence"}
+service_pids=''
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$edge_container" "$pg_container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in result.md http-evidence.tsv iam.log gateway.log evidence.log finance.log money.log employee-paid.json money-facts.tsv finance-facts.tsv; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command_name in go docker curl jq lsof openssl shasum; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+for port in 19430 19431 19432 19433 19434 19435 19443; do
+  ! lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is already in use" >&2; exit 2; }
+done
+
+tenant=71111111-1111-4111-8111-111111111111
+person=72222222-2222-4222-8222-222222222222
+service_subject=73333333-3333-4333-8333-333333333333
+money_workload_subject=77777777-7777-4777-8777-777777777778
+owner_party=74444444-4444-4444-8444-444444444444
+payee_party=78888888-8888-4888-8888-888888888888
+payment_command=76666666-6666-4666-8666-666666666666
+issuer=https://127.0.0.1:19443/auth
+base=https://127.0.0.1:19443
+admin_password='p7-local-acceptance-password-2026'
+manifest="$script_dir/suite-manifest.json"
+keys="$runtime/signing-keys.json"
+public_keys="$runtime/public-keys.json"
+workload_key="$runtime/money-workload.json"
+workload_public="$runtime/money-workload-public.json"
+workload_policy="$runtime/workload-policy.json"
+
+wait_http() {
+  url=$1; log=$2
+  for attempt in $(seq 1 60); do
+    curl -fsS "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 60 ] || { sed -n '1,220p' "$log" >&2; exit 1; }
+    sleep 1
+  done
+}
+
+request() {
+  method=$1; url=$2; token=$3; key=$4; payload=$5; output=$6; expected=$7
+  if [ -n "$payload" ]; then
+    actual=$(curl -ksS -o "$output" -w '%{http_code}' -X "$method" -H "Authorization: ApiKey $token" -H "Idempotency-Key: $key" -H 'Content-Type: application/json' --data "$payload" "$url")
+  elif [ -n "$key" ]; then
+    actual=$(curl -ksS -o "$output" -w '%{http_code}' -X "$method" -H "Authorization: ApiKey $token" -H "Idempotency-Key: $key" "$url")
+  else
+    actual=$(curl -ksS -o "$output" -w '%{http_code}' -X "$method" -H "Authorization: ApiKey $token" "$url")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { sed -n '1,200p' "$output" >&2; exit 1; }
+}
+
+iam_post() {
+  path=$1; payload=$2; output=$3; expected=$4
+  actual=$(curl -sS -o "$output" -w '%{http_code}' -b "$runtime/iam.cookies" -c "$runtime/iam.cookies" \
+    -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' --data "$payload" "http://127.0.0.1:19431$path")
+  [ "$actual" = "$expected" ] || { sed -n '1,200p' "$output" >&2; exit 1; }
+}
+
+echo '[1/10] 构建六个真实进程（低并发）'
+(cd "$repo/backend/platform/identity-access" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/iam" ./cmd/server)
+(cd "$repo/backend/platform/gateway" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/gateway" ./cmd/server)
+(cd "$repo/backend/services/evidence-service" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/evidence" ./cmd/server)
+(cd "$repo/backend/services/internal-finance-requests" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/finance" ./cmd/server)
+(cd "$repo/backend/services/money-flow-ledger" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money" ./cmd/server && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money-ops" ./cmd/ops)
+(cd "$repo/backend/services/people-groups" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/workload-keyctl" ./cmd/workload-keyctl)
+GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/person-stub" "$script_dir/person-reference-stub.go"
+
+echo '[2/10] 启动限资源 PostgreSQL 18，建立四个独立数据库'
+docker run --detach --name "$pg_container" --cpus 1 --memory 768m -e POSTGRES_PASSWORD=postgres -p 127.0.0.1::5432 postgres:18.6-alpine >/dev/null
+for attempt in $(seq 1 60); do
+  docker exec "$pg_container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { docker logs "$pg_container" >&2; exit 1; }
+  sleep 1
+done
+postgres_port=$(docker port "$pg_container" 5432/tcp | sed 's/.*://')
+for database in identity evidence finance money; do docker exec "$pg_container" createdb -h 127.0.0.1 -U postgres "$database"; done
+identity_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/identity?sslmode=disable"
+evidence_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/evidence?sslmode=disable"
+finance_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/finance?sslmode=disable"
+money_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/money?sslmode=disable"
+
+echo '[3/10] 启动 Person 引用端口与正式 IAM，建立账号、授权和 Key'
+WORKLOAD_KEY_FILE="$workload_key" WORKLOAD_PUBLIC_KEY_FILE="$workload_public" WORKLOAD_ID=money-flow-ledger WORKLOAD_SUBJECT_ID="$money_workload_subject" "$runtime/workload-keyctl" init
+jq -n --arg subject "$money_workload_subject" --arg public "$workload_public" '{schema_version:"1",identities:[{id:"money-flow-ledger",subject_id:$subject,display_name:"Money Flow Ledger",public_keys_path:$public,permissions:[{audience:"party-directory",action:"party-directory.reference.read",resource_types:["party"]}]}]}' >"$workload_policy"
+TENANT_ID="$tenant" PERSON_ID="$person" "$runtime/person-stub" >"$runtime/person.log" 2>&1 &
+person_pid=$!; service_pids="$person_pid"
+wait_http http://127.0.0.1:19432/health/ready "$runtime/person.log"
+HTTP_ADDR=127.0.0.1:19431 DATABASE_URL="$identity_database" MIGRATION_MODE=auto TENANT_ID="$tenant" TENANT_NAME='P7 验收租户' \
+  PUBLIC_ISSUER="$issuer" SIGNING_KEY_FILE="$keys" BOOTSTRAP_ADMIN_USERNAME=p7-admin BOOTSTRAP_ADMIN_DISPLAY_NAME='P7 测试员工' BOOTSTRAP_ADMIN_PASSWORD="$admin_password" \
+  CAPABILITY_MANIFEST_PATHS="$repo/contracts/access/v1/examples/identity-access-capabilities.json,$repo/contracts/access/v1/examples/open-api-capabilities.json,$repo/contracts/access/v1/examples/evidence-service-capabilities.json,$repo/contracts/access/v1/examples/internal-finance-requests-capabilities.json,$repo/contracts/access/v1/examples/money-flow-ledger-capabilities.json" \
+  WORKLOAD_IDENTITY_POLICY_PATH="$workload_policy" \
+  PERSON_REFERENCE_BASE_URL=http://127.0.0.1:19432 PERSON_REFERENCE_SERVICE_SUBJECT_ID="$service_subject" SESSION_COOKIE_SECURE=false \
+  "$runtime/iam" >"$runtime/iam.log" 2>&1 &
+iam_pid=$!; service_pids="$service_pids $iam_pid"
+wait_http http://127.0.0.1:19431/health/ready "$runtime/iam.log"
+curl -fsS http://127.0.0.1:19431/api/v1/.well-known/jwks.json >"$public_keys"
+csrf=$(curl -fsS -c "$runtime/iam.cookies" http://127.0.0.1:19431/api/v1/csrf | jq -er '.csrf_token')
+iam_post /api/v1/login "{\"username\":\"p7-admin\",\"password\":\"$admin_password\"}" "$runtime/login.json" 200
+admin=$(curl -fsS -b "$runtime/iam.cookies" http://127.0.0.1:19431/api/v1/session | jq -er '.principal.subject_id')
+for action in open-api.invoice-reimbursement.use open-api.key.manage open-api.self-audit.read; do
+  iam_post /api/v1/admin/grants "{\"subject_id\":\"$admin\",\"audience\":\"open-api\",\"action\":\"$action\"}" "$runtime/grant.json" 204
+done
+for pair in 'evidence-service evidence-service.metadata.read' 'internal-finance-requests internal-finance-requests.payment.confirm' 'internal-finance-requests internal-finance-requests.tenant.read'; do
+  set -- $pair
+  iam_post /api/v1/admin/grants "{\"subject_id\":\"$admin\",\"audience\":\"$1\",\"action\":\"$2\"}" "$runtime/grant.json" 204
+done
+money_scope=$(jq -cn --arg id "$payment_command" '{kind:"resources",resources:[{type:"internal_finance_payment",id:$id}]}')
+iam_post /api/v1/admin/grants "$(jq -cn --arg subject "$admin" --argjson scope "$money_scope" '{subject_id:$subject,audience:"money-flow-ledger",action:"money-flow-ledger.internal-finance-payment.record",scope:$scope}')" "$runtime/grant.json" 204
+iam_post /api/v1/api-keys '{"label":"P7 发票报销验收","ttl_days":180}' "$runtime/api-key.json" 201
+api_key=$(jq -er '.secret' "$runtime/api-key.json")
+key_id=$(jq -er '.id' "$runtime/api-key.json")
+iam_post /api/v1/credentials '{"audience":"evidence-service"}' "$runtime/evidence-credential.json" 200
+evidence_token=$(jq -er '.token' "$runtime/evidence-credential.json")
+iam_post /api/v1/credentials '{"audience":"internal-finance-requests"}' "$runtime/finance-credential.json" 200
+finance_token=$(jq -er '.token' "$runtime/finance-credential.json")
+iam_post /api/v1/credentials "$(jq -cn --argjson scope "$money_scope" '{audience:"money-flow-ledger",scope:$scope}')" "$runtime/money-credential.json" 200
+money_token=$(jq -er '.token' "$runtime/money-credential.json")
+
+echo '[4/10] 迁移并启动三个真实 Owner'
+DATABASE_URL="$money_database" "$runtime/money-ops" migrate >/dev/null
+docker exec -i "$pg_container" psql -h 127.0.0.1 -v ON_ERROR_STOP=1 -U postgres -d money <<SQL
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at)
+VALUES ('$owner_party','organization','P7 验收公司',1,now(),now()),
+       ('$payee_party','individual','P7 测试员工',1,now(),now());
+SQL
+DATABASE_URL="$money_database" "$runtime/money-ops" internal-finance-owner-set \
+  --command-id 75555555-5555-4555-8555-555555555555 --tenant-id "$tenant" --local-party-id "$owner_party" \
+  --actor-kind iam_subject --actor-id "$admin" --actor-display-name 'P7 财务经办人' --reason 'P7 闭环验收' >/dev/null
+person_digest=$(printf '%s' "{\"id\":\"$person\",\"revision\":1,\"reference_code\":\"P7-EMP-001\",\"display_name\":\"P7 测试员工\",\"status\":\"active\"}" | shasum -a 256 | awk '{print "sha256:"$1}')
+DATABASE_URL="$money_database" "$runtime/money-ops" payable-party-map \
+  --command-id 79999999-9999-4999-8999-999999999999 --tenant-id "$tenant" --person-id "$person" \
+  --person-revision 1 --person-digest "$person_digest" --local-party-id "$payee_party" \
+  --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$admin" \
+  --reviewed-by-display-name 'P7 财务经办人' --reason 'P7 员工付款闭环验收' >/dev/null
+
+start_money() {
+  HTTP_ADDR=127.0.0.1:19435 DATABASE_URL="$money_database" MIGRATION_MODE=verify IDENTITY_PROVIDER=iam \
+    IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant" IAM_PUBLIC_KEYS_PATH="$public_keys" \
+    PARTY_BASE_URL=http://127.0.0.1:19432 IAM_SERVICE_CREDENTIAL_URL=http://127.0.0.1:19431/api/v1/service-credentials \
+    WORKLOAD_ID=money-flow-ledger WORKLOAD_SUBJECT_ID="$money_workload_subject" WORKLOAD_KEY_FILE="$workload_key" \
+    "$runtime/money" >"$runtime/money.log" 2>&1 &
+  money_pid=$!; service_pids="$service_pids $money_pid"; wait_http http://127.0.0.1:19435/health/ready "$runtime/money.log"
+}
+local_key=$(openssl rand 48 | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+start_evidence() {
+  HTTP_ADDR=127.0.0.1:19433 DATABASE_URL="$evidence_database" MIGRATION_MODE=auto IDENTITY_PROVIDER=iam \
+    IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant" IAM_PUBLIC_KEYS_PATH="$public_keys" STORAGE_PROVIDER=local \
+    PUBLIC_BASE_URL="$base/evidence" LOCAL_STORAGE_ROOT="$runtime/evidence-bytes" LOCAL_SIGNING_KEY="$local_key" \
+    "$runtime/evidence" >"$runtime/evidence.log" 2>&1 &
+  evidence_pid=$!; service_pids="$service_pids $evidence_pid"; wait_http http://127.0.0.1:19433/health/ready "$runtime/evidence.log"
+}
+start_finance() {
+  HTTP_ADDR=127.0.0.1:19434 DATABASE_URL="$finance_database" MIGRATION_MODE=auto IDENTITY_PROVIDER=iam \
+    IAM_ISSUER="$issuer" IAM_TENANT_ID="$tenant" IAM_PUBLIC_KEYS_PATH="$public_keys" \
+    MONEY_BASE_URL=http://127.0.0.1:19435 MONEY_ACCESS_TOKEN="$money_token" \
+    EVIDENCE_BASE_URL=http://127.0.0.1:19433 EVIDENCE_ACCESS_TOKEN="$evidence_token" \
+    "$runtime/finance" >"$runtime/finance.log" 2>&1 &
+  finance_pid=$!; service_pids="$service_pids $finance_pid"; wait_http http://127.0.0.1:19434/health/ready "$runtime/finance.log"
+}
+start_money; start_evidence; start_finance
+
+echo '[5/10] 启动正式 Gateway 与真实 TLS 入口'
+HTTP_ADDR=127.0.0.1:19430 SUITE_MANIFEST_PATH="$manifest" IAM_PUBLIC_KEYS_PATH="$public_keys" IAM_ISSUER="$issuer" \
+  TRUST_PROXY_CLIENT_IP=true OPEN_API_REQUIRE_HTTPS=true "$runtime/gateway" >"$runtime/gateway.log" 2>&1 &
+gateway_pid=$!; service_pids="$service_pids $gateway_pid"
+wait_http http://127.0.0.1:19430/health/ready "$runtime/gateway.log"
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$runtime/tls.key" -out "$runtime/tls.crt" -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' >/dev/null 2>&1
+docker run --detach --name "$edge_container" --cpus 0.5 --memory 96m -p 127.0.0.1:19443:443 \
+  --add-host host.docker.internal:host-gateway -v "$script_dir/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$runtime:/runtime:ro" nginx:1.28-alpine >/dev/null
+for attempt in $(seq 1 60); do curl -kfsS "$base/health/ready" >/dev/null 2>&1 && break; [ "$attempt" -lt 60 ] || { docker logs "$edge_container" >&2; exit 1; }; sleep 1; done
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+request GET "$base/open-api/v1/me" "$api_key" '' '' "$runtime/me.json" 200
+jq -e --arg tenant "$tenant" --arg person "$person" '.tenant_id==$tenant and .person_id==$person' "$runtime/me.json" >/dev/null
+
+echo '[6/10] 注入 Evidence 故障后用原幂等键恢复，并上传真实测试 PDF'
+kill "$evidence_pid"; wait "$evidence_pid" 2>/dev/null || true
+pdf="$runtime/test-invoice.pdf"
+printf '%%PDF-1.7\n1 0 obj<</Type/Catalog>>endobj\n%%%%EOF\n' >"$pdf"
+size=$(wc -c <"$pdf" | tr -d ' '); sha=$(shasum -a 256 "$pdf" | awk '{print $1}')
+upload_payload=$(jq -cn --argjson size "$size" --arg sha "$sha" '{file_name:"test-invoice.pdf",size_bytes:$size,media_type:"application/pdf",sha256:$sha,client_context:{purpose:"invoice"}}')
+request POST "$base/open-api/v1/evidence/upload-sessions" "$api_key" p7-upload-create-0001 "$upload_payload" "$runtime/evidence-unavailable.json" 503
+start_evidence
+request POST "$base/open-api/v1/evidence/upload-sessions" "$api_key" p7-upload-create-0001 "$upload_payload" "$runtime/upload.json" 201
+upload_url=$(jq -er '.authorization.upload_url' "$runtime/upload.json"); session=$(jq -er '.session_id' "$runtime/upload.json")
+actual=$(curl -ksS -D "$runtime/upload.headers" -o "$runtime/upload-body.txt" -w '%{http_code}' -X PUT -H 'Content-Type: application/pdf' --data-binary "@$pdf" "$upload_url")
+[ "$actual" = 204 ] || { cat "$runtime/upload-body.txt" >&2; exit 1; }
+etag=$(awk 'BEGIN{IGNORECASE=1} /^etag:/ {gsub(/[\r\n\"]/,"",$2); print $2}' "$runtime/upload.headers")
+complete_payload=$(jq -cn --argjson size "$size" --arg sha "$sha" --arg etag "$etag" '{observed_size_bytes:$size,observed_sha256:$sha,etag:$etag}')
+request POST "$base/open-api/v1/evidence/upload-sessions/$session/complete" "$api_key" p7-upload-complete-0001 "$complete_payload" "$runtime/evidence.json" 200
+jq -e '.validation_profile=="invoice-v1" and .security_status=="passed" and .status=="available"' "$runtime/evidence.json" >/dev/null
+
+unsafe="$runtime/unsafe-invoice.pdf"
+printf '%%PDF-1.7\n/JavaScript (blocked)\n%%%%EOF\n' >"$unsafe"
+unsafe_size=$(wc -c <"$unsafe" | tr -d ' '); unsafe_sha=$(shasum -a 256 "$unsafe" | awk '{print $1}')
+unsafe_payload=$(jq -cn --argjson size "$unsafe_size" --arg sha "$unsafe_sha" '{file_name:"unsafe-invoice.pdf",size_bytes:$size,media_type:"application/pdf",sha256:$sha,client_context:{purpose:"invoice"}}')
+request POST "$base/open-api/v1/evidence/upload-sessions" "$api_key" p7-unsafe-create-0001 "$unsafe_payload" "$runtime/unsafe-upload.json" 201
+unsafe_url=$(jq -er '.authorization.upload_url' "$runtime/unsafe-upload.json"); unsafe_session=$(jq -er '.session_id' "$runtime/unsafe-upload.json")
+actual=$(curl -ksS -D "$runtime/unsafe.headers" -o "$runtime/unsafe-body.txt" -w '%{http_code}' -X PUT -H 'Content-Type: application/pdf' --data-binary "@$unsafe" "$unsafe_url")
+[ "$actual" = 204 ] || { cat "$runtime/unsafe-body.txt" >&2; exit 1; }
+unsafe_etag=$(awk 'BEGIN{IGNORECASE=1} /^etag:/ {gsub(/[\r\n\"]/,"",$2); print $2}' "$runtime/unsafe.headers")
+unsafe_complete=$(jq -cn --argjson size "$unsafe_size" --arg sha "$unsafe_sha" --arg etag "$unsafe_etag" '{observed_size_bytes:$size,observed_sha256:$sha,etag:$etag}')
+request POST "$base/open-api/v1/evidence/upload-sessions/$unsafe_session/complete" "$api_key" p7-unsafe-complete-0001 "$unsafe_complete" "$runtime/unsafe-rejected.json" 422
+
+echo '[7/10] 注入 Finance 故障后用原幂等键恢复，提交报销并阻断重复'
+file_id=$(jq -er '.file_id' "$runtime/evidence.json"); version=$(jq -er '.version' "$runtime/evidence.json")
+create_payload=$(jq -cn --arg file "$file_id" --argjson version "$version" '{title:"P7 测试发票报销",lines:[{business_date:"2026-10-25",category_key:"travel",category_name:"差旅费",category_revision:1,purpose:"P7 测试交通费",amount_minor:12345,evidence:[{file_id:$file,version:$version,purpose:"invoice"}],invoice:{code:"P7TEST",number:"000001",issuer_name:"P7 测试开票方",invoice_date:"2026-10-25",amount_minor:12345}}],payee:{bank_name:"测试银行",account_number:"6222020000000000"}}')
+kill "$finance_pid"; wait "$finance_pid" 2>/dev/null || true
+request POST "$base/open-api/v1/reimbursements" "$api_key" p7-reimbursement-create-0001 "$create_payload" "$runtime/finance-unavailable.json" 503
+start_finance
+request POST "$base/open-api/v1/reimbursements" "$api_key" p7-reimbursement-create-0001 "$create_payload" "$runtime/reimbursement.json" 201
+request_id=$(jq -er '.id' "$runtime/reimbursement.json"); revision=$(jq -er '.revision' "$runtime/reimbursement.json")
+submit_payload=$(jq -cn --argjson revision "$revision" '{expected_revision:$revision,suspected_duplicate_acknowledged:false}')
+request POST "$base/open-api/v1/reimbursements/$request_id/submit" "$api_key" p7-reimbursement-submit-0001 "$submit_payload" "$runtime/submitted.json" 200
+jq -e '.status=="payable" and .approval_policy=="not_required"' "$runtime/submitted.json" >/dev/null
+request POST "$base/open-api/v1/reimbursements" "$api_key" p7-reimbursement-create-duplicate "$create_payload" "$runtime/duplicate-draft.json" 201
+duplicate_id=$(jq -er '.id' "$runtime/duplicate-draft.json"); duplicate_revision=$(jq -er '.revision' "$runtime/duplicate-draft.json")
+duplicate_submit=$(jq -cn --argjson revision "$duplicate_revision" '{expected_revision:$revision,suspected_duplicate_acknowledged:false}')
+request POST "$base/open-api/v1/reimbursements/$duplicate_id/submit" "$api_key" p7-reimbursement-submit-duplicate "$duplicate_submit" "$runtime/duplicate-conflict.json" 409
+
+echo '[8/10] 注入 Money 故障，原付款命令恢复且只产生一组资金事实'
+payment_revision=$(jq -er '.revision' "$runtime/submitted.json")
+payment_payload=$(jq -cn --arg command "$payment_command" --argjson revision "$payment_revision" '{command_id:$command,expected_revision:$revision,actual_amount_minor:12345,occurred_on:"2026-10-25",note:"P7 测试实际付款",overage_confirmed:false,overage_reason:""}')
+kill "$money_pid"; wait "$money_pid" 2>/dev/null || true
+actual=$(curl -sS -o "$runtime/money-unavailable.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' --data "$payment_payload" "http://127.0.0.1:19434/api/v1/finance-requests/$request_id/payments")
+[ "$actual" = 503 ] || { cat "$runtime/money-unavailable.json" >&2; exit 1; }
+start_money
+actual=$(curl -sS -o "$runtime/payment.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $finance_token" -H 'Content-Type: application/json' --data "$payment_payload" "http://127.0.0.1:19434/api/v1/finance-requests/$request_id/payments")
+[ "$actual" = 200 ] || { cat "$runtime/payment.json" >&2; exit 1; }
+jq -e '.status=="paid" and .paid_minor==12345 and .allocated_minor==12345 and (.payments|length)==1' "$runtime/payment.json" >/dev/null
+
+echo '[9/10] 验证本人已支付投影、撤权即时生效与数据库唯一性'
+request GET "$base/open-api/v1/reimbursements/$request_id" "$api_key" '' '' "$runtime/employee-paid.json" 200
+jq -e '.status=="paid" and .paid_minor==12345 and .allocated_minor==12345 and (.payments|length)==1' "$runtime/employee-paid.json" >/dev/null
+docker exec "$pg_container" psql -h 127.0.0.1 -U postgres -d money -AtF '|' -c "SELECT (SELECT count(*) FROM internal_finance_payment_deliveries WHERE command_id='$payment_command'),(SELECT count(*) FROM cash_transactions),(SELECT count(*) FROM allocations)" >"$runtime/money-facts.tsv"
+grep -Eq '^1\|1\|1$' "$runtime/money-facts.tsv"
+docker exec "$pg_container" psql -h 127.0.0.1 -U postgres -d finance -AtF '|' -c "SELECT (SELECT count(*) FROM finance_payment_deliveries WHERE command_id='$payment_command'),(SELECT attempt_count FROM finance_payment_deliveries WHERE command_id='$payment_command'),(SELECT count(*) FROM finance_requests WHERE id='$request_id' AND status='paid')" >"$runtime/finance-facts.tsv"
+grep -Eq '^1\|2\|1$' "$runtime/finance-facts.tsv"
+iam_post "/api/v1/api-keys/$key_id/revoke" '{}' "$runtime/revoked.json" 200
+request GET "$base/open-api/v1/me" "$api_key" '' '' "$runtime/revoked-call.json" 401
+
+echo '[10/10] 汇总证据，退出时停止全部进程和容器'
+assertions=$(awk -F '\t' 'NR>1 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+printf '%s\n' \
+  '# P7 员工发票报销闭环本地验收结果' '' \
+  "- 经真实自签名 HTTPS、Gateway、IAM、Evidence、Internal Finance Requests、Money 和四个独立 PostgreSQL 数据库完成一张测试 PDF 发票闭环。" \
+  "- HTTP 断言：${assertions}；状态不匹配：${mismatches}。" \
+  '- Evidence 与 Finance 停机时返回可重试 503；恢复后复用原幂等键成功。' \
+  '- Money 停机产生未知结果；恢复后复用原付款命令，Finance attempt_count=2，Money 只有 1 个交付、1 笔资金和 1 笔核销。' \
+  '- 强重复发票被阻断，员工本人查询到 paid，Key 撤销后下一次调用立即 401。' \
+  '- 文件安全实现为格式、结构与危险主动内容的有界校验，不等同于通用杀毒引擎。' \
+  '- 仅使用临时本地资源；未执行 D1 或公网部署。' >"$runtime/result.md"
+[ "$mismatches" = 0 ] || exit 1
+cat "$runtime/result.md"

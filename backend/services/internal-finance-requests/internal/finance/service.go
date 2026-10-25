@@ -3,6 +3,7 @@ package finance
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,9 @@ type Store interface {
 	Update(context.Context, Actor, string, UpdateInput, string) (Request, error)
 	Submit(context.Context, Actor, string, SubmitInput, string) (Request, error)
 	Withdraw(context.Context, Actor, string, WithdrawInput, string) (Request, error)
+	Restore(context.Context, Actor, string, RestoreInput, string) (Request, error)
+	DeleteDraft(context.Context, Actor, string, DeleteDraftInput, string) (Request, error)
+	ArchiveStaleDrafts(context.Context, time.Time, int) (int, error)
 	PreparePayment(context.Context, Actor, string, ConfirmPaymentInput, string) (Request, PaymentDelivery, error)
 	CompletePayment(context.Context, Actor, string, string, MoneyPaymentResult) (Request, error)
 	MarkPaymentFailed(context.Context, Actor, string, string, string) error
@@ -33,15 +37,21 @@ type Store interface {
 	ListCategories(context.Context, string) ([]ExpenseCategory, error)
 	Get(context.Context, string, string) (Request, error)
 	List(context.Context, string, ListFilter) ([]Request, error)
+	IsEvidenceReferenced(context.Context, string, string, int) (bool, error)
 }
 
 type MoneyPayments interface {
 	Record(context.Context, MoneyPaymentRequest) (MoneyPaymentResult, error)
 }
 
+type EvidenceReferences interface {
+	Resolve(context.Context, string, EvidenceRef) (EvidenceVersion, error)
+}
+
 type Service struct {
 	store    Store
 	payments MoneyPayments
+	evidence EvidenceReferences
 }
 
 var platformCategories = []ExpenseCategory{
@@ -57,12 +67,23 @@ var platformCategories = []ExpenseCategory{
 
 func NewService(store Store) (*Service, error) { return NewServiceWithPayments(store, nil) }
 func NewServiceWithPayments(store Store, payments MoneyPayments) (*Service, error) {
+	return NewServiceWithDependencies(store, payments, nil)
+}
+func NewServiceWithDependencies(store Store, payments MoneyPayments, evidence EvidenceReferences) (*Service, error) {
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
-	return &Service{store: store, payments: payments}, nil
+	return &Service{store: store, payments: payments, evidence: evidence}, nil
 }
 func (s *Service) Ping(ctx context.Context) error { return s.store.Ping(ctx) }
+
+func (s *Service) IsEvidenceReferenced(ctx context.Context, tenantID, fileID string, version int) (bool, error) {
+	tenantID, fileID = normalizeID(tenantID), normalizeID(fileID)
+	if !uuidPattern.MatchString(tenantID) || !uuidPattern.MatchString(fileID) || version < 1 {
+		return false, fmt.Errorf("invalid evidence reference")
+	}
+	return s.store.IsEvidenceReferenced(ctx, tenantID, fileID, version)
+}
 
 func (s *Service) Create(ctx context.Context, actor Actor, input CreateInput) (Request, error) {
 	normalizeCreate(&input)
@@ -76,7 +97,14 @@ func (s *Service) Create(ctx context.Context, actor Actor, input CreateInput) (R
 		if err := normalizeDetails(input.RequestType, &input.Details, false); err != nil {
 			return Request{}, err
 		}
-		input.AmountMinor = totalLines(input.Details.Lines)
+		if err := s.resolveEvidence(ctx, actor.TenantID, &input.Details); err != nil {
+			return Request{}, err
+		}
+		total, err := totalLines(input.Details.Lines)
+		if err != nil {
+			return Request{}, err
+		}
+		input.AmountMinor = total
 	}
 	value, err := s.store.Create(ctx, actor, input, hash(input))
 	return redactRequest(value, false), err
@@ -98,7 +126,13 @@ func (s *Service) Update(ctx context.Context, actor Actor, id string, input Upda
 		if err = normalizeDetails(current.RequestType, &input.Details, false); err != nil {
 			return Request{}, err
 		}
-		input.AmountMinor = totalLines(input.Details.Lines)
+		if err = s.resolveEvidence(ctx, actor.TenantID, &input.Details); err != nil {
+			return Request{}, err
+		}
+		input.AmountMinor, err = totalLines(input.Details.Lines)
+		if err != nil {
+			return Request{}, err
+		}
 	}
 	if input.AmountMinor < 1 {
 		return Request{}, fmt.Errorf("invalid update amount")
@@ -132,6 +166,10 @@ func (s *Service) Submit(ctx context.Context, actor Actor, id string, input Subm
 	if err = normalizeDetails(value.RequestType, &value.Details, true); err != nil {
 		return Request{}, err
 	}
+	if err = s.resolveEvidence(ctx, actor.TenantID, &value.Details); err != nil {
+		return Request{}, err
+	}
+	input.ValidatedDetails = &value.Details
 	if value.RequestType == "payment" && !hasEvidence(value.Details) && !input.MissingEvidenceAcknowledged {
 		return Request{}, fmt.Errorf("invalid submit: payment without Evidence requires acknowledgement")
 	}
@@ -149,6 +187,31 @@ func (s *Service) Withdraw(ctx context.Context, actor Actor, id string, input Wi
 	}
 	value, err := s.store.Withdraw(ctx, actor, id, input, hash(input))
 	return redactRequest(value, false), err
+}
+
+func (s *Service) Restore(ctx context.Context, actor Actor, id string, input RestoreInput) (Request, error) {
+	id, input.CommandID = normalizeID(id), normalizeID(input.CommandID)
+	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) {
+		return Request{}, fmt.Errorf("invalid restore")
+	}
+	value, err := s.store.Restore(ctx, actor, id, input, hash(input))
+	return redactRequest(value, false), err
+}
+
+func (s *Service) DeleteDraft(ctx context.Context, actor Actor, id string, input DeleteDraftInput) (Request, error) {
+	id, input.CommandID, input.Confirmation = normalizeID(id), normalizeID(input.CommandID), strings.TrimSpace(input.Confirmation)
+	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.Confirmation != "DELETE" {
+		return Request{}, fmt.Errorf("invalid draft deletion confirmation")
+	}
+	value, err := s.store.DeleteDraft(ctx, actor, id, input, hash(input))
+	return redactRequest(value, false), err
+}
+
+func (s *Service) ArchiveStaleDrafts(ctx context.Context, before time.Time, limit int) (int, error) {
+	if before.IsZero() || limit < 1 || limit > 1000 {
+		return 0, fmt.Errorf("invalid archive request")
+	}
+	return s.store.ArchiveStaleDrafts(ctx, before.UTC(), limit)
 }
 
 func (s *Service) ConfirmPayment(ctx context.Context, actor Actor, id string, input ConfirmPaymentInput) (Request, error) {
@@ -252,11 +315,31 @@ func (s *Service) List(ctx context.Context, tenant string, filter ListFilter) (P
 	if filter.ApplicantSubjectID != "" && !uuidPattern.MatchString(filter.ApplicantSubjectID) {
 		return Page{}, fmt.Errorf("invalid applicant")
 	}
+	validStatus := map[string]bool{"": true, "draft": true, "payable": true, "partially_paid": true, "paid": true, "paid_with_overpayment": true, "withdrawn": true}
+	if (filter.RequestType != "" && filter.RequestType != "reimbursement" && filter.RequestType != "payment") || !validStatus[filter.Status] || filter.Limit < 0 || filter.Limit > 100 || (filter.SubmittedFrom != "" && !validDate(filter.SubmittedFrom)) || (filter.SubmittedTo != "" && !validDate(filter.SubmittedTo)) || (filter.BeforeUpdatedAt != nil && !uuidPattern.MatchString(filter.BeforeID)) {
+		return Page{}, fmt.Errorf("invalid list filter")
+	}
+	if filter.Limit == 0 {
+		filter.Limit = 20
+	}
 	items, err := s.store.List(ctx, tenant, filter)
+	if err != nil {
+		return Page{}, err
+	}
+	next := ""
+	if len(items) > filter.Limit {
+		last := items[filter.Limit-1]
+		raw, _ := json.Marshal(struct {
+			UpdatedAt time.Time `json:"updated_at"`
+			ID        string    `json:"id"`
+		}{last.UpdatedAt, last.ID})
+		next = base64.RawURLEncoding.EncodeToString(raw)
+		items = items[:filter.Limit]
+	}
 	for i := range items {
 		items[i] = redactRequest(items[i], false)
 	}
-	return Page{Items: items}, err
+	return Page{Items: items, NextCursor: next}, nil
 }
 
 func (s *Service) ListCategories(ctx context.Context, tenant string) (CategoryPage, error) {
@@ -374,6 +457,16 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 		if err := normalizeEvidence(line.Evidence); err != nil {
 			return err
 		}
+		if requestType == "reimbursement" && line.Invoice != nil {
+			line.Invoice.Code = normalizeInvoiceIdentifier(line.Invoice.Code)
+			line.Invoice.Number = normalizeInvoiceIdentifier(line.Invoice.Number)
+			line.Invoice.IssuerName = strings.TrimSpace(line.Invoice.IssuerName)
+			line.Invoice.InvoiceDate = strings.TrimSpace(line.Invoice.InvoiceDate)
+			parsed, dateErr := time.Parse("2006-01-02", line.Invoice.InvoiceDate)
+			if dateErr != nil || parsed.Format("2006-01-02") != line.Invoice.InvoiceDate || line.Invoice.IssuerName == "" || len([]rune(line.Invoice.IssuerName)) > 200 || line.Invoice.AmountMinor != line.AmountMinor || (line.Invoice.Code == "") != (line.Invoice.Number == "") {
+				return fmt.Errorf("invalid reimbursement invoice snapshot")
+			}
+		}
 	}
 	if err := normalizeEvidence(d.Evidence); err != nil {
 		return err
@@ -425,8 +518,58 @@ func normalizeAttribution(value *AttributionSnapshot) error {
 func normalizeEvidence(refs []EvidenceRef) error {
 	for i := range refs {
 		refs[i].FileID, refs[i].Purpose = normalizeID(refs[i].FileID), strings.TrimSpace(refs[i].Purpose)
-		if !uuidPattern.MatchString(refs[i].FileID) || refs[i].Version < 1 || refs[i].Purpose == "" || len([]rune(refs[i].Purpose)) > 200 {
+		refs[i].SHA256 = strings.ToLower(strings.TrimSpace(refs[i].SHA256))
+		refs[i].MediaType = strings.ToLower(strings.TrimSpace(refs[i].MediaType))
+		refs[i].ValidationProfile = strings.TrimSpace(refs[i].ValidationProfile)
+		refs[i].SecurityStatus = strings.TrimSpace(refs[i].SecurityStatus)
+		if !uuidPattern.MatchString(refs[i].FileID) || refs[i].Version < 1 || refs[i].Purpose == "" || len([]rune(refs[i].Purpose)) > 200 || (refs[i].SHA256 != "" && !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(refs[i].SHA256)) || refs[i].SizeBytes < 0 {
 			return fmt.Errorf("invalid Evidence reference")
+		}
+	}
+	return nil
+}
+
+func normalizeInvoiceIdentifier(value string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	return strings.NewReplacer(" ", "", "-", "").Replace(value)
+}
+
+func (s *Service) resolveEvidence(ctx context.Context, tenantID string, details *DetailSnapshot) error {
+	refs := make([]*EvidenceRef, 0)
+	for i := range details.Lines {
+		for j := range details.Lines[i].Evidence {
+			refs = append(refs, &details.Lines[i].Evidence[j])
+		}
+	}
+	for i := range details.Evidence {
+		refs = append(refs, &details.Evidence[i])
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	if len(refs) > 20 || s.evidence == nil {
+		return fmt.Errorf("%w: Evidence reference validation is unavailable", ErrDependency)
+	}
+	var total int64
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		key := fmt.Sprintf("%s:%d", ref.FileID, ref.Version)
+		if seen[key] {
+			return fmt.Errorf("invalid duplicate Evidence reference")
+		}
+		seen[key] = true
+		value, err := s.evidence.Resolve(ctx, tenantID, *ref)
+		if err != nil {
+			return fmt.Errorf("%w: Evidence reference could not be confirmed", ErrDependency)
+		}
+		if value.FileID != ref.FileID || value.Version != ref.Version || value.Status != "available" || value.ValidationProfile != "invoice-v1" || value.SecurityStatus != "passed" || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(value.SHA256) || value.SizeBytes < 1 || value.SizeBytes > 20<<20 {
+			return fmt.Errorf("invalid invoice Evidence reference")
+		}
+		ref.SHA256, ref.MediaType, ref.SizeBytes = value.SHA256, value.MediaType, value.SizeBytes
+		ref.ValidationProfile, ref.SecurityStatus = value.ValidationProfile, value.SecurityStatus
+		total += value.SizeBytes
+		if total > 100<<20 {
+			return fmt.Errorf("invalid invoice Evidence total size")
 		}
 	}
 	return nil
@@ -445,12 +588,15 @@ func hasEvidence(d DetailSnapshot) bool {
 	}
 	return false
 }
-func totalLines(lines []Line) int64 {
+func totalLines(lines []Line) (int64, error) {
 	var total int64
 	for _, line := range lines {
+		if line.AmountMinor < 1 || line.AmountMinor > int64(^uint64(0)>>1)-total {
+			return 0, fmt.Errorf("invalid line total")
+		}
 		total += line.AmountMinor
 	}
-	return total
+	return total, nil
 }
 func requestDigest(v Request) string {
 	v.Payments = nil
@@ -466,6 +612,10 @@ func hash(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func normalizeID(v string) string { return strings.ToLower(strings.TrimSpace(v)) }
+func validDate(v string) bool {
+	parsed, err := time.Parse("2006-01-02", v)
+	return err == nil && parsed.Format("2006-01-02") == v
+}
 func last4(v string) string {
 	r := []rune(v)
 	if len(r) <= 4 {

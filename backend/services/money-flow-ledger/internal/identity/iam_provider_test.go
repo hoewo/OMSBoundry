@@ -176,6 +176,39 @@ func TestIAMProviderAcceptsOnlyExactPayableSuggestionWorkloadCapabilities(t *tes
 	}
 }
 
+func TestIAMProviderAcceptsOnlyExactInternalFinancePaymentCredential(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	keyID := "33333333-3333-4333-8333-333333333333"
+	path := filepath.Join(t.TempDir(), "keys.json")
+	keyData, _ := json.Marshal(map[string]any{"keys": []map[string]string{{"kty": "OKP", "crv": "Ed25519", "use": "sig", "alg": "EdDSA", "kid": keyID, "x": base64.RawURLEncoding.EncodeToString(publicKey), "status": "active"}}})
+	if err := os.WriteFile(path, keyData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewIAMProvider("https://oms.example.test/auth", "22222222-2222-4222-8222-222222222222", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	provider.now = func() time.Time { return now }
+	commandID := "55555555-5555-4555-8555-555555555555"
+	claims := map[string]any{
+		"ver": "1", "iss": "https://oms.example.test/auth", "sub": "11111111-1111-4111-8111-111111111111",
+		"tid": "22222222-2222-4222-8222-222222222222", "aud": "money-flow-ledger", "name": "Internal Finance workload",
+		"actions": []string{"money-flow-ledger.internal-finance-payment.record"},
+		"scope":   map[string]any{"kind": "resources", "resources": []map[string]string{{"type": "internal_finance_payment", "id": commandID}}},
+		"iat":     now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Unix(), "jti": "44444444-4444-4444-8444-444444444444",
+	}
+	principal, found, err := provider.ResolveSession(context.Background(), signIAMToken(t, keyID, privateKey, claims))
+	if err != nil || !found || !principal.Can(PermissionInternalFinancePaymentRecord) || !principal.CanReference("internal_finance_payment", commandID) || principal.CanReference("internal_finance_payment", "66666666-6666-4666-8666-666666666666") {
+		t.Fatalf("principal=%#v found=%v err=%v", principal, found, err)
+	}
+	wrongType := copyClaims(claims)
+	wrongType["scope"] = map[string]any{"kind": "resources", "resources": []map[string]string{{"type": "payroll_payment", "id": commandID}}}
+	if _, found, err := provider.ResolveSession(context.Background(), signIAMToken(t, keyID, privateKey, wrongType)); err != nil || found {
+		t.Fatalf("internal finance action accepted for payroll scope found=%v err=%v", found, err)
+	}
+}
+
 func copyClaims(source map[string]any) map[string]any {
 	result := make(map[string]any, len(source))
 	for key, value := range source {

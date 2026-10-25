@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,14 +32,19 @@ type Service struct {
 	provider       storage.Provider
 	uploadTTL      time.Duration
 	maxUploadBytes int64
+	references     ReferenceProtector
 	now            func() time.Time
 }
 
 func NewService(pool *pgxpool.Pool, provider storage.Provider, uploadTTL time.Duration, maxUploadBytes int64) (*Service, error) {
+	return NewServiceWithReferenceProtector(pool, provider, uploadTTL, maxUploadBytes, nil)
+}
+
+func NewServiceWithReferenceProtector(pool *pgxpool.Pool, provider storage.Provider, uploadTTL time.Duration, maxUploadBytes int64, references ReferenceProtector) (*Service, error) {
 	if pool == nil || provider == nil || uploadTTL <= 0 || maxUploadBytes <= 0 {
 		return nil, fmt.Errorf("evidence service configuration is invalid")
 	}
-	return &Service{pool: pool, provider: provider, uploadTTL: uploadTTL, maxUploadBytes: maxUploadBytes, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Service{pool: pool, provider: provider, uploadTTL: uploadTTL, maxUploadBytes: maxUploadBytes, references: references, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 func (s *Service) Ping(ctx context.Context) error {
 	if err := s.pool.Ping(ctx); err != nil {
@@ -54,7 +60,7 @@ func (s *Service) ListVersions(ctx context.Context, tenantID string, limit int) 
 	if limit < 1 || limit > 100 {
 		return VersionPage{}, ErrInvalid
 	}
-	rows, err := s.pool.Query(ctx, `SELECT file_id,version,status,file_name,size_bytes,media_type,sha256,created_at FROM file_versions WHERE tenant_id=$1 ORDER BY created_at DESC,file_id DESC LIMIT $2`, tenantID, limit)
+	rows, err := s.pool.Query(ctx, `SELECT file_id,version,status,file_name,size_bytes,media_type,sha256,validation_profile,security_status,created_at FROM file_versions v WHERE tenant_id=$1 AND NOT EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded') ORDER BY created_at DESC,file_id DESC LIMIT $2`, tenantID, limit)
 	if err != nil {
 		return VersionPage{}, err
 	}
@@ -62,7 +68,7 @@ func (s *Service) ListVersions(ctx context.Context, tenantID string, limit int) 
 	page := VersionPage{Items: make([]Version, 0, limit)}
 	for rows.Next() {
 		var item Version
-		if err := rows.Scan(&item.FileID, &item.Version, &item.Status, &item.FileName, &item.SizeBytes, &item.MediaType, &item.SHA256, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.FileID, &item.Version, &item.Status, &item.FileName, &item.SizeBytes, &item.MediaType, &item.SHA256, &item.ValidationProfile, &item.SecurityStatus, &item.CreatedAt); err != nil {
 			return VersionPage{}, err
 		}
 		page.Items = append(page.Items, item)
@@ -76,6 +82,9 @@ func (s *Service) ListVersions(ctx context.Context, tenantID string, limit int) 
 func (s *Service) CreateUploadSession(ctx context.Context, actor Actor, key string, input CreateUploadInput) (UploadSession, error) {
 	input = normalizeCreate(input)
 	if err := validateCreate(key, input, s.maxUploadBytes); err != nil {
+		return UploadSession{}, err
+	}
+	if err := validateInvoiceCreate(input); err != nil {
 		return UploadSession{}, err
 	}
 	fingerprint, err := fingerprint(input)
@@ -150,6 +159,9 @@ func (s *Service) CreateVersionUploadSession(ctx context.Context, actor Actor, f
 		return UploadSession{}, ErrInvalid
 	}
 	if err := validateCreate(key, input, s.maxUploadBytes); err != nil {
+		return UploadSession{}, err
+	}
+	if err := validateInvoiceCreate(input); err != nil {
 		return UploadSession{}, err
 	}
 	fingerprint, err := fingerprint(struct {
@@ -301,7 +313,16 @@ func (s *Service) CompleteUpload(ctx context.Context, actor Actor, sessionID, ke
 		_ = s.markCompletionFailed(ctx, actor, intent, "declared sha256 mismatch")
 		return Version{}, ErrConflict
 	}
-	return s.finalizeCompletion(ctx, actor, intent, key, fp, actualSize, actualType, actualSHA)
+	securityStatus := "not_required"
+	if intent.ValidationProfile == "invoice-v1" {
+		actualType, err = s.inspectInvoice(ctx, intent)
+		if err != nil {
+			_ = s.markCompletionFailed(ctx, actor, intent, "invoice validation failed")
+			return Version{}, ErrInvalid
+		}
+		securityStatus = "passed"
+	}
+	return s.finalizeCompletion(ctx, actor, intent, key, fp, actualSize, actualType, actualSHA, securityStatus)
 }
 
 func (s *Service) completedCommand(ctx context.Context, actor Actor, action, resourceID, key string, fp []byte) (Version, bool, error) {
@@ -354,15 +375,18 @@ func (s *Service) recordCompletedSessionReplay(ctx context.Context, actor Actor,
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Version{}, false, err
 	}
-	var status string
+	var status, createdBy string
 	var fileID string
 	var versionNumber int
-	err = tx.QueryRow(ctx, `SELECT status,file_id::text,version FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, actor.TenantID, sessionID).Scan(&status, &fileID, &versionNumber)
+	err = tx.QueryRow(ctx, `SELECT status,file_id::text,version,created_by_subject::text FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, actor.TenantID, sessionID).Scan(&status, &fileID, &versionNumber, &createdBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Version{}, false, ErrNotFound
 	}
 	if err != nil {
 		return Version{}, false, err
+	}
+	if createdBy != actor.SubjectID {
+		return Version{}, false, ErrNotFound
 	}
 	if status != "completed" {
 		if err := tx.Commit(ctx); err != nil {
@@ -372,7 +396,7 @@ func (s *Service) recordCompletedSessionReplay(ctx context.Context, actor Actor,
 	}
 	var value Version
 	var provider, bucket, objectKey string
-	err = tx.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,created_at,provider,bucket,object_key FROM file_versions WHERE tenant_id=$1 AND file_id=$2 AND version=$3`, actor.TenantID, fileID, versionNumber).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.CreatedAt, &provider, &bucket, &objectKey)
+	err = tx.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,validation_profile,security_status,created_at,provider,bucket,object_key FROM file_versions WHERE tenant_id=$1 AND file_id=$2 AND version=$3`, actor.TenantID, fileID, versionNumber).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.ValidationProfile, &value.SecurityStatus, &value.CreatedAt, &provider, &bucket, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Version{}, false, fmt.Errorf("completed upload session has no file version")
 	}
@@ -403,6 +427,9 @@ func (s *Service) claimCompletion(ctx context.Context, actor Actor, sessionID st
 	intent, status, err := s.loadUploadIntentTx(ctx, tx, actor.TenantID, sessionID, false)
 	if err != nil {
 		return storage.UploadIntent{}, err
+	}
+	if intent.CreatedBySubject != actor.SubjectID {
+		return storage.UploadIntent{}, ErrNotFound
 	}
 	if status == "completed" {
 		return storage.UploadIntent{}, ErrConflict
@@ -459,9 +486,22 @@ func (s *Service) inspect(ctx context.Context, intent storage.UploadIntent) (int
 	return total, http.DetectContentType(header), hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (s *Service) finalizeCompletion(ctx context.Context, actor Actor, intent storage.UploadIntent, key string, fp []byte, size int64, mediaType, digest string) (Version, error) {
+func (s *Service) inspectInvoice(ctx context.Context, intent storage.UploadIntent) (string, error) {
+	object, err := s.provider.Open(ctx, intent.Object)
+	if err != nil {
+		return "", err
+	}
+	defer object.Reader.Close()
+	content, err := io.ReadAll(io.LimitReader(object.Reader, invoiceMaxBytes+1))
+	if err != nil || int64(len(content)) > invoiceMaxBytes || int64(len(content)) != object.Metadata.SizeBytes {
+		return "", fmt.Errorf("invoice object could not be read safely")
+	}
+	return validateInvoiceBytes(intent.FileName, content)
+}
+
+func (s *Service) finalizeCompletion(ctx context.Context, actor Actor, intent storage.UploadIntent, key string, fp []byte, size int64, mediaType, digest, securityStatus string) (Version, error) {
 	now := s.now()
-	version := Version{FileID: intent.FileID, Version: intent.Version, Status: "available", FileName: intent.FileName, SizeBytes: size, MediaType: mediaType, SHA256: digest, CreatedAt: now, Object: intent.Object}
+	version := Version{FileID: intent.FileID, Version: intent.Version, Status: "available", FileName: intent.FileName, SizeBytes: size, MediaType: mediaType, SHA256: digest, ValidationProfile: intent.ValidationProfile, SecurityStatus: securityStatus, CreatedAt: now, Object: intent.Object}
 	result, _ := json.Marshal(version)
 	auditID, _ := newUUID()
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -478,7 +518,7 @@ func (s *Service) finalizeCompletion(ctx context.Context, actor Actor, intent st
 	if status != "completing" {
 		return Version{}, ErrConflict
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO file_versions(tenant_id,file_id,version,status,file_name,size_bytes,media_type,sha256,provider,bucket,object_key,created_at,created_by_subject,created_by_name) VALUES($1,$2,$3,'available',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, actor.TenantID, intent.FileID, intent.Version, intent.FileName, size, mediaType, digest, intent.Object.Provider, intent.Object.Bucket, intent.Object.ObjectKey, now, actor.SubjectID, actor.DisplayName)
+	_, err = tx.Exec(ctx, `INSERT INTO file_versions(tenant_id,file_id,version,status,file_name,size_bytes,media_type,sha256,validation_profile,security_status,provider,bucket,object_key,created_at,created_by_subject,created_by_name) VALUES($1,$2,$3,'available',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, actor.TenantID, intent.FileID, intent.Version, intent.FileName, size, mediaType, digest, intent.ValidationProfile, securityStatus, intent.Object.Provider, intent.Object.Bucket, intent.Object.ObjectKey, now, actor.SubjectID, actor.DisplayName)
 	if err != nil {
 		return Version{}, err
 	}
@@ -550,11 +590,14 @@ func (s *Service) AbortUpload(ctx context.Context, actor Actor, sessionID, key s
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	var status string
-	if err := tx.QueryRow(ctx, `SELECT status FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, actor.TenantID, sessionID).Scan(&status); errors.Is(err, pgx.ErrNoRows) {
+	var status, createdBy string
+	if err := tx.QueryRow(ctx, `SELECT status,created_by_subject::text FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, actor.TenantID, sessionID).Scan(&status, &createdBy); errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	} else if err != nil {
 		return err
+	}
+	if createdBy != actor.SubjectID {
+		return ErrNotFound
 	}
 	if status == "completed" || status == "cleaned" {
 		return ErrConflict
@@ -607,7 +650,7 @@ func (s *Service) GetVersion(ctx context.Context, tenantID, fileID string, versi
 	}
 	var value Version
 	var provider, bucket, objectKey string
-	err := s.pool.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,created_at,provider,bucket,object_key FROM file_versions WHERE tenant_id=$1 AND file_id=$2 AND version=$3`, tenantID, fileID, version).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.CreatedAt, &provider, &bucket, &objectKey)
+	err := s.pool.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,validation_profile,security_status,created_at,provider,bucket,object_key FROM file_versions v WHERE tenant_id=$1 AND file_id=$2 AND version=$3 AND NOT EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded')`, tenantID, fileID, version).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.ValidationProfile, &value.SecurityStatus, &value.CreatedAt, &provider, &bucket, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Version{}, ErrNotFound
 	}
@@ -624,7 +667,7 @@ func (s *Service) GetLatestVersion(ctx context.Context, tenantID, fileID string)
 	}
 	var value Version
 	var provider, bucket, objectKey string
-	err := s.pool.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,created_at,provider,bucket,object_key FROM file_versions WHERE tenant_id=$1 AND file_id=$2 ORDER BY version DESC LIMIT 1`, tenantID, fileID).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.CreatedAt, &provider, &bucket, &objectKey)
+	err := s.pool.QueryRow(ctx, `SELECT file_id::text,version,status,file_name,size_bytes,media_type,sha256,validation_profile,security_status,created_at,provider,bucket,object_key FROM file_versions v WHERE tenant_id=$1 AND file_id=$2 AND NOT EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded') ORDER BY version DESC LIMIT 1`, tenantID, fileID).Scan(&value.FileID, &value.Version, &value.Status, &value.FileName, &value.SizeBytes, &value.MediaType, &value.SHA256, &value.ValidationProfile, &value.SecurityStatus, &value.CreatedAt, &provider, &bucket, &objectKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Version{}, ErrNotFound
 	}
@@ -664,15 +707,15 @@ type rowQuerier interface {
 }
 
 func (s *Service) loadUploadIntentTx(ctx context.Context, q rowQuerier, tenantID, sessionID string, global bool) (storage.UploadIntent, string, error) {
-	query := `SELECT tenant_id::text,id::text,file_id::text,version,file_name,declared_media_type,expected_size,expires_at,provider,bucket,object_key,COALESCE(declared_sha256,''),status FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`
+	query := `SELECT tenant_id::text,id::text,file_id::text,version,file_name,declared_media_type,expected_size,CASE WHEN client_context->>'purpose'='invoice' THEN 'invoice-v1' ELSE 'general' END,created_by_subject::text,expires_at,provider,bucket,object_key,COALESCE(declared_sha256,''),status FROM upload_sessions WHERE tenant_id=$1 AND id=$2 FOR UPDATE`
 	args := []any{tenantID, sessionID}
 	if global {
-		query = `SELECT tenant_id::text,id::text,file_id::text,version,file_name,declared_media_type,expected_size,expires_at,provider,bucket,object_key,COALESCE(declared_sha256,''),status FROM upload_sessions WHERE id=$1 FOR UPDATE`
+		query = `SELECT tenant_id::text,id::text,file_id::text,version,file_name,declared_media_type,expected_size,CASE WHEN client_context->>'purpose'='invoice' THEN 'invoice-v1' ELSE 'general' END,created_by_subject::text,expires_at,provider,bucket,object_key,COALESCE(declared_sha256,''),status FROM upload_sessions WHERE id=$1 FOR UPDATE`
 		args = []any{sessionID}
 	}
 	var intent storage.UploadIntent
 	var provider, bucket, objectKey, status string
-	err := q.QueryRow(ctx, query, args...).Scan(&intent.Object.TenantID, &intent.SessionID, &intent.FileID, &intent.Version, &intent.FileName, &intent.MediaType, &intent.ExpectedSize, &intent.ExpiresAt, &provider, &bucket, &objectKey, &intent.ExpectedSHA256, &status)
+	err := q.QueryRow(ctx, query, args...).Scan(&intent.Object.TenantID, &intent.SessionID, &intent.FileID, &intent.Version, &intent.FileName, &intent.MediaType, &intent.ExpectedSize, &intent.ValidationProfile, &intent.CreatedBySubject, &intent.ExpiresAt, &provider, &bucket, &objectKey, &intent.ExpectedSHA256, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return storage.UploadIntent{}, "", ErrNotFound
 	}
@@ -717,6 +760,136 @@ func (s *Service) Cleanup(ctx context.Context, limit int, staleBefore time.Time)
 		}
 	}
 	return result, nil
+}
+
+// CleanupUnreferenced removes only object bytes for completed versions that
+// remained unreferenced past the retention boundary. Immutable metadata and
+// audit facts remain so backups and operators can distinguish cleanup from a
+// file that never existed. A missing or failing reference protector always
+// fails closed.
+func (s *Service) CleanupUnreferenced(ctx context.Context, limit int, completedBefore time.Time) (CleanupResult, error) {
+	if limit < 1 || limit > 1000 || completedBefore.IsZero() {
+		return CleanupResult{}, ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, `SELECT v.tenant_id::text,v.file_id::text,v.version FROM file_versions v LEFT JOIN file_version_cleanup_attempts c ON c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version WHERE v.validation_profile='invoice-v1' AND v.created_at<=$1 AND COALESCE(c.status,'')<>'succeeded' ORDER BY v.created_at,v.file_id,v.version LIMIT $2`, completedBefore, limit)
+	if err != nil {
+		return CleanupResult{}, err
+	}
+	var targets [][3]string
+	for rows.Next() {
+		var target [3]string
+		if err = rows.Scan(&target[0], &target[1], &target[2]); err != nil {
+			rows.Close()
+			return CleanupResult{}, err
+		}
+		targets = append(targets, target)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return CleanupResult{}, err
+	}
+	rows.Close()
+	result := CleanupResult{Examined: len(targets)}
+	for _, target := range targets {
+		version, parseErr := strconv.Atoi(target[2])
+		if parseErr != nil {
+			result.Failed++
+			continue
+		}
+		protected, cleanupErr := s.cleanupUnreferencedOne(ctx, target[0], target[1], version)
+		if protected {
+			result.Protected++
+		} else if cleanupErr != nil {
+			result.Failed++
+		} else {
+			result.Cleaned++
+		}
+	}
+	return result, nil
+}
+
+func (s *Service) cleanupUnreferencedOne(ctx context.Context, tenantID, fileID string, version int) (bool, error) {
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Release()
+	lockName := fmt.Sprintf("evidence-unreferenced-cleanup:%s:%s:%d", tenantID, fileID, version)
+	var acquired bool
+	if err = conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1,0))`, lockName).Scan(&acquired); err != nil {
+		return false, err
+	}
+	if !acquired {
+		return true, nil
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1,0))`, lockName)
+	}()
+	var ref storage.ObjectRef
+	ref.TenantID = tenantID
+	var alreadyCleaned bool
+	err = conn.QueryRow(ctx, `SELECT v.provider,v.bucket,v.object_key,EXISTS(SELECT 1 FROM file_version_cleanup_attempts c WHERE c.tenant_id=v.tenant_id AND c.file_id=v.file_id AND c.version=v.version AND c.status='succeeded') FROM file_versions v WHERE v.tenant_id=$1 AND v.file_id=$2 AND v.version=$3`, tenantID, fileID, version).Scan(&ref.Provider, &ref.Bucket, &ref.ObjectKey, &alreadyCleaned)
+	if errors.Is(err, pgx.ErrNoRows) || alreadyCleaned {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if s.references == nil {
+		err = fmt.Errorf("reference protection unavailable")
+		_ = s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "failed", err.Error())
+		return false, err
+	}
+	protected, err := s.references.IsReferenced(ctx, tenantID, fileID, version)
+	if err != nil {
+		_ = s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "failed", "reference protection check failed")
+		return false, err
+	}
+	if protected {
+		return true, s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "protected", "")
+	}
+	if err = s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "pending", ""); err != nil {
+		return false, err
+	}
+	// Recheck immediately before physical deletion. If the owner is unavailable
+	// or reports a reference, retain the bytes and record the outcome.
+	protected, err = s.references.IsReferenced(ctx, tenantID, fileID, version)
+	if err != nil {
+		_ = s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "failed", "reference protection recheck failed")
+		return false, err
+	}
+	if protected {
+		return true, s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "protected", "")
+	}
+	if err = s.provider.Delete(ctx, ref); err != nil {
+		_ = s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "failed", err.Error())
+		return false, err
+	}
+	return false, s.recordVersionCleanup(ctx, tenantID, fileID, version, ref.Provider, "succeeded", "")
+}
+
+func (s *Service) recordVersionCleanup(ctx context.Context, tenantID, fileID string, version int, provider, status, message string) error {
+	if len(message) > 2000 {
+		message = message[:2000]
+	}
+	now := s.now()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err = tx.Exec(ctx, `INSERT INTO file_version_cleanup_attempts(tenant_id,file_id,version,status,attempts,last_error,first_attempted_at,updated_at) VALUES($1,$2,$3,$4,1,$5,$6,$6) ON CONFLICT(tenant_id,file_id,version) DO UPDATE SET status=EXCLUDED.status,attempts=file_version_cleanup_attempts.attempts+1,last_error=EXCLUDED.last_error,updated_at=EXCLUDED.updated_at WHERE file_version_cleanup_attempts.status<>'succeeded'`, tenantID, fileID, version, status, message, now); err != nil {
+		return err
+	}
+	auditID, _ := newUUID()
+	outcome := "succeeded"
+	if status == "failed" {
+		outcome = "failed"
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO evidence_audit_entries(id,tenant_id,action,object_type,object_id,actor_kind,actor_display_name,outcome,provider,occurred_at,details) VALUES($1,$2,'file_version.unreferenced_cleanup','file_version',$3,'system','evidence-cleanup',$4,$5,$6,jsonb_build_object('version',$7::integer,'status',$8::text,'error',$9::text))`, auditID, tenantID, fileID, outcome, provider, now, version, status, message); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 func (s *Service) cleanupOne(ctx context.Context, sessionID string) (bool, error) {
 	conn, err := s.pool.Acquire(ctx)

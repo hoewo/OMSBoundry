@@ -30,7 +30,7 @@ func TestResolverUsesBoundedPeopleReferenceContract(t *testing.T) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/references/iam-subjects/"+subjectID+"/person" || r.Header.Get("Authorization") != "Bearer signed-service-credential" {
 			t.Fatalf("unexpected request: %s %s %#v", r.Method, r.URL.Path, r.Header)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": "1", "source_application": "people-groups", "resource_type": "person", "id": personID, "tenant_id": tenantID, "status": "active", "revision": 7})
+		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": "1", "source_application": "people-groups", "resource_type": "person", "id": personID, "tenant_id": tenantID, "status": "active", "revision": 7, "reference_code": "EMP-001", "display_name": "测试员工"})
 	}))
 	defer server.Close()
 	resolver, err := New(server.URL, subjectID, "https://oms.example.test/auth", signer, time.Second)
@@ -43,7 +43,7 @@ func TestResolverUsesBoundedPeopleReferenceContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.ID != personID || value.TenantID != tenantID || value.Status != "active" || value.Revision != 7 {
+	if value.ID != personID || value.TenantID != tenantID || value.Status != "active" || value.Revision != 7 || value.ReferenceCode != "EMP-001" || value.DisplayName != "测试员工" || len(value.Digest) != 71 {
 		t.Fatalf("reference = %#v", value)
 	}
 	if signer.claims.Audience != "people-groups" || signer.claims.Tenant != tenantID || len(signer.claims.Actions) != 1 || signer.claims.Actions[0] != "people-groups.person.reference.read" || len(signer.claims.Scope.Resources) != 1 || signer.claims.Scope.Resources[0] != (identity.ResourceRef{Type: "iam_subject", ID: subjectID}) || signer.claims.ExpiresAt-signer.claims.IssuedAt != 60 {
@@ -53,7 +53,7 @@ func TestResolverUsesBoundedPeopleReferenceContract(t *testing.T) {
 
 func TestResolverRejectsInconsistentReference(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": "1", "source_application": "people-groups", "resource_type": "person", "id": personID, "tenant_id": "44444444-4444-4444-8444-444444444444", "status": "active", "revision": 1})
+		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": "1", "source_application": "people-groups", "resource_type": "person", "id": personID, "tenant_id": "44444444-4444-4444-8444-444444444444", "status": "active", "revision": 1, "reference_code": "EMP-001", "display_name": "测试员工"})
 	}))
 	defer server.Close()
 	resolver, err := New(server.URL, subjectID, "https://oms.example.test/auth", &captureSigner{}, time.Second)

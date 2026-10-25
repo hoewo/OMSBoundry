@@ -55,6 +55,15 @@ type Claims struct {
 	ExpiresAt int64    `json:"exp"`
 	AuthTime  int64    `json:"auth_time"`
 	ID        string   `json:"jti"`
+	Person    *struct {
+		ID            string `json:"id"`
+		TenantID      string `json:"tenant_id"`
+		Status        string `json:"status"`
+		Revision      int64  `json:"revision"`
+		ReferenceCode string `json:"reference_code,omitempty"`
+		DisplayName   string `json:"display_name"`
+		Digest        string `json:"digest"`
+	} `json:"person,omitempty"`
 }
 type Verifier struct {
 	path, issuer, tenant string

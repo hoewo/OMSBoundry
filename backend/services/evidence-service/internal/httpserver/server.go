@@ -273,6 +273,8 @@ func (s *Server) writeFileReference(w http.ResponseWriter, tenantID string, valu
 		"size_bytes":         value.SizeBytes,
 		"media_type":         value.MediaType,
 		"sha256":             value.SHA256,
+		"validation_profile": value.ValidationProfile,
+		"security_status":    value.SecurityStatus,
 	})
 }
 

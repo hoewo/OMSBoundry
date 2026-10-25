@@ -1,6 +1,7 @@
 package evidence
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -59,15 +60,17 @@ type UploadSession struct {
 }
 
 type Version struct {
-	FileID    string            `json:"file_id"`
-	Version   int               `json:"version"`
-	Status    string            `json:"status"`
-	FileName  string            `json:"file_name"`
-	SizeBytes int64             `json:"size_bytes"`
-	MediaType string            `json:"media_type"`
-	SHA256    string            `json:"sha256"`
-	CreatedAt time.Time         `json:"created_at"`
-	Object    storage.ObjectRef `json:"-"`
+	FileID            string            `json:"file_id"`
+	Version           int               `json:"version"`
+	Status            string            `json:"status"`
+	FileName          string            `json:"file_name"`
+	SizeBytes         int64             `json:"size_bytes"`
+	MediaType         string            `json:"media_type"`
+	SHA256            string            `json:"sha256"`
+	ValidationProfile string            `json:"validation_profile"`
+	SecurityStatus    string            `json:"security_status"`
+	CreatedAt         time.Time         `json:"created_at"`
+	Object            storage.ObjectRef `json:"-"`
 }
 
 type VersionPage struct {
@@ -90,4 +93,8 @@ type CleanupResult struct {
 	Cleaned   int `json:"cleaned"`
 	Failed    int `json:"failed"`
 	Protected int `json:"protected"`
+}
+
+type ReferenceProtector interface {
+	IsReferenced(context.Context, string, string, int) (bool, error)
 }

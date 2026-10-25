@@ -3,6 +3,7 @@ package personreference
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,6 +83,8 @@ func (r *Resolver) ResolveBySubject(ctx context.Context, tenantID, subjectID str
 		TenantID          string `json:"tenant_id"`
 		Status            string `json:"status"`
 		Revision          int64  `json:"revision"`
+		ReferenceCode     string `json:"reference_code"`
+		DisplayName       string `json:"display_name"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 64<<10))
 	decoder.DisallowUnknownFields()
@@ -92,10 +95,20 @@ func (r *Resolver) ResolveBySubject(ctx context.Context, tenantID, subjectID str
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return apikey.PersonReference{}, fmt.Errorf("Person reference has trailing data")
 	}
-	if value.SchemaVersion != "1" || value.SourceApplication != "people-groups" || value.ResourceType != "person" || !uuidPattern.MatchString(value.ID) || value.TenantID != tenantID || value.Revision < 1 || (value.Status != "active" && value.Status != "inactive") {
+	value.ReferenceCode = strings.TrimSpace(value.ReferenceCode)
+	value.DisplayName = strings.TrimSpace(value.DisplayName)
+	if value.SchemaVersion != "1" || value.SourceApplication != "people-groups" || value.ResourceType != "person" || !uuidPattern.MatchString(value.ID) || value.TenantID != tenantID || value.Revision < 1 || value.DisplayName == "" || len([]rune(value.DisplayName)) > 100 || (value.Status != "active" && value.Status != "inactive") {
 		return apikey.PersonReference{}, fmt.Errorf("Person reference is inconsistent")
 	}
-	return apikey.PersonReference{ID: value.ID, TenantID: value.TenantID, Status: value.Status, Revision: value.Revision}, nil
+	digestInput, _ := json.Marshal(struct {
+		ID            string `json:"id"`
+		Revision      int64  `json:"revision"`
+		ReferenceCode string `json:"reference_code"`
+		DisplayName   string `json:"display_name"`
+		Status        string `json:"status"`
+	}{value.ID, value.Revision, value.ReferenceCode, value.DisplayName, value.Status})
+	digest := sha256.Sum256(digestInput)
+	return apikey.PersonReference{ID: value.ID, TenantID: value.TenantID, Status: value.Status, Revision: value.Revision, ReferenceCode: value.ReferenceCode, DisplayName: value.DisplayName, Digest: fmt.Sprintf("sha256:%x", digest)}, nil
 }
 
 func randomUUID() (string, error) {

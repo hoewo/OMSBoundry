@@ -11,7 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"omsbizfoundry/internal-finance-requests/internal/database"
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 type integrationMoney struct{ calls int }
@@ -30,6 +32,19 @@ type rejectedMoney struct{ calls int }
 func (m *rejectedMoney) Record(context.Context, MoneyPaymentRequest) (MoneyPaymentResult, error) {
 	m.calls++
 	return MoneyPaymentResult{}, ErrPaymentRejected
+}
+
+type integrationEvidence struct{}
+
+func (integrationEvidence) Resolve(_ context.Context, _ string, ref EvidenceRef) (EvidenceVersion, error) {
+	return EvidenceVersion{FileID: ref.FileID, Version: ref.Version, Status: "available", SHA256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", MediaType: "application/pdf", SizeBytes: 128, ValidationProfile: "invoice-v1", SecurityStatus: "passed"}, nil
+}
+
+type fingerprintEvidence struct{}
+
+func (fingerprintEvidence) Resolve(_ context.Context, _ string, ref EvidenceRef) (EvidenceVersion, error) {
+	digit := strings.ReplaceAll(ref.FileID, "-", "")[:1]
+	return EvidenceVersion{FileID: ref.FileID, Version: ref.Version, Status: "available", SHA256: strings.Repeat(digit, 64), MediaType: "application/pdf", SizeBytes: 128, ValidationProfile: "invoice-v1", SecurityStatus: "passed"}, nil
 }
 
 func TestLifecycleIdempotencyRevisionAuditAndTenantIsolation(t *testing.T) {
@@ -78,13 +93,46 @@ func TestLifecycleIdempotencyRevisionAuditAndTenantIsolation(t *testing.T) {
 	}
 }
 
+func TestStableListUsesDescendingIDForEqualTimestamps(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	service, _ := NewService(store)
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	first, err := service.Create(ctx, actor, CreateInput{CommandID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", RequestType: "reimbursement", Title: "分页一", AmountMinor: 100, Currency: "CNY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.Create(ctx, actor, CreateInput{CommandID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2", RequestType: "reimbursement", Title: "分页二", AmountMinor: 100, Currency: "CNY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixed := time.Date(2026, 10, 26, 8, 0, 0, 0, time.UTC)
+	if _, err = pool.Exec(ctx, `UPDATE finance_requests SET updated_at=$1 WHERE tenant_id=$2 AND id=ANY($3::uuid[])`, fixed, actor.TenantID, []string{first.ID, second.ID}); err != nil {
+		t.Fatal(err)
+	}
+	higher, lower := first.ID, second.ID
+	if higher < lower {
+		higher, lower = lower, higher
+	}
+	page, err := service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID, RequestType: "reimbursement", Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != higher || page.NextCursor == "" {
+		t.Fatalf("first page=%#v err=%v", page, err)
+	}
+	page, err = service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID, RequestType: "reimbursement", BeforeUpdatedAt: &fixed, BeforeID: higher, Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != lower {
+		t.Fatalf("second page=%#v err=%v", page, err)
+	}
+}
+
 func TestFormalSubmitPartialAndOverpaymentLifecycle(t *testing.T) {
 	ctx := context.Background()
 	pool, cleanup := integrationPool(t, ctx)
 	defer cleanup()
 	store, _ := NewPostgresStore(pool)
 	money := &integrationMoney{}
-	service, _ := NewServiceWithPayments(store, money)
+	service, _ := NewServiceWithDependencies(store, money, integrationEvidence{})
 	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
 	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	details := DetailSnapshot{Applicant: ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: digest, DisplayName: "申请人"}, Payee: PayeeSnapshot{Kind: "person", Reference: ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: digest, DisplayName: "申请人"}, DisplayName: "申请人", BankName: "测试银行", AccountNumber: "6222021234567890"}, Lines: []Line{{ID: "55555555-5555-4555-8555-555555555555", BusinessDate: "2026-10-25", CategoryKey: "travel", CategoryName: "差旅费", CategoryRev: 1, Purpose: "客户现场差旅", AmountMinor: 10000, Evidence: []EvidenceRef{{FileID: "66666666-6666-4666-8666-666666666666", Version: 1, Purpose: "发票"}}}}}
@@ -94,6 +142,14 @@ func TestFormalSubmitPartialAndOverpaymentLifecycle(t *testing.T) {
 	}
 	if created.Details.Payee.AccountNumber != "" || created.Details.Payee.AccountLast4 != "7890" {
 		t.Fatalf("create response must be masked: %#v", created.Details.Payee)
+	}
+	referenced, err := service.IsEvidenceReferenced(ctx, actor.TenantID, "66666666-6666-4666-8666-666666666666", 1)
+	if err != nil || !referenced {
+		t.Fatalf("created draft evidence was not protected: referenced=%v err=%v", referenced, err)
+	}
+	referenced, err = service.IsEvidenceReferenced(ctx, actor.TenantID, "66666666-6666-4666-8666-666666666666", 2)
+	if err != nil || referenced {
+		t.Fatalf("unreferenced version was protected: referenced=%v err=%v", referenced, err)
 	}
 	sensitive, err := service.GetSensitive(ctx, actor, created.ID, "财务付款前核对")
 	if err != nil || sensitive.Details.Payee.AccountNumber != "6222021234567890" {
@@ -136,7 +192,7 @@ func TestExpenseCategoryRevisionsAndDeterministicPaymentRejection(t *testing.T) 
 	defer cleanup()
 	store, _ := NewPostgresStore(pool)
 	money := &rejectedMoney{}
-	service, _ := NewServiceWithPayments(store, money)
+	service, _ := NewServiceWithDependencies(store, money, integrationEvidence{})
 	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
 
 	initial, err := service.ListCategories(ctx, actor.TenantID)
@@ -178,6 +234,99 @@ func TestExpenseCategoryRevisionsAndDeterministicPaymentRejection(t *testing.T) 
 		t.Fatalf("delivery status=%q err=%v", status, err)
 	}
 }
+
+func TestInvoiceStrongAndSuspectedDuplicateRules(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	service, _ := NewServiceWithDependencies(store, nil, fingerprintEvidence{})
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	makeDetails := func(lineID, fileID, code, number string) DetailSnapshot {
+		person := ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: digest, DisplayName: "申请人"}
+		return DetailSnapshot{Applicant: person, Payee: PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人", BankName: "测试银行", AccountNumber: "6222021234567890"}, Lines: []Line{{ID: lineID, BusinessDate: "2026-10-25", CategoryKey: "travel", CategoryName: "差旅费", CategoryRev: 1, Purpose: "差旅", AmountMinor: 10000, Evidence: []EvidenceRef{{FileID: fileID, Version: 1, Purpose: "发票"}}, Invoice: &InvoiceSnapshot{Code: code, Number: number, IssuerName: "测试开票方", InvoiceDate: "2026-10-24", AmountMinor: 10000}}}}
+	}
+	first, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000001", RequestType: "reimbursement", Title: "首单", AmountMinor: 1, Currency: "CNY", Details: makeDetails("20000000-0000-4000-8000-000000000001", "60000000-0000-4000-8000-000000000001", "A001", "N001")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Submit(ctx, actor, first.ID, SubmitInput{CommandID: "10000000-0000-4000-8000-000000000002", ExpectedRevision: first.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	strong, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000003", RequestType: "reimbursement", Title: "强重复", AmountMinor: 1, Currency: "CNY", Details: makeDetails("20000000-0000-4000-8000-000000000002", "70000000-0000-4000-8000-000000000001", "A001", "N001")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Submit(ctx, actor, strong.ID, SubmitInput{CommandID: "10000000-0000-4000-8000-000000000004", ExpectedRevision: strong.Revision}); !errors.Is(err, ErrStrongDuplicate) {
+		t.Fatalf("expected strong duplicate, got %v", err)
+	}
+	suspected, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000005", RequestType: "reimbursement", Title: "疑似重复", AmountMinor: 1, Currency: "CNY", Details: makeDetails("20000000-0000-4000-8000-000000000003", "80000000-0000-4000-8000-000000000001", "A002", "N002")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit := SubmitInput{CommandID: "10000000-0000-4000-8000-000000000006", ExpectedRevision: suspected.Revision}
+	if _, err = service.Submit(ctx, actor, suspected.ID, submit); !errors.Is(err, ErrSuspectedDuplicate) {
+		t.Fatalf("expected suspected duplicate, got %v", err)
+	}
+	submit.SuspectedDuplicateAcknowledged = true
+	accepted, err := service.Submit(ctx, actor, suspected.ID, submit)
+	if err != nil || accepted.Details.Duplicate.Status != "suspected" {
+		t.Fatalf("accepted=%#v err=%v", accepted, err)
+	}
+}
+
+func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	service, _ := NewService(store)
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	created, err := service.Create(ctx, actor, CreateInput{CommandID: "90000000-0000-4000-8000-000000000001", RequestType: "reimbursement", Title: "待归档草稿", AmountMinor: 100, Currency: "CNY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().UTC().Add(-91 * 24 * time.Hour)
+	if _, err = pool.Exec(ctx, `UPDATE finance_requests SET updated_at=$3 WHERE tenant_id=$1 AND id=$2`, actor.TenantID, created.ID, staleAt); err != nil {
+		t.Fatal(err)
+	}
+	count, err := service.ArchiveStaleDrafts(ctx, time.Now().UTC().Add(-90*24*time.Hour), 10)
+	if err != nil || count != 1 {
+		t.Fatalf("archive count=%d err=%v", count, err)
+	}
+	page, err := service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID})
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("default list=%#v err=%v", page, err)
+	}
+	page, err = service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID, IncludeArchived: true})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ArchivedAt == nil {
+		t.Fatalf("archived list=%#v err=%v", page, err)
+	}
+	restored, err := service.Restore(ctx, actor, created.ID, RestoreInput{CommandID: "90000000-0000-4000-8000-000000000002"})
+	if err != nil || restored.Revision != 2 || restored.ArchivedAt != nil {
+		t.Fatalf("restore=%#v err=%v", restored, err)
+	}
+	deleted, err := service.DeleteDraft(ctx, actor, created.ID, DeleteDraftInput{CommandID: "90000000-0000-4000-8000-000000000003", Confirmation: "DELETE"})
+	if err != nil || deleted.DeletedAt == nil {
+		t.Fatalf("delete=%#v err=%v", deleted, err)
+	}
+	if _, err = service.Get(ctx, actor.TenantID, created.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted draft must be hidden, got %v", err)
+	}
+	page, err = service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID, IncludeArchived: true, IncludeDeleted: true})
+	if err != nil || len(page.Items) != 1 || page.Items[0].DeletedAt == nil {
+		t.Fatalf("audit list=%#v err=%v", page, err)
+	}
+	var revisions, retentionEvents int
+	if err = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM finance_request_revisions WHERE request_id=$1),(SELECT count(*) FROM finance_request_retention_events WHERE request_id=$1)`, created.ID).Scan(&revisions, &retentionEvents); err != nil {
+		t.Fatal(err)
+	}
+	if revisions != 2 || retentionEvents != 3 {
+		t.Fatalf("revisions=%d retention_events=%d", revisions, retentionEvents)
+	}
+}
+
 func integrationPool(t *testing.T, ctx context.Context) (*pgxpool.Pool, func()) {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")

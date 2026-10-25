@@ -38,6 +38,8 @@ type Config struct {
 	ProjectPolicyBaseURL         string
 	PeoplePolicyBaseURL          string
 	PolicyServiceSubjectID       string
+	PersonReferenceBaseURL       string
+	PersonReferenceSubjectID     string
 	ProjectAssignmentPolicyPaths []string
 	PolicyTimeout                time.Duration
 	WorkloadIdentityPolicyPath   string
@@ -63,6 +65,8 @@ func Load() (Config, error) {
 		ProjectPolicyBaseURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("PROJECT_POLICY_BASE_URL")), "/"),
 		PeoplePolicyBaseURL:          strings.TrimRight(strings.TrimSpace(os.Getenv("PEOPLE_POLICY_BASE_URL")), "/"),
 		PolicyServiceSubjectID:       strings.ToLower(strings.TrimSpace(os.Getenv("POLICY_SERVICE_SUBJECT_ID"))),
+		PersonReferenceBaseURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("PERSON_REFERENCE_BASE_URL")), "/"),
+		PersonReferenceSubjectID:     strings.ToLower(strings.TrimSpace(os.Getenv("PERSON_REFERENCE_SERVICE_SUBJECT_ID"))),
 		ProjectAssignmentPolicyPaths: splitList(os.Getenv("PROJECT_ASSIGNMENT_POLICY_PATHS")),
 		PolicyTimeout:                3 * time.Second,
 		WorkloadIdentityPolicyPath:   strings.TrimSpace(os.Getenv("WORKLOAD_IDENTITY_POLICY_PATH")),
@@ -70,6 +74,14 @@ func Load() (Config, error) {
 	}
 	if len(config.ProjectAssignmentPolicyPaths) == 0 {
 		config.ProjectAssignmentPolicyPaths = splitList(os.Getenv("PROJECT_ASSIGNMENT_POLICY_PATH"))
+	}
+	// Keep the existing D1 policy configuration compatible while allowing the
+	// API-key Person resolver to run without enabling Project policy evaluation.
+	if config.PersonReferenceBaseURL == "" {
+		config.PersonReferenceBaseURL = config.PeoplePolicyBaseURL
+	}
+	if config.PersonReferenceSubjectID == "" {
+		config.PersonReferenceSubjectID = config.PolicyServiceSubjectID
 	}
 	var err error
 	if config.ShutdownPeriod, err = durationEnv("SHUTDOWN_TIMEOUT", config.ShutdownPeriod); err != nil {
@@ -145,10 +157,23 @@ func Load() (Config, error) {
 			}
 		}
 	}
+	if (config.PersonReferenceBaseURL == "") != (config.PersonReferenceSubjectID == "") {
+		return Config{}, fmt.Errorf("PERSON_REFERENCE_BASE_URL and PERSON_REFERENCE_SERVICE_SUBJECT_ID must be configured together")
+	}
+	if config.PersonReferenceBaseURL != "" {
+		if !uuidPattern.MatchString(config.PersonReferenceSubjectID) {
+			return Config{}, fmt.Errorf("PERSON_REFERENCE_SERVICE_SUBJECT_ID must be a lowercase RFC 4122 UUID")
+		}
+		parsed, parseErr := url.Parse(config.PersonReferenceBaseURL)
+		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return Config{}, fmt.Errorf("PERSON_REFERENCE_BASE_URL must be an absolute http or https URL without credentials, query or fragment")
+		}
+	}
 	return config, nil
 }
 
-func (c Config) PolicyEnabled() bool { return len(c.ProjectAssignmentPolicyPaths) > 0 }
+func (c Config) PolicyEnabled() bool          { return len(c.ProjectAssignmentPolicyPaths) > 0 }
+func (c Config) PersonReferenceEnabled() bool { return c.PersonReferenceBaseURL != "" }
 
 func splitList(raw string) []string {
 	values := make([]string, 0)
