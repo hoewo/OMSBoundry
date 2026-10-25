@@ -1,6 +1,14 @@
 # OMSBizFoundry 验证入口
 
-## 2026-10-25 OMS1 迭代 P0／P1／P2／P3
+## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4
+
+P4 工资执行提供三 Owner 隔离重复验收入口：
+
+```sh
+./acceptance/p4-payroll-execution/run-isolated
+```
+
+该入口启动一次性 PostgreSQL 18.6，并为 People、Payroll、Money 创建三个独立数据库和三个真实 HTTP 服务；生成两名成员及薪酬快照，预览／提交月度导入，完成核对和批量发放部分成功，再以显式超额确认完成第二次付款。验收证明成功项不会被缺账户失败回滚，两笔 Payment 只绑定一个工资义务，净应发精确核销且 500 分超额留在 Money 未分配；结束时清理自身进程与容器。Payroll 集成测试另覆盖整数舍入、同月并发、幂等、未知恢复、零／负实发、作废／替代、补发／扣回和本人可见性。该证据不表示 D1／公网、正式地区比例或 P5 财务申请已完成。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
 
 P3 成员与薪酬档案提供独立重复验收入口：
 

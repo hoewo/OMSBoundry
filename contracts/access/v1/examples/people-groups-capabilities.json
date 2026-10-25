@@ -12,6 +12,6 @@
     { "id": "people-groups.capability.manage", "description": "声明或结束组能力", "risk": "write", "resource_types": ["group", "group_capability"] },
     { "id": "people-groups.snapshot.publish", "description": "发布不可变可校验名册快照", "risk": "privileged", "resource_types": ["group", "roster_snapshot"] },
     { "id": "people-groups.policy-fact.read", "description": "供受信 IAM Policy Provider 读取 Person 与 IAM Subject 的版本化映射事实", "risk": "privileged", "resource_types": ["person"] },
-    { "id": "people-groups.person.reference.read", "description": "供受信业务应用读取精确 Person 当前引用", "risk": "privileged", "resource_types": ["person"] }
+    { "id": "people-groups.person.reference.read", "description": "供受信业务应用按精确 Person 或 IAM Subject 读取当前 Person 引用", "risk": "privileged", "resource_types": ["person", "iam_subject"] }
   ]
 }

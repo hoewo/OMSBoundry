@@ -11,6 +11,7 @@ import (
 )
 
 var accountNumberPattern = regexp.MustCompile(`^[0-9]{4,32}$`)
+var sourceDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 var (
 	ErrProfileNotFound      = errors.New("payroll profile not found")
@@ -19,12 +20,13 @@ var (
 )
 
 type PersonReference struct {
-	ID, TenantID, DisplayName, Status string
-	Revision                          int64
+	ID, TenantID, ReferenceCode, DisplayName, Status, Digest string
+	Revision                                                 int64
 }
 
 type PersonReferencePort interface {
 	ValidatePerson(context.Context, string, string) (PersonReference, error)
+	ResolvePersonForSubject(context.Context, string, string) (PersonReference, error)
 }
 
 type CompensationProfile struct {
@@ -182,7 +184,7 @@ func (s *Service) UpsertCompensation(ctx context.Context, actor Actor, in Upsert
 	if err := validateActor(actor); err != nil {
 		return CompensationProfile{}, err
 	}
-	if !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(in.CommandID))) || !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(in.PersonID))) || !periodPattern.MatchString(strings.TrimSpace(in.EffectiveMonth)) || in.ExpectedRevision < 0 || in.FixedSalaryMinor < 0 || in.SocialInsuranceBaseMinor < 0 || in.HousingFundBaseMinor < 0 {
+	if !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(in.CommandID))) || !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(in.PersonID))) || !periodPattern.MatchString(strings.TrimSpace(in.EffectiveMonth)) || in.ExpectedRevision < 0 || in.FixedSalaryMinor < 0 || in.FixedSalaryMinor > maxPayrollMinor || in.SocialInsuranceBaseMinor < 0 || in.SocialInsuranceBaseMinor > maxPayrollMinor || in.HousingFundBaseMinor < 0 || in.HousingFundBaseMinor > maxPayrollMinor {
 		return CompensationProfile{}, fmt.Errorf("invalid compensation profile")
 	}
 	in.CommandID, in.PersonID, in.EffectiveMonth = strings.ToLower(strings.TrimSpace(in.CommandID)), strings.ToLower(strings.TrimSpace(in.PersonID)), strings.TrimSpace(in.EffectiveMonth)
@@ -234,7 +236,7 @@ func (s *Service) validatePerson(ctx context.Context, tenant, id string) (Person
 	// not become a Payroll eligibility rule: inactive people may still need a
 	// final payment, correction, recovery, or a profile revision prepared for
 	// rehire. The reference port validates the finite People status vocabulary.
-	if value.ID != id || value.TenantID != tenant || value.Revision < 1 || (value.Status != "active" && value.Status != "inactive") || strings.TrimSpace(value.DisplayName) == "" {
+	if value.ID != id || value.TenantID != tenant || value.Revision < 1 || (value.Status != "active" && value.Status != "inactive") || strings.TrimSpace(value.DisplayName) == "" || len([]rune(value.ReferenceCode)) > 64 || !sourceDigestPattern.MatchString(value.Digest) {
 		return PersonReference{}, ErrReferenceInvalid
 	}
 	return value, nil
@@ -300,7 +302,7 @@ func validateComponents(values []ContributionComponent) ([]ContributionComponent
 	for i := range values {
 		v := &values[i]
 		v.Key, v.BaseKind, v.RoundingMode = strings.ToLower(strings.TrimSpace(v.Key)), strings.ToLower(strings.TrimSpace(v.BaseKind)), strings.ToLower(strings.TrimSpace(v.RoundingMode))
-		if seen[v.Key] || want[v.Key] != v.BaseKind || v.IndividualRateBPS < 0 || v.IndividualRateBPS > 10000 || v.EmployerRateBPS < 0 || v.EmployerRateBPS > 10000 || v.BaseFloorMinor < 0 || v.BaseCapMinor < v.BaseFloorMinor || (v.RoundingMode != "half_up" && v.RoundingMode != "down" && v.RoundingMode != "up") {
+		if seen[v.Key] || want[v.Key] != v.BaseKind || v.IndividualRateBPS < 0 || v.IndividualRateBPS > 10000 || v.EmployerRateBPS < 0 || v.EmployerRateBPS > 10000 || v.BaseFloorMinor < 0 || v.BaseFloorMinor > maxPayrollMinor || v.BaseCapMinor < v.BaseFloorMinor || v.BaseCapMinor > maxPayrollMinor || (v.RoundingMode != "half_up" && v.RoundingMode != "down" && v.RoundingMode != "up") {
 			return nil, fmt.Errorf("invalid contribution component")
 		}
 		seen[v.Key] = true

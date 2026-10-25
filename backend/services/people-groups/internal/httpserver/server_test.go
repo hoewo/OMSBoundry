@@ -23,6 +23,9 @@ func (stubUseCases) Ping(context.Context) error { return nil }
 func (s stubUseCases) GetPerson(context.Context, string, string) (peoplegroups.Person, error) {
 	return s.person, s.personErr
 }
+func (s stubUseCases) GetPersonByIAMSubject(context.Context, string, string) (peoplegroups.Person, error) {
+	return s.person, s.personErr
+}
 
 type stubAuthenticator struct {
 	principal auth.Principal
@@ -145,6 +148,32 @@ func TestPersonReferenceReturnsTypedNotFoundWithoutCurrentData(t *testing.T) {
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/references/persons/"+personID, nil))
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "person_not_found") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestSubjectPersonReferenceRequiresExactSubjectScopeAndDoesNotLeakLink(t *testing.T) {
+	const subjectID = "66666666-6666-4666-8666-666666666666"
+	const personID = "77777777-7777-4777-8777-777777777777"
+	person := peoplegroups.Person{ID: personID, TenantID: "tenant-1", DisplayName: "张工程师", Status: "inactive", Revision: 4, IAMSubjectID: subjectID}
+	principal := auth.Principal{TenantID: "tenant-1", ScopeKind: "resources", AllowedActions: map[string]bool{auth.ActionPersonReferenceRead: true}, ResourceIDs: map[string]bool{"iam_subject\x00" + subjectID: true}}
+	server, err := New(stubUseCases{person: person}, stubAuthenticator{principal: principal}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/references/iam-subjects/"+subjectID+"/person", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"id":"`+personID+`"`) || !strings.Contains(response.Body.String(), `"status":"inactive"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "iam_subject_id") || strings.Contains(response.Body.String(), subjectID) {
+		t.Fatalf("subject reference leaked IAM linkage: %s", response.Body.String())
+	}
+	principal.ResourceIDs = map[string]bool{"iam_subject\x00" + personID: true}
+	server, _ = New(stubUseCases{person: person}, stubAuthenticator{principal: principal}, Options{})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/references/iam-subjects/"+subjectID+"/person", nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("adjacent subject scope status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

@@ -28,6 +28,7 @@ import (
 	"omsbizfoundry/money-flow-ledger/internal/party"
 	"omsbizfoundry/money-flow-ledger/internal/partymigration"
 	"omsbizfoundry/money-flow-ledger/internal/payablesuggestion"
+	"omsbizfoundry/money-flow-ledger/internal/payrollpayment"
 	"omsbizfoundry/money-flow-ledger/internal/receiptset"
 )
 
@@ -168,6 +169,11 @@ func run(logger *slog.Logger) error {
 	identityOptions.ReceiptSets = receiptset.NewService(receiptset.NewPostgresRepository(pool))
 	cashTransactionService := cashtransaction.NewService(cashtransaction.NewPostgresRepository(pool))
 	allocationService := allocation.NewService(allocation.NewPostgresRepository(pool))
+	payrollPaymentService, err := payrollpayment.NewService(payrollpayment.NewPostgresRepository(pool), obligationService, cashTransactionService, allocationService)
+	if err != nil {
+		return err
+	}
+	identityOptions.PayrollPayments = payrollPaymentService
 	operatingSummaryService := operatingsummary.NewService(operatingsummary.NewPostgresRepository(pool))
 	ledgerExportService, err := ledgerexport.NewService(ledgerexport.NewPostgresRepository(pool))
 	if err != nil {

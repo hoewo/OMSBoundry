@@ -1118,6 +1118,9 @@ func (s *Service) ListPersons(ctx context.Context, tenantID string) ([]Person, e
 func (s *Service) GetPerson(ctx context.Context, tenantID, id string) (Person, error) {
 	return s.getPerson(ctx, s.pool, tenantID, id)
 }
+func (s *Service) GetPersonByIAMSubject(ctx context.Context, tenantID, subjectID string) (Person, error) {
+	return scanPerson(s.pool.QueryRow(ctx, personSelect+` WHERE tenant_id=$1 AND iam_subject_id=$2`, tenantID, subjectID))
+}
 func (s *Service) ListEmploymentEvents(ctx context.Context, tenantID, personID string) ([]EmploymentEvent, error) {
 	rows, err := s.pool.Query(ctx, `SELECT person_id::text,sequence,person_revision,event_kind,effective_date::text,reason,department,position_title,occurred_at FROM person_employment_events WHERE tenant_id=$1 AND person_id=$2 ORDER BY sequence`, tenantID, personID)
 	if err != nil {

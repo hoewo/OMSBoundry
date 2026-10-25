@@ -29,6 +29,7 @@ import (
 	"omsbizfoundry/money-flow-ledger/internal/party"
 	"omsbizfoundry/money-flow-ledger/internal/partymigration"
 	"omsbizfoundry/money-flow-ledger/internal/payablesuggestion"
+	"omsbizfoundry/money-flow-ledger/internal/payrollpayment"
 	"omsbizfoundry/money-flow-ledger/internal/receiptset"
 	contract "omsbizfoundry/payable-suggestion-contract"
 )
@@ -131,6 +132,10 @@ type ReceiptSetUseCases interface {
 	Get(context.Context, string, string) (receiptset.Set, error)
 }
 
+type PayrollPaymentUseCases interface {
+	Record(context.Context, audit.ActorRef, payrollpayment.Request) (payrollpayment.Result, error)
+}
+
 type Options struct {
 	SessionCookieSecure  bool
 	SessionCookieName    string
@@ -143,6 +148,7 @@ type Options struct {
 	PayableSuggestions   PayableSuggestionUseCases
 	ReceiptSets          ReceiptSetUseCases
 	CashEvidence         CashEvidenceUseCases
+	PayrollPayments      PayrollPaymentUseCases
 }
 
 type Server struct {
@@ -160,6 +166,7 @@ type Server struct {
 	payableSuggestions     PayableSuggestionUseCases
 	receiptSets            ReceiptSetUseCases
 	cashEvidence           CashEvidenceUseCases
+	payrollPayments        PayrollPaymentUseCases
 	homePage               *template.Template
 	loginPage              *template.Template
 	partyPage              *template.Template
@@ -329,6 +336,7 @@ func New(
 		payableSuggestions:     options.PayableSuggestions,
 		receiptSets:            options.ReceiptSets,
 		cashEvidence:           options.CashEvidence,
+		payrollPayments:        options.PayrollPayments,
 		homePage:               homePage,
 		loginPage:              loginPage,
 		partyPage:              partyPage,
@@ -408,6 +416,9 @@ func New(
 		publicMux.Handle("GET /api/v1/payable-suggestion-intakes/{suggestionID}/history", server.authenticatePayableSuggestion(identity.PermissionPayableSuggestionRead, http.HandlerFunc(server.payableSuggestionHistory)))
 		publicMux.Handle("POST /api/v1/payable-suggestion-intakes/{suggestionID}/decisions", server.authenticatePayableSuggestion(identity.PermissionPayableSuggestionDecide, http.HandlerFunc(server.decidePayableSuggestion)))
 		publicMux.Handle("POST /api/v1/payable-suggestion-intakes/{suggestionID}/withdrawal", server.authenticatePayableSuggestion(identity.PermissionPayableSuggestionWithdraw, http.HandlerFunc(server.withdrawPayableSuggestion)))
+	}
+	if server.payrollPayments != nil {
+		publicMux.Handle("POST /api/v1/payroll-payments", server.authenticatePayrollPayment(http.HandlerFunc(server.recordPayrollPayment)))
 	}
 	publicMux.Handle("/", server.authenticate(server.requirePermission(identity.PermissionView, protectedMux)))
 

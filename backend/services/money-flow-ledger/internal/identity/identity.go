@@ -40,6 +40,7 @@ const (
 	PermissionPayableSuggestionRead     Permission = "payable_suggestion.read"
 	PermissionPayableSuggestionWithdraw Permission = "payable_suggestion.withdraw"
 	PermissionPayableSuggestionDecide   Permission = "payable_suggestion.decide"
+	PermissionPayrollPaymentRecord      Permission = "payroll_payment.record"
 )
 
 type Status string
@@ -102,6 +103,7 @@ func (p Principal) Can(permission Permission) bool {
 			PermissionPayableSuggestionRead:     "money-flow-ledger.payable-suggestion.read",
 			PermissionPayableSuggestionWithdraw: "money-flow-ledger.payable-suggestion.withdraw",
 			PermissionPayableSuggestionDecide:   "money-flow-ledger.payable-suggestion.decide",
+			PermissionPayrollPaymentRecord:      "money-flow-ledger.payroll-payment.record",
 		}[permission]
 		return action != "" && p.AllowedActions[action]
 	}

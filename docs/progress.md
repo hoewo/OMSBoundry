@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-25 P4 本地完成，进入 P5。Payroll 已从薪酬档案扩展到正式工资执行：月度唯一期间、不可变工资行 revision、成员／薪酬／账户／缴费方案快照、整数五险一金计算、绩效／调整／外部个税、导入预览、核对、同步、作废／替代、调整批次以及逐人／批量发放。Money 新增工资交付契约，每个工资行一个稳定义务，多次实际付款分别登记并按剩余净应发核销，超额保留未分配；批量部分失败不回滚成功项。三数据库／三进程验收 14／14 HTTP 断言通过，四个受影响 Go module、256 项 Workbench Node 测试、Money 25 migration PostgreSQL 18 门禁通过。没有部署 D1／公网，正式缴费比例仍须按地区权威来源核验，跨应用恢复／导出留待 P9。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
+
 2026-10-25 P2 本地完成，进入 P3。新增 `Internal Finance Requests` 与 `Payroll` 两个独立 Go／PostgreSQL Owner：各自拥有 migration、版本化 API、IAM／Tenant／Capability／资源范围校验、幂等命令、不可变 revision／audit、Docker 镜像和备份／空目标恢复。真实 PostgreSQL 18.6 集成测试覆盖跨租户和直接篡改拒绝；隔离验收完成两个独立镜像的写入、重放、冲突、revision、分别恢复和恢复后续写。D1 可选 profile、路由、Suite Manifest、19 镜像发布／提升及恢复清单门禁通过，但未执行正式 D1／公网部署；业务仍只是草稿骨架。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)
 
 2026-10-25 P1 本地完成。新增可重复验收实际启动 IAM 与 People 两个进程及 PostgreSQL 18.6，在同一服务实例内建立 Tenant A／B，完成独立登录、能力签发、Subject↔Person、列表、跨租户 ID／Subject 拒绝、撤权和停用；随后将 IAM／People 分库备份恢复到两个新空库，确认 Tenant、稳定 ID、revision、Subject 状态快照不变并继续写入。12 个当时既有受保护 Owner 普通测试和代表性 PostgreSQL 租户隔离／搜索／分页／导出／附件路径通过，秘密模式扫描无命中。该结论仅是本地 P1，不表示 D1 或公网发布完成。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)

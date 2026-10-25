@@ -34,9 +34,29 @@ type ProfileUseCases interface {
 	ReviseCustomScheme(context.Context, domain.Actor, string, domain.ReviseCustomSchemeInput) (domain.ContributionScheme, error)
 	ListSchemes(context.Context, string) ([]domain.ContributionScheme, error)
 }
+type ExecutionUseCases interface {
+	CreateRegularRun(context.Context, domain.Actor, domain.CreateRegularRunInput) (domain.ExecutionRun, error)
+	CreateAdjustmentRun(context.Context, domain.Actor, domain.CreateAdjustmentRunInput) (domain.ExecutionRun, error)
+	PreviewPayrollImport(context.Context, domain.Actor, string, domain.PreviewPayrollImportInput) (domain.PayrollImportPreview, error)
+	CommitPayrollImport(context.Context, domain.Actor, string, domain.CommitPayrollImportInput) (domain.ExecutionRun, error)
+	GetExecutionRun(context.Context, string, string) (domain.ExecutionRun, error)
+	ListExecutionRuns(context.Context, string) ([]domain.ExecutionRun, error)
+	RevisePayrollLine(context.Context, domain.Actor, string, string, domain.ReviseLineInput) (domain.ExecutionRun, error)
+	ReviewPayrollRun(context.Context, domain.Actor, string, domain.RunCommandInput) (domain.ExecutionRun, error)
+	ConfirmZeroLine(context.Context, domain.Actor, string, string, domain.LineCommandInput) (domain.ExecutionRun, error)
+	VoidPayrollRun(context.Context, domain.Actor, string, domain.RunCommandInput) (domain.ExecutionRun, error)
+	RecordPayment(context.Context, domain.Actor, string, string, domain.RecordPaymentInput) (domain.ExecutionRun, error)
+	SyncMembers(context.Context, domain.Actor, string, domain.SyncMembersInput) (domain.ExecutionRun, error)
+	PreviewCompensationSync(context.Context, domain.Actor, string, string) (domain.SnapshotSyncPreview, error)
+	ConfirmCompensationSync(context.Context, domain.Actor, string, string, domain.ConfirmSnapshotSyncInput) (domain.ExecutionRun, error)
+	PreviewPaymentProfileSync(context.Context, domain.Actor, string, string) (domain.SnapshotSyncPreview, error)
+	ConfirmPaymentProfileSync(context.Context, domain.Actor, string, string, domain.ConfirmSnapshotSyncInput) (domain.ExecutionRun, error)
+	ListSelfPayslips(context.Context, domain.Actor) (domain.SelfPayslipPage, error)
+}
 type Server struct {
 	useCases      UseCases
 	profiles      ProfileUseCases
+	execution     ExecutionUseCases
 	authenticator auth.Authenticator
 	handler       http.Handler
 }
@@ -50,6 +70,9 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	if profiles, ok := useCases.(ProfileUseCases); ok {
 		s.profiles = profiles
 	}
+	if execution, ok := useCases.(ExecutionUseCases); ok {
+		s.execution = execution
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", s.live)
 	mux.HandleFunc("GET /health/ready", s.ready)
@@ -59,6 +82,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("PUT /api/v1/payroll-runs/{run_id}", s.protected(auth.ActionRunManage, http.HandlerFunc(s.update)))
 	mux.Handle("GET /api/v1/references/payroll-runs/{run_id}", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.reference)))
 	s.registerProfileRoutes(mux, "/api/v1")
+	s.registerExecutionRoutes(mux, "/api/v1")
 	// Gateway strips the public, versioned /payroll/v1 prefix.
 	mux.Handle("POST /payroll-runs", s.protected(auth.ActionRunManage, http.HandlerFunc(s.create)))
 	mux.Handle("GET /payroll-runs", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.list)))
@@ -66,8 +90,30 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("PUT /payroll-runs/{run_id}", s.protected(auth.ActionRunManage, http.HandlerFunc(s.update)))
 	mux.Handle("GET /references/payroll-runs/{run_id}", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.reference)))
 	s.registerProfileRoutes(mux, "")
+	s.registerExecutionRoutes(mux, "")
 	s.handler = securityHeaders(mux)
 	return s, nil
+}
+
+func (s *Server) registerExecutionRoutes(mux *http.ServeMux, prefix string) {
+	mux.Handle("POST "+prefix+"/payroll-periods", s.protected(auth.ActionRunManage, http.HandlerFunc(s.createRegularRun)))
+	mux.Handle("POST "+prefix+"/payroll-adjustment-runs", s.protected(auth.ActionRunManage, http.HandlerFunc(s.createAdjustmentRun)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/imports:preview", s.protected(auth.ActionRunManage, http.HandlerFunc(s.previewPayrollImport)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/imports:commit", s.protected(auth.ActionRunManage, http.HandlerFunc(s.commitPayrollImport)))
+	mux.Handle("GET "+prefix+"/payroll-periods", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.listExecutionRuns)))
+	mux.Handle("GET "+prefix+"/payroll-periods/{run_id}", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.getExecutionRun)))
+	mux.Handle("PUT "+prefix+"/payroll-periods/{run_id}/lines/{line_id}", s.protected(auth.ActionRunManage, http.HandlerFunc(s.revisePayrollLine)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/review", s.protected(auth.ActionRunManage, http.HandlerFunc(s.reviewPayrollRun)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/void", s.protected(auth.ActionRunManage, http.HandlerFunc(s.voidPayrollRun)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/confirm-no-payment", s.protected(auth.ActionRunManage, http.HandlerFunc(s.confirmZeroLine)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.recordPayment)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/payments:batch", s.protected(auth.ActionPaymentBatchConfirm, http.HandlerFunc(s.recordPaymentsBatch)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/members:sync", s.protected(auth.ActionRunManage, http.HandlerFunc(s.syncMembers)))
+	mux.Handle("GET "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/compensation-sync-preview", s.protected(auth.ActionRunManage, http.HandlerFunc(s.previewCompensationSync)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/compensation:sync", s.protected(auth.ActionRunManage, http.HandlerFunc(s.confirmCompensationSync)))
+	mux.Handle("GET "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/payment-profile-sync-preview", s.protected(auth.ActionRunManage, http.HandlerFunc(s.previewPaymentProfileSync)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/payment-profile:sync", s.protected(auth.ActionRunManage, http.HandlerFunc(s.confirmPaymentProfileSync)))
+	mux.Handle("GET "+prefix+"/me/payslips", s.protected(auth.ActionSelfRead, http.HandlerFunc(s.listSelfPayslips)))
 }
 func (s *Server) registerProfileRoutes(mux *http.ServeMux, prefix string) {
 	mux.Handle("GET "+prefix+"/compensation-profiles", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.listCompensations)))
@@ -90,12 +136,334 @@ func (s *Server) requireProfiles(w http.ResponseWriter) bool {
 	}
 	return true
 }
+func (s *Server) requireExecution(w http.ResponseWriter) bool {
+	if s.execution == nil {
+		writeProblem(w, 503, "PAYROLL_EXECUTION_UNAVAILABLE", "工资执行暂不可用", true)
+		return false
+	}
+	return true
+}
 func requireTenantScope(w http.ResponseWriter, p auth.Principal) bool {
 	if p.ScopeKind != "tenant" {
 		writeProblem(w, 403, "SCOPE_DENIED", "该操作需要租户范围", false)
 		return false
 	}
 	return true
+}
+func requireRunScope(w http.ResponseWriter, p auth.Principal, runID string) bool {
+	if p.CanResourceType("payroll_run", runID) {
+		return true
+	}
+	writeProblem(w, 403, "SCOPE_DENIED", "凭证范围不包含该工资表", false)
+	return false
+}
+func requireRunLineScope(w http.ResponseWriter, p auth.Principal, runID, lineID string) bool {
+	if p.ScopeKind == "tenant" || (p.CanResourceType("payroll_run", runID) && p.CanResourceType("payroll_line", lineID)) {
+		return true
+	}
+	writeProblem(w, 403, "SCOPE_DENIED", "凭证范围不包含该工资表和工资行", false)
+	return false
+}
+func executionIDs(r *http.Request) (string, string) {
+	return strings.ToLower(strings.TrimSpace(r.PathValue("run_id"))), strings.ToLower(strings.TrimSpace(r.PathValue("line_id")))
+}
+
+func (s *Server) createRegularRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if !s.requireExecution(w) || !requireTenantScope(w, p) {
+		return
+	}
+	var in domain.CreateRegularRunInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.CreateRegularRun(r.Context(), actorFrom(p), in)
+	s.writeExecution(w, http.StatusCreated, v, err)
+}
+func (s *Server) createAdjustmentRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if !s.requireExecution(w) || !requireTenantScope(w, p) {
+		return
+	}
+	var in domain.CreateAdjustmentRunInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.CreateAdjustmentRun(r.Context(), actorFrom(p), in)
+	s.writeExecution(w, http.StatusCreated, v, err)
+}
+func (s *Server) previewPayrollImport(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in domain.PreviewPayrollImportInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.PreviewPayrollImport(r.Context(), actorFrom(p), runID, in)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+func (s *Server) commitPayrollImport(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in domain.CommitPayrollImportInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.CommitPayrollImport(r.Context(), actorFrom(p), runID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) listExecutionRuns(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if !s.requireExecution(w) || !requireTenantScope(w, p) {
+		return
+	}
+	v, err := s.execution.ListExecutionRuns(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": v})
+}
+func (s *Server) getExecutionRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	v, err := s.execution.GetExecutionRun(r.Context(), p.TenantID, runID)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) revisePayrollLine(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.ReviseLineInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.RevisePayrollLine(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) reviewPayrollRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in domain.RunCommandInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.ReviewPayrollRun(r.Context(), actorFrom(p), runID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) voidPayrollRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in domain.RunCommandInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.VoidPayrollRun(r.Context(), actorFrom(p), runID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) confirmZeroLine(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.LineCommandInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.ConfirmZeroLine(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) recordPayment(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.RecordPaymentInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.RecordPayment(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) syncMembers(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in domain.SyncMembersInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.SyncMembers(r.Context(), actorFrom(p), runID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) previewCompensationSync(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	v, err := s.execution.PreviewCompensationSync(r.Context(), actorFrom(p), runID, lineID)
+	s.writeProfile(w, v, err)
+}
+func (s *Server) confirmCompensationSync(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.ConfirmSnapshotSyncInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.ConfirmCompensationSync(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) previewPaymentProfileSync(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	v, err := s.execution.PreviewPaymentProfileSync(r.Context(), actorFrom(p), runID, lineID)
+	s.writeProfile(w, v, err)
+}
+func (s *Server) confirmPaymentProfileSync(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.ConfirmSnapshotSyncInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.ConfirmPaymentProfileSync(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) listSelfPayslips(w http.ResponseWriter, r *http.Request) {
+	if !s.requireExecution(w) {
+		return
+	}
+	value, err := s.execution.ListSelfPayslips(r.Context(), actorFrom(principalFrom(r)))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
+}
+
+type batchPaymentRequest struct {
+	Items []struct {
+		LineID string                    `json:"line_id"`
+		Input  domain.RecordPaymentInput `json:"input"`
+	} `json:"items"`
+}
+type batchPaymentResult struct {
+	LineID string               `json:"line_id"`
+	Status string               `json:"status"`
+	Run    *domain.ExecutionRun `json:"run,omitempty"`
+	Error  string               `json:"error,omitempty"`
+}
+
+func (s *Server) recordPaymentsBatch(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, _ := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunScope(w, p, runID) {
+		return
+	}
+	var in batchPaymentRequest
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if len(in.Items) == 0 || len(in.Items) > 500 {
+		writeProblem(w, 400, "INVALID_REQUEST", "批量付款必须包含 1 至 500 条工资行", false)
+		return
+	}
+	current, err := s.execution.GetExecutionRun(r.Context(), p.TenantID, runID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	lineRevisions := make(map[string]int64, len(current.Lines))
+	for _, line := range current.Lines {
+		lineRevisions[line.ID] = line.Revision
+	}
+	results := make([]batchPaymentResult, 0, len(in.Items))
+	seen := map[string]bool{}
+	for _, item := range in.Items {
+		lineID := strings.ToLower(strings.TrimSpace(item.LineID))
+		if lineID == "" || seen[lineID] {
+			writeProblem(w, 400, "INVALID_REQUEST", "批量付款工资行不能为空或重复", false)
+			return
+		}
+		if !requireRunLineScope(w, p, runID, lineID) {
+			return
+		}
+		if item.Input.ExpectedRunRevision != current.Revision || lineRevisions[lineID] == 0 || item.Input.ExpectedLineRevision != lineRevisions[lineID] {
+			writeProblem(w, 409, "PAYROLL_PREVIEW_STALE", "批量付款预览已经过期，请重新核对", true)
+			return
+		}
+		seen[lineID] = true
+	}
+	counts := map[string]int{"succeeded": 0, "failed": 0, "unknown": 0, "unexecuted": 0}
+	for index, item := range in.Items {
+		lineID := strings.ToLower(strings.TrimSpace(item.LineID))
+		item.Input.ExpectedRunRevision = current.Revision
+		value, err := s.execution.RecordPayment(r.Context(), actorFrom(p), runID, lineID, item.Input)
+		result := batchPaymentResult{LineID: lineID, Status: "succeeded"}
+		if err == nil {
+			result.Run = &value
+			current = value
+		} else {
+			result.Status = "failed"
+			if errors.Is(err, domain.ErrPaymentUnknown) {
+				result.Status = "unknown"
+			}
+			result.Error = err.Error()
+		}
+		counts[result.Status]++
+		results = append(results, result)
+		if errors.Is(err, domain.ErrRevisionConflict) || errors.Is(err, domain.ErrPreviewStale) {
+			for _, remaining := range in.Items[index+1:] {
+				results = append(results, batchPaymentResult{LineID: strings.ToLower(strings.TrimSpace(remaining.LineID)), Status: "unexecuted", Error: "batch preview became stale"})
+				counts["unexecuted"]++
+			}
+			break
+		}
+	}
+	writeJSON(w, http.StatusMultiStatus, map[string]any{"items": results, "summary": counts})
+}
+func (s *Server) writeExecution(w http.ResponseWriter, status int, value domain.ExecutionRun, err error) {
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, status, value)
 }
 func (s *Server) listCompensations(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r)
@@ -344,6 +712,20 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeProblem(w, 409, "PERSON_REFERENCE_INVALID", err.Error(), false)
 	case errors.Is(err, domain.ErrReferenceUnavailable):
 		writeProblem(w, 503, "PERSON_REFERENCE_UNAVAILABLE", err.Error(), true)
+	case errors.Is(err, domain.ErrRunLocked):
+		writeProblem(w, 409, "PAYROLL_RUN_LOCKED", err.Error(), false)
+	case errors.Is(err, domain.ErrPreviewStale):
+		writeProblem(w, 409, "PAYROLL_PREVIEW_STALE", err.Error(), true)
+	case errors.Is(err, domain.ErrPaymentUnknown):
+		writeProblem(w, 409, "PAYROLL_PAYMENT_UNKNOWN", err.Error(), true)
+	case errors.Is(err, domain.ErrPaymentAccount):
+		writeProblem(w, 422, "PAYMENT_ACCOUNT_MISSING", err.Error(), false)
+	case errors.Is(err, domain.ErrPaymentNotReady):
+		writeProblem(w, 422, "PAYROLL_PAYMENT_NOT_READY", err.Error(), false)
+	case errors.Is(err, domain.ErrOverageConfirmation):
+		writeProblem(w, 422, "PAYROLL_OVERAGE_CONFIRMATION_REQUIRED", err.Error(), false)
+	case errors.Is(err, domain.ErrPaymentFailed):
+		writeProblem(w, 502, "PAYROLL_PAYMENT_FAILED", err.Error(), true)
 	case strings.Contains(err.Error(), "invalid"):
 		writeProblem(w, 400, "INVALID_REQUEST", err.Error(), false)
 	default:

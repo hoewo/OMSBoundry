@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-25 P4 已完成本地门禁（BF-239）：Payroll 的月度工资表、冻结成员／薪酬／账户／方案快照、整数计算、导入预览、核对、同步、状态机和调整批次已形成独立 PostgreSQL 事实；逐人／批量实际发放经版本化连接器进入 Money，形成稳定工资义务、实际资金、核销和超额未分配事实。三进程隔离验收覆盖部分成功、缺账户、二次超额确认和幂等引用；Owner 集成测试覆盖同月并发、未知恢复、零／负实发、作废／替代、补发／扣回和本人可见性。Workbench 正式工资页已接 Owner API。下一阶段进入 P5 财务申请、审批占位与付款确认；本批未部署 D1／公网。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
+
 2026-10-25 P3 已完成本地门禁（BF-238）：People & Groups 的成员任职生命周期、Payroll 的 Compensation／Payment Profile 和标准／自定义 Contribution Scheme 已形成独立 migration、API、能力、幂等 revision、审计和 Workbench 组合旅程；Payroll→People 使用版本化资源引用和独立工作负载身份。新增隔离验收覆盖新增／离职／重入职、离职期间薪酬维护、生效月、缺账号、账号遮罩／历史、未知 Person、稳定快照和匿名拒绝；双租户、撤权与不可变历史由 PostgreSQL／HTTP 测试覆盖。下一阶段进入 P4 工资表、核对与实际发放；本批未部署 D1／公网。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
 
 2026-10-25 P2 已完成本地门禁：`Internal Finance Requests` 与 `Payroll` 已作为两个独立 Owner 建立最小草稿聚合、PostgreSQL schema、版本化 API、可信 Actor／Tenant／Capability／resource scope 授权、expected revision、幂等、不可变审计、镜像、D1 可选装配和备份恢复。两个独立镜像的写入、重放、冲突、备份、空目标恢复及续写通过；发布工具链已扩展到 19 镜像。当前进入 P3 成员与薪酬档案，不代表新服务已部署 D1／公网，也不代表工资／财务闭环已完成。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)

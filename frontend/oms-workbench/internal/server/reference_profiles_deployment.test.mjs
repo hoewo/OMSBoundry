@@ -38,7 +38,7 @@ const backupStart=source.indexOf('verify_backup_selection_value() {');
 const backupEnd=source.indexOf('\nrestore_backup() {',backupStart);
 assert(backupStart>=0&&backupEnd>backupStart);
 const backupGuards=source.slice(backupStart,backupEnd);
-const flags=['CONTRACT','MONEY','PEOPLE','PARTY','PROJECT','EVIDENCE','BUSINESS_ENGAGEMENT','BILLING','PRODUCTION','APPROVAL_AUDIT_RESULTS','COST_OUTSOURCING','BONUS_DISTRIBUTION'];
+const flags=['CONTRACT','MONEY','PEOPLE','PARTY','PROJECT','EVIDENCE','BUSINESS_ENGAGEMENT','BILLING','PRODUCTION','APPROVAL_AUDIT_RESULTS','COST_OUTSOURCING','BONUS_DISTRIBUTION','INTERNAL_FINANCE_REQUESTS','PAYROLL'];
 const selection=flags.map(f=>'ENABLE_'+f+'=true').join('\n')+'\n';
 const profileLines=(bonus='',personnel='',stage='')=>'REFERENCE_OA_BONUS_PROFILE='+bonus+'\nREFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE='+personnel+'\nREFERENCE_OA_PRODUCTION_STAGE_PROFILE='+stage+'\n';
 const native='reference-oa-production-personnel-v1';

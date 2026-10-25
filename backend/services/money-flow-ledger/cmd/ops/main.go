@@ -37,7 +37,7 @@ func run() error {
 		return buildinfo.Write(os.Stdout)
 	}
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: ops check|migrate|link-iam-subject|party-migration-preflight|party-migration-map|party-runtime-transition|party-directory-project|payable-party-map|version [options]")
+		return fmt.Errorf("usage: ops check|migrate|link-iam-subject|party-migration-preflight|party-migration-map|party-runtime-transition|party-directory-project|payable-party-map|payroll-owner-set|version [options]")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -61,9 +61,101 @@ func run() error {
 		return runPartyDirectoryProject(ctx, os.Args[2:])
 	case "payable-party-map":
 		return runPayablePartyMap(ctx, os.Args[2:])
+	case "payroll-owner-set":
+		return runPayrollOwnerSet(ctx, os.Args[2:])
 	default:
 		return fmt.Errorf("unknown operation %q; expected check, migrate, link-iam-subject, party-migration-preflight, party-migration-map, party-runtime-transition, party-directory-project, payable-party-map, or version", os.Args[1])
 	}
+}
+
+func runPayrollOwnerSet(ctx context.Context, arguments []string) error {
+	flags := flag.NewFlagSet("ops payroll-owner-set", flag.ContinueOnError)
+	commandID := flags.String("command-id", "", "idempotent setting command UUID")
+	tenantID := flags.String("tenant-id", "", "installation tenant UUID")
+	localPartyID := flags.String("local-party-id", "", "Money organization Party UUID")
+	actorKind := flags.String("actor-kind", "iam_subject", "operator actor kind")
+	actorID := flags.String("actor-id", "", "operator identifier")
+	actorName := flags.String("actor-display-name", "", "operator display name")
+	reason := flags.String("reason", "", "reviewed setting reason")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("payroll-owner-set does not accept positional arguments")
+	}
+	for name, value := range map[string]*string{"command-id": commandID, "tenant-id": tenantID, "local-party-id": localPartyID} {
+		*value = strings.ToLower(strings.TrimSpace(*value))
+		if !operationUUIDPattern.MatchString(*value) {
+			return fmt.Errorf("%s must be a lowercase RFC 4122 UUID", name)
+		}
+	}
+	*actorKind = strings.TrimSpace(*actorKind)
+	*actorID = strings.TrimSpace(*actorID)
+	*actorName = strings.TrimSpace(*actorName)
+	*reason = strings.TrimSpace(*reason)
+	if !regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`).MatchString(*actorKind) || *actorID == "" || len([]rune(*actorID)) > 100 || *actorName == "" || len([]rune(*actorName)) > 100 || *reason == "" || len([]rune(*reason)) > 1000 {
+		return fmt.Errorf("operator and reason are required")
+	}
+	pool, _, err := openRuntime(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	if _, err = database.RequireCurrentSchema(ctx, pool); err != nil {
+		return err
+	}
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "payroll-owner:"+*tenantID); err != nil {
+		return err
+	}
+	var partyRevision int64
+	var partyKind, partyName string
+	if err = tx.QueryRow(ctx, `SELECT revision,kind,legal_name FROM parties WHERE id=$1`, *localPartyID).Scan(&partyRevision, &partyKind, &partyName); err != nil {
+		return fmt.Errorf("load Money Party: %w", err)
+	}
+	if partyKind != "organization" {
+		return fmt.Errorf("payroll ledger owner must be an organization Party")
+	}
+	request := struct {
+		CommandID, TenantID, LocalPartyID, PartyKind, PartyName, ActorKind, ActorID, ActorName, Reason string
+		PartyRevision                                                                                  int64
+	}{*commandID, *tenantID, *localPartyID, partyKind, partyName, *actorKind, *actorID, *actorName, *reason, partyRevision}
+	raw, _ := json.Marshal(request)
+	sum := sha256.Sum256(raw)
+	requestSHA := hex.EncodeToString(sum[:])
+	var existingSHA string
+	var existingRevision int64
+	var existingAt time.Time
+	err = tx.QueryRow(ctx, `SELECT request_sha256,revision,recorded_at FROM payroll_ledger_owner_setting_revisions WHERE command_id=$1`, *commandID).Scan(&existingSHA, &existingRevision, &existingAt)
+	if err == nil {
+		if existingSHA != requestSHA {
+			return fmt.Errorf("payroll owner command already has a different request")
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		return writeJSON(map[string]any{"tenant_id": *tenantID, "revision": existingRevision, "local_party_id": *localPartyID, "recorded_at": existingAt, "replayed": true})
+	}
+	if err != pgx.ErrNoRows {
+		return err
+	}
+	var revision int64
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(max(revision),0)+1 FROM payroll_ledger_owner_setting_revisions WHERE tenant_id=$1`, *tenantID).Scan(&revision); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	_, err = tx.Exec(ctx, `INSERT INTO payroll_ledger_owner_setting_revisions(tenant_id,revision,command_id,local_party_id,local_party_revision,local_party_kind,local_party_legal_name,reason,actor_kind,actor_id,actor_display_name,recorded_at,request_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, *tenantID, revision, *commandID, *localPartyID, partyRevision, partyKind, partyName, *reason, *actorKind, *actorID, *actorName, now, requestSHA)
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	return writeJSON(map[string]any{"tenant_id": *tenantID, "revision": revision, "local_party_id": *localPartyID, "recorded_at": now, "replayed": false})
 }
 
 var operationUUIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)

@@ -2127,7 +2127,7 @@ func TestMoneyFlowAdministratorPartyAndObligationFlowAgainstPostgreSQL(t *testin
 	}
 	if exportManifest.FormatID != ledgerexport.FormatID || exportManifest.FormatVersion != ledgerexport.FormatVersion ||
 		exportManifest.LedgerOwner.ID != createdPartyID ||
-		exportManifest.SourceSchemaVersion != "000016_local_user_iam_subject_links.sql" || len(exportManifest.Files) != 13 {
+		exportManifest.SourceSchemaVersion != "000025_payroll_payments.sql" || len(exportManifest.Files) != 13 {
 		t.Fatalf("owner ledger manifest = %#v", exportManifest)
 	}
 	for _, file := range exportManifest.Files {

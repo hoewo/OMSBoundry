@@ -128,7 +128,7 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 		return iamClaims{}, fmt.Errorf("resource scope is empty")
 	}
 	for _, resource := range claims.Scope.Resources {
-		if resource.Type != "person" || !uuidPattern.MatchString(resource.ID) {
+		if (resource.Type != "person" && resource.Type != "iam_subject") || !uuidPattern.MatchString(resource.ID) {
 			return iamClaims{}, fmt.Errorf("invalid people resource scope")
 		}
 	}

@@ -21,7 +21,13 @@ func (profilePersonReferences) ValidatePerson(_ context.Context, tenant, id stri
 	if id == "88888888-8888-4888-8888-888888888888" {
 		status = "inactive"
 	}
-	return PersonReference{ID: id, TenantID: tenant, DisplayName: "成员甲", Status: status, Revision: 7}, nil
+	return PersonReference{ID: id, TenantID: tenant, ReferenceCode: "EMP-" + strings.ToUpper(id[len(id)-4:]), DisplayName: "成员甲", Status: status, Revision: 7, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, nil
+}
+func (profilePersonReferences) ResolvePersonForSubject(_ context.Context, tenant, subject string) (PersonReference, error) {
+	if tenant == "" || subject == "" {
+		return PersonReference{}, ErrReferenceInvalid
+	}
+	return PersonReference{ID: subject, TenantID: tenant, ReferenceCode: "EMP-001", DisplayName: "成员甲", Status: "active", Revision: 7, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, nil
 }
 
 func TestMemberProfilesRevisionMaskingSchemesAndIsolation(t *testing.T) {

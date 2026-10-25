@@ -13,7 +13,10 @@ import (
 var (
 	uuidPattern   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	periodPattern = regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`)
+	datePattern   = regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])$`)
 )
+
+const maxPayrollMinor int64 = 900_000_000_000_000
 
 type Store interface {
 	Ping(context.Context) error
@@ -25,18 +28,29 @@ type Store interface {
 type Service struct {
 	store            Store
 	personReferences PersonReferencePort
+	paymentDelivery  PaymentDeliveryPort
 }
 
-func NewService(store Store, references ...PersonReferencePort) (*Service, error) {
+func NewService(store Store, dependencies ...any) (*Service, error) {
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
-	if len(references) > 1 {
-		return nil, fmt.Errorf("at most one person reference port is allowed")
-	}
 	service := &Service{store: store}
-	if len(references) == 1 {
-		service.personReferences = references[0]
+	for _, dependency := range dependencies {
+		switch value := dependency.(type) {
+		case PersonReferencePort:
+			if service.personReferences != nil {
+				return nil, fmt.Errorf("at most one person reference port is allowed")
+			}
+			service.personReferences = value
+		case PaymentDeliveryPort:
+			if service.paymentDelivery != nil {
+				return nil, fmt.Errorf("at most one payment delivery port is allowed")
+			}
+			service.paymentDelivery = value
+		default:
+			return nil, fmt.Errorf("unsupported payroll dependency")
+		}
 	}
 	return service, nil
 }

@@ -82,7 +82,7 @@
   async function api(id,path,options={}){
     const config=app(id);if(!config||!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.route||''))throw new Error('相关功能暂不可用，请联系管理员');
     const evidencePath=id==='evidence-service'&&/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(path);
-    if((!evidencePath&&!/^\/api\/v1\/[A-Za-z0-9_/?=&%.-]+$/.test(path))||path.includes('..'))throw new Error('业务请求路径无效');
+    if((!evidencePath&&!/^\/api\/v1\/[A-Za-z0-9_/?=&%.:-]+$/.test(path))||path.includes('..'))throw new Error('业务请求路径无效');
     const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD',request=()=>fetch(config.route+path,{...options,credentials:'same-origin',redirect:'manual',headers:{Accept:'application/json',...(options.headers||{})}});
     if(mutating)await authorize(id,true);
     let response=await request();

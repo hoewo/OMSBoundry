@@ -14,9 +14,12 @@ const (
 	ActionPaymentProfileManage     = "payroll.payment-profile.manage"
 	ActionSensitiveAccountRead     = "payroll.sensitive-account.read"
 	ActionContributionSchemeManage = "payroll.contribution-scheme.manage"
+	ActionPaymentConfirm           = "payroll.payment.confirm"
+	ActionPaymentBatchConfirm      = "payroll.payment.batch-confirm"
+	ActionSelfRead                 = "payroll.self.read"
 )
 
-var AllActions = []string{"payroll.self.read", ActionTenantRead, "payroll.compensation-profile.manage", "payroll.payment-profile.manage", "payroll.sensitive-account.read", "payroll.sensitive-account.export", "payroll.contribution-scheme.manage", ActionRunManage, "payroll.payment.confirm", "payroll.payment.batch-confirm", "payroll.export", ActionReferenceRead}
+var AllActions = []string{ActionSelfRead, ActionTenantRead, ActionCompensationManage, ActionPaymentProfileManage, ActionSensitiveAccountRead, "payroll.sensitive-account.export", ActionContributionSchemeManage, ActionRunManage, ActionPaymentConfirm, ActionPaymentBatchConfirm, "payroll.export", ActionReferenceRead}
 var ErrUnauthenticated = errors.New("authentication required")
 
 type Principal struct {

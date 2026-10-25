@@ -302,7 +302,12 @@
         {
           "audience": "people-groups",
           "action": "people-groups.person.reference.read",
-          "resource_types": ["person"]
+          "resource_types": ["person", "iam_subject"]
+        },
+        {
+          "audience": "money-flow-ledger",
+          "action": "money-flow-ledger.payroll-payment.record",
+          "resource_types": ["payroll_payment"]
         }
       ]
     },

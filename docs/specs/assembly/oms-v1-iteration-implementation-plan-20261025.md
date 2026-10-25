@@ -1,6 +1,6 @@
 # OMS1 2026-10-25 迭代实施拆解
 
-状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P3 已于 2026-10-25 通过，证据见[P0 记录](../../reports/oms-v1-iteration-p0-baseline-validation-20261025.md)、[P1 验证报告](../../reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)、[P2 验证报告](../../reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)和[P3 验证报告](../../reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)。当前进入 P4 工资表、核对与实际发放；本地通过不表示 D1 或公网已经发布新版本。
+状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P4 已于 2026-10-25 通过，证据见[P0 记录](../../reports/oms-v1-iteration-p0-baseline-validation-20261025.md)、[P1 验证报告](../../reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)、[P2 验证报告](../../reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)、[P3 验证报告](../../reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)和[P4 验证报告](../../reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)。当前进入 P5 财务申请、审批占位与付款确认；本地通过不表示 D1 或公网已经发布新版本。
 
 问题 A → 可验证结果 B：本轮同时涉及租户、两个新业务 Owner、开放 API、跨系统资金闭环和外部 Feedback SDK，若按页面并行堆功能会重新形成浏览器事实和隐式耦合 → 按所有权与依赖顺序交付可独立验证的纵向切片，每阶段都有迁移、授权、故障恢复和运行证据。
 
@@ -18,9 +18,9 @@
 | 能力 | 当前证据 | 缺口 |
 | --- | --- | --- |
 | 租户与账号 | P1 已证明同进程 Tenant A／B 的创建、登录、授权、资源隔离、撤权和恢复 | 尚未进入新 D1／公网组合，也未实现后续多租户账号切换 |
-| 成员 | P3 已有成员生命周期、任职 revision、Payroll 档案挂载及 Workbench 两 Owner 管理旅程 | 待 P4 冻结工资成员／薪酬／账户快照及发放状态 |
+| 成员 | P3 已有成员生命周期、任职 revision、Payroll 档案挂载及 Workbench 两 Owner 管理旅程；P4 已冻结工资成员快照 | 待 P9 全组合恢复与公网连续旅程 |
 | 财务申请 | P2 已有独立 `Internal Finance Requests` Owner、数据库、草稿 API、IAM、幂等和恢复 | 缺少正式明细、附件、审批、财务确认及 Money／Evidence 连接 |
-| 工资 | P3 已有独立 Payroll、薪酬／支付档案、标准／自定义缴费方案及 People Reference | 缺少工资期间／行快照、计算、核对、发放及 Money 连接 |
+| 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接 | 待 P9 补跨应用恢复／导出并完成 D1／公网连续旅程 |
 | 开放平台 | 尚无员工 Key 管理与 `/open-api/v1/` 报销契约 | 缺少 Key 生命周期、Gateway 鉴权／限流／审计、OpenAPI 和调用端恢复契约 |
 | 发票报销闭环 | Evidence 和 Money 已独立存在 | 缺少财务申请 Owner 及三者之间的幂等连接、未知结果恢复和端到端验收 |
 | Feedback V2 | 旧参考 OA 只有占位入口；主 OMS1 无正式入口 | 缺少正式 IAM 能力、配置、iframe bridge、未读角标、Arckit 白名单／通知开关和端到端验证 |
@@ -101,7 +101,9 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 
 验收门：新增／离职／重新入职、薪酬生效月、账号缺失、账户历史、隐私遮罩、撤权和双租户隔离全部通过；People 变化不改写 Payroll 历史，Payroll 变化不改写 People。
 
-### P4：工资表、核对与实际发放
+### P4：工资表、核对与实际发放（已通过）
+
+状态：2026-10-25 本地通过；未部署 D1／公网。完整证据见[P4 验证报告](../../reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)。
 
 覆盖：BF-186、BF-189、BF-204～BF-215。
 

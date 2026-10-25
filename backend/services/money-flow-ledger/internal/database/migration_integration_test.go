@@ -61,14 +61,14 @@ func TestMoneyFlowMigrationsFromBootstrapAndReplay(t *testing.T) {
 	if err := environment.Pool.QueryRow(ctx, `
 		SELECT
 			(SELECT count(*) FROM schema_migrations),
-			(SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('local_users', 'local_sessions', 'audit_entries', 'parties', 'party_create_commands', 'obligations', 'obligation_create_commands', 'obligation_revisions', 'obligation_confirmation_commands', 'cash_transactions', 'cash_transaction_create_commands', 'allocations', 'allocation_apply_commands', 'internal_transfers', 'internal_transfer_create_commands', 'allocation_reversals', 'allocation_reversal_create_commands', 'cash_transaction_reversals', 'cash_transaction_reversal_create_commands', 'obligation_amount_adjustments', 'obligation_amount_adjustment_commands', 'obligation_remissions', 'obligation_remission_commands', 'obligation_closures', 'obligation_closure_commands', 'obligation_cash_expectations', 'obligation_cash_expectation_commands', 'party_migration_mappings', 'receipt_sets', 'receipt_set_items', 'receipt_set_confirm_commands', 'cash_transaction_evidence_revisions') AND relkind = 'r'),
-			(SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('local_users_username_unique', 'local_sessions_user_idx', 'audit_entries_timeline_idx', 'parties_legal_name_id_idx', 'party_create_commands_party_idx', 'obligations_created_id_idx', 'obligations_status_due_id_idx', 'cash_transactions_recorded_id_idx', 'cash_transactions_type_occurred_id_idx', 'cash_transactions_external_reference_unique', 'allocations_applied_id_idx', 'allocations_cash_applied_id_idx', 'allocations_obligation_applied_id_idx', 'internal_transfers_recorded_id_idx', 'internal_transfers_occurred_id_idx', 'internal_transfers_external_reference_unique', 'allocation_reversals_reversed_id_idx', 'allocation_reversals_cash_reversed_id_idx', 'allocation_reversals_obligation_reversed_id_idx', 'cash_transaction_reversals_reversed_id_idx', 'obligation_amount_adjustments_obligation_adjusted_id_idx', 'obligation_remissions_obligation_recorded_id_idx', 'obligation_closures_closed_id_idx', 'obligation_revisions_recorded_revision_idx', 'obligation_cash_expectations_current_idx', 'obligation_cash_expectations_schedule_idx', 'party_migration_mappings_target_idx', 'receipt_sets_tenant_project_confirmed_idx', 'receipt_set_items_allocation_idx', 'cash_transaction_evidence_revisions_latest_idx') AND relkind = 'i'),
-			(SELECT count(*) FROM pg_trigger WHERE tgname IN ('audit_entries_immutable', 'party_create_commands_immutable', 'obligation_create_commands_immutable', 'obligation_revisions_immutable', 'obligation_confirmation_commands_immutable', 'cash_transactions_immutable', 'cash_transaction_create_commands_immutable', 'allocations_validate_insert', 'allocations_validate_remission_insert', 'allocations_immutable', 'allocation_apply_commands_immutable', 'internal_transfers_immutable', 'internal_transfer_create_commands_immutable', 'allocation_reversals_validate_insert', 'allocation_reversals_immutable', 'allocation_reversal_create_commands_immutable', 'cash_transaction_reversals_validate_insert', 'cash_transaction_reversals_immutable', 'cash_transaction_reversal_create_commands_immutable', 'obligation_amount_adjustments_validate_insert', 'obligation_amount_adjustments_validate_remission_floor', 'obligation_revisions_validate_insert', 'obligations_validate_current_revision_update', 'obligation_amount_adjustments_immutable', 'obligation_amount_adjustment_commands_immutable', 'obligation_remissions_validate_insert', 'obligation_remissions_immutable', 'obligation_remission_commands_immutable', 'obligation_closures_validate_insert', 'obligations_validate_closure_status_update', 'obligation_closures_require_closed_status', 'obligation_closures_immutable', 'obligation_closure_commands_immutable', 'zz_obligation_revisions_recorded_time_monotonic', 'zz_obligation_amount_adjustments_recorded_time_monotonic', 'zz_allocations_recorded_time_monotonic', 'zz_allocation_reversals_recorded_time_monotonic', 'zz_obligation_remissions_recorded_time_monotonic', 'zz_obligation_closures_recorded_time_monotonic', 'obligation_cash_expectations_validate_insert', 'obligation_cash_expectations_immutable', 'obligation_cash_expectation_commands_immutable', 'party_migration_mappings_immutable', 'receipt_set_items_validate_insert', 'receipt_sets_total_consistent', 'receipt_set_items_total_consistent', 'receipt_sets_immutable', 'receipt_set_items_immutable', 'receipt_set_confirm_commands_immutable', 'cash_transaction_evidence_revisions_immutable') AND NOT tgisinternal),
-			(SELECT count(*) FROM pg_constraint WHERE conrelid IN ('obligations'::regclass, 'obligation_create_commands'::regclass, 'obligation_revisions'::regclass, 'obligation_confirmation_commands'::regclass, 'cash_transactions'::regclass, 'cash_transaction_create_commands'::regclass, 'allocations'::regclass, 'allocation_apply_commands'::regclass, 'internal_transfers'::regclass, 'internal_transfer_create_commands'::regclass, 'allocation_reversals'::regclass, 'allocation_reversal_create_commands'::regclass, 'cash_transaction_reversals'::regclass, 'cash_transaction_reversal_create_commands'::regclass, 'obligation_amount_adjustments'::regclass, 'obligation_amount_adjustment_commands'::regclass, 'obligation_remissions'::regclass, 'obligation_remission_commands'::regclass, 'obligation_closures'::regclass, 'obligation_closure_commands'::regclass, 'obligation_cash_expectations'::regclass, 'obligation_cash_expectation_commands'::regclass, 'party_migration_mappings'::regclass, 'receipt_sets'::regclass, 'receipt_set_items'::regclass, 'receipt_set_confirm_commands'::regclass, 'cash_transaction_evidence_revisions'::regclass) AND contype = 'f')
+			(SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('local_users', 'local_sessions', 'audit_entries', 'parties', 'party_create_commands', 'obligations', 'obligation_create_commands', 'obligation_revisions', 'obligation_confirmation_commands', 'cash_transactions', 'cash_transaction_create_commands', 'allocations', 'allocation_apply_commands', 'internal_transfers', 'internal_transfer_create_commands', 'allocation_reversals', 'allocation_reversal_create_commands', 'cash_transaction_reversals', 'cash_transaction_reversal_create_commands', 'obligation_amount_adjustments', 'obligation_amount_adjustment_commands', 'obligation_remissions', 'obligation_remission_commands', 'obligation_closures', 'obligation_closure_commands', 'obligation_cash_expectations', 'obligation_cash_expectation_commands', 'party_migration_mappings', 'receipt_sets', 'receipt_set_items', 'receipt_set_confirm_commands', 'cash_transaction_evidence_revisions', 'payroll_ledger_owner_setting_revisions', 'payroll_payment_obligation_bindings', 'payroll_payment_deliveries') AND relkind = 'r'),
+			(SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('local_users_username_unique', 'local_sessions_user_idx', 'audit_entries_timeline_idx', 'parties_legal_name_id_idx', 'party_create_commands_party_idx', 'obligations_created_id_idx', 'obligations_status_due_id_idx', 'cash_transactions_recorded_id_idx', 'cash_transactions_type_occurred_id_idx', 'cash_transactions_external_reference_unique', 'allocations_applied_id_idx', 'allocations_cash_applied_id_idx', 'allocations_obligation_applied_id_idx', 'internal_transfers_recorded_id_idx', 'internal_transfers_occurred_id_idx', 'internal_transfers_external_reference_unique', 'allocation_reversals_reversed_id_idx', 'allocation_reversals_cash_reversed_id_idx', 'allocation_reversals_obligation_reversed_id_idx', 'cash_transaction_reversals_reversed_id_idx', 'obligation_amount_adjustments_obligation_adjusted_id_idx', 'obligation_remissions_obligation_recorded_id_idx', 'obligation_closures_closed_id_idx', 'obligation_revisions_recorded_revision_idx', 'obligation_cash_expectations_current_idx', 'obligation_cash_expectations_schedule_idx', 'party_migration_mappings_target_idx', 'receipt_sets_tenant_project_confirmed_idx', 'receipt_set_items_allocation_idx', 'cash_transaction_evidence_revisions_latest_idx', 'payroll_ledger_owner_setting_latest_idx', 'payroll_payment_deliveries_line_idx') AND relkind = 'i'),
+			(SELECT count(*) FROM pg_trigger WHERE tgname IN ('audit_entries_immutable', 'party_create_commands_immutable', 'obligation_create_commands_immutable', 'obligation_revisions_immutable', 'obligation_confirmation_commands_immutable', 'cash_transactions_immutable', 'cash_transaction_create_commands_immutable', 'allocations_validate_insert', 'allocations_validate_remission_insert', 'allocations_immutable', 'allocation_apply_commands_immutable', 'internal_transfers_immutable', 'internal_transfer_create_commands_immutable', 'allocation_reversals_validate_insert', 'allocation_reversals_immutable', 'allocation_reversal_create_commands_immutable', 'cash_transaction_reversals_validate_insert', 'cash_transaction_reversals_immutable', 'cash_transaction_reversal_create_commands_immutable', 'obligation_amount_adjustments_validate_insert', 'obligation_amount_adjustments_validate_remission_floor', 'obligation_revisions_validate_insert', 'obligations_validate_current_revision_update', 'obligation_amount_adjustments_immutable', 'obligation_amount_adjustment_commands_immutable', 'obligation_remissions_validate_insert', 'obligation_remissions_immutable', 'obligation_remission_commands_immutable', 'obligation_closures_validate_insert', 'obligations_validate_closure_status_update', 'obligation_closures_require_closed_status', 'obligation_closures_immutable', 'obligation_closure_commands_immutable', 'zz_obligation_revisions_recorded_time_monotonic', 'zz_obligation_amount_adjustments_recorded_time_monotonic', 'zz_allocations_recorded_time_monotonic', 'zz_allocation_reversals_recorded_time_monotonic', 'zz_obligation_remissions_recorded_time_monotonic', 'zz_obligation_closures_recorded_time_monotonic', 'obligation_cash_expectations_validate_insert', 'obligation_cash_expectations_immutable', 'obligation_cash_expectation_commands_immutable', 'party_migration_mappings_immutable', 'receipt_set_items_validate_insert', 'receipt_sets_total_consistent', 'receipt_set_items_total_consistent', 'receipt_sets_immutable', 'receipt_set_items_immutable', 'receipt_set_confirm_commands_immutable', 'cash_transaction_evidence_revisions_immutable', 'payroll_ledger_owner_setting_revisions_immutable', 'payroll_payment_obligation_bindings_immutable', 'payroll_payment_deliveries_immutable') AND NOT tgisinternal),
+			(SELECT count(*) FROM pg_constraint WHERE conrelid IN ('obligations'::regclass, 'obligation_create_commands'::regclass, 'obligation_revisions'::regclass, 'obligation_confirmation_commands'::regclass, 'cash_transactions'::regclass, 'cash_transaction_create_commands'::regclass, 'allocations'::regclass, 'allocation_apply_commands'::regclass, 'internal_transfers'::regclass, 'internal_transfer_create_commands'::regclass, 'allocation_reversals'::regclass, 'allocation_reversal_create_commands'::regclass, 'cash_transaction_reversals'::regclass, 'cash_transaction_reversal_create_commands'::regclass, 'obligation_amount_adjustments'::regclass, 'obligation_amount_adjustment_commands'::regclass, 'obligation_remissions'::regclass, 'obligation_remission_commands'::regclass, 'obligation_closures'::regclass, 'obligation_closure_commands'::regclass, 'obligation_cash_expectations'::regclass, 'obligation_cash_expectation_commands'::regclass, 'party_migration_mappings'::regclass, 'receipt_sets'::regclass, 'receipt_set_items'::regclass, 'receipt_set_confirm_commands'::regclass, 'cash_transaction_evidence_revisions'::regclass, 'payroll_ledger_owner_setting_revisions'::regclass, 'payroll_payment_obligation_bindings'::regclass, 'payroll_payment_deliveries'::regclass) AND contype = 'f')
 		`).Scan(&migrationCount, &tableCount, &indexCount, &triggerCount, &foreignKeyCount); err != nil {
 		t.Fatalf("inspect migration objects: %v", err)
 	}
-	if migrationCount != 24 || tableCount != 32 || indexCount != 30 || triggerCount != 50 || foreignKeyCount != 50 {
+	if migrationCount != 25 || tableCount != 35 || indexCount != 32 || triggerCount != 53 || foreignKeyCount != 54 {
 		t.Fatalf("migration objects versions=%d tables=%d indexes=%d triggers=%d foreign_keys=%d", migrationCount, tableCount, indexCount, triggerCount, foreignKeyCount)
 	}
 
@@ -258,7 +258,7 @@ func TestObligationDraftMigrationFromPartySchema(t *testing.T) {
 	`).Scan(&afterVersions, &obligationsAfter, &commandsAfter); err != nil {
 		t.Fatalf("inspect obligation schema state: %v", err)
 	}
-	if afterVersions != 24 || obligationsAfter == nil || commandsAfter == nil {
+	if afterVersions != 25 || obligationsAfter == nil || commandsAfter == nil {
 		t.Fatalf("obligation schema versions=%d obligations=%v commands=%v", afterVersions, obligationsAfter, commandsAfter)
 	}
 }
@@ -345,7 +345,7 @@ func TestObligationConfirmationMigrationFromDraftSchema(t *testing.T) {
 	`).Scan(&versions, &status, &currentRevision, &revisionTable, &commandTable); err != nil {
 		t.Fatalf("inspect confirmation migration: %v", err)
 	}
-	if versions != 24 || status != "draft" || currentRevision != nil || revisionTable == nil || commandTable == nil {
+	if versions != 25 || status != "draft" || currentRevision != nil || revisionTable == nil || commandTable == nil {
 		t.Fatalf("confirmation migration versions=%d status=%s current=%v revisions=%v commands=%v", versions, status, currentRevision, revisionTable, commandTable)
 	}
 }
@@ -408,7 +408,7 @@ func TestCashTransactionMigrationFromConfirmationSchema(t *testing.T) {
 	`).Scan(&versions, &parties, &cashTable, &commandTable); err != nil {
 		t.Fatalf("inspect cash transaction migration: %v", err)
 	}
-	if versions != 24 || parties != 1 || cashTable == nil || commandTable == nil {
+	if versions != 25 || parties != 1 || cashTable == nil || commandTable == nil {
 		t.Fatalf("cash migration versions=%d parties=%d cash=%v commands=%v", versions, parties, cashTable, commandTable)
 	}
 }
@@ -494,7 +494,7 @@ func TestAllocationMigrationFromCashTransactionSchema(t *testing.T) {
 	`).Scan(&versions, &cashTransactions, &allocationTable, &commandTable); err != nil {
 		t.Fatalf("inspect allocation migration: %v", err)
 	}
-	if versions != 24 || cashTransactions != 1 || allocationTable == nil || commandTable == nil {
+	if versions != 25 || cashTransactions != 1 || allocationTable == nil || commandTable == nil {
 		t.Fatalf("allocation migration versions=%d cash=%d allocations=%v commands=%v", versions, cashTransactions, allocationTable, commandTable)
 	}
 }
@@ -581,7 +581,7 @@ func TestInternalTransferMigrationFromAllocationSchema(t *testing.T) {
 	`).Scan(&versions, &cashTransactions, &transferTable, &commandTable); err != nil {
 		t.Fatalf("inspect internal transfer migration: %v", err)
 	}
-	if versions != 24 || cashTransactions != 1 || transferTable == nil || commandTable == nil {
+	if versions != 25 || cashTransactions != 1 || transferTable == nil || commandTable == nil {
 		t.Fatalf("internal transfer migration versions=%d cash=%d transfers=%v commands=%v", versions, cashTransactions, transferTable, commandTable)
 	}
 }
@@ -732,7 +732,7 @@ func TestAllocationReversalMigrationFromInternalTransferSchema(t *testing.T) {
 	`).Scan(&versions, &allocations, &reversals, &netAllocated, &reversalTable, &commandTable); err != nil {
 		t.Fatalf("inspect allocation reversal migration: %v", err)
 	}
-	if versions != 24 || allocations != 1 || reversals != 0 || netAllocated != "40.000000" || reversalTable == nil || commandTable == nil {
+	if versions != 25 || allocations != 1 || reversals != 0 || netAllocated != "40.000000" || reversalTable == nil || commandTable == nil {
 		t.Fatalf("allocation reversal migration versions=%d allocations=%d reversals=%d net=%s tables=%v/%v",
 			versions, allocations, reversals, netAllocated, reversalTable, commandTable)
 	}
@@ -888,7 +888,7 @@ func TestCashTransactionReversalMigrationFromAllocationReversalSchema(t *testing
 	); err != nil {
 		t.Fatalf("inspect cash transaction reversal migration: %v", err)
 	}
-	if versions != 24 || cashTransactions != 1 || allocations != 1 || allocationReversals != 1 ||
+	if versions != 25 || cashTransactions != 1 || allocations != 1 || allocationReversals != 1 ||
 		cashReversals != 0 || netAllocated != "0.000000" || reversalTable == nil || commandTable == nil {
 		t.Fatalf("cash reversal migration versions=%d cash=%d allocations=%d/%d cash_reversals=%d net=%s tables=%v/%v",
 			versions, cashTransactions, allocations, allocationReversals, cashReversals, netAllocated, reversalTable, commandTable)
@@ -1107,7 +1107,7 @@ func TestObligationAmountAdjustmentMigrationFromCashReversalSchema(t *testing.T)
 	); err != nil {
 		t.Fatalf("inspect obligation amount adjustment migration: %v", err)
 	}
-	if versions != 24 || rootOriginal != "100.000000" || effectiveAmount != "100.000000" ||
+	if versions != 25 || rootOriginal != "100.000000" || effectiveAmount != "100.000000" ||
 		netAllocated != "40.000000" || outstanding != "60.000000" || revisionKind != "confirmation" ||
 		sourceDraft != 1 || sourceRevision != nil || recordedKind != "local_user" ||
 		recordedID != "b3000000-0000-4000-8000-000000000001" || recordedName != "调整升级管理员" ||
@@ -1336,7 +1336,7 @@ func TestObligationRemissionMigrationFromAmountAdjustmentSchema(t *testing.T) {
 	); err != nil {
 		t.Fatalf("inspect obligation remission migration: %v", err)
 	}
-	if versions != 24 || effective != "120.000000" || allocated != "40.000000" ||
+	if versions != 25 || effective != "120.000000" || allocated != "40.000000" ||
 		remitted != "0" || outstanding != "80.000000" || revisions != 2 || adjustments != 1 ||
 		allocations != 1 || remissions != 0 || commands != 0 || remissionTable == nil || commandTable == nil {
 		t.Fatalf("remission migration versions=%d amounts=%s/%s/%s/%s facts=%d/%d/%d/%d/%d tables=%v/%v",
@@ -1510,7 +1510,7 @@ func TestObligationClosureMigrationFromRemissionSchema(t *testing.T) {
 	); err != nil {
 		t.Fatalf("inspect obligation closure migration: %v", err)
 	}
-	if versions != 24 || status != "open" || effective != "100.000000" || allocated != "0" ||
+	if versions != 25 || status != "open" || effective != "100.000000" || allocated != "0" ||
 		remitted != "40.000000" || outstanding != "60.000000" || revisions != 1 || remissions != 1 ||
 		closures != 0 || commands != 0 || closureTable == nil || commandTable == nil {
 		t.Fatalf("closure migration versions=%d status=%s amounts=%s/%s/%s/%s facts=%d/%d/%d/%d tables=%v/%v",
@@ -1552,7 +1552,7 @@ func TestObligationRecordedTimeGuardMigrationPreservesValidVersion13Facts(t *tes
 	`).Scan(&versions, &monotonicTriggers, &guardFunction, &revisionIndex, &storedConfirmationAt, &storedRemissionAt); err != nil {
 		t.Fatalf("inspect recorded-time migration: %v", err)
 	}
-	if versions != 24 || monotonicTriggers != 6 || guardFunction == nil || revisionIndex == nil ||
+	if versions != 25 || monotonicTriggers != 6 || guardFunction == nil || revisionIndex == nil ||
 		!storedConfirmationAt.Equal(confirmationAt) || !storedRemissionAt.Equal(remissionAt) {
 		t.Fatalf("recorded-time migration versions=%d triggers=%d function=%v index=%v times=%v/%v",
 			versions, monotonicTriggers, guardFunction, revisionIndex, storedConfirmationAt, storedRemissionAt)
@@ -1616,7 +1616,7 @@ func TestCashExpectationMigrationFromRecordedTimeSchemaPreservesFacts(t *testing
 	`).Scan(&versions, &obligations, &revisions, &remissions, &expectations, &commands, &expectationTable, &commandTable); err != nil {
 		t.Fatalf("inspect version 15 state: %v", err)
 	}
-	if versions != 24 || obligations != beforeObligations || revisions != beforeRevisions || remissions != beforeRemissions ||
+	if versions != 25 || obligations != beforeObligations || revisions != beforeRevisions || remissions != beforeRemissions ||
 		expectations != 0 || commands != 0 || expectationTable == nil || commandTable == nil {
 		t.Fatalf("version 15 state versions=%d facts=%d/%d/%d expectations=%d/%d tables=%v/%v",
 			versions, obligations, revisions, remissions, expectations, commands, expectationTable, commandTable)

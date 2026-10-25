@@ -29,6 +29,7 @@ type UseCases interface {
 	SetPersonIAMSubject(context.Context, peoplegroups.Actor, string, peoplegroups.SetIAMSubjectInput) (peoplegroups.Person, error)
 	ListPersons(context.Context, string) ([]peoplegroups.Person, error)
 	GetPerson(context.Context, string, string) (peoplegroups.Person, error)
+	GetPersonByIAMSubject(context.Context, string, string) (peoplegroups.Person, error)
 	ListEmploymentEvents(context.Context, string, string) ([]peoplegroups.EmploymentEvent, error)
 	CreateDefinition(context.Context, peoplegroups.Actor, peoplegroups.DefinitionKind, peoplegroups.CreateDefinitionInput) (peoplegroups.Definition, error)
 	UpdateDefinition(context.Context, peoplegroups.Actor, peoplegroups.DefinitionKind, string, peoplegroups.UpdateDefinitionInput) (peoplegroups.Definition, error)
@@ -114,6 +115,7 @@ func New(useCases UseCases, authenticator auth.Authenticator, options Options) (
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.Handle("GET /api/v1/policy-facts/persons/{person_id}", s.protectedPolicyFact(http.HandlerFunc(s.personPolicyFact)))
 	mux.Handle("GET /api/v1/references/persons/{person_id}", s.protectedPersonReference(http.HandlerFunc(s.personReference)))
+	mux.Handle("GET /api/v1/references/iam-subjects/{subject_id}/person", s.protectedSubjectPersonReference(http.HandlerFunc(s.subjectPersonReference)))
 	mux.Handle("/", s.protected(http.HandlerFunc(s.route)))
 	s.handler = securityHeaders(limitBody(mux))
 	return s, nil
@@ -140,6 +142,27 @@ func (s *Server) protectedPersonReference(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) protectedSubjectPersonReference(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, err := s.authenticator.Authenticate(r)
+		if err != nil {
+			writeProblem(w, http.StatusUnauthorized, "credential_required", "需要有效访问凭证")
+			return
+		}
+		if !principal.Can(auth.ActionPersonReferenceRead) {
+			writeProblem(w, http.StatusForbidden, "capability_denied", "缺少 "+auth.ActionPersonReferenceRead)
+			return
+		}
+		subjectID := r.PathValue("subject_id")
+		if !principal.CanResource("iam_subject", subjectID) {
+			writeProblem(w, http.StatusForbidden, "scope_denied", "凭证范围不包含该 IAM Subject")
+			return
+		}
+		ctx := context.WithValue(r.Context(), principalKey{}, principal)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func (s *Server) personReference(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r)
 	person, err := s.useCases.GetPerson(r.Context(), p.TenantID, r.PathValue("person_id"))
@@ -157,6 +180,31 @@ func (s *Server) personReference(w http.ResponseWriter, r *http.Request) {
 		"id":                 person.ID,
 		"tenant_id":          person.TenantID,
 		"resource_type":      "person",
+		"reference_code":     person.ReferenceCode,
+		"display_name":       person.DisplayName,
+		"status":             person.Status,
+		"revision":           person.Revision,
+	})
+}
+
+func (s *Server) subjectPersonReference(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	person, err := s.useCases.GetPersonByIAMSubject(r.Context(), p.TenantID, r.PathValue("subject_id"))
+	if err != nil {
+		if errors.Is(err, peoplegroups.ErrNotFound) {
+			writeProblem(w, http.StatusNotFound, "person_not_found", "该账号尚未关联人员")
+			return
+		}
+		writeProblem(w, http.StatusInternalServerError, "reference_unavailable", "人员引用暂不可用")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"schema_version":     "1",
+		"source_application": "people-groups",
+		"id":                 person.ID,
+		"tenant_id":          person.TenantID,
+		"resource_type":      "person",
+		"reference_code":     person.ReferenceCode,
 		"display_name":       person.DisplayName,
 		"status":             person.Status,
 		"revision":           person.Revision,

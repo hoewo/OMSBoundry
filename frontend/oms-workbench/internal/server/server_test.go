@@ -578,7 +578,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261024.1",
+		"assets/oms-phase1.css?v=20261025.2",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
 		"assets/oms-phase1.js?v=20261023.2",
 		`data-oms-v1-flow="receivable-total"`,
@@ -620,9 +620,10 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"data-internal-finance-select-all",
 		"data-internal-finance-clear",
 		`data-subject-id="88888888-8888-4888-8888-888888888888"`,
-		"体验版数据仅保存在当前登录账号的本浏览器中",
+		"data-internal-storage-notice",
 		"assets/oms-phase1-internal-model.js?v=20261023.2",
-		"assets/oms-phase1-internal.js?v=20261025.1",
+		"assets/oms-phase1-internal.js?v=20261025.2",
+		"assets/oms-phase1-payroll-owner.js?v=20261025.1",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -678,6 +679,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		{"/assets/oms-phase1.js", "application/javascript; charset=utf-8", "loadOffsetCollection('project-workspace','/api/v1/project-directory',{status:'all'})"},
 		{"/assets/oms-phase1-internal-model.js", "application/javascript; charset=utf-8", "scope.OMSInternalModel"},
 		{"/assets/oms-phase1-internal.js", "application/javascript; charset=utf-8", "oms-v1.company-internal"},
+		{"/assets/oms-phase1-payroll-owner.js", "application/javascript; charset=utf-8", "payments:batch"},
 		{"/assets/oms-phase1-evidence.js", "application/javascript; charset=utf-8", "createEvidenceTransfer"},
 		{"/assets/workbench.js", "application/javascript; charset=utf-8", "window.location.assign('/workbench/?view=oms-v1')"},
 	} {
@@ -700,7 +702,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS P3 owner composition asset missing %q status=%d", marker, ownerAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261024.1", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261025.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {

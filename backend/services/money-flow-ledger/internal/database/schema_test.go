@@ -47,7 +47,7 @@ func TestEmbeddedMigrationListIsOrdered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 24 || versions[0] != "000001_bootstrap.sql" || versions[len(versions)-1] != "000024_cash_transaction_evidence_revisions.sql" {
+	if len(versions) != 25 || versions[0] != "000001_bootstrap.sql" || versions[len(versions)-1] != "000025_payroll_payments.sql" {
 		t.Fatalf("migrationVersions() = %#v", versions)
 	}
 	status := classifySchema(versions, append([]string(nil), versions...), true, 0)

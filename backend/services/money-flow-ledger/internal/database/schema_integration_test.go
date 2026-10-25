@@ -72,7 +72,7 @@ func TestExplicitSchemaGateAndAtomicPendingMigrations(t *testing.T) {
 	}
 	connection.Release()
 	status, err = InspectSchema(ctx, environment.Pool)
-	if err != nil || status.State != SchemaPending || len(status.Pending) != 11 {
+	if err != nil || status.State != SchemaPending || len(status.Pending) != 13 {
 		t.Fatalf("pending InspectSchema() = %#v, %v", status, err)
 	}
 	if _, err := RequireCurrentSchema(ctx, environment.Pool); err == nil {
@@ -171,7 +171,7 @@ func TestConcurrentExplicitMigrationsSerialize(t *testing.T) {
 		}
 	}
 	status, err := RequireCurrentSchema(ctx, environment.Pool)
-	if err != nil || status.State != SchemaCurrent || len(status.Applied) != 24 {
+	if err != nil || status.State != SchemaCurrent || len(status.Applied) != 25 {
 		t.Fatalf("schema after concurrent migrations = %#v, %v", status, err)
 	}
 }

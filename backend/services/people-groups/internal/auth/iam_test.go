@@ -97,6 +97,16 @@ func TestIAMProviderAcceptsOnlyExactPersonReferenceCredential(t *testing.T) {
 	if err != nil || adjacent.Can(ActionPersonReferenceRead) {
 		t.Fatalf("adjacent view credential principal=%+v err=%v", adjacent, err)
 	}
+	claims.Actions = []string{ActionPersonReferenceRead}
+	claims.Scope.Resources = []struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	}{{Type: "iam_subject", ID: personID}}
+	request.Header.Set("Authorization", "Bearer "+signTestToken(t, keyID, claims, privateKey))
+	resolved, err := provider.Authenticate(request)
+	if err != nil || !resolved.CanResource("iam_subject", personID) {
+		t.Fatalf("subject-scoped reference principal=%+v err=%v", resolved, err)
+	}
 }
 
 func signTestToken(t *testing.T, keyID string, claims iamClaims, key ed25519.PrivateKey) string {

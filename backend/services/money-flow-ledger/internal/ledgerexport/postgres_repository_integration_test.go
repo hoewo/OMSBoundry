@@ -480,7 +480,7 @@ func assertExportArchive(t *testing.T, artifact Artifact, ownerID string, exclud
 			}
 		}
 	}
-	if artifact.Manifest.LedgerOwner.ID != ownerID || artifact.Manifest.SourceSchemaVersion != "000016_local_user_iam_subject_links.sql" {
+	if artifact.Manifest.LedgerOwner.ID != ownerID || artifact.Manifest.SourceSchemaVersion != "000025_payroll_payments.sql" {
 		t.Fatalf("artifact manifest = %#v", artifact.Manifest)
 	}
 }

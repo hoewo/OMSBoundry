@@ -9,6 +9,7 @@ import (
 	"omsbizfoundry/payroll/internal/config"
 	"omsbizfoundry/payroll/internal/database"
 	"omsbizfoundry/payroll/internal/httpserver"
+	"omsbizfoundry/payroll/internal/moneypayment"
 	domain "omsbizfoundry/payroll/internal/payroll"
 	"omsbizfoundry/payroll/internal/personreference"
 	workloadidentity "omsbizfoundry/workload-identity"
@@ -47,12 +48,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var credentials *workloadidentity.TokenSource
+	if (cfg.PeopleBaseURL != "" || cfg.MoneyBaseURL != "") && cfg.IdentityProvider == "iam" {
+		credentials, err = workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
+		if err != nil {
+			return err
+		}
+	}
 	var personReferences domain.PersonReferencePort
 	if cfg.PeopleBaseURL != "" && cfg.IdentityProvider == "iam" {
-		credentials, credentialErr := workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
-		if credentialErr != nil {
-			return credentialErr
-		}
 		personReferences, err = personreference.NewHTTPValidator(cfg.PeopleBaseURL, "", credentials, cfg.ReferenceTimeout)
 	} else if cfg.PeopleBaseURL != "" {
 		personReferences, err = personreference.NewHTTPValidator(cfg.PeopleBaseURL, cfg.PeopleAccessToken, nil, cfg.ReferenceTimeout)
@@ -60,12 +64,23 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	var service *domain.Service
-	if personReferences == nil {
-		service, err = domain.NewService(store)
-	} else {
-		service, err = domain.NewService(store, personReferences)
+	var paymentDelivery domain.PaymentDeliveryPort
+	if cfg.MoneyBaseURL != "" && cfg.IdentityProvider == "iam" {
+		paymentDelivery, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, "", credentials, cfg.ReferenceTimeout)
+	} else if cfg.MoneyBaseURL != "" {
+		paymentDelivery, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, cfg.MoneyAccessToken, nil, cfg.ReferenceTimeout)
 	}
+	if err != nil {
+		return err
+	}
+	dependencies := make([]any, 0, 2)
+	if personReferences != nil {
+		dependencies = append(dependencies, personReferences)
+	}
+	if paymentDelivery != nil {
+		dependencies = append(dependencies, paymentDelivery)
+	}
+	service, err := domain.NewService(store, dependencies...)
 	if err != nil {
 		return err
 	}

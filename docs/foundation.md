@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P4 实现基线（BF-239）：Payroll 已独立拥有月度工资期间、成员工资行、冻结计算快照、导入预览、核对、同步、作废／替代、调整批次和逐人／批量实际发放历史；个人与单位五险一金、外部个税、绩效和调整全部以整数精确计算并追加 revision。Payroll 通过版本化 Money Payment Delivery 交付实际付款，Money 为每个工资行稳定建立一个义务并独立保存 Payment／Allocation／超额未分配事实；部分失败不回滚成功项，未知结果只能沿原命令恢复。正式 Workbench 工资页在 People＋Payroll 装配时改用 Owner API。本地 P4 门禁通过，未部署 D1／公网；P5 财务申请仍待实施。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
+
 2026-10-25 P3 实现基线（BF-238）：People & Groups 已拥有成员基础资料、部门／岗位、状态生效日期及新增／离职／重新入职事件历史；Payroll 已拥有按 Person ID 挂载、按月份生效的固定工资／社保基数／公积金基数档案、版本化工资账户，以及带地区、权威来源、核对时间、基数上下限、个人／单位万分比和舍入规则的标准／租户自定义缴费方案。两个 Owner 分库保存历史，People 状态变化不改写 Payroll，离职也不成为 Payroll 资格规则；普通账户读取始终脱敏。Workbench 成员管理改为分别调用两个 Owner，并显式处理部分成功。本地 P3 门禁通过，P4 工资生成、计算、同步与实际发放尚未实施，D1／公网未发布。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)
 
 2026-10-25 P2 实现基线：`Internal Finance Requests` 与 `Payroll` 是两个独立事实 Owner，而不是 Workbench 浏览器状态或同一个“内部管理后端”。两者各自拥有数据库、ID、Tenant、revision、命令幂等和审计；第一条可运行切片分别是报销／付款申请草稿与月度工资批次草稿。Owner 从可信 IAM 凭证取得 Actor、Tenant、Capability 和资源范围，并在资源层执行本人／租户授权；当前投影必须与最新不可变 revision 一致。P2 只建立演进和恢复骨架，成员薪酬、工资计算／发放、财务附件／审批／Money 连接仍待 P3～P7。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)

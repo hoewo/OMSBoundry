@@ -159,7 +159,8 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 		genericReference := claims.Actions[0] == "money-flow-ledger.reference.read" && (resource.Type == "obligation" || resource.Type == "transaction")
 		receiptSetReference := claims.Actions[0] == "money-flow-ledger.receipt-set.reference.read" && resource.Type == "receipt_set"
 		payableSuggestionCommand := resource.Type == "payable_suggestion" && (claims.Actions[0] == "money-flow-ledger.payable-suggestion.submit" || claims.Actions[0] == "money-flow-ledger.payable-suggestion.read" || claims.Actions[0] == "money-flow-ledger.payable-suggestion.withdraw")
-		if ((!cashWorkspace && len(claims.Actions) != 1) || (!genericReference && !receiptSetReference && !payableSuggestionCommand && !cashWorkspace)) || !iamUUIDPattern.MatchString(resource.ID) {
+		payrollPaymentCommand := resource.Type == "payroll_payment" && claims.Actions[0] == "money-flow-ledger.payroll-payment.record"
+		if ((!cashWorkspace && len(claims.Actions) != 1) || (!genericReference && !receiptSetReference && !payableSuggestionCommand && !payrollPaymentCommand && !cashWorkspace)) || !iamUUIDPattern.MatchString(resource.ID) {
 			return iamClaims{}, fmt.Errorf("invalid reference resource")
 		}
 	}
@@ -208,7 +209,7 @@ func (p *IAMProvider) loadKeys() (map[string]ed25519.PublicKey, error) {
 
 func validMoneyFlowAction(action string) bool {
 	switch action {
-	case "money-flow-ledger.view", "money-flow-ledger.party.register", "money-flow-ledger.obligation.manage", "money-flow-ledger.cash.record", "money-flow-ledger.cash.reverse", "money-flow-ledger.cash.evidence.manage", "money-flow-ledger.allocation.manage", "money-flow-ledger.transfer.record", "money-flow-ledger.export", "money-flow-ledger.statistics.read", "money-flow-ledger.amount.read", "money-flow-ledger.reference.read", "money-flow-ledger.receipt-set.confirm", "money-flow-ledger.receipt-set.reference.read", "money-flow-ledger.payable-suggestion.submit", "money-flow-ledger.payable-suggestion.read", "money-flow-ledger.payable-suggestion.withdraw", "money-flow-ledger.payable-suggestion.decide":
+	case "money-flow-ledger.view", "money-flow-ledger.party.register", "money-flow-ledger.obligation.manage", "money-flow-ledger.cash.record", "money-flow-ledger.cash.reverse", "money-flow-ledger.cash.evidence.manage", "money-flow-ledger.allocation.manage", "money-flow-ledger.transfer.record", "money-flow-ledger.export", "money-flow-ledger.statistics.read", "money-flow-ledger.amount.read", "money-flow-ledger.reference.read", "money-flow-ledger.receipt-set.confirm", "money-flow-ledger.receipt-set.reference.read", "money-flow-ledger.payable-suggestion.submit", "money-flow-ledger.payable-suggestion.read", "money-flow-ledger.payable-suggestion.withdraw", "money-flow-ledger.payable-suggestion.decide", "money-flow-ledger.payroll-payment.record":
 		return true
 	default:
 		return false

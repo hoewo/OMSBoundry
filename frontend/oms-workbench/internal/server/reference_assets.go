@@ -97,11 +97,17 @@ var omsPhase1JS string
 var omsPhase1InternalModelJS string
 
 // omsPhase1Internal composes People & Groups and Payroll for member profiles.
-// Payroll-run and internal expense-request candidates remain browser-local
-// until their later vertical slices replace those views.
+// Internal expense-request candidates remain browser-local until P5 replaces
+// that view.
 //
 //go:embed oms_phase1_internal.js
 var omsPhase1InternalJS string
+
+// omsPhase1PayrollOwner composes formal Payroll execution facts and commands;
+// it is inert when the Payroll or People & Groups application is not assembled.
+//
+//go:embed oms_phase1_payroll_owner.js
+var omsPhase1PayrollOwnerJS string
 
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string

@@ -1,0 +1,18 @@
+{
+  "command_id": "94000000-0000-4000-8000-000000000001",
+  "title": "P4 隔离验收方案",
+  "region_code": "CN-TEST",
+  "region_name": "隔离验收地区",
+  "effective_month": "2026-10",
+  "authority_source": "https://authority.example.test/payroll/p4",
+  "authority_verified_at": "2026-10-25T00:00:00Z",
+  "components": [
+    {"key": "pension", "base_kind": "social", "individual_rate_bps": 800, "employer_rate_bps": 1600, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"},
+    {"key": "medical", "base_kind": "social", "individual_rate_bps": 200, "employer_rate_bps": 900, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"},
+    {"key": "unemployment", "base_kind": "social", "individual_rate_bps": 50, "employer_rate_bps": 50, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"},
+    {"key": "work_injury", "base_kind": "social", "individual_rate_bps": 0, "employer_rate_bps": 20, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"},
+    {"key": "maternity", "base_kind": "social", "individual_rate_bps": 0, "employer_rate_bps": 80, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"},
+    {"key": "housing_fund", "base_kind": "housing", "individual_rate_bps": 700, "employer_rate_bps": 700, "base_floor_minor": 0, "base_cap_minor": 3000000, "rounding_mode": "half_up"}
+  ],
+  "reason": "P4 跨服务验收专用，不代表真实地区法定比例"
+}

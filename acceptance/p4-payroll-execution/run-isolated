@@ -1,0 +1,193 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-p4-payroll.XXXXXX")
+container="oms-p4-payroll-pg18-$$"
+evidence_dir=${P4_PAYROLL_EVIDENCE_DIR:-"$repo/deployments/d1/.runtime/p4-payroll-execution-evidence"}
+service_pids=''
+
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  for pid in $service_pids; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in $service_pids; do wait "$pid" >/dev/null 2>&1 || true; done
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  mkdir -p "$evidence_dir"
+  for artifact in http-evidence.tsv result.md money-facts.tsv people.log payroll.log money.log batch.json overage-required.json final-run.json; do
+    [ ! -f "$runtime/$artifact" ] || cp "$runtime/$artifact" "$evidence_dir/$artifact"
+  done
+  rm -rf "$runtime"
+  exit "$status"
+}
+trap cleanup EXIT HUP INT TERM
+
+for command_name in go docker curl jq; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+for port in 19321 19322 19323; do
+  ! lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is already in use" >&2; exit 2; }
+done
+
+echo '[1/8] 构建 People、Payroll、Money 及运维命令'
+(cd "$repo/backend/services/people-groups" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/people-groups" ./cmd/server && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/people-ops" ./cmd/ops)
+(cd "$repo/backend/services/payroll" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/payroll" ./cmd/server && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/payroll-ops" ./cmd/ops)
+(cd "$repo/backend/services/money-flow-ledger" && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money" ./cmd/server && GOMAXPROCS=2 GOWORK=off go build -p 1 -o "$runtime/money-ops" ./cmd/ops)
+
+echo '[2/8] 启动临时 PostgreSQL 18 并迁移三个独立数据库'
+docker run --detach --name "$container" -e POSTGRES_PASSWORD=postgres -p 127.0.0.1::5432 postgres:18.6-alpine >/dev/null
+for attempt in $(seq 1 60); do
+  docker exec "$container" pg_isready -U postgres >/dev/null 2>&1 && break
+  [ "$attempt" -lt 60 ] || { docker logs "$container" >&2; exit 1; }
+  sleep 1
+done
+postgres_port=$(docker port "$container" 5432/tcp | sed 's/.*://')
+for database in people payroll money; do docker exec "$container" createdb -U postgres "$database"; done
+people_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/people?sslmode=disable"
+payroll_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/payroll?sslmode=disable"
+money_database="postgres://postgres:postgres@127.0.0.1:$postgres_port/money?sslmode=disable"
+
+tenant=11111111-1111-4111-8111-111111111111
+actor=22222222-2222-4222-8222-222222222222
+people_token=p4-people-template-token-123456
+payroll_token=p4-payroll-template-token-123456
+money_token=p4-money-reference-token-1234567
+owner_party=94000000-0000-4000-8000-000000000010
+person_party=94000000-0000-4000-8000-000000000011
+
+DATABASE_URL="$people_database" IDENTITY_PROVIDER=template TEMPLATE_TENANT_ID="$tenant" TEMPLATE_SUBJECT_ID="$actor" TEMPLATE_DISPLAY_NAME='P4 验收人' TEMPLATE_ACCESS_TOKEN="$people_token" "$runtime/people-ops" migrate
+DATABASE_URL="$payroll_database" "$runtime/payroll-ops" migrate
+DATABASE_URL="$money_database" "$runtime/money-ops" migrate >/dev/null
+DATABASE_URL="$payroll_database" PLATFORM_TENANT_ID="$tenant" PLATFORM_ACTOR_ID="$actor" PLATFORM_ACTOR_NAME='P4 规则维护人' PLATFORM_CREDENTIAL_ID=p4-platform-fixture "$runtime/payroll-ops" import-standard-scheme "$script_dir/standard-scheme.json"
+
+echo '[3/8] 启动三个 Owner，并建立版本化 People → Payroll、Payroll → Money 通道'
+HTTP_ADDR=127.0.0.1:19321 DATABASE_URL="$people_database" MIGRATION_MODE=verify IDENTITY_PROVIDER=template TEMPLATE_TENANT_ID="$tenant" TEMPLATE_SUBJECT_ID="$actor" TEMPLATE_DISPLAY_NAME='P4 人员经办人' TEMPLATE_ACCESS_TOKEN="$people_token" "$runtime/people-groups" >"$runtime/people.log" 2>&1 &
+people_pid=$!
+HTTP_ADDR=127.0.0.1:19323 DATABASE_URL="$money_database" MIGRATION_MODE=verify IDENTITY_PROVIDER=local BOOTSTRAP_ADMIN_USERNAME=p4-money-admin BOOTSTRAP_ADMIN_DISPLAY_NAME='P4 资金经办人' BOOTSTRAP_ADMIN_PASSWORD='p4-money-acceptance-password-2026' REFERENCE_TENANT_ID="$tenant" REFERENCE_ACCESS_TOKEN="$money_token" "$runtime/money" >"$runtime/money.log" 2>&1 &
+money_pid=$!
+service_pids="$people_pid $money_pid"
+
+wait_http() {
+  url=$1
+  log=$2
+  for attempt in $(seq 1 60); do
+    curl -fsS "$url" >/dev/null 2>&1 && return 0
+    [ "$attempt" -lt 60 ] || { sed -n '1,160p' "$log" >&2; exit 1; }
+    sleep 1
+  done
+}
+wait_http http://127.0.0.1:19321/health/ready "$runtime/people.log"
+wait_http http://127.0.0.1:19323/health/ready "$runtime/money.log"
+
+HTTP_ADDR=127.0.0.1:19322 DATABASE_URL="$payroll_database" MIGRATION_MODE=verify IDENTITY_PROVIDER=template TEMPLATE_TENANT_ID="$tenant" TEMPLATE_SUBJECT_ID="$actor" TEMPLATE_DISPLAY_NAME='P4 工资经办人' TEMPLATE_ACCESS_TOKEN="$payroll_token" PEOPLE_BASE_URL=http://127.0.0.1:19321 PEOPLE_ACCESS_TOKEN="$people_token" MONEY_BASE_URL=http://127.0.0.1:19323 MONEY_ACCESS_TOKEN="$money_token" "$runtime/payroll" >"$runtime/payroll.log" 2>&1 &
+payroll_pid=$!
+service_pids="$service_pids $payroll_pid"
+wait_http http://127.0.0.1:19322/health/ready "$runtime/payroll.log"
+
+printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
+request() {
+  method=$1; url=$2; token=$3; payload=$4; output=$5; expected=$6
+  if [ -n "$payload" ]; then
+    actual=$(curl -sS -o "$output" -w '%{http_code}' -X "$method" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data "$payload" "$url")
+  else
+    actual=$(curl -sS -o "$output" -w '%{http_code}' -X "$method" -H "Authorization: Bearer $token" "$url")
+  fi
+  printf '%s %s\t%s\t%s\n' "$method" "$url" "$expected" "$actual" >>"$runtime/http-evidence.tsv"
+  [ "$actual" = "$expected" ] || { sed -n '1,160p' "$output" >&2; exit 1; }
+}
+
+echo '[4/8] 建立两名成员和独立薪酬档案，其中一人故意缺少工资账户'
+person_1_payload='{"command_id":"94000000-0000-4000-8000-000000000021","reference_code":"P4-001","display_name":"P4成员甲","department":"研发部","position_title":"工程师","employment_start_date":"2026-01-01"}'
+person_2_payload='{"command_id":"94000000-0000-4000-8000-000000000022","reference_code":"P4-002","display_name":"P4成员乙","department":"产品部","position_title":"产品经理","employment_start_date":"2026-01-01"}'
+request POST http://127.0.0.1:19321/api/v1/persons "$people_token" "$person_1_payload" "$runtime/person-1.json" 201
+request POST http://127.0.0.1:19321/api/v1/persons "$people_token" "$person_2_payload" "$runtime/person-2.json" 201
+person_1=$(jq -er '.id' "$runtime/person-1.json")
+person_2=$(jq -er '.id' "$runtime/person-2.json")
+
+comp_1='{"command_id":"94000000-0000-4000-8000-000000000031","expected_revision":0,"effective_month":"2026-10","fixed_salary_minor":1000000,"social_insurance_base_minor":800000,"housing_fund_base_minor":800000,"reason":"P4 建档"}'
+comp_2='{"command_id":"94000000-0000-4000-8000-000000000032","expected_revision":0,"effective_month":"2026-10","fixed_salary_minor":1200000,"social_insurance_base_minor":900000,"housing_fund_base_minor":900000,"reason":"P4 建档"}'
+pay_1='{"command_id":"94000000-0000-4000-8000-000000000033","expected_revision":0,"account_name":"P4成员甲","bank_name":"验收银行","account_number":"6222021234567890","status":"active","effective_month":"2026-10","reason":"P4 工资卡建档","confirmed":true}'
+request PUT "http://127.0.0.1:19322/api/v1/compensation-profiles/$person_1" "$payroll_token" "$comp_1" "$runtime/comp-1.json" 200
+request PUT "http://127.0.0.1:19322/api/v1/compensation-profiles/$person_2" "$payroll_token" "$comp_2" "$runtime/comp-2.json" 200
+request PUT "http://127.0.0.1:19322/api/v1/payment-profiles/$person_1" "$payroll_token" "$pay_1" "$runtime/payment-1.json" 200
+jq -e '.masked_account_number == "**** **** **** 7890" and (has("account_number") | not)' "$runtime/payment-1.json" >/dev/null
+
+echo '[5/8] 生成月度工资表，预览并确认批量绩效／个税，再核对为待发放'
+request GET http://127.0.0.1:19322/api/v1/contribution-schemes "$payroll_token" '' "$runtime/schemes.json" 200
+scheme_id=$(jq -er '.[] | select(.scheme_kind=="standard") | .id' "$runtime/schemes.json")
+run_payload=$(jq -cn --arg first "$person_1" --arg second "$person_2" --arg scheme "$scheme_id" '{command_id:"94000000-0000-4000-8000-000000000041",period:"2026-10",label:"2026年10月工资",planned_pay_date:"2026-10-31",contribution_scheme_id:$scheme,contribution_scheme_revision:1,person_ids:[$first,$second]}')
+request POST http://127.0.0.1:19322/api/v1/payroll-periods "$payroll_token" "$run_payload" "$runtime/run-created.json" 201
+run_id=$(jq -er '.id' "$runtime/run-created.json")
+run_revision=$(jq -er '.revision' "$runtime/run-created.json")
+line_1=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person)' "$runtime/run-created.json")
+line_2=$(jq -er --arg person "$person_2" '.lines[] | select(.person_id==$person)' "$runtime/run-created.json")
+line_1_revision=$(printf '%s' "$line_1" | jq -er '.revision')
+line_2_revision=$(printf '%s' "$line_2" | jq -er '.revision')
+preview_payload=$(jq -cn --arg first "$person_1" --arg second "$person_2" --argjson run "$run_revision" --argjson firstrev "$line_1_revision" --argjson secondrev "$line_2_revision" '{expected_run_revision:$run,rows:[{person_id:$first,expected_line_revision:$firstrev,performance_minor:20000,tax_minor:3000,tax_source_note:"外部个税结果",adjustments:[]},{person_id:$second,expected_line_revision:$secondrev,performance_minor:10000,tax_minor:5000,tax_source_note:"外部个税结果",adjustments:[]}]}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/imports:preview" "$payroll_token" "$preview_payload" "$runtime/import-preview.json" 200
+jq -e '.confirmable == true and (.items | length)==2 and ([.items[].match_status] | all(.=="matched"))' "$runtime/import-preview.json" >/dev/null
+preview_id=$(jq -er '.id' "$runtime/import-preview.json")
+preview_hash=$(jq -er '.preview_hash' "$runtime/import-preview.json")
+commit_payload=$(jq -cn --arg id "$preview_id" --arg hash "$preview_hash" --argjson revision "$run_revision" '{command_id:"94000000-0000-4000-8000-000000000042",preview_id:$id,preview_hash:$hash,expected_run_revision:$revision,reason:"P4 导入核对"}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/imports:commit" "$payroll_token" "$commit_payload" "$runtime/run-imported.json" 200
+run_revision=$(jq -er '.revision' "$runtime/run-imported.json")
+review_payload=$(jq -cn --argjson revision "$run_revision" '{command_id:"94000000-0000-4000-8000-000000000043",expected_revision:$revision,reason:"P4 工资核对完成"}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/review" "$payroll_token" "$review_payload" "$runtime/run-reviewed.json" 200
+jq -e '.status=="ready_to_pay" and (.lines|length)==2 and ([.lines[].status]|all(.=="ready_to_pay")) and ([.lines[].employee_contribution_minor]|all(.>0))' "$runtime/run-reviewed.json" >/dev/null
+
+echo '[6/8] 建立 Money 账簿主体和成员精确映射'
+person_revision=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .person_source_revision' "$runtime/run-reviewed.json")
+person_digest=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .person_source_digest' "$runtime/run-reviewed.json")
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U postgres -d money <<SQL
+INSERT INTO parties(id,kind,legal_name,revision,created_at,updated_at) VALUES
+('$owner_party','organization','P4 验收公司',1,now(),now()),
+('$person_party','individual','P4成员甲',1,now(),now());
+SQL
+DATABASE_URL="$money_database" "$runtime/money-ops" payroll-owner-set --command-id 94000000-0000-4000-8000-000000000051 --tenant-id "$tenant" --local-party-id "$owner_party" --actor-kind iam_subject --actor-id "$actor" --actor-display-name 'P4 资金经办人' --reason 'P4 工资账簿主体复核' >"$runtime/payroll-owner.json"
+DATABASE_URL="$money_database" "$runtime/money-ops" payable-party-map --command-id 94000000-0000-4000-8000-000000000052 --tenant-id "$tenant" --person-id "$person_1" --person-revision "$person_revision" --person-digest "$person_digest" --local-party-id "$person_party" --reviewed-by-actor-kind iam_subject --reviewed-by-actor-id "$actor" --reviewed-by-display-name 'P4 资金经办人' --reason 'P4 成员工资收款主体复核' >"$runtime/person-mapping.json"
+
+echo '[7/8] 批量发放验证部分成功；再显式确认超额并完成第一人工资'
+run_revision=$(jq -er '.revision' "$runtime/run-reviewed.json")
+line_1_id=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .id' "$runtime/run-reviewed.json")
+line_2_id=$(jq -er --arg person "$person_2" '.lines[] | select(.person_id==$person) | .id' "$runtime/run-reviewed.json")
+line_1_revision=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .revision' "$runtime/run-reviewed.json")
+line_2_revision=$(jq -er --arg person "$person_2" '.lines[] | select(.person_id==$person) | .revision' "$runtime/run-reviewed.json")
+line_1_net=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .net_payable_minor' "$runtime/run-reviewed.json")
+line_2_net=$(jq -er --arg person "$person_2" '.lines[] | select(.person_id==$person) | .net_payable_minor' "$runtime/run-reviewed.json")
+first_amount=$((line_1_net / 2))
+batch_payload=$(jq -cn --arg first "$line_1_id" --arg second "$line_2_id" --argjson run "$run_revision" --argjson firstrev "$line_1_revision" --argjson secondrev "$line_2_revision" --argjson firstamount "$first_amount" --argjson secondamount "$line_2_net" '{items:[{line_id:$first,input:{command_id:"94000000-0000-4000-8000-000000000061",expected_run_revision:$run,expected_line_revision:$firstrev,actual_amount_minor:$firstamount,occurred_on:"2026-10-31",note:"P4 首笔部分发放",overage_confirmed:false,overage_reason:""}},{line_id:$second,input:{command_id:"94000000-0000-4000-8000-000000000062",expected_run_revision:$run,expected_line_revision:$secondrev,actual_amount_minor:$secondamount,occurred_on:"2026-10-31",note:"P4 缺账户验证",overage_confirmed:false,overage_reason:""}}]}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/payments:batch" "$payroll_token" "$batch_payload" "$runtime/batch.json" 207
+jq -e '.summary.succeeded==1 and .summary.failed==1 and .summary.unknown==0 and .summary.unexecuted==0 and ([.items[].status]|sort)==["failed","succeeded"]' "$runtime/batch.json" >/dev/null
+request GET "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id" "$payroll_token" '' "$runtime/run-partial.json" 200
+jq -e --arg first "$person_1" --arg second "$person_2" '(.status=="partially_paid") and (.lines[]|select(.person_id==$first)|.status)=="partially_paid" and (.lines[]|select(.person_id==$second)|.payment_account_missing==true)' "$runtime/run-partial.json" >/dev/null
+
+run_revision=$(jq -er '.revision' "$runtime/run-partial.json")
+line_1_revision=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .revision' "$runtime/run-partial.json")
+allocated=$(jq -er --arg person "$person_1" '.lines[] | select(.person_id==$person) | .allocated_paid_minor' "$runtime/run-partial.json")
+remaining=$((line_1_net - allocated))
+overage_amount=$((remaining + 500))
+overage_missing=$(jq -cn --argjson run "$run_revision" --argjson line "$line_1_revision" --argjson amount "$overage_amount" '{command_id:"94000000-0000-4000-8000-000000000063",expected_run_revision:$run,expected_line_revision:$line,actual_amount_minor:$amount,occurred_on:"2026-10-31",note:"P4 超额门禁",overage_confirmed:false,overage_reason:""}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/lines/$line_1_id/payments" "$payroll_token" "$overage_missing" "$runtime/overage-required.json" 422
+jq -e '.code=="PAYROLL_OVERAGE_CONFIRMATION_REQUIRED"' "$runtime/overage-required.json" >/dev/null
+overage_confirmed=$(jq -cn --argjson run "$run_revision" --argjson line "$line_1_revision" --argjson amount "$overage_amount" '{command_id:"94000000-0000-4000-8000-000000000064",expected_run_revision:$run,expected_line_revision:$line,actual_amount_minor:$amount,occurred_on:"2026-10-31",note:"P4 已核对超额",overage_confirmed:true,overage_reason:"银行实付多 5 元，保留未分配余额复核"}')
+request POST "http://127.0.0.1:19322/api/v1/payroll-periods/$run_id/lines/$line_1_id/payments" "$payroll_token" "$overage_confirmed" "$runtime/final-run.json" 200
+jq -e --arg person "$person_1" '(.status=="partially_paid") and (.lines[]|select(.person_id==$person)|.status)=="paid" and (.lines[]|select(.person_id==$person)|.overage_minor)==500' "$runtime/final-run.json" >/dev/null
+
+docker exec "$container" psql -U postgres -d money -AtF '|' -c "SELECT (SELECT count(*) FROM obligations WHERE source_application='payroll' AND source_resource_type='payroll_line'),(SELECT count(*) FROM cash_transactions),(SELECT count(*) FROM allocations),(SELECT count(*) FROM payroll_payment_deliveries),round(((SELECT COALESCE(sum(amount),0) FROM cash_transactions)-(SELECT COALESCE(sum(amount),0) FROM allocations))*100)::bigint" >"$runtime/money-facts.tsv"
+grep -Eq '^1\|2\|2\|2\|500$' "$runtime/money-facts.tsv"
+
+echo '[8/8] 汇总跨服务证据并清理临时资源'
+assertions=$(awk -F '\t' 'NR>1 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+mismatches=$(awk -F '\t' 'NR>1 && $2!=$3 {count++} END {print count+0}' "$runtime/http-evidence.tsv")
+printf '%s\n' \
+  '# P4 工资执行跨服务验收结果' \
+  '' \
+  "- HTTP 断言：${assertions}；状态不匹配：${mismatches}。" \
+  '- People、Payroll、Money 使用三个独立数据库，通过版本化 HTTP 和稳定 Person 引用连接。' \
+  '- 工资表冻结成员、薪酬、缴费方案和账户快照；导入先预览再提交。' \
+  '- 批量发放一条成功、一条因缺账户失败；成功 Money 事实未被回滚。' \
+  '- 两笔实际支付只创建一个工资义务，精确核销净应发并保留 500 分超额未分配余额。' \
+  '- 本验收使用测试比例方案，不代表真实地区现行法定比例；未执行 D1 或公网部署。' >"$runtime/result.md"
+[ "$mismatches" = 0 ] || exit 1
+cat "$runtime/result.md"
