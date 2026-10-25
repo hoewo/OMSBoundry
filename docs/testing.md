@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C11 真实浏览器与撤权恢复门禁（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `verify-c11-browser.mjs` 先复验同一 C0～C10 链，再用两个 C1 Tenant 管理员的隔离 Chromium Context 登录 Workbench，核对页面 Tenant／Subject，分别点击 Feedback submit／status 并验证同一跨域 SDK Origin。主 Tenant 随后撤销 `feedback.use`，要求入口隐藏且公司内部管理导航仍可用；恢复 capability 后刷新并要求入口返回。故意 403 的预期浏览器资源错误单独计数，其他 Console warning/error 和 Page error 必须为零。固定证据不包含密码、Cookie、API Key、Capability 或派生反馈身份。
+
+`PLAYWRIGHT_MODULE_PATH=... BROWSER_EXECUTABLE=... make p9-browser-driver-test` 已实际通过：测试先构造完整 C0～C10 fixture，再在两个短生命周期回环 Origin 上运行生产 `oms_phase1_feedback.js` 与真实 Chrome，验证双 Tenant 点击、跨域 iframe、撤权、非 Feedback 导航、恢复授权和最终 Grant 还原；独立 verifier 同时拒绝摘要漂移、重算摘要后的非预期 Console 错误和 API Key 注入。两个 server 与 Chrome 均在测试退出时关闭，未启动 Docker、数据库或 OMS 常驻服务。`run-c0-c11` 可恢复既有阶段，`verify-run-c0-c11` 还会核对十二套制品、精确 C1 Actor 和跨 Origin。该夹具不等于真实 D1，真实全链和回滚记录仍待执行。
+
 ## P9 C0～C10 可恢复总入口（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/run-c0-c10` 先运行或复用 C0～C8，再运行或复用 C9、C10；缺失 C9 时必须显式设置 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`，C10 缺真实开发者回复时保持 exit 3／`PENDING`，复跑从 C10 恢复。只读入口 `verify-run-c0-c10` 会独立复验十一套固定制品、同一 Compose project／公共 Origin、C0～C8 checksum DAG、C9 对 C0～C8 及 C10 对 C0／C1／C9 的精确绑定。

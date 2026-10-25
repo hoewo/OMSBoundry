@@ -61,14 +61,21 @@ developer replies in Feedback Console; rerunning the exact command completes
 notification and per-conversation read checks. See the adjacent README for
 exact inputs and secret-free evidence contracts.
 
-For the bounded end-to-end window, prefer `run-c0-c10` instead of manually
+`verify-c11-browser.mjs` then uses real Chromium contexts for both Tenant
+administrators. It opens submit and status against the configured cross-origin
+Feedback frame, records page／Console health, revokes `feedback.use`, proves
+that Feedback disappears without breaking normal OMS navigation, restores the
+grant, and proves the entry returns. Playwright and Chromium are operator
+prerequisites and are not bundled into the release archive.
+
+For the bounded end-to-end window, prefer `run-c0-c11` instead of manually
 joining those commands. It resumes verified phase directories, refuses to
 start a missing C9 without the same explicit restore confirmation, preserves
 C10's `PENDING` exit while developer replies are outstanding, and finishes by
-running `verify-run-c0-c10` over the whole checksum graph. It does not start,
-stop or deploy the D1 stack. No minimum soak duration is currently part of the
-accepted gate; real-browser Console/click and rollback records remain separate
-required evidence.
+running `verify-run-c0-c11` over the whole checksum graph and exact C1 browser
+actors. It does not start, stop or deploy the D1 stack. No minimum soak duration
+is currently part of the accepted gate; rollback remains separate required
+evidence.
 
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and

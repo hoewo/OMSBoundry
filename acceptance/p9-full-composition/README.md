@@ -4,7 +4,7 @@ This target is the bounded runtime gate for the OMS1 P9 iteration. It does not s
 
 For the complete C0 through C8 business journey, set the same variables documented below plus an absolute `P9_RUN_EVIDENCE_ROOT` and run `run-c0-c8`. The runner creates `c0` through `c8` below that root in order. On interruption it verifies and reuses each already complete phase, then resumes at the first absent phase; after every phase it independently checks the Compose project, public origin and all preceding checksum bindings. It never starts or stops services, and `P9_C5_SECRET_DIR` must remain outside the evidence root.
 
-For the whole C0 through C10 runtime gate, use `run-c0-c10` with those same inputs. It first invokes the resumable C0-C8 runner, then performs or reuses C9 recovery and C10 Feedback. A missing C9 is never started unless `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` is present. A C10 run waiting for real developer replies exits `3` without evidence; after the replies, rerun the exact command and it resumes at C10. Finally, `verify-run-c0-c10` independently checks all eleven fixed artifact sets, one Compose project, one public origin, the complete C0-C8 checksum DAG, the C9 bindings and the C10 bindings. Neither command owns service startup, shutdown or deployment.
+For the whole C0 through C11 runtime gate, use `run-c0-c11` with those same inputs plus the two administrator credential files and a Playwright Chromium module. It first invokes the resumable C0-C10 runner, then performs or reuses the real-browser C11. A missing C9 is never started unless `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` is present. A C10 run waiting for real developer replies exits `3` without evidence; after the replies, rerun the exact command and it resumes at C10. Finally, `verify-run-c0-c11` independently checks all twelve fixed artifact sets, one Compose project, one public origin, the complete checksum DAG, exact C1 browser actors, and a common Feedback SDK origin distinct from OMS. Neither command owns service startup, shutdown or deployment.
 
 Required runtime state:
 
@@ -216,10 +216,26 @@ acceptance/p9-full-composition/verify-c10-feedback.mjs
 
 C10 obtains Feedback configuration only through each authenticated OMS Gateway session and requires project `115`, notifications and distinct HMAC-derived identities. It creates or reuses two deterministic conversations per Tenant and replays one customer message with an HTTPS URL attachment by `client_message_id`. If a Feedback developer has not replied to all four conversations, the command exits `3`, prints only the non-secret Feedback IDs/short IDs and leaves no C10 evidence; reply to those items in Feedback Console and rerun the exact command. Completion requires real developer messages, unread notifications for both conversations, marking the first conversation read without clearing the second, and finally clearing the second. API Keys, short-lived session tokens, IAM credentials, Cookies and pseudonymous user IDs never enter C10 evidence. Validate a handed-off artifact with `verify-c10-evidence EVIDENCE_DIR`.
 
-Once the full chain has completed, verify it again without performing any business or recovery action:
+After C10, run the actual Workbench in Chromium for both Tenant administrators:
 
 ```sh
-acceptance/p9-full-composition/verify-run-c0-c10 /absolute/path/to/evidence
+P9_RUN_EVIDENCE_ROOT=/absolute/path/to/evidence \
+P9_C11_EVIDENCE_DIR=/absolute/path/to/evidence/c11 \
+P9_PRIMARY_ADMIN_USERNAME=admin-a \
+P9_PRIMARY_ADMIN_PASSWORD_FILE=/restricted/admin-a.password \
+P9_SECONDARY_ADMIN_USERNAME=admin-b \
+P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
+PLAYWRIGHT_MODULE_PATH=/absolute/path/to/playwright/index.mjs \
+BROWSER_EXECUTABLE=/absolute/path/to/chromium \
+node acceptance/p9-full-composition/verify-c11-browser.mjs
 ```
 
-Passing this command proves the fixed C0-C10 artifacts belong to one continuous runtime chain. It does not replace the still-separate real-browser Console/click record, rollback record or a duration requirement. No minimum soak duration is currently specified; a future duration must be recorded as a separate accepted requirement rather than inferred by this runner.
+C11 logs into both C1 Tenant administrators in isolated browser contexts, checks the rendered Tenant／Subject, opens both Feedback submit and status modes through the configured cross-origin iframe, and fails on page errors or unexpected Console warnings/errors. It then revokes the primary administrator's `feedback.use`, requires the entry to become undiscoverable while non-Feedback OMS navigation remains usable, restores the grant, and requires the entry to return. The expected browser resource error caused by the deliberate 403 is counted separately; it is not silently treated as an unexpected clean Console. Cleanup attempts to restore the grant if the run is interrupted after revocation. Passwords, API Keys, Cookies and pseudonymous identities are excluded from the fixed four-file evidence set. Validate a handed-off artifact with `verify-c11-evidence EVIDENCE_DIR`.
+
+Once the full chain has completed, verify it again without performing any business, browser or recovery action:
+
+```sh
+acceptance/p9-full-composition/verify-run-c0-c11 /absolute/path/to/evidence
+```
+
+Passing this command proves the fixed C0-C11 artifacts belong to one continuous runtime chain. It does not replace a rollback record or a duration requirement. No minimum soak duration is currently specified; a future duration must be recorded as a separate accepted requirement rather than inferred by this runner.

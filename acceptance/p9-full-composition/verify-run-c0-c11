@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-run-c0-c11 EVIDENCE_ROOT' >&2; exit 2; }
+root=$1
+[ -d "$root" ] || { echo "P9 run evidence root not found: $root" >&2; exit 2; }
+for command_name in jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+[ -z "$(find "$root" -type l -print -quit)" ] || { echo 'P9 run evidence must not contain symbolic links' >&2; exit 1; }
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+"$script_dir/verify-run-c0-c10" "$root" >/dev/null
+"$script_dir/verify-c11-evidence" "$root/c11" >/dev/null
+
+digest() { openssl dgst -sha256 -r "$1" | awk '{print $1}'; }
+c0_state="$root/c0/state-after-c0.json"
+c1_state="$root/c1/state-after-c1.json"
+c11_state="$root/c11/state-after-c11.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state")
+public_url=$(jq -er '.deployment.public_url|sub("/+$";"")' "$c0_state")
+
+[ "$(jq -er '.deployment.compose_project' "$c11_state")" = "$compose_project" ] || { echo 'C11 Compose project continuity failed' >&2; exit 1; }
+[ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$c11_state")" = "$public_url" ] || { echo 'C11 public origin continuity failed' >&2; exit 1; }
+for phase in 0 1 9 10; do
+  expected=$(digest "$root/c$phase/checksums.sha256")
+  actual=$(jq -er ".deployment.c${phase}_checksums_sha256" "$c11_state")
+  [ "$actual" = "$expected" ] || { echo "C11 does not bind the supplied C$phase evidence" >&2; exit 1; }
+done
+
+c1_actors=$(jq -r '.tenants[]|[.id,.administrator_subject_id]|@tsv' "$c1_state" | LC_ALL=C sort)
+c11_actors=$(jq -r '.tenants[]|[.tenant_id,.subject_id]|@tsv' "$c11_state" | LC_ALL=C sort)
+[ "$c11_actors" = "$c1_actors" ] || { echo 'C11 browser actors differ from the C1 Tenant administrators' >&2; exit 1; }
+
+sdk_origins=$(jq -r '.tenants[].submit_frame_origin' "$c11_state" | sort -u)
+[ "$(printf '%s\n' "$sdk_origins" | awk 'NF{count++}END{print count+0}')" -eq 1 ] || { echo 'C11 tenants used different Feedback SDK origins' >&2; exit 1; }
+[ "$sdk_origins" != "$(printf '%s' "$public_url" | sed -E 's#^((https?://)?[^/]+).*$#\1#')" ] || { echo 'C11 Feedback SDK did not cross the public OMS origin' >&2; exit 1; }
+
+echo "PASS P9 continuous C0-C11 evidence chain for Compose project $compose_project"

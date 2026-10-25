@@ -43,6 +43,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-264 增加显式确认后才可执行的 C9 原项目联合备份／清卷恢复门禁，并在恢复后核对十五库指纹、Evidence 字节、C7／C8 稳定重放和 Open API 审计续写；离线正反例通过，真实 D1 尚未执行。
 - BF-265 增加 C10 Feedback V2 真实旅程门禁：绑定 C0／C1／C9，两个 Tenant 各两条会话，没有开发者回复时保持 `PENDING`，回复后核对逐会话未读／已读隔离；离线 pending／resume 与证据负例通过，真实 project 115 尚未执行。
 - BF-266 增加随 release bundle 交付的 `run-c0-c10` 与 `verify-run-c0-c10`：总入口复用已有 C0～C8，再执行或复用 C9／C10；C9 仍需显式破坏性确认，C10 仍可在人工回复点安全暂停。最终 verifier 独立核对十一套固定制品、单一 Compose project／Origin、C0～C8 checksum DAG、C9 对 C0～C8 及 C10 对 C0／C1／C9 的绑定。离线完整复用、checksum-valid 断链和未确认 C9 负例通过；执行器不管理服务生命周期，也没有擅自引入未确认的 soak 时长。
+- BF-267 增加 C11 真实浏览器门禁、`run-c0-c11` 与十二阶段全链 verifier：两个 C1 Tenant 管理员分别在真实 Chromium 中核对页面身份并点击 Feedback submit／status，SDK iframe 必须来自同一配置跨域 Origin；主 Tenant 撤销 `feedback.use` 后入口隐藏、OMS 导航仍可用，恢复授权后入口返回。低资源双 Origin 夹具实际运行生产 Feedback bridge 并确认最终 Grant 恢复，摘要漂移、非预期 Console 错误和 API Key 注入负例通过；真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -70,6 +71,7 @@ acceptance/p9-full-composition/test-run-c0-c8
 acceptance/p9-full-composition/test-c9-recovery
 node acceptance/p9-full-composition/test-c10-feedback.mjs
 acceptance/p9-full-composition/test-run-c0-c10
+PLAYWRIGHT_MODULE_PATH=... BROWSER_EXECUTABLE=... node acceptance/p9-full-composition/test-c11-browser.mjs
 git diff --check
 ```
 
@@ -82,13 +84,13 @@ git diff --check
 仍需在一次有界运行窗口内完成并在退出后清理：
 
 1. 使用非占位部署秘密和当前镜像启动全组合，记录镜像 digest 与全部容器健康；
-2. 使用 `run-c0-c10` 连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、报销付款、工资实际发放、恢复和 Feedback 旅程；
+2. 使用 `run-c0-c11` 连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、报销付款、工资实际发放、恢复、Feedback API 旅程和双租户真实浏览器撤权恢复；
 3. 创建带 `public-ingress-quiesced-v1` 声明和十五库无秘密事实指纹的联合备份，恢复到空目标并通过自动指纹比对，再次执行 Evidence 字节、关键读取与续写；
 4. 对比恢复前后 Tenant、稳定 ID、revision、精确金额、File Version、Money 引用、Key 非秘密元数据、反馈身份映射与审计；
-5. 记录真实浏览器 Console、跨租户／撤权负例及回滚点。
+5. 核对 C11 真实环境 Console／点击／撤权证据，并单独记录回滚点。
 
-P8 仍缺项目 115 服务端通知、有效 Feedback 运行凭证、双账号／双租户和真实跨域浏览器证据；P9 还缺真实浏览器 Console／点击与回滚记录。该外部运行门禁未关闭前，也不能把“连续 Feedback”或整轮 P9 记为通过。当前需求没有规定最小 soak 时长，因此源码门禁不凭空增加时间条件。
+P8／P9 的真实环境仍缺项目 115 完整外部回复／通知、双账号／双租户 C11 浏览器证据和回滚记录；本地真实 Chrome 夹具不替代这些运行证据。该外部门禁未关闭前，不能把“连续 Feedback”或整轮 P9 记为通过。当前需求没有规定最小 soak 时长，因此源码门禁不凭空增加时间条件。
 
 ## 5. 资源状态
 
-本批只执行 Go／shell／JSON／Compose 渲染测试，没有启动 D1、PostgreSQL 或其他常驻容器。全组合构建与恢复留到运行参数齐备后一次性执行，避免当前开发机长期占用资源。
+本批只执行 Go／shell／JSON／Compose 渲染与一个短生命周期 Chrome／双回环 HTTP 夹具，没有启动 D1、PostgreSQL 或其他常驻容器；浏览器与端口均在测试退出时关闭。全组合构建与恢复留到运行参数齐备后一次性执行，避免当前开发机长期占用资源。
