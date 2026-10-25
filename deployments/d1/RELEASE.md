@@ -47,8 +47,11 @@ For the OMS1 P9 release gate, run `acceptance/p9-full-composition/verify-c0`
 before creating business fixtures, then run
 `verify-c1-multitenant` with two protected administrator password files. The
 second gate uses the already-running stack and same public origin; it does not
-start or stop services. See its adjacent README for the exact inputs and
-secret-free evidence contract.
+start or stop services. Continue with `verify-c2-member-payroll` against the
+exact C0/C1 evidence to establish isolated Compensation Profiles for both
+Tenant Persons. C2 intentionally does not assert statutory rates or execute a
+payroll period. See the adjacent README for exact inputs and secret-free
+evidence contracts.
 
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and

@@ -17,6 +17,14 @@ make p9-multitenant-driver-test
 
 该入口用假的 Docker／curl 和真实 jq／checksum 构造通过 C0，验证第二 Tenant 首次创建、同 Origin 双会话、People 授权、双 Person、交叉 404、Workbench Tenant、固定 C1 制品校验和篡改拒绝，并扫描确认管理员密码未进入 Docker 参数或证据。生产 `verify-c1-multitenant` 不启动／停止服务，只能绑定通过独立 verifier 的 C0 和已经运行的 D1。离线通过不表示真实 C1 已执行；真实命令、受限密码文件与输出格式见 [P9 README](../acceptance/p9-full-composition/README.md)。
 
+BF-256 的低资源离线回归：
+
+```sh
+make p9-member-payroll-driver-test
+```
+
+该入口用假的 curl 与真实 jq／checksum 构造并独立校验 C0／C1，随后验证双登录、Payroll 最小 Grant、两份幂等 Compensation Profile、Person source revision、整数最小货币单位、列表隔离、交叉 404、重跑和固定 C2 制品；摘要漂移以及“重算摘要但删除一项 HTTP 证据”都必须失败。密码不会进入证据。生产 `verify-c2-member-payroll` 只绑定同一 C0／C1 和已经运行的 D1，不启动或停止服务，不校验法定比例，也不生成／发放工资。离线通过不表示真实 C2 已执行。
+
 ## 2026-10-26 OMS1 迭代 P8 Feedback 本地真实浏览器门禁
 
 不启动 Docker，用两个随机回环端口形成真实跨 origin Workbench／SDK，并让真实 Chromium 直接加载生产宿主脚本：

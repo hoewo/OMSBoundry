@@ -18,9 +18,9 @@
 | 能力 | 当前证据 | 缺口 |
 | --- | --- | --- |
 | 租户与账号 | P1 已证明同进程 Tenant A／B 的创建、登录、授权、资源隔离、撤权和恢复；BF-254 已修复 Gateway／Workbench 把 Manifest 默认 Tenant 误当白名单的问题；BF-255 已提供绑定 C0 的同 Origin 双租户运行驱动 | 驱动尚未在新 D1／公网执行；首版明确不提供同账号租户切换 |
-| 成员 | P3 已有成员生命周期、任职 revision、Payroll 档案挂载及 Workbench 两 Owner 管理旅程；P4 已冻结工资成员快照 | 待 P9 全组合恢复与公网连续旅程 |
+| 成员 | P3 已有成员生命周期、任职 revision、Payroll 档案挂载及 Workbench 两 Owner 管理旅程；P4 已冻结工资成员快照；BF-256 已提供绑定 C1 双 Tenant Person 的 C2 薪酬档案运行驱动 | C2 尚未在新 D1／公网执行；待全组合恢复与连续旅程 |
 | 财务申请 | P7 已完成 Evidence 实时复验、员工本人开放 API、重复识别、草稿保留与 Finance→Money 闭环 | D1／公网全组合和联合恢复留待 P9 |
-| 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接 | 待 P9 补跨应用恢复／导出并完成 D1／公网连续旅程 |
+| 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接；BF-256 已把 P9 连续旅程推进到双 Tenant Compensation Profile | 尚未在真实 D1 生成工资周期；待补跨应用恢复／导出和公网连续旅程 |
 | 开放平台 | P7 已开放 profile／settings、Evidence 发票上传和本人报销命令／查询，并同步 OpenAPI 与中文说明 | 其他业务 API 不在本轮；D1／公网留待 P9 |
 | 发票报销闭环 | P7 已用真实 TLS、IAM、Gateway、三个 Owner 和四库完成上传→提交→付款→本人 paid 查询及故障恢复 | 商业杀毒／OCR、自动代付、审批和公网连续旅程不在 P7 |
 | Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist、OMS Origin 模板及本地真实 Chromium 跨 origin 宿主门禁 | 项目 115 服务端通知开关、有效运行凭证、双账号／双租户、附件／回复／单条已读和外部端到端浏览器仍待验 |
@@ -186,6 +186,7 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 - D1 增加两个服务、两个数据库、路由、Grant bootstrap、备份恢复与镜像清单；
 - 本地与 D1 使用同一 API、migration 和镜像，配置只决定端点和放置；
 - 连续完成 Tenant 创建、成员、薪酬、工资、财务申请、开放 API 报销闭环和 Feedback；
+- C0／C1／C2 运行驱动依次绑定固定证据摘要；C2 只覆盖成员稳定引用到薪酬档案，不以验收基数冒充法定比例或工资执行；
 - 生成逐项证据报告、回滚点、镜像 digest、容器健康、数据库恢复和浏览器 console 记录。
 - 新联合备份在停写窗口内生成无秘密数据库事实指纹；空目标恢复必须在业务服务启动前与原 checkpoint 严格一致，随后仍要完成 Evidence 字节和关键业务读取／续写。
 

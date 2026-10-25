@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 BF-256 为 P9 增加 C2 成员→薪酬档案连续验收入口：它绑定 C0／C1，在同一公网 Origin 让两个 Tenant 分别把已有 Person 稳定引用挂载为 Payroll Compensation Profile，并验证 source revision、整数金额、列表隔离与交叉 404。该阶段明确不声明五险一金比例、不生成工资表、不发薪；当前只完成离线驱动／证据回归，真实 D1 尚未运行。
+
 2026-10-26 BF-255 为 P9 增加 C1 双租户连续验收入口：它绑定已校验 C0 和同一公网 Origin，安全创建／复用第二 Tenant，分别完成登录、People 授权、Person 稳定重放、列表隔离、跨租户 404 与 Workbench Tenant 投影；秘密不进入 argv 或证据。当前只完成离线驱动／证据回归，真实 D1 尚未运行。
 
 2026-10-26 BF-254 修正单一 Manifest Tenant 对同域名多租户的错误限制：当前登录账号的可信 Tenant 来自 IAM 会话和签名 Capability；Manifest `tenant_id` 仅保留为部署默认／迁移锚点。Gateway 与 Workbench 已允许同一 issuer 下的第二 Tenant，并在任意成功登录后清除旧能力 Cookie；Owner 仍拥有最终租户隔离。源码回归不替代 P9 的双租户 D1、附件、导出与恢复实测。
