@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 P9 增量（BF-258）：C4 财务申请运行驱动与固定证据 verifier 已进入源码和 D1 release bundle。它绑定 C0～C3，复用两 Tenant 的 C1 Person 快照，分别创建无附件但显式确认的付款申请，并验证 `payable`／`not_required`、敏感账号脱敏、本人列表隔离、交叉 404 和零付款／零 Money。下一连续阶段才进入员工 API Key＋Evidence 发票上传＋本人报销；真实 D1、实际付款、恢复和 Feedback 仍待有界运行窗口。
+
 2026-10-26 BF-257 完成 P9 C3 工资表运行驱动、独立证据 verifier、双 Tenant 幂等重跑／快照／隔离／秘密扫描回归和 release bundle 装配。C3 使用明确非法律依据的六项零比例 fixture，只证明工资周期生成、上游 revision 冻结、无需审批与未支付边界；不发薪、不写 Money。下一段应从同一 C0→C3 链进入财务申请与开放 API 发票报销，再连接实际付款；真实 D1 C3 尚未执行。
 
 2026-10-26 BF-256 完成 P9 C2 成员到薪酬档案运行驱动、独立证据 verifier、双 Tenant 幂等重跑／隔离／秘密扫描回归和 release bundle 装配。下一段应在同一 C0→C2 链上显式准备版本化缴费方案并生成工资周期，再进入 Finance／开放 API 报销；比例来源未确认前只可使用清楚标记的验收方案，不能冒充现行法定规则。真实 D1 C2 尚未执行。

@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C4 财务申请连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/verify-c4-finance-requests` 会重新验证并绑定 C0～C3 固定证据，在同一公网 Origin 下登录两名管理员、读取既有 C1 Person 快照、取得最小 Finance 本人能力，并各自建立／提交一笔付款申请。断言覆盖 `payable`、`not_required`、明确无附件确认、账号只显示后四位、零支付／零 Money、本人列表隔离和跨 Tenant 404。报销的 Evidence 强制条件保持不变。
+
+`make p9-finance-request-driver-test` 已实际通过：离线 curl fixture 覆盖首次与重跑、Grant 204／409、提交 200／精确已提交状态 409 后重读收敛、密码不落证据、checksum 漂移拒绝，以及删掉跨租户断言后重算 checksum 仍失败。该测试不启动服务、容器或数据库，不构成真实 D1／公网、实际付款、恢复或 P9 完成证据。
+
 ## 2026-10-26 同域名多租户 Gateway／Workbench 回归
 
 ```sh

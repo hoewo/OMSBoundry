@@ -75,4 +75,21 @@ acceptance/p9-full-composition/verify-c3-payroll-periods
 
 C3 re-verifies and binds C0／C1／C2, discovers exactly one already-running Payroll container from the C0 Compose project, and imports one stable acceptance-only standard Contribution Scheme through Payroll's own operations binary. All six rates are deliberately zero and the fixture is explicitly non-statutory; it tests snapshot mechanics without claiming legal correctness. Each Tenant administrator receives only `payroll.tenant.read` and `payroll.run.manage`, then creates or replays one regular 2026-10 Payroll Period for the existing C1 Person and C2 Compensation Profile. The gate requires `review_pending`, an explicit `not_required` approval snapshot, frozen Person／Compensation／Scheme revisions, precise integer totals, zero actual payment, Tenant-isolated lists and cross-Tenant 404. It never calls payment endpoints or Money, and it does not start or stop services. Validate a handed-off artifact with `verify-c3-evidence EVIDENCE_DIR`.
 
+Continue with the internal Finance request gate against the same running composition:
+
+```sh
+P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
+P9_C1_EVIDENCE_DIR=/absolute/path/to/evidence/c1 \
+P9_C2_EVIDENCE_DIR=/absolute/path/to/evidence/c2 \
+P9_C3_EVIDENCE_DIR=/absolute/path/to/evidence/c3 \
+P9_C4_EVIDENCE_DIR=/absolute/path/to/evidence/c4 \
+P9_PRIMARY_ADMIN_USERNAME=admin-a \
+P9_PRIMARY_ADMIN_PASSWORD_FILE=/restricted/admin-a.password \
+P9_SECONDARY_ADMIN_USERNAME=admin-b \
+P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
+acceptance/p9-full-composition/verify-c4-finance-requests
+```
+
+C4 re-verifies and binds C0 through C3. It refreshes the existing C1 Person snapshots, grants only Finance self-read/self-manage, and creates one external one-time-payee payment request per Tenant. Because reimbursement submission requires Evidence by design, this bounded phase uses payment requests and records the required explicit acknowledgement that Evidence is missing. Both requests must reach `payable` with the frozen `not_required` approval placeholder, masked account numbers, zero payment facts, isolated self lists and cross-Tenant 404. The gate never calls a payment endpoint or Money, starts no service, and accepts only the precise already-submitted state conflict on safe reruns before re-reading the final fact. Validate a handed-off artifact with `verify-c4-evidence EVIDENCE_DIR`.
+
 After the continuous fixture has been created, `d1 backup` must produce both `backup-consistency.env` and `database-fingerprints.tsv`. The latter contains only database names, table/row counts and SHA-256 values; raw rows and sequence values never enter the artifact. Its schema/fact digests cover public sequence definitions and `last_value`/`is_called` as well as tables. Before deleting target volumes, `d1 restore` validates its fixed format and exact database selection; it then recomputes the same fingerprints before starting business services and fails closed on any mismatch. A passing fingerprint comparison proves database checkpoint equality only; the P9 runtime window must still verify Evidence bytes and repeat key reads and one bounded continuation write after restore.

@@ -6,6 +6,7 @@ tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
 runtime=$(mktemp -d "$tmp_root/oms-p9-c3-test.XXXXXX")
 trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
 mkdir -p "$runtime/bin"
+artifact_dir=${P9_C3_TEST_ARTIFACT_DIR:-}
 
 P9_C2_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c2-member-payroll" >/dev/null
 
@@ -120,5 +121,17 @@ awk -F '\t' '$1!="GET secondary cross-tenant Payroll Period"' "$incomplete/http-
 http_sha=$(openssl dgst -sha256 -r "$incomplete/http-evidence.tsv" | awk '{print $1}')
 awk -v sha="$http_sha" '$2=="http-evidence.tsv" {$1=sha} {print $1"  "$2}' "$incomplete/checksums.sha256" >"$incomplete/checksums.tmp"; mv "$incomplete/checksums.tmp" "$incomplete/checksums.sha256"
 if "$script_dir/verify-c3-evidence" "$incomplete" >/dev/null 2>&1; then echo 'P9 C3 evidence verifier accepted a recomputed but incomplete HTTP matrix' >&2; exit 1; fi
+
+if [ -n "$artifact_dir" ]; then
+  [ ! -e "$artifact_dir" ] || { echo "P9 C3 test artifact directory already exists: $artifact_dir" >&2; exit 2; }
+  mkdir -p "$artifact_dir"
+  cp -R "$runtime/fixture/c0" "$artifact_dir/c0"
+  cp -R "$runtime/fixture/c1" "$artifact_dir/c1"
+  cp -R "$runtime/fixture/c2" "$artifact_dir/c2"
+  cp -R "$runtime/c3" "$artifact_dir/c3"
+  cp "$runtime/fixture/primary.password" "$artifact_dir/primary.password"
+  cp "$runtime/fixture/secondary.password" "$artifact_dir/secondary.password"
+  chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password"
+fi
 
 echo 'PASS P9 C3 offline Payroll Period driver and evidence regression'

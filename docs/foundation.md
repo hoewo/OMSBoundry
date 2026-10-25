@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P9 C4 连续运行门禁（BF-258）：双租户财务阶段必须沿用 C1 Person 和同一公网入口，以最小 Finance 本人读写能力分别创建并提交一笔付款申请，验证无需审批快照、明确无附件确认、账号脱敏、列表隔离和交叉 404。报销仍必须有 Evidence，不允许为测试弱化；付款申请进入待支付不等于发生实际支付或 Money 事实。当前只有离线驱动／证据回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+
 2026-10-26 BF-257 为 P9 增加 C3 工资表连续验收入口：它绑定 C0～C2，在同一公网 Origin 为两个 Tenant 的既有 Person／Compensation Profile 各生成一张待核对工资表，冻结成员、薪酬和方案 revision，并验证无需审批快照、零实付、列表隔离与交叉 404。六项零比例方案只用于验收快照机制，明确不是法定规则；C3 不发薪、不写 Money。当前只完成离线驱动／证据回归，真实 D1 尚未运行。
 
 2026-10-26 BF-256 为 P9 增加 C2 成员→薪酬档案连续验收入口：它绑定 C0／C1，在同一公网 Origin 让两个 Tenant 分别把已有 Person 稳定引用挂载为 Payroll Compensation Profile，并验证 source revision、整数金额、列表隔离与交叉 404。该阶段明确不声明五险一金比例、不生成工资表、不发薪；当前只完成离线驱动／证据回归，真实 D1 尚未运行。

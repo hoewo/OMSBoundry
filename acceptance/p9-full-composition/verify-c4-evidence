@@ -1,0 +1,76 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-c4-evidence EVIDENCE_DIR' >&2; exit 2; }
+evidence_dir=$1
+[ -d "$evidence_dir" ] || { echo "P9 C4 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C4 evidence must not contain symbolic links' >&2; exit 1; }
+
+expected_entries='checksums.sha256
+http-evidence.tsv
+result.md
+state-after-c4.json'
+actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort)
+[ "$actual_entries" = "$expected_entries" ] || { echo 'P9 C4 evidence directory does not contain the fixed artifact set' >&2; exit 1; }
+expected_files='http-evidence.tsv
+result.md
+state-after-c4.json'
+actual_files=$(awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ {exit 1} {print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C4 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual_files" = "$expected_files" ] || { echo 'P9 C4 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r expected artifact; do
+  actual=$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}')
+  [ "$actual" = "$expected" ] || { echo "P9 C4 checksum mismatch for $artifact" >&2; exit 1; }
+done <"$evidence_dir/checksums.sha256"
+
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C4" and .result=="pass" and
+  .deployment.profile=="D1" and
+  ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c2_checksums_sha256,.deployment.c3_checksums_sha256] | all(test("^[0-9a-f]{64}$"))) and
+  (.tenants|length)==2 and (.tenants[0].id != .tenants[1].id) and
+  all(.tenants[]; (.id|test($uuid)) and (.person_id|test($uuid)) and (.finance_request.id|test($uuid)) and
+      .finance_request.revision>=2 and .finance_request.type=="payment" and .finance_request.status=="payable" and
+      .finance_request.approval_status=="not_applicable" and .finance_request.amount_minor==12345) and
+  .checks.person_snapshot_preserved=="pass" and .checks.approval_not_required=="pass" and
+  .checks.missing_evidence_explicitly_acknowledged=="pass" and .checks.finance_request_list_isolation=="pass" and
+  .checks.cross_tenant_finance_request_not_found=="pass" and .checks.payment_facts_absent=="pass" and
+  .checks.money_written==false and .checks.secrets_recorded==false
+' "$evidence_dir/state-after-c4.json" >/dev/null || { echo 'P9 C4 state has an invalid schema or failed check' >&2; exit 1; }
+
+awk -F '\t' '
+  NR==1 {if ($0!="request\texpected_status\tactual_status\ttime_seconds") exit 1; next}
+  NF!=4 {exit 1}
+  $4 !~ /^[0-9]+([.][0-9]+)?$/ {exit 1}
+  $1=="GET /auth/api/v1/csrf" {csrf++}
+  $1=="POST /auth/api/v1/login" {login++}
+  $1=="GET /auth/api/v1/session" {session++}
+  $1=="POST Finance grant" {grant++}
+  $1=="POST /gateway/authorize/people-groups" {people_authorize++}
+  $1=="GET primary Person snapshot" {primary_person++}
+  $1=="GET secondary Person snapshot" {secondary_person++}
+  $1=="POST /gateway/authorize/internal-finance-requests" {finance_authorize++}
+  $1=="POST primary Finance request" {primary_create++}
+  $1=="POST secondary Finance request" {secondary_create++}
+  $1=="POST primary Finance submit" {primary_submit++}
+  $1=="POST secondary Finance submit" {secondary_submit++}
+  $1=="GET primary Finance request final" {primary_final++}
+  $1=="GET secondary Finance request final" {secondary_final++}
+  $1=="GET primary Finance request list" {primary_list++}
+  $1=="GET secondary Finance request list" {secondary_list++}
+  $1=="GET primary cross-tenant Finance request" {primary_cross++}
+  $1=="GET secondary cross-tenant Finance request" {secondary_cross++}
+  $2==$3 {next}
+  $2=="204/409" && ($3=="204" || $3=="409") {next}
+  $2=="200/409" && ($3=="200" || $3=="409") {next}
+  {exit 1}
+  END {
+    if (csrf!=2 || login!=2 || session!=2 || grant!=4 || people_authorize!=2 || primary_person!=1 || secondary_person!=1 ||
+        finance_authorize!=2 || primary_create!=1 || secondary_create!=1 || primary_submit!=1 || secondary_submit!=1 ||
+        primary_final!=1 || secondary_final!=1 || primary_list!=1 || secondary_list!=1 || primary_cross!=1 || secondary_cross!=1) exit 1
+  }
+' "$evidence_dir/http-evidence.tsv" || { echo 'P9 C4 HTTP evidence contains a failed or incomplete assertion matrix' >&2; exit 1; }
+
+echo 'PASS P9 C4 evidence integrity and assertion matrix'
