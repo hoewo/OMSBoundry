@@ -1,0 +1,122 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR); c1_dir=$(required_env P9_C1_EVIDENCE_DIR); c2_dir=$(required_env P9_C2_EVIDENCE_DIR)
+c3_dir=$(required_env P9_C3_EVIDENCE_DIR); c4_dir=$(required_env P9_C4_EVIDENCE_DIR); c5_dir=$(required_env P9_C5_EVIDENCE_DIR)
+evidence_dir=$(required_env P9_C6_EVIDENCE_DIR); secret_dir=$(required_env P9_C5_SECRET_DIR)
+ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+for command_name in curl jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null; "$script_dir/verify-c1-evidence" "$c1_dir" >/dev/null
+"$script_dir/verify-c2-evidence" "$c2_dir" >/dev/null; "$script_dir/verify-c3-evidence" "$c3_dir" >/dev/null
+"$script_dir/verify-c4-evidence" "$c4_dir" >/dev/null; "$script_dir/verify-c5-evidence" "$c5_dir" >/dev/null
+case "$evidence_dir" in /*) ;; *) echo 'P9_C6_EVIDENCE_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir" in /*) ;; *) echo 'P9_C5_SECRET_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir/" in "$evidence_dir/"*|"$evidence_dir/") echo 'P9 C5 secrets must not be inside C6 evidence' >&2; exit 2;; esac
+case "$evidence_dir/" in "$secret_dir/"*|"$secret_dir/") echo 'P9 C6 evidence must not be inside the C5 secret directory' >&2; exit 2;; esac
+[ ! -e "$evidence_dir" ] || { [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || { echo "P9 C6 evidence directory must be absent or empty: $evidence_dir" >&2; exit 2; }; }
+
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+[ -d "$secret_dir" ] && [ "$(file_mode "$secret_dir")" = 700 ] || { echo 'P9 C5 secret directory must exist with mode 0700' >&2; exit 2; }
+for actor in primary secondary; do
+  [ -f "$secret_dir/$actor.api-key" ] && [ "$(file_mode "$secret_dir/$actor.api-key")" = 600 ] || { echo "$actor API Key recovery file must have mode 0600" >&2; exit 2; }
+  tr -d '\r\n' <"$secret_dir/$actor.api-key" | grep -Eq '^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$' || { echo "$actor API Key recovery secret is invalid" >&2; exit 2; }
+done
+if [ -n "$ca_bundle" ]; then [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }; fi
+
+c0_state="$c0_dir/state-after-c0.json"; c1_state="$c1_dir/state-after-c1.json"; c2_state="$c2_dir/state-after-c2.json"
+c3_state="$c3_dir/state-after-c3.json"; c4_state="$c4_dir/state-after-c4.json"; c5_state="$c5_dir/state-after-c5.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state"); base_url=$(jq -er '.deployment.public_url | sub("/+$";"")' "$c0_state")
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not an allowed HTTPS or loopback origin' >&2; exit 1;; esac
+for phase_state in "$c1_state" "$c2_state" "$c3_state" "$c4_state" "$c5_state"; do [ "$(jq -er '.deployment.compose_project' "$phase_state")" = "$compose_project" ] || { echo 'continuous phase Compose project changed' >&2; exit 1; }; done
+c0_sha=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256" | awk '{print $1}'); c1_sha=$(openssl dgst -sha256 -r "$c1_dir/checksums.sha256" | awk '{print $1}')
+c2_sha=$(openssl dgst -sha256 -r "$c2_dir/checksums.sha256" | awk '{print $1}'); c3_sha=$(openssl dgst -sha256 -r "$c3_dir/checksums.sha256" | awk '{print $1}')
+c4_sha=$(openssl dgst -sha256 -r "$c4_dir/checksums.sha256" | awk '{print $1}'); c5_sha=$(openssl dgst -sha256 -r "$c5_dir/checksums.sha256" | awk '{print $1}')
+[ "$(jq -er '.deployment.public_url | sub("/+$";"")' "$c5_state")" = "$base_url" ] || { echo 'C5 public origin does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.c0_checksums_sha256' "$c5_state")" = "$c0_sha" ] && [ "$(jq -er '.deployment.c1_checksums_sha256' "$c5_state")" = "$c1_sha" ] &&
+  [ "$(jq -er '.deployment.c2_checksums_sha256' "$c5_state")" = "$c2_sha" ] && [ "$(jq -er '.deployment.c3_checksums_sha256' "$c5_state")" = "$c3_sha" ] &&
+  [ "$(jq -er '.deployment.c4_checksums_sha256' "$c5_state")" = "$c4_sha" ] || { echo 'C5 evidence chain is invalid' >&2; exit 1; }
+primary_tenant_id=$(jq -er '.tenants[0].id' "$c5_state"); secondary_tenant_id=$(jq -er '.tenants[1].id' "$c5_state")
+primary_person_id=$(jq -er '.tenants[0].person_id' "$c5_state"); secondary_person_id=$(jq -er '.tenants[1].person_id' "$c5_state")
+primary_key_id=$(jq -er '.tenants[0].api_key.id' "$c5_state"); secondary_key_id=$(jq -er '.tenants[1].api_key.id' "$c5_state")
+primary_prefix=$(jq -er '.tenants[0].api_key.prefix' "$c5_state"); secondary_prefix=$(jq -er '.tenants[1].api_key.prefix' "$c5_state")
+tr -d '\r\n' <"$secret_dir/primary.api-key" | grep -Eq "^${primary_prefix}_[A-Za-z0-9_-]{32,64}$" || { echo 'primary API Key prefix does not match C5' >&2; exit 1; }
+tr -d '\r\n' <"$secret_dir/secondary.api-key" | grep -Eq "^${secondary_prefix}_[A-Za-z0-9_-]{32,64}$" || { echo 'secondary API Key prefix does not match C5' >&2; exit 1; }
+jq -e --arg a "$primary_tenant_id" --arg b "$secondary_tenant_id" --arg pa "$primary_person_id" --arg pb "$secondary_person_id" '.tenants[0].id==$a and .tenants[1].id==$b and .tenants[0].person.id==$pa and .tenants[1].person.id==$pb' "$c1_state" >/dev/null || { echo 'C1/C5 Tenant or Person continuity is invalid' >&2; exit 1; }
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); workspace=$(mktemp -d "$tmp_root/oms-p9-c6.XXXXXX"); evidence_stage=
+trap 'rm -rf -- "$workspace"; if [ -n "$evidence_stage" ]; then rm -rf -- "$evidence_stage"; fi' EXIT HUP INT TERM
+chmod 700 "$workspace"; http_evidence="$workspace/http-evidence.tsv"; printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+curl_result() { output_file=$1; shift; set -- --silent --show-error --connect-timeout 10 --max-time 45 --output "$output_file" --write-out '%{http_code} %{time_total}' "$@"; if [ -n "$ca_bundle" ]; then set -- --cacert "$ca_bundle" "$@"; fi; curl "$@"; }
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+expect_status() { [ "$2" = "$1" ] || { echo "$3 returned HTTP $2, expected $1" >&2; exit 1; }; }
+open_request() {
+  actor=$1; method=$2; path=$3; key_file=$4; idempotency=$5; payload_file=$6; output_file=$7; expected=$8; label=$9
+  config="$workspace/$actor-api.conf"; { printf 'header = "Authorization: ApiKey '; tr -d '\r\n' <"$key_file"; printf '"\n'; } >"$config"; chmod 600 "$config"
+  set -- --config "$config" --request "$method"; [ -z "$idempotency" ] || set -- "$@" -H "Idempotency-Key: $idempotency"; [ -z "$payload_file" ] || set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload_file"
+  result=$(curl_result "$output_file" "$@" "$base_url$path"); rm -f -- "$config"; actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}'); record_http "$label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$label"
+}
+upload_binary() {
+  actor=$1; upload_url=$2; pdf=$3; headers=$4; output=$5
+  case "$upload_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'Evidence upload URL is not HTTPS or loopback' >&2; exit 1;; esac
+  config="$workspace/$actor-upload.conf"; printf 'url = "%s"\n' "$upload_url" >"$config"; chmod 600 "$config"
+  result=$(curl_result "$output" --config "$config" --request PUT --dump-header "$headers" -H 'Content-Type: application/pdf' --data-binary "@$pdf"); rm -f -- "$config"
+  actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}'); record_http "PUT $actor signed Evidence upload" 204 "$actual" "$duration"; expect_status 204 "$actual" "PUT $actor signed Evidence upload"
+}
+run_actor() {
+  actor=$1; key_file=$2; invoice_code=$3; invoice_number=$4; tenant_id=$5; person_id=$6
+  pdf="$workspace/$actor-invoice.pdf"; printf '%%PDF-1.7\n%% P9 C6 %s Tenant invoice\n1 0 obj<</Type/Catalog>>endobj\n%%%%EOF\n' "$actor" >"$pdf"
+  size=$(wc -c <"$pdf" | tr -d ' '); sha=$(openssl dgst -sha256 -r "$pdf" | awk '{print $1}')
+  jq -n --arg actor "$actor" --argjson size "$size" --arg sha "$sha" '{file_name:("p9-c6-"+$actor+"-invoice.pdf"),size_bytes:$size,media_type:"application/pdf",sha256:$sha,client_context:{purpose:"invoice"}}' >"$workspace/$actor-upload-create.json"
+  open_request "$actor" POST /open-api/v1/evidence/upload-sessions "$key_file" "p9-c6-$actor-upload-create-v1" "$workspace/$actor-upload-create.json" "$workspace/$actor-upload-session.json" 201 "POST $actor Evidence upload session"
+  session_id=$(jq -er '.session_id' "$workspace/$actor-upload-session.json"); upload_url=$(jq -er '.authorization.upload_url' "$workspace/$actor-upload-session.json")
+  upload_binary "$actor" "$upload_url" "$pdf" "$workspace/$actor-upload.headers" "$workspace/$actor-upload.body"
+  etag=$(awk 'tolower($1)=="etag:" {gsub(/[\r\n\"]/ ,"",$2); print $2}' "$workspace/$actor-upload.headers"); [ -n "$etag" ] || { echo "$actor Evidence upload did not return ETag" >&2; exit 1; }
+  jq -n --argjson size "$size" --arg sha "$sha" --arg etag "$etag" '{observed_size_bytes:$size,observed_sha256:$sha,etag:$etag}' >"$workspace/$actor-upload-complete.json"
+  open_request "$actor" POST "/open-api/v1/evidence/upload-sessions/$session_id/complete" "$key_file" "p9-c6-$actor-upload-complete-v1" "$workspace/$actor-upload-complete.json" "$workspace/$actor-evidence.json" 200 "POST $actor Evidence complete"
+  jq -e '.version>=1 and .validation_profile=="invoice-v1" and .security_status=="passed" and .status=="available"' "$workspace/$actor-evidence.json" >/dev/null || { echo "$actor Evidence result is invalid" >&2; exit 1; }
+  file_id=$(jq -er '.file_id' "$workspace/$actor-evidence.json"); file_version=$(jq -er '.version' "$workspace/$actor-evidence.json")
+  jq -n --arg actor "$actor" --arg file "$file_id" --argjson version "$file_version" --arg code "$invoice_code" --arg number "$invoice_number" '{title:("P9 C6 "+$actor+" 员工发票报销"),lines:[{business_date:"2026-10-26",category_key:"travel",category_name:"差旅费",category_revision:1,purpose:"P9 C6 双租户发票报销验收",amount_minor:23456,evidence:[{file_id:$file,version:$version,purpose:"invoice"}],invoice:{code:$code,number:$number,issuer_name:("P9 C6 "+$actor+" 虚构开票方"),invoice_date:"2026-10-26",amount_minor:23456}}],payee:{bank_name:"P9 验收银行",account_number:"6222020000007890"}}' >"$workspace/$actor-reimbursement-create.json"
+  open_request "$actor" POST /open-api/v1/reimbursements "$key_file" "p9-c6-$actor-reimbursement-create-v1" "$workspace/$actor-reimbursement-create.json" "$workspace/$actor-reimbursement.json" 201 "POST $actor reimbursement"
+  request_id=$(jq -er '.id' "$workspace/$actor-reimbursement.json"); revision=$(jq -er '.revision' "$workspace/$actor-reimbursement.json")
+  jq -n --argjson revision "$revision" '{expected_revision:$revision,suspected_duplicate_acknowledged:false}' >"$workspace/$actor-reimbursement-submit.json"
+  open_request "$actor" POST "/open-api/v1/reimbursements/$request_id/submit" "$key_file" "p9-c6-$actor-reimbursement-submit-v1" "$workspace/$actor-reimbursement-submit.json" "$workspace/$actor-submitted.json" 200 "POST $actor reimbursement submit"
+  jq -e --arg tenant "$tenant_id" --arg person "$person_id" --arg request "$request_id" --arg file "$file_id" --argjson version "$file_version" '.id==$request and .tenant_id==$tenant and .details.applicant.id==$person and .status=="payable" and .approval_policy=="not_required" and .approval_status=="not_applicable" and .amount_minor==23456 and .paid_minor==0 and .allocated_minor==0 and (.details.lines|length)==1 and .details.lines[0].evidence[0].file_id==$file and .details.lines[0].evidence[0].version==$version and .details.payee.account_last4=="7890" and (.details.payee|has("account_number")|not)' "$workspace/$actor-submitted.json" >/dev/null || { echo "$actor submitted reimbursement is invalid" >&2; exit 1; }
+  open_request "$actor" GET "/open-api/v1/reimbursements/$request_id" "$key_file" '' '' "$workspace/$actor-detail.json" 200 "GET $actor reimbursement detail"
+  open_request "$actor" GET '/open-api/v1/reimbursements?limit=20' "$key_file" '' '' "$workspace/$actor-list.json" 200 "GET $actor reimbursement list"
+  jq -e --arg request "$request_id" 'any(.items[];.id==$request and .status=="payable" and .paid_minor==0)' "$workspace/$actor-list.json" >/dev/null || { echo "$actor reimbursement list is incomplete" >&2; exit 1; }
+  jq -n --arg request_id "$request_id" --arg file_id "$file_id" --argjson file_version "$file_version" --arg sha "$sha" --argjson revision "$(jq -er '.revision' "$workspace/$actor-submitted.json")" '{request_id:$request_id,revision:$revision,file_id:$file_id,file_version:$file_version,file_sha256:$sha}' >"$workspace/$actor-result.json"
+}
+
+run_actor primary "$secret_dir/primary.api-key" P9C6A 000001 "$primary_tenant_id" "$primary_person_id"
+run_actor secondary "$secret_dir/secondary.api-key" P9C6B 000002 "$secondary_tenant_id" "$secondary_person_id"
+primary_request_id=$(jq -er '.request_id' "$workspace/primary-result.json"); secondary_request_id=$(jq -er '.request_id' "$workspace/secondary-result.json")
+open_request primary GET "/open-api/v1/reimbursements/$secondary_request_id" "$secret_dir/primary.api-key" '' '' "$workspace/primary-cross.json" 404 'GET primary cross-tenant reimbursement'
+open_request secondary GET "/open-api/v1/reimbursements/$primary_request_id" "$secret_dir/secondary.api-key" '' '' "$workspace/secondary-cross.json" 404 'GET secondary cross-tenant reimbursement'
+for cross in "$workspace/primary-cross.json" "$workspace/secondary-cross.json"; do jq -e '.error.code=="NOT_FOUND" or .error.code=="FINANCE_REQUEST_NOT_FOUND"' "$cross" >/dev/null || { echo 'cross-Tenant reimbursement did not fail as not found' >&2; exit 1; }; done
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" \
+  --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" \
+  --arg ta "$primary_tenant_id" --arg pa "$primary_person_id" --arg ka "$primary_key_id" --slurpfile ra "$workspace/primary-result.json" \
+  --arg tb "$secondary_tenant_id" --arg pb "$secondary_person_id" --arg kb "$secondary_key_id" --slurpfile rb "$workspace/secondary-result.json" \
+  '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C6",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5},tenants:[{id:$ta,person_id:$pa,api_key_id:$ka,evidence:{file_id:$ra[0].file_id,version:$ra[0].file_version,sha256:$ra[0].file_sha256,status:"available"},reimbursement:{id:$ra[0].request_id,revision:$ra[0].revision,status:"payable",approval_status:"not_applicable",amount_minor:23456,paid_minor:0}},{id:$tb,person_id:$pb,api_key_id:$kb,evidence:{file_id:$rb[0].file_id,version:$rb[0].file_version,sha256:$rb[0].file_sha256,status:"available"},reimbursement:{id:$rb[0].request_id,revision:$rb[0].revision,status:"payable",approval_status:"not_applicable",amount_minor:23456,paid_minor:0}}],checks:{real_pdf_bytes_uploaded:"pass",evidence_validation_passed:"pass",evidence_reference_frozen:"pass",approval_not_required:"pass",self_list_isolation:"pass",cross_tenant_reimbursement_not_found:"pass",payment_facts_absent:"pass",money_written:false,secrets_recorded:false}}' >"$workspace/state-after-c6.json"
+cat >"$workspace/result.md" <<EOF
+# P9 C6 invoice reimbursement result
+
+- Result: pass
+- Captured at: $captured_at
+- Public origin: $base_url
+- Checks: two Tenant-bound PDF uploads, validated Evidence references, employee reimbursement submission, self lists and cross-Tenant 404.
+- Actual payment or Money write: no
+- Secrets or signed upload URLs recorded in evidence: no
+EOF
+mkdir -p "$(dirname -- "$evidence_dir")"; evidence_stage=$(mktemp -d "$(dirname -- "$evidence_dir")/.p9-c6-evidence.XXXXXX"); chmod 700 "$evidence_stage"
+cp "$http_evidence" "$evidence_stage/http-evidence.tsv"; cp "$workspace/result.md" "$evidence_stage/result.md"; cp "$workspace/state-after-c6.json" "$evidence_stage/state-after-c6.json"; chmod 600 "$evidence_stage/"*; : >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv result.md state-after-c6.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact" | awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"; done
+chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c6-evidence" "$evidence_stage" >/dev/null
+if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi
+mv "$evidence_stage" "$evidence_dir"; evidence_stage=
+echo 'PASS P9 C6 employee invoice upload and reimbursement isolation'

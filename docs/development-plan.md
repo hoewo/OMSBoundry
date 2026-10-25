@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 P9 增量（BF-260）：C6 员工发票上传／报销驱动和固定证据 verifier 已进入源码及 D1 release bundle。它绑定 C0～C5，用两把既有员工 Key 分别完成虚构 PDF 实字节直传、Evidence `invoice-v1` 校验、稳定引用冻结、本人报销提交／列表／详情和跨 Tenant 404；报销停在待支付，未调用实际付款或 Money。下一连续阶段由授权财务人员确认两笔实际付款并核对 Money 唯一事实，再进入联合备份／空目标恢复和 Feedback；真实 D1 C6 尚未执行。
+
 2026-10-26 P9 增量（BF-259）：C5 员工 API Key 运行驱动、固定证据 verifier 和受限 Secret 恢复约定已进入源码及 D1 release bundle。它绑定 C0～C4，为两个既有 Person 各建立或复用一把默认 180 天 Key，验证脱敏自助列表、可信身份绑定、Webhook 占位和本人调用审计；Secret、密码、Cookie 与 Authorization 不进入证据，C5 不做业务写。下一连续阶段用同一 Key 进入 Evidence 发票上传与本人报销，再由财务确认实际付款；真实 D1、恢复与 Feedback 仍待有界运行窗口。
 
 2026-10-26 P9 增量（BF-258）：C4 财务申请运行驱动与固定证据 verifier 已进入源码和 D1 release bundle。它绑定 C0～C3，复用两 Tenant 的 C1 Person 快照，分别创建无附件但显式确认的付款申请，并验证 `payable`／`not_required`、敏感账号脱敏、本人列表隔离、交叉 404 和零付款／零 Money。下一连续阶段才进入员工 API Key＋Evidence 发票上传＋本人报销；真实 D1、实际付款、恢复和 Feedback 仍待有界运行窗口。

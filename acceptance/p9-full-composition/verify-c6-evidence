@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-c6-evidence EVIDENCE_DIR' >&2; exit 2; }
+evidence_dir=$1
+[ -d "$evidence_dir" ] || { echo "P9 C6 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C6 evidence must not contain symbolic links' >&2; exit 1; }
+expected_entries='checksums.sha256
+http-evidence.tsv
+result.md
+state-after-c6.json'
+actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort)
+[ "$actual_entries" = "$expected_entries" ] || { echo 'P9 C6 evidence directory does not contain the fixed artifact set' >&2; exit 1; }
+expected_files='http-evidence.tsv
+result.md
+state-after-c6.json'
+actual_files=$(awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ {exit 1} {print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C6 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual_files" = "$expected_files" ] || { echo 'P9 C6 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r expected artifact; do actual=$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}'); [ "$actual" = "$expected" ] || { echo "P9 C6 checksum mismatch for $artifact" >&2; exit 1; }; done <"$evidence_dir/checksums.sha256"
+
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C6" and .result=="pass" and .deployment.profile=="D1" and
+  ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c2_checksums_sha256,.deployment.c3_checksums_sha256,.deployment.c4_checksums_sha256,.deployment.c5_checksums_sha256] | all(test("^[0-9a-f]{64}$"))) and
+  (.tenants|length)==2 and (.tenants[0].id != .tenants[1].id) and (.tenants[0].person_id != .tenants[1].person_id) and
+  (.tenants[0].api_key_id != .tenants[1].api_key_id) and (.tenants[0].evidence.file_id != .tenants[1].evidence.file_id) and
+  (.tenants[0].reimbursement.id != .tenants[1].reimbursement.id) and
+  all(.tenants[]; (.id|test($uuid)) and (.person_id|test($uuid)) and (.api_key_id|test($uuid)) and
+    (.evidence.file_id|test($uuid)) and .evidence.version>=1 and (.evidence.sha256|test("^[0-9a-f]{64}$")) and .evidence.status=="available" and
+    (.reimbursement.id|test($uuid)) and .reimbursement.revision>=2 and .reimbursement.status=="payable" and
+    .reimbursement.approval_status=="not_applicable" and .reimbursement.amount_minor==23456 and .reimbursement.paid_minor==0) and
+  .checks.real_pdf_bytes_uploaded=="pass" and .checks.evidence_validation_passed=="pass" and .checks.evidence_reference_frozen=="pass" and
+  .checks.approval_not_required=="pass" and .checks.self_list_isolation=="pass" and .checks.cross_tenant_reimbursement_not_found=="pass" and
+  .checks.payment_facts_absent=="pass" and .checks.money_written==false and .checks.secrets_recorded==false
+' "$evidence_dir/state-after-c6.json" >/dev/null || { echo 'P9 C6 state has an invalid schema or failed check' >&2; exit 1; }
+
+awk -F '\t' '
+  NR==1 {if ($0!="request\texpected_status\tactual_status\ttime_seconds") exit 1; next}
+  NF!=4 {exit 1} $4 !~ /^[0-9]+([.][0-9]+)?$/ {exit 1}
+  $1=="POST primary Evidence upload session" {a_session++} $1=="POST secondary Evidence upload session" {b_session++}
+  $1=="PUT primary signed Evidence upload" {a_put++} $1=="PUT secondary signed Evidence upload" {b_put++}
+  $1=="POST primary Evidence complete" {a_complete++} $1=="POST secondary Evidence complete" {b_complete++}
+  $1=="POST primary reimbursement" {a_create++} $1=="POST secondary reimbursement" {b_create++}
+  $1=="POST primary reimbursement submit" {a_submit++} $1=="POST secondary reimbursement submit" {b_submit++}
+  $1=="GET primary reimbursement detail" {a_detail++} $1=="GET secondary reimbursement detail" {b_detail++}
+  $1=="GET primary reimbursement list" {a_list++} $1=="GET secondary reimbursement list" {b_list++}
+  $1=="GET primary cross-tenant reimbursement" {a_cross++} $1=="GET secondary cross-tenant reimbursement" {b_cross++}
+  $2!=$3 {exit 1}
+  END {if (a_session!=1||b_session!=1||a_put!=1||b_put!=1||a_complete!=1||b_complete!=1||a_create!=1||b_create!=1||a_submit!=1||b_submit!=1||a_detail!=1||b_detail!=1||a_list!=1||b_list!=1||a_cross!=1||b_cross!=1) exit 1}
+' "$evidence_dir/http-evidence.tsv" || { echo 'P9 C6 HTTP evidence contains a failed or incomplete assertion matrix' >&2; exit 1; }
+if grep -REq 'bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}|([?&](token|signature|credential|key)=)' "$evidence_dir"; then echo 'P9 C6 evidence contains an API Key or signed URL secret' >&2; exit 1; fi
+echo 'PASS P9 C6 evidence integrity, secret exclusion and assertion matrix'

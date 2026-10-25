@@ -111,4 +111,20 @@ acceptance/p9-full-composition/verify-c5-api-keys
 
 C5 re-verifies and binds C0 through C4, grants the three existing employee Open API capabilities, and creates one 180-day API Key for each existing C1 member. A newly issued secret is written exactly once to a mode-`0600` file outside evidence; subsequent runs with those protected recovery files reuse the same Key instead of creating another one. Each employee must see only their redacted Key list, call `/open-api/v1/me` with the exact Tenant／Subject／Person／Key binding, read the disabled Webhook placeholder from settings, and see both calls in their own usage audit. C5 performs no reimbursement or other business write and never persists the secret, Cookie, password, Authorization header or response body in evidence. Validate a handed-off artifact with `verify-c5-evidence EVIDENCE_DIR`.
 
+Continue with the employee invoice reimbursement gate using the same protected C5 Key files:
+
+```sh
+P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
+P9_C1_EVIDENCE_DIR=/absolute/path/to/evidence/c1 \
+P9_C2_EVIDENCE_DIR=/absolute/path/to/evidence/c2 \
+P9_C3_EVIDENCE_DIR=/absolute/path/to/evidence/c3 \
+P9_C4_EVIDENCE_DIR=/absolute/path/to/evidence/c4 \
+P9_C5_EVIDENCE_DIR=/absolute/path/to/evidence/c5 \
+P9_C5_SECRET_DIR=/restricted/p9-c5-api-keys \
+P9_C6_EVIDENCE_DIR=/absolute/path/to/evidence/c6 \
+acceptance/p9-full-composition/verify-c6-invoice-reimbursements
+```
+
+C6 re-verifies and binds C0 through C5. Each employee uploads distinct real PDF bytes through an Evidence signed upload URL, completes the `invoice-v1` validation, creates a reimbursement with the stable File ID／Version, submits it to `payable`, and reads it from their own list and detail. The gate requires the frozen Evidence reference, `not_required` approval snapshot, masked bank account, zero payment, isolated self lists and cross-Tenant 404. API Keys and signed URLs are passed through protected temporary curl config files and never enter evidence. C6 does not call a payment endpoint or Money. Validate a handed-off artifact with `verify-c6-evidence EVIDENCE_DIR`.
+
 After the continuous fixture has been created, `d1 backup` must produce both `backup-consistency.env` and `database-fingerprints.tsv`. The latter contains only database names, table/row counts and SHA-256 values; raw rows and sequence values never enter the artifact. Its schema/fact digests cover public sequence definitions and `last_value`/`is_called` as well as tables. Before deleting target volumes, `d1 restore` validates its fixed format and exact database selection; it then recomputes the same fingerprints before starting business services and fails closed on any mismatch. A passing fingerprint comparison proves database checkpoint equality only; the P9 runtime window must still verify Evidence bytes and repeat key reads and one bounded continuation write after restore.

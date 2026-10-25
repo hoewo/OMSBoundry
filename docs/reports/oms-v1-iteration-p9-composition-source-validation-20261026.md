@@ -36,6 +36,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-257 增加绑定 C0～C2 的 P9 C3 驱动和独立证据 verifier：Payroll 自有 ops 幂等导入明确非法律依据的六项零比例验收方案，两个管理员经同一 Origin 各生成一张待核对、无需审批且未支付的常规工资表；验证 C1 Person／C2 Compensation／Scheme revision 快照、整数结果、列表隔离与交叉 404。离线首次／重跑、既有 Grant、秘密扫描和两类篡改负例通过并进入 release bundle；未调用发放或 Money，真实 D1 尚未执行。
 - BF-258 增加绑定 C0～C3 的 P9 C4 驱动和独立证据 verifier：两名管理员刷新各自 C1 Person 快照，只取得 Finance 本人读写能力，并各自建立一笔无附件但显式确认缺失事实的付款申请；验证 `payable`／`not_required`、账号脱敏、零付款／零 Money、本人列表隔离和交叉 404。报销 Evidence 强制条件没有放松。离线首次／重跑、Grant 冲突、秘密扫描和两类篡改负例通过并进入 release bundle；真实 D1 尚未执行。
 - BF-259 增加绑定 C0～C4 的 P9 C5 驱动和独立证据 verifier：两名既有员工分别通过 IAM 正式入口创建或复用一把默认 180 天 API Key，一次性 Secret 只写入证据外的 `0700`／`0600` 恢复位置；验证本人 Key 列表脱敏与隔离、Open API Tenant／Subject／Person／Key 绑定、Webhook 未开放占位及本人调用审计。离线首次／重跑、Grant 冲突、密码／Secret 扫描、摘要漂移、HTTP 矩阵缺失和重算 checksum 后注入 Secret 的负例通过并进入 release bundle；未做业务写，真实 D1 尚未执行。
+- BF-260 增加绑定 C0～C5 的 P9 C6 驱动和独立证据 verifier：两个 Tenant 的员工使用 C5 Key 分别上传不同的虚构 PDF 实字节，完成 Evidence `invoice-v1` 校验，以稳定 File ID／Version 建立并提交本人报销；验证正确 Person／Evidence 快照、`payable`／`not_applicable`、账号脱敏、本人列表、交叉 404 和零付款／零 Money。Key 与签名 URL 只进入受限临时 curl 配置。离线字节上传、摘要漂移、HTTP 矩阵缺失和重算 checksum 后 Secret 注入负例通过并进入 release bundle；真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -56,6 +57,7 @@ acceptance/p9-full-composition/test-c2-member-payroll
 acceptance/p9-full-composition/test-c3-payroll-periods
 acceptance/p9-full-composition/test-c4-finance-requests
 acceptance/p9-full-composition/test-c5-api-keys
+acceptance/p9-full-composition/test-c6-invoice-reimbursements
 git diff --check
 ```
 
@@ -68,7 +70,7 @@ git diff --check
 仍需在一次有界运行窗口内完成并在退出后清理：
 
 1. 使用非占位部署秘密和当前镜像启动全组合，记录镜像 digest 与全部容器健康；
-2. 在 C0～C5 驱动基础上连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、实际付款与 Feedback 旅程；
+2. 在 C0～C6 驱动基础上连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、实际付款与 Feedback 旅程；
 3. 创建带 `public-ingress-quiesced-v1` 声明和十五库无秘密事实指纹的联合备份，恢复到空目标并通过自动指纹比对，再次执行 Evidence 字节、关键读取与续写；
 4. 对比恢复前后 Tenant、稳定 ID、revision、精确金额、File Version、Money 引用、Key 非秘密元数据、反馈身份映射与审计；
 5. 记录真实浏览器 Console、跨租户／撤权负例及回滚点。

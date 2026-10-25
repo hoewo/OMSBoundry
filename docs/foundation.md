@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P9 C6 连续运行门禁（BF-260）：两个 Tenant 的员工使用 C5 Key 分别把真实虚构 PDF 字节交给 Evidence，完成发票验证后，以 File ID／Version 创建并提交本人报销。Finance 只冻结 Person、Evidence、发票与收款快照，状态 `payable` 不代表发生实际付款；C6 必须保持列表隔离、交叉 404、敏感账号脱敏和零 Money。Key 与签名 URL 不得进入证据。当前只有离线驱动／证据回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+
 2026-10-26 P9 C5 连续运行门禁（BF-259）：两个 Tenant 的既有员工分别从 IAM 正式入口取得一把默认 180 天 API Key；一次性 Secret 必须落在证据外的受限恢复目录，证据与日志只允许 Key ID／prefix 等非秘密元数据。Key 自助列表、Open API profile／settings 和本人调用审计必须保持 Tenant／Subject／Person 隔离；Webhook 仍只是未开放占位，本阶段不执行发票上传或报销业务写。当前只有离线驱动／证据回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
 2026-10-26 P9 C4 连续运行门禁（BF-258）：双租户财务阶段必须沿用 C1 Person 和同一公网入口，以最小 Finance 本人读写能力分别创建并提交一笔付款申请，验证无需审批快照、明确无附件确认、账号脱敏、列表隔离和交叉 404。报销仍必须有 Evidence，不允许为测试弱化；付款申请进入待支付不等于发生实际支付或 Money 事实。当前只有离线驱动／证据回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
