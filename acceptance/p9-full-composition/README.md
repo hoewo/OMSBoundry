@@ -20,7 +20,7 @@ P9_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
 acceptance/p9-full-composition/verify-c0
 ```
 
-The raw Compose model and container/image inspections are never persisted because they can contain deployment secrets. Evidence contains only topology, image identities/digests, service health, manifest, readiness, check log and a machine-readable C0 state. Passing C0 is only a precondition; it does not prove the Tenant/member/payroll/reimbursement/Feedback journey or backup/empty-target restore.
+The raw Compose model and container/image inspections are never persisted because they can contain deployment secrets. Evidence contains only topology, image identities/digests, service health, manifest, readiness, check log and a machine-readable C0 state. Every running container's immutable image ID must match the ID currently resolved by its configured image reference; a repointed tag fails C0. Passing C0 is only a precondition; it does not prove the Tenant/member/payroll/reimbursement/Feedback journey or backup/empty-target restore.
 
 C0 writes a fixed artifact set plus `checksums.sha256`; run `verify-evidence EVIDENCE_DIR` whenever the directory is handed off or reused. The verifier rejects links, extra/missing files and digest drift. This detects accidental corruption but is not a publisher signature and does not make an untrusted storage location trustworthy.
 

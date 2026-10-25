@@ -124,6 +124,13 @@ done
 jq -s 'sort_by(.configured_image)' "$evidence_dir/images.jsonl" >"$evidence_dir/images.json"
 rm -f "$evidence_dir/images.jsonl"
 chmod 600 "$evidence_dir/images.json"
+jq -e --slurpfile images "$evidence_dir/images.json" '
+  ($images[0] | map({key:.configured_image,value:.image_id}) | from_entries) as $resolved |
+  all(.[]; $resolved[.configured_image] == .image_id)
+' "$evidence_dir/services-and-health.json" >/dev/null || {
+  echo 'P9 running container image IDs do not match their configured image references' >&2
+  exit 1
+}
 
 D1_ENV_FILE="$env_file" D1_PROJECT_NAME="$project" "$d1_ops" check >"$evidence_dir/schema-and-contract-check.log" 2>&1
 chmod 600 "$evidence_dir/schema-and-contract-check.log"
@@ -147,7 +154,7 @@ jq -n \
   --arg captured_at "$captured_at" --arg tenant_id "$tenant_id" --arg project "$project" --arg base_url "$base_url" \
   --arg image_mode "$image_mode" --arg manifest_sha256 "$manifest_sha256" --arg topology_sha256 "$topology_sha256" --arg check_sha256 "$check_sha256" \
   --argjson enabled_applications "$enabled_applications" --argjson feedback_key_count "$feedback_key_count" \
-  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,deployment:{profile:"D1",compose_project:$project,public_url:$base_url,image_mode:$image_mode,running_services:19,healthy_services:19},suite:{enabled_applications:$enabled_applications,domain_application_count:14},feedback:{auth_mode:"apiKey",project_id:115,notifications_enabled:true,configured_key_count:$feedback_key_count,secrets_recorded:false},checks:{exact_service_set:"pass",nginx_only_host_port:"pass",schemas_current_and_contracts_valid:"pass",public_readiness:"pass",suite_manifest_sha256:$manifest_sha256,compose_topology_sha256:$topology_sha256,schema_and_contract_log_sha256:$check_sha256},artifacts:["checksums.sha256","compose-topology.json","images.json","readiness.json","schema-and-contract-check.log","services-and-health.json","state-after-c0.json","suite-manifest.json"]}' \
+  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,deployment:{profile:"D1",compose_project:$project,public_url:$base_url,image_mode:$image_mode,running_services:19,healthy_services:19},suite:{enabled_applications:$enabled_applications,domain_application_count:14},feedback:{auth_mode:"apiKey",project_id:115,notifications_enabled:true,configured_key_count:$feedback_key_count,secrets_recorded:false},checks:{exact_service_set:"pass",nginx_only_host_port:"pass",running_images_match_configured_references:"pass",schemas_current_and_contracts_valid:"pass",public_readiness:"pass",suite_manifest_sha256:$manifest_sha256,compose_topology_sha256:$topology_sha256,schema_and_contract_log_sha256:$check_sha256},artifacts:["checksums.sha256","compose-topology.json","images.json","readiness.json","schema-and-contract-check.log","services-and-health.json","state-after-c0.json","suite-manifest.json"]}' \
   >"$evidence_dir/state-after-c0.json"
 chmod 600 "$evidence_dir/state-after-c0.json"
 

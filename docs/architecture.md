@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 image provenance boundary（BF-252）：C0 同时记录运行容器的不可变 Image ID 和配置镜像引用／Repo Digest，并要求引用在采集时解析到同一 Image ID。标签在容器启动后漂移时不得生成通过证据；证据交接复验会再次交叉核对，不只信任状态文件中的 `pass`。这证明采集时运行身份，不替代镜像签名、SBOM 或 Registry 保留策略。
+
 2026-10-26 P9 C0 evidence boundary（BF-251）：全组合前置证据使用固定闭集目录，服务健康、镜像身份、readiness、Suite Manifest、脱敏 Compose 拓扑、schema／contract 日志和数值版本状态均进入 SHA-256 清单；独立验证器拒绝链接、额外／缺失文件和内容漂移。该清单只证明采集后未发生意外变化，不提供发布者签名，也不把原始 Compose／inspect 或部署秘密写入证据。
 
 2026-10-26 P9 D1 sequence checkpoint boundary（BF-250）：数据库 checkpoint 不只包含表中当前行，也包含决定下一次自增写入的 public sequence 定义和运行状态。D1 指纹把 sequence 的数据类型、起止／步长／循环／缓存配置纳入 schema 摘要，把 `last_value`／`is_called` 的 PostgreSQL 内 SHA-256 纳入事实摘要；恢复前后任一漂移均在业务服务开放前失败关闭。该门禁只增强恢复一致性，不改变 Owner 数据所有权或以指纹替代恢复后的业务续写验证。

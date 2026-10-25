@@ -80,21 +80,23 @@ MOCK_D1
 cat >"$mock_bin/docker" <<'MOCK_DOCKER'
 #!/bin/sh
 set -eu
+container_image_id=${P9_TEST_CONTAINER_IMAGE_ID:-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}
+resolved_image_id=${P9_TEST_RESOLVED_IMAGE_ID:-sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}
 case "${1:-} ${2:-}" in
   'ps --filter')
     awk '{print "container-" NR}' "$P9_TEST_SERVICES_FILE"
     ;;
   'inspect container-1')
-    jq -Rn '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:("sha256:"+.),State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
+    jq -Rn --arg image_id "$container_image_id" '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:$image_id,State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
     ;;
   'image inspect')
-    printf '%s\n' 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|["registry.example/test@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"]'
+    printf '%s|%s\n' "$resolved_image_id" '["registry.example/test@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"]'
     ;;
   *)
     # docker inspect receives every generated container ID; match by command
     # name instead of enumerating all nineteen arguments.
     if [ "${1:-}" = inspect ]; then
-      jq -Rn '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:("sha256:"+.),State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
+      jq -Rn --arg image_id "$container_image_id" '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:$image_id,State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
     else
       echo "unexpected mock docker command: $*" >&2
       exit 2
@@ -157,6 +159,31 @@ if "$script_dir/verify-evidence" "$runtime/evidence-extra" >"$runtime/extra.out"
   exit 1
 fi
 grep -Fq 'P9 evidence directory does not contain the fixed C0 artifact set' "$runtime/extra.err"
+
+if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
+  P9_TEST_RESOLVED_IMAGE_ID=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$runtime/evidence-image-drift" \
+  "$script_dir/verify-c0" >"$runtime/image-drift.out" 2>"$runtime/image-drift.err"; then
+  echo 'P9 C0 accepted a configured image reference that no longer resolves to the running image' >&2
+  exit 1
+fi
+grep -Fq 'P9 running container image IDs do not match their configured image references' "$runtime/image-drift.err"
+
+cp -R "$evidence" "$runtime/evidence-semantic-image-drift"
+jq '.[0].image_id="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"' \
+  "$runtime/evidence-semantic-image-drift/images.json" >"$runtime/evidence-semantic-image-drift/images.json.tmp"
+mv "$runtime/evidence-semantic-image-drift/images.json.tmp" "$runtime/evidence-semantic-image-drift/images.json"
+images_sha=$(openssl dgst -sha256 -r "$runtime/evidence-semantic-image-drift/images.json" | awk '{print $1}')
+awk -v sha="$images_sha" '$2=="images.json" {$1=sha} {print}' \
+  "$runtime/evidence-semantic-image-drift/checksums.sha256" >"$runtime/evidence-semantic-image-drift/checksums.sha256.tmp"
+mv "$runtime/evidence-semantic-image-drift/checksums.sha256.tmp" "$runtime/evidence-semantic-image-drift/checksums.sha256"
+if "$script_dir/verify-evidence" "$runtime/evidence-semantic-image-drift" \
+  >"$runtime/semantic-image-drift.out" 2>"$runtime/semantic-image-drift.err"; then
+  echo 'P9 C0 evidence verifier accepted a checksum-valid running/configured image mismatch' >&2
+  exit 1
+fi
+grep -Fq 'P9 C0 evidence contains a running/configured image mismatch' "$runtime/semantic-image-drift.err"
 
 grep -v '^payroll$' "$services_file" >"$runtime/services-missing.txt"
 if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$runtime/services-missing.txt" \

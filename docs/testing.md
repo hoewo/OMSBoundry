@@ -30,6 +30,8 @@ BF-250 将 public sequence 的定义以及 `last_value`／`is_called` 加入同�
 
 BF-251 扩展 `p9-full-composition-preflight-test`：C0 正例生成固定八文件目录及覆盖七个非清单文件的 SHA-256 清单，独立验证器复验通过；修改 `readiness.json` 或增加未跟踪文件均失败。验证器同时拒绝符号链接、错误／重复／缺失清单项，并校验状态 schema、19／19 和十四领域应用声明。摘要清单不是签名，不抵抗能同时重写制品与清单的恶意主体。
 
+BF-252 在同一自测加入两类镜像负例：配置引用解析为不同 Image ID 时，C0 在形成通过状态前失败；另修改 `images.json` 并重算正确 checksum，独立 verifier 仍因运行容器 ID 与解析 ID 不一致而拒绝。正例还独立复核精确 19 服务、19／19 healthy 和仅 Nginx 发布端口。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

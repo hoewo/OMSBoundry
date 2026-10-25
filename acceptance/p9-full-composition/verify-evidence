@@ -53,11 +53,55 @@ while read -r expected_sha256 artifact; do
   }
 done <"$checksum_file"
 
+expected_services='approval-audit-results
+billing-invoice
+bonus-distribution
+business-engagement
+contract-ledger
+cost-outsourcing
+evidence-service
+gateway
+identity-access
+internal-finance-requests
+money-flow-ledger
+nginx
+party-directory
+payroll
+people-groups
+postgres
+production-operations
+project-workspace
+unified-workbench'
+actual_services=$(jq -r '.[].service' "$evidence_dir/services-and-health.json")
+[ "$actual_services" = "$expected_services" ] || {
+  echo 'P9 C0 evidence service set is invalid' >&2
+  exit 1
+}
+jq -e 'length == 19 and all(.[]; .state == "running" and .health == "healthy")' \
+  "$evidence_dir/services-and-health.json" >/dev/null || {
+  echo 'P9 C0 evidence does not contain 19/19 healthy services' >&2
+  exit 1
+}
+jq -e --slurpfile images "$evidence_dir/images.json" '
+  ($images[0] | map({key:.configured_image,value:.image_id}) | from_entries) as $resolved |
+  all(.[]; $resolved[.configured_image] == .image_id)
+' "$evidence_dir/services-and-health.json" >/dev/null || {
+  echo 'P9 C0 evidence contains a running/configured image mismatch' >&2
+  exit 1
+}
+published=$(jq -c '[.services[] | select((.ports | length) > 0) | .service] | sort' \
+  "$evidence_dir/compose-topology.json")
+[ "$published" = '["nginx"]' ] || {
+  echo 'P9 C0 evidence contains an invalid published-port topology' >&2
+  exit 1
+}
+
 jq -e '
   .schema_version == 1 and (.schema_version | type) == "number" and
   .scenario_id == "oms-v1-p9-full-composition-v1" and
   .phase == "C0" and .result == "pass" and
   .deployment.running_services == 19 and .deployment.healthy_services == 19 and
+  .checks.running_images_match_configured_references == "pass" and
   .suite.domain_application_count == 14 and
   .feedback.secrets_recorded == false and
   (.artifacts == [

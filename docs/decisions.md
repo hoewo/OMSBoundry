@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-252（已接受／P9 运行镜像身份门禁）：C0 不得把可变镜像引用当前解析到的 Image ID 当作正在运行的版本。每个容器的实际不可变 `.Image` 必须与其 `configured_image` 在采集时解析到的 ID 相等，否则失败关闭；独立证据验证器再次从 `services-and-health.json` 与 `images.json` 交叉核对。mock 已覆盖标签漂移，以及篡改镜像证据后重算 checksum 仍被语义校验拒绝；真实镜像身份仍待 19 服务窗口采集。
+
 2026-10-26 BF-251（已接受／P9 C0 证据完整性门禁）：C0 证据目录固定为七个被校验制品、状态文件和 `checksums.sha256`，不得接受符号链接、额外／缺失文件、格式错误清单或任一摘要漂移；`state-after-c0.json.schema_version` 固定为数值 `1`。独立 `verify-evidence` 可在交接后复验，mock 已覆盖 readiness 篡改和额外文件拒绝。SHA-256 清单用于发现意外损坏，不是签名或不可信存储的防篡改证明；真实 C0 仍待全组合窗口执行。
 
 2026-10-26 BF-250（已接受／恢复后续写序列门禁）：BF-248 数据库指纹同时覆盖 public sequence 的结构参数与当前 `last_value`／`is_called` 状态。只比较表结构和表行不能证明恢复后下一次自增写入安全；sequence 状态进入数据库级 schema／事实 SHA-256 后，空目标恢复在业务服务启动前即可发现错位。短生命周期 PostgreSQL 18 已证明 `nextval` 会改变序列摘要且原始业务值不出库；真实十五库恢复后的继续写入仍须 P9 运行窗口验证。
