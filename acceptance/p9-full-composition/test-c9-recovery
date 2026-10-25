@@ -4,6 +4,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); runtime=$(mktemp -d "$tmp_root/oms-p9-c9-test.XXXXXX")
 trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+artifact_dir=${P9_C9_TEST_ARTIFACT_DIR:-}
 P9_C8_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c8-payroll-payments" >/dev/null
 mkdir "$runtime/c9"; cp -R "$runtime/fixture/c7" "$runtime/c9/post-c7"; cp -R "$runtime/fixture/c8" "$runtime/c9/post-c8"
 
@@ -26,9 +27,9 @@ EOF
 phase=0
 while [ "$phase" -le 8 ]; do eval c${phase}_sha=$(openssl dgst -sha256 -r "$runtime/fixture/c$phase/checksums.sha256"|awk '{print $1}'); phase=$((phase+1)); done
 post7_sha=$(openssl dgst -sha256 -r "$runtime/c9/post-c7/checksums.sha256"|awk '{print $1}'); post8_sha=$(openssl dgst -sha256 -r "$runtime/c9/post-c8/checksums.sha256"|awk '{print $1}')
-jq -n --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" --arg c6 "$c6_sha" --arg c7 "$c7_sha" --arg c8 "$c8_sha" --arg post7 "$post7_sha" --arg post8 "$post8_sha" --slurpfile c6state "$runtime/fixture/c6/state-after-c6.json" --slurpfile c7state "$runtime/c9/post-c7/state-after-c7.json" --slurpfile c8state "$runtime/c9/post-c8/state-after-c8.json" '
+jq -n --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" --arg c6 "$c6_sha" --arg c7 "$c7_sha" --arg c8 "$c8_sha" --arg post7 "$post7_sha" --arg post8 "$post8_sha" --slurpfile c0state "$runtime/fixture/c0/state-after-c0.json" --slurpfile c6state "$runtime/fixture/c6/state-after-c6.json" --slurpfile c7state "$runtime/c9/post-c7/state-after-c7.json" --slurpfile c8state "$runtime/c9/post-c8/state-after-c8.json" '
  {schema_version:1,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C9",result:"pass",captured_at:"2026-10-26T00:01:00Z",
-  deployment:{profile:"D1",compose_project:"p9-test",public_url:"http://127.0.0.1:19090",c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5,c6_checksums_sha256:$c6,c7_checksums_sha256:$c7,c8_checksums_sha256:$c8,post_c7_checksums_sha256:$post7,post_c8_checksums_sha256:$post8},
+  deployment:{profile:"D1",compose_project:$c0state[0].deployment.compose_project,public_url:$c0state[0].deployment.public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5,c6_checksums_sha256:$c6,c7_checksums_sha256:$c7,c8_checksums_sha256:$c8,post_c7_checksums_sha256:$post7,post_c8_checksums_sha256:$post8},
   backup:{id:"20261026T000000Z",checksums_sha256:("a"*64),database_fingerprints_sha256:("c"*64),consistency_mode:"public-ingress-quiesced-v1",database_count:15},
   recovery:{empty_target_restore:"pass",database_fingerprint_match:"pass",d1_health:"pass",evidence_bytes:"pass",stable_command_replay:"pass",continuation_write:"open_api_usage_audit"},
   tenants:[$c6state[0].tenants[] as $base | ($c7state[0].tenants[]|select(.tenant_id==$base.id)) as $paid | ($c8state[0].tenants[]|select(.tenant_id==$base.id)) as $payroll | {tenant_id:$base.id,evidence:($base.evidence+{bytes_match:true}),reimbursement:{id:$paid.reimbursement.id,status:$paid.reimbursement.status},payroll:{run_id:$payroll.payroll.run_id,line_id:$payroll.payroll.line_id,status:$payroll.payroll.status}}],
@@ -60,4 +61,13 @@ if env P9_C0_EVIDENCE_DIR="$runtime/fixture/c0" P9_C1_EVIDENCE_DIR="$runtime/fix
   echo 'P9 C9 destructive driver ran without explicit confirmation' >&2; exit 1
 fi
 grep -Fq 'P9_C9_CONFIRM_IN_PLACE_RESTORE=yes' "$runtime/guard.out"
+if [ -n "$artifact_dir" ]; then
+  [ ! -e "$artifact_dir" ] || { echo "P9 C9 test artifact directory already exists: $artifact_dir" >&2; exit 2; }
+  mkdir -p "$artifact_dir/secrets"; chmod 0700 "$artifact_dir/secrets"
+  for phase in c0 c1 c2 c3 c4 c5 c6 c7 c8; do cp -R "$runtime/fixture/$phase" "$artifact_dir/$phase"; done
+  cp -R "$runtime/c9" "$artifact_dir/c9"
+  cp "$runtime/fixture/primary.password" "$runtime/fixture/secondary.password" "$artifact_dir/"
+  cp "$runtime/fixture/secrets/"* "$artifact_dir/secrets/"
+  chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password" "$artifact_dir/secrets/"*
+fi
 echo 'PASS P9 C9 recovery evidence, continuity negatives and destructive guard'

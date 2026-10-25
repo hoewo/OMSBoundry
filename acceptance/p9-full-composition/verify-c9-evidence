@@ -43,6 +43,10 @@ jq -e --arg uuid "$uuid" '
 ' "$state" >/dev/null || { echo 'P9 C9 state has an invalid schema or failed check' >&2; exit 1; }
 
 post7="$evidence_dir/post-c7/state-after-c7.json"; post8="$evidence_dir/post-c8/state-after-c8.json"
+[ "$(jq -er '.deployment.compose_project' "$post7")" = "$(jq -er '.deployment.compose_project' "$state")" ] &&
+  [ "$(jq -er '.deployment.compose_project' "$post8")" = "$(jq -er '.deployment.compose_project' "$state")" ] || { echo 'P9 C9 post-restore Compose project changed' >&2; exit 1; }
+[ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$post7")" = "$(jq -er '.deployment.public_url|sub("/+$";"")' "$state")" ] &&
+  [ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$post8")" = "$(jq -er '.deployment.public_url|sub("/+$";"")' "$state")" ] || { echo 'P9 C9 post-restore public origin changed' >&2; exit 1; }
 [ "$(jq -er '.deployment.post_c7_checksums_sha256' "$state")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c7/checksums.sha256" | awk '{print $1}')" ] || { echo 'P9 C9 does not bind post-restore C7 evidence' >&2; exit 1; }
 [ "$(jq -er '.deployment.post_c8_checksums_sha256' "$state")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c8/checksums.sha256" | awk '{print $1}')" ] || { echo 'P9 C9 does not bind post-restore C8 evidence' >&2; exit 1; }
 [ "$(jq -er '.deployment.c7_checksums_sha256' "$post8")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c7/checksums.sha256" | awk '{print $1}')" ] || { echo 'post-restore C8 does not bind post-restore C7' >&2; exit 1; }

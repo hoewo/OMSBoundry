@@ -197,3 +197,19 @@ acceptance/p9-full-composition/verify-c9-recovery
 ```
 
 C9 is intentionally destructive to the exact Compose project recorded by C0: D1 removes its containers and volumes, restores the just-created backup into empty volumes, verifies all fifteen database fingerprints before starting business services, and runs the full D1 check. It then re-downloads both C6 invoices through new short-lived Evidence grants and compares their bytes, replays C7 and C8 stable commands without changing business facts, and confirms each employee's restored Open API calls created a new usage audit. Backup archives, dumps and signing keys stay in the configured protected D1 backup directory and are represented in C9 only by digests. Validate a handed-off C9 artifact with `verify-c9-evidence EVIDENCE_DIR`.
+
+After C9, exercise the external Feedback V2 boundary with the same two Tenant administrators:
+
+```sh
+P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
+P9_C1_EVIDENCE_DIR=/absolute/path/to/evidence/c1 \
+P9_C9_EVIDENCE_DIR=/absolute/path/to/evidence/c9 \
+P9_C10_EVIDENCE_DIR=/absolute/path/to/evidence/c10 \
+P9_PRIMARY_ADMIN_USERNAME=admin-a \
+P9_PRIMARY_ADMIN_PASSWORD_FILE=/restricted/admin-a.password \
+P9_SECONDARY_ADMIN_USERNAME=admin-b \
+P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
+acceptance/p9-full-composition/verify-c10-feedback.mjs
+```
+
+C10 obtains Feedback configuration only through each authenticated OMS Gateway session and requires project `115`, notifications and distinct HMAC-derived identities. It creates or reuses two deterministic conversations per Tenant and replays one customer message with an HTTPS URL attachment by `client_message_id`. If a Feedback developer has not replied to all four conversations, the command exits `3`, prints only the non-secret Feedback IDs/short IDs and leaves no C10 evidence; reply to those items in Feedback Console and rerun the exact command. Completion requires real developer messages, unread notifications for both conversations, marking the first conversation read without clearing the second, and finally clearing the second. API Keys, short-lived session tokens, IAM credentials, Cookies and pseudonymous user IDs never enter C10 evidence. Validate a handed-off artifact with `verify-c10-evidence EVIDENCE_DIR`.

@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C10 Feedback V2 真实旅程门禁（2026-10-26，源码门禁通过／真实 project 115 待执行）
+
+入口 `acceptance/p9-full-composition/verify-c10-feedback.mjs` 绑定同一 C0、C1 与 C9，使用两个 Tenant 的真实管理员会话取得 `feedback.use` 后从 Gateway 获取外部运行配置。每侧建立或复用两条 project 115 会话并幂等追加带 HTTPS URL 附件的客户消息；缺少开发者回复时明确返回 `PENDING` 且不生成证据。平台回复后复跑，要求两条会话均有开发者消息和未读通知，标记第一条已读不影响第二条，再单独清除第二条。证据不包含 API Key、Session token、密码、Cookie 或 HMAC 派生用户身份。
+
+`make p9-feedback-driver-test` 已实际通过：短时回环 HTTP server 模拟 OMS Gateway 与 Feedback API，首次运行停在四条真实回复门禁，注入开发者消息后同命令恢复完成；同时覆盖双租户身份、幂等消息、URL 附件、逐会话已读，以及 checksum 漂移、缺开发者消息和 Secret 注入负例。测试进程在 `finally` 中关闭且不启动容器；它不替代 project 115、生产 Origin allowlist 或外部 Console 的真实证据。
+
 ## P9 C9 联合备份／空目标恢复门禁（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/verify-c9-recovery` 先复验同一 C0～C8 链，只在显式设置 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` 后调用 D1 联合备份和原 Compose project 清卷恢复。它在删除卷前再次核对完整备份闭集、checksum、停写声明、十四应用全选和十五库指纹；D1 恢复后执行健康检查，下载并按 C6 摘要核对两份发票字节，重放 C7／C8 稳定命令并要求业务事实不变，最后从 IAM usage 列表确认两个 Tenant 均产生恢复后的 Open API 审计写入。固定 C9 证据包含恢复事件、摘要和 post-C7／post-C8 子证据，不复制备份本体、签名密钥、密码、API Key 或短期 URL。

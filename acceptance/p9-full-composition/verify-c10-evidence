@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-c10-evidence EVIDENCE_DIR' >&2; exit 2; }
+evidence_dir=$1
+[ -d "$evidence_dir" ] || { echo "P9 C10 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C10 evidence must not contain symbolic links' >&2; exit 1; }
+
+expected='checksums.sha256
+http-evidence.tsv
+result.md
+state-after-c10.json'
+[ "$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | sort)" = "$expected" ] || { echo 'P9 C10 evidence has an invalid artifact set' >&2; exit 1; }
+files='http-evidence.tsv
+result.md
+state-after-c10.json'
+actual=$(awk 'NF!=2||$1!~/^[0-9a-f]{64}$/||seen[$2]++{exit 1}{print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C10 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual" = "$files" ] || { echo 'P9 C10 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r digest artifact; do [ "$(openssl dgst -sha256 -r "$evidence_dir/$artifact"|awk '{print $1}')" = "$digest" ] || { echo "P9 C10 checksum mismatch for $artifact" >&2; exit 1; }; done <"$evidence_dir/checksums.sha256"
+
+state="$evidence_dir/state-after-c10.json"
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C10" and .result=="pass" and
+  .deployment.profile=="D1" and ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c9_checksums_sha256]|all(test("^[0-9a-f]{64}$"))) and
+  .feedback.project_id==115 and .feedback.notifications_enabled==true and (.feedback.auth_modes|length)==1 and all(.feedback.auth_modes[];.=="apiKey" or .=="session") and
+  (.tenants|length)==2 and .tenants[0].tenant_id!=.tenants[1].tenant_id and
+  all(.tenants[];(.tenant_id|test($uuid)) and (.feedbacks|length)==2 and ([.feedbacks[].ordinal]|sort)==[1,2] and
+    all(.feedbacks[];(.id|type)=="number" and .id>=1 and (.short_id|type)=="string" and (.short_id|length)>0 and
+      (.customer_message_id|type)=="number" and .customer_message_id>=1 and (.developer_message_ids|length)>=1 and all(.developer_message_ids[];type=="number" and .>=1) and
+      .attachment_type=="url" and .final_unread_count==0)) and
+  .checks.two_feedbacks_per_tenant=="pass" and .checks.idempotent_customer_message=="pass" and .checks.developer_reply=="pass" and .checks.self_list_isolation=="pass" and
+  .checks.single_feedback_read_scope=="pass" and .checks.cross_tenant_identity_distinct=="pass" and .checks.credentials_recorded==false
+' "$state" >/dev/null || { echo 'P9 C10 state has an invalid schema or failed check' >&2; exit 1; }
+
+awk -F '\t' '
+  NR==1{if($0!="request\texpected_status\tactual_status\ttime_seconds")exit 1;next}
+  NF!=4||$4!~/^[0-9]+([.][0-9]+)?$/{exit 1}
+  {ok=0;n=split($2,expected,"/");for(i=1;i<=n;i++)if(expected[i]==$3)ok=1;if(!ok)exit 1}
+  $1=="POST primary Feedback config"{pc++} $1=="POST secondary Feedback config"{sc++}
+  $1=="POST primary Feedback 1 message"{pm1++} $1=="POST primary Feedback 2 message"{pm2++}
+  $1=="POST secondary Feedback 1 message"{sm1++} $1=="POST secondary Feedback 2 message"{sm2++}
+  $1=="POST primary Feedback 1 read"{pr1++} $1=="POST primary Feedback 2 read"{pr2++}
+  $1=="POST secondary Feedback 1 read"{sr1++} $1=="POST secondary Feedback 2 read"{sr2++}
+  END{if(pc!=1||sc!=1||pm1!=1||pm2!=1||sm1!=1||sm2!=1||pr1!=1||pr2!=1||sr1!=1||sr2!=1)exit 1}
+' "$evidence_dir/http-evidence.tsv" || { echo 'P9 C10 HTTP evidence is incomplete' >&2; exit 1; }
+if grep -REq 'Authorization:|ak_[A-Za-z0-9_-]{16,}|fbs_[A-Za-z0-9_.-]{12,}|customUserId|custom_user_id|password|oms_iam_(session|csrf)' "$evidence_dir"; then echo 'P9 C10 evidence contains a credential or pseudonymous identity' >&2; exit 1; fi
+echo 'PASS P9 C10 Feedback V2 evidence integrity and secret exclusion'

@@ -54,8 +54,12 @@ payroll period. After C0 through C8 complete, `verify-c9-recovery` is the only
 P9 recovery entry: it requires `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`, backs up
 and replaces the exact C0 Compose project's volumes, verifies the fifteen
 database fingerprints, both invoice byte digests, C7/C8 stable replay and a
-fresh Open API usage write. See the adjacent README for exact inputs and
-secret-free evidence contracts.
+fresh Open API usage write. `verify-c10-feedback.mjs` then uses the same two
+Tenant administrators and the protected Gateway adapter to exercise real
+project 115 conversations. Its first run may stop with `PENDING` until a
+developer replies in Feedback Console; rerunning the exact command completes
+notification and per-conversation read checks. See the adjacent README for
+exact inputs and secret-free evidence contracts.
 
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and

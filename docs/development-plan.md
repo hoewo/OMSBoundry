@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 P9 增量（BF-265）：新增随 D1 release bundle 交付的 C10 Feedback V2 真实旅程门禁。它绑定 C0／C1／C9，以两个 Tenant 的既有管理员和 Gateway 配置分别创建或复用两条 project 115 会话，幂等追加带 URL 附件的客户消息；没有平台开发者回复时以 `PENDING` 停止且不出具证据，回复后复跑验证开发者消息、两条未读以及逐会话已读隔离。离线 pending／resume 与证据正反例通过；下一步只在真实 P9 窗口执行 C0～C10、完成人工回复和最终有界稳定运行，不再增加新的业务阶段。
+
 2026-10-26 P9 增量（BF-264）：新增随 D1 release bundle 交付的 C9 联合恢复门禁。它只接受同一 C0～C8 证据链与显式 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`，独立核对完整备份闭集、停写声明、十四应用选择和十五库指纹，再对原 Compose project 执行清卷恢复；恢复后必须通过 D1 检查、两份 C6 发票逐字节摘要、C7／C8 稳定命令重放与业务事实等价，以及两 Tenant 新增 Open API usage audit。备份本体、签名密钥、凭证和短期 URL 不进入 C9 证据。离线 verifier 正反例通过；真实 D1 C9 尚未执行，下一段进入真实 Feedback V2 旅程和最终有界运行。
 
 2026-10-26 P9 增量（BF-263）：新增随 D1 release bundle 交付的 `run-c0-c8`，把九个已有阶段收敛为可恢复的单一连续入口；既有阶段先独立复验再复用，最终逐边核对 project、Origin 和全部前序 checksum 绑定。离线完整链与 checksum-valid 断链负例通过。下一步不再扩展业务阶段，转入同一链完成后的联合备份／原项目空目标恢复、恢复后关键读取／续写及 Feedback 真实旅程；真实 D1 尚未执行。
