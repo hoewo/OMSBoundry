@@ -21,6 +21,7 @@ import (
 	"omsbizfoundry/money-flow-ledger/internal/audit"
 	"omsbizfoundry/money-flow-ledger/internal/cashevidence"
 	"omsbizfoundry/money-flow-ledger/internal/cashtransaction"
+	"omsbizfoundry/money-flow-ledger/internal/financepayment"
 	"omsbizfoundry/money-flow-ledger/internal/identity"
 	"omsbizfoundry/money-flow-ledger/internal/internaltransfer"
 	"omsbizfoundry/money-flow-ledger/internal/ledgerexport"
@@ -135,61 +136,66 @@ type ReceiptSetUseCases interface {
 type PayrollPaymentUseCases interface {
 	Record(context.Context, audit.ActorRef, payrollpayment.Request) (payrollpayment.Result, error)
 }
+type InternalFinancePaymentUseCases interface {
+	Record(context.Context, audit.ActorRef, financepayment.Request) (financepayment.Result, error)
+}
 
 type Options struct {
-	SessionCookieSecure  bool
-	SessionCookieName    string
-	ExternalIdentity     bool
-	PublicBasePath       string
-	ReferenceTenantID    string
-	ReferenceAccessToken string
-	PartyRuntime         PartyRuntime
-	DirectoryParties     DirectoryPartyProjector
-	PayableSuggestions   PayableSuggestionUseCases
-	ReceiptSets          ReceiptSetUseCases
-	CashEvidence         CashEvidenceUseCases
-	PayrollPayments      PayrollPaymentUseCases
+	SessionCookieSecure     bool
+	SessionCookieName       string
+	ExternalIdentity        bool
+	PublicBasePath          string
+	ReferenceTenantID       string
+	ReferenceAccessToken    string
+	PartyRuntime            PartyRuntime
+	DirectoryParties        DirectoryPartyProjector
+	PayableSuggestions      PayableSuggestionUseCases
+	ReceiptSets             ReceiptSetUseCases
+	CashEvidence            CashEvidenceUseCases
+	PayrollPayments         PayrollPaymentUseCases
+	InternalFinancePayments InternalFinancePaymentUseCases
 }
 
 type Server struct {
-	readiness              ReadinessChecker
-	identities             IdentityUseCases
-	parties                PartyUseCases
-	partyRuntime           PartyRuntime
-	directoryParties       DirectoryPartyProjector
-	obligations            ObligationUseCases
-	cashTransactions       CashTransactionUseCases
-	allocations            AllocationUseCases
-	operatingSummaries     OperatingSummaryUseCases
-	ledgerExports          LedgerExportUseCases
-	internalTransfers      InternalTransferUseCases
-	payableSuggestions     PayableSuggestionUseCases
-	receiptSets            ReceiptSetUseCases
-	cashEvidence           CashEvidenceUseCases
-	payrollPayments        PayrollPaymentUseCases
-	homePage               *template.Template
-	loginPage              *template.Template
-	partyPage              *template.Template
-	obligationPage         *template.Template
-	obligationDetail       *template.Template
-	historicalBalancePage  *template.Template
-	agingPage              *template.Template
-	cashForecastPage       *template.Template
-	operatingSummaryPage   *template.Template
-	operatingDetailPage    *template.Template
-	ledgerExportPage       *template.Template
-	cashTransactionPage    *template.Template
-	cashTransactionDetail  *template.Template
-	allocationPage         *template.Template
-	allocationDetail       *template.Template
-	internalTransferPage   *template.Template
-	internalTransferDetail *template.Template
-	sessionCookieSecure    bool
-	sessionCookieName      string
-	externalIdentity       bool
-	publicBasePath         string
-	referenceTenantID      string
-	referenceAccessToken   string
+	readiness               ReadinessChecker
+	identities              IdentityUseCases
+	parties                 PartyUseCases
+	partyRuntime            PartyRuntime
+	directoryParties        DirectoryPartyProjector
+	obligations             ObligationUseCases
+	cashTransactions        CashTransactionUseCases
+	allocations             AllocationUseCases
+	operatingSummaries      OperatingSummaryUseCases
+	ledgerExports           LedgerExportUseCases
+	internalTransfers       InternalTransferUseCases
+	payableSuggestions      PayableSuggestionUseCases
+	receiptSets             ReceiptSetUseCases
+	cashEvidence            CashEvidenceUseCases
+	payrollPayments         PayrollPaymentUseCases
+	internalFinancePayments InternalFinancePaymentUseCases
+	homePage                *template.Template
+	loginPage               *template.Template
+	partyPage               *template.Template
+	obligationPage          *template.Template
+	obligationDetail        *template.Template
+	historicalBalancePage   *template.Template
+	agingPage               *template.Template
+	cashForecastPage        *template.Template
+	operatingSummaryPage    *template.Template
+	operatingDetailPage     *template.Template
+	ledgerExportPage        *template.Template
+	cashTransactionPage     *template.Template
+	cashTransactionDetail   *template.Template
+	allocationPage          *template.Template
+	allocationDetail        *template.Template
+	internalTransferPage    *template.Template
+	internalTransferDetail  *template.Template
+	sessionCookieSecure     bool
+	sessionCookieName       string
+	externalIdentity        bool
+	publicBasePath          string
+	referenceTenantID       string
+	referenceAccessToken    string
 }
 
 type principalContextKey struct{}
@@ -322,44 +328,45 @@ func New(
 		return nil, err
 	}
 	server := &Server{
-		readiness:              readiness,
-		identities:             identities,
-		parties:                parties,
-		partyRuntime:           options.PartyRuntime,
-		directoryParties:       options.DirectoryParties,
-		obligations:            obligations,
-		cashTransactions:       cashTransactions,
-		allocations:            allocations,
-		operatingSummaries:     operatingSummaries,
-		ledgerExports:          ledgerExports,
-		internalTransfers:      internalTransfers,
-		payableSuggestions:     options.PayableSuggestions,
-		receiptSets:            options.ReceiptSets,
-		cashEvidence:           options.CashEvidence,
-		payrollPayments:        options.PayrollPayments,
-		homePage:               homePage,
-		loginPage:              loginPage,
-		partyPage:              partyPage,
-		obligationPage:         obligationPage,
-		obligationDetail:       obligationDetail,
-		historicalBalancePage:  historicalBalancePage,
-		agingPage:              agingPage,
-		cashForecastPage:       cashForecastPage,
-		operatingSummaryPage:   operatingSummaryPage,
-		operatingDetailPage:    operatingDetailPage,
-		ledgerExportPage:       ledgerExportPage,
-		cashTransactionPage:    cashTransactionPage,
-		cashTransactionDetail:  cashTransactionDetail,
-		allocationPage:         allocationPage,
-		allocationDetail:       allocationDetail,
-		internalTransferPage:   internalTransferPage,
-		internalTransferDetail: internalTransferDetail,
-		sessionCookieSecure:    options.SessionCookieSecure,
-		sessionCookieName:      sessionName,
-		externalIdentity:       options.ExternalIdentity,
-		publicBasePath:         options.PublicBasePath,
-		referenceTenantID:      options.ReferenceTenantID,
-		referenceAccessToken:   options.ReferenceAccessToken,
+		readiness:               readiness,
+		identities:              identities,
+		parties:                 parties,
+		partyRuntime:            options.PartyRuntime,
+		directoryParties:        options.DirectoryParties,
+		obligations:             obligations,
+		cashTransactions:        cashTransactions,
+		allocations:             allocations,
+		operatingSummaries:      operatingSummaries,
+		ledgerExports:           ledgerExports,
+		internalTransfers:       internalTransfers,
+		payableSuggestions:      options.PayableSuggestions,
+		receiptSets:             options.ReceiptSets,
+		cashEvidence:            options.CashEvidence,
+		payrollPayments:         options.PayrollPayments,
+		internalFinancePayments: options.InternalFinancePayments,
+		homePage:                homePage,
+		loginPage:               loginPage,
+		partyPage:               partyPage,
+		obligationPage:          obligationPage,
+		obligationDetail:        obligationDetail,
+		historicalBalancePage:   historicalBalancePage,
+		agingPage:               agingPage,
+		cashForecastPage:        cashForecastPage,
+		operatingSummaryPage:    operatingSummaryPage,
+		operatingDetailPage:     operatingDetailPage,
+		ledgerExportPage:        ledgerExportPage,
+		cashTransactionPage:     cashTransactionPage,
+		cashTransactionDetail:   cashTransactionDetail,
+		allocationPage:          allocationPage,
+		allocationDetail:        allocationDetail,
+		internalTransferPage:    internalTransferPage,
+		internalTransferDetail:  internalTransferDetail,
+		sessionCookieSecure:     options.SessionCookieSecure,
+		sessionCookieName:       sessionName,
+		externalIdentity:        options.ExternalIdentity,
+		publicBasePath:          options.PublicBasePath,
+		referenceTenantID:       options.ReferenceTenantID,
+		referenceAccessToken:    options.ReferenceAccessToken,
 	}
 
 	protectedMux := http.NewServeMux()
@@ -419,6 +426,9 @@ func New(
 	}
 	if server.payrollPayments != nil {
 		publicMux.Handle("POST /api/v1/payroll-payments", server.authenticatePayrollPayment(http.HandlerFunc(server.recordPayrollPayment)))
+	}
+	if server.internalFinancePayments != nil {
+		publicMux.Handle("POST /api/v1/internal-finance-payments", server.authenticateInternalFinancePayment(http.HandlerFunc(server.recordInternalFinancePayment)))
 	}
 	publicMux.Handle("/", server.authenticate(server.requirePermission(identity.PermissionView, protectedMux)))
 

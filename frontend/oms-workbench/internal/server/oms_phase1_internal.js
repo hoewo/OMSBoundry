@@ -11,6 +11,7 @@
   const ownerAPI=globalThis.OMSPhase1OwnerAPI;
   const ownerMembers=Boolean(ownerAPI?.app?.('people-groups')&&ownerAPI?.app?.('payroll'));
   const ownerPayroll=Boolean(ownerAPI?.app?.('people-groups')&&ownerAPI?.app?.('payroll'));
+  const ownerFinance=Boolean(ownerAPI?.app?.('internal-finance-requests'));
 
   const safe=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const uuid=()=>globalThis.crypto?.randomUUID?.()||'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,value=>{const random=Math.random()*16|0,part=value==='x'?random:(random&3|8);return part.toString(16)});
@@ -47,7 +48,7 @@
   }
   let data=readStore();
   const view={pages:{members:1,payroll:1,finance:1},pageSize:{members:20,payroll:20,finance:20},sorts:{members:{key:'updated_at',direction:'desc'},payroll:{key:'pay_date',direction:'desc'},finance:{key:'created_at',direction:'desc'}},selectedPayroll:new Set(),selectedFinance:new Set(),selectablePayroll:[],selectableFinance:[]};
-  const persist=()=>localStorage.setItem(storeKey,JSON.stringify({...data,...(ownerMembers?{members:[]}:{}),...(ownerPayroll?{payroll_periods:[]}: {})}));
+  const persist=()=>localStorage.setItem(storeKey,JSON.stringify({...data,...(ownerMembers?{members:[]}:{}),...(ownerPayroll?{payroll_periods:[]}: {}),...(ownerFinance?{finance_records:[]}: {})}));
   const show=detail=>root.dispatchEvent(new CustomEvent('oms-v1:show-dialog',{detail}));
   const close=()=>root.dispatchEvent(new CustomEvent('oms-v1:close-dialog'));
   const formStatus=copy=>'<div class="oms-v1__form-status is-wide" data-oms-v1-form-status>'+safe(copy||'')+'</div>';
@@ -233,17 +234,19 @@
     root.querySelector('[data-internal-payroll-select-all]').addEventListener('click',()=>{for(const id of view.selectablePayroll)view.selectedPayroll.add(id);renderPayroll()});
     root.querySelector('[data-internal-payroll-clear]').addEventListener('click',()=>{view.selectedPayroll.clear();renderPayroll()});
   }
-  root.querySelector('[data-internal-new-finance]').addEventListener('click',()=>openFinanceEditor());
-  root.querySelector('[data-internal-finance-paid]').addEventListener('click',openFinancePaidBatch);
-  root.querySelector('[data-internal-finance-select-all]').addEventListener('click',()=>{for(const id of view.selectableFinance)view.selectedFinance.add(id);renderFinance()});
-  root.querySelector('[data-internal-finance-clear]').addEventListener('click',()=>{view.selectedFinance.clear();renderFinance()});
-  for(const input of root.querySelectorAll('[data-internal-member-search],[data-internal-payroll-search],[data-internal-finance-search]')){if(ownerPayroll&&input.hasAttribute('data-internal-payroll-search'))continue;input.addEventListener('input',()=>{const scope=input.hasAttribute('data-internal-member-search')?'members':input.hasAttribute('data-internal-payroll-search')?'payroll':'finance';view.pages[scope]=1;if(scope==='payroll')view.selectedPayroll.clear();if(scope==='finance')view.selectedFinance.clear();({members:renderMembers,payroll:renderPayroll,finance:renderFinance}[scope])()})}
+  if(!ownerFinance){
+    root.querySelector('[data-internal-new-finance]').addEventListener('click',()=>openFinanceEditor());
+    root.querySelector('[data-internal-finance-paid]').addEventListener('click',openFinancePaidBatch);
+    root.querySelector('[data-internal-finance-select-all]').addEventListener('click',()=>{for(const id of view.selectableFinance)view.selectedFinance.add(id);renderFinance()});
+    root.querySelector('[data-internal-finance-clear]').addEventListener('click',()=>{view.selectedFinance.clear();renderFinance()});
+  }
+  for(const input of root.querySelectorAll('[data-internal-member-search],[data-internal-payroll-search],[data-internal-finance-search]')){if(ownerPayroll&&input.hasAttribute('data-internal-payroll-search')||ownerFinance&&input.hasAttribute('data-internal-finance-search'))continue;input.addEventListener('input',()=>{const scope=input.hasAttribute('data-internal-member-search')?'members':input.hasAttribute('data-internal-payroll-search')?'payroll':'finance';view.pages[scope]=1;if(scope==='payroll')view.selectedPayroll.clear();if(scope==='finance')view.selectedFinance.clear();({members:renderMembers,payroll:renderPayroll,finance:renderFinance}[scope])()})}
   for(const select of root.querySelectorAll('[data-internal-member-status]'))select.addEventListener('change',()=>{view.pages.members=1;renderMembers()});
   if(!ownerPayroll)for(const select of root.querySelectorAll('[data-internal-payroll-status],[data-internal-payroll-month]'))select.addEventListener('change',()=>{view.pages.payroll=1;view.selectedPayroll.clear();renderPayroll()});
-  for(const select of root.querySelectorAll('[data-internal-finance-type],[data-internal-finance-status]'))select.addEventListener('change',()=>{view.pages.finance=1;view.selectedFinance.clear();renderFinance()});
+  if(!ownerFinance)for(const select of root.querySelectorAll('[data-internal-finance-type],[data-internal-finance-status]'))select.addEventListener('change',()=>{view.pages.finance=1;view.selectedFinance.clear();renderFinance()});
 
   const boundary=root.querySelector('[data-internal-storage-notice]');
-  if(boundary)boundary.textContent=ownerMembers&&ownerPayroll?'成员与工资数据由正式业务服务保存；财务申请仍为当前账号的浏览器体验数据，不会跨设备同步。':'当前页面为浏览器体验版；数据仅保存在当前登录账号的本浏览器中，不会跨设备同步。';
-  renderMembers();if(!ownerPayroll)renderPayroll();renderFinance();
+  if(boundary)boundary.textContent=ownerMembers&&ownerPayroll&&ownerFinance?'成员、工资和财务申请均由各自正式业务服务保存。':ownerMembers&&ownerPayroll?'成员与工资数据由正式业务服务保存；财务申请仍为当前账号的浏览器体验数据，不会跨设备同步。':'当前页面为浏览器体验版；数据仅保存在当前登录账号的本浏览器中，不会跨设备同步。';
+  renderMembers();if(!ownerPayroll)renderPayroll();if(!ownerFinance)renderFinance();
   if(ownerMembers)void loadOwnerMembers();
 })();

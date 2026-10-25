@@ -109,6 +109,12 @@ var omsPhase1InternalJS string
 //go:embed oms_phase1_payroll_owner.js
 var omsPhase1PayrollOwnerJS string
 
+// omsPhase1FinanceOwner composes the formal Internal Finance Requests owner
+// and is inert when that application is not assembled.
+//
+//go:embed oms_phase1_finance_owner.js
+var omsPhase1FinanceOwnerJS string
+
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string
 

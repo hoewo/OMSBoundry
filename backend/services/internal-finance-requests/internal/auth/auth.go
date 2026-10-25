@@ -7,13 +7,19 @@ import (
 )
 
 const (
-	ActionSelfRead      = "internal-finance-requests.self.read"
-	ActionSelfManage    = "internal-finance-requests.self.manage"
-	ActionTenantRead    = "internal-finance-requests.tenant.read"
-	ActionReferenceRead = "internal-finance-requests.reference.read"
+	ActionSelfRead             = "internal-finance-requests.self.read"
+	ActionSelfManage           = "internal-finance-requests.self.manage"
+	ActionTenantRead           = "internal-finance-requests.tenant.read"
+	ActionReferenceRead        = "internal-finance-requests.reference.read"
+	ActionPaymentConfirm       = "internal-finance-requests.payment.confirm"
+	ActionPaymentBatchConfirm  = "internal-finance-requests.payment.batch-confirm"
+	ActionSensitiveAccountRead = "internal-finance-requests.sensitive-account.read"
+	ActionCategoryManage       = "internal-finance-requests.category.manage"
+	ActionExport               = "internal-finance-requests.export"
+	ActionSensitiveExport      = "internal-finance-requests.sensitive-account.export"
 )
 
-var AllActions = []string{ActionSelfRead, ActionSelfManage, ActionTenantRead, ActionReferenceRead, "internal-finance-requests.payment.confirm", "internal-finance-requests.payment.batch-confirm", "internal-finance-requests.sensitive-account.read", "internal-finance-requests.export", "internal-finance-requests.sensitive-account.export", "internal-finance-requests.category.manage"}
+var AllActions = []string{ActionSelfRead, ActionSelfManage, ActionTenantRead, ActionReferenceRead, ActionPaymentConfirm, ActionPaymentBatchConfirm, ActionSensitiveAccountRead, ActionCategoryManage, ActionExport, ActionSensitiveExport}
 var ErrUnauthenticated = errors.New("authentication required")
 
 type Principal struct {

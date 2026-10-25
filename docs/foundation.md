@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P5 实现基线（BF-240；取代 BF-185、BF-191～BF-203 的“尚未实施”状态）：Internal Finance Requests 已独立拥有报销／付款申请的正式明细、类别、收款与费用归属快照、Evidence 稳定引用、无需审批快照、撤回 revision、敏感访问审计和 Payment Delivery；Money 独立拥有对应义务、实际付款、整单核销及超额未分配余额。普通读取、全部写响应和普通导出只返回账号尾号，完整读取与敏感导出分别授权并逐条审计；批量付款部分失败不回滚成功项。正式 Workbench 财务页已切换 Owner API。本地双数据库／双进程、空目标恢复和敏感边界门禁通过；未部署 D1／公网，Evidence 实时校验与开放 API 分别留待 P7／P6。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)
+
 2026-10-25 P4 实现基线（BF-239）：Payroll 已独立拥有月度工资期间、成员工资行、冻结计算快照、导入预览、核对、同步、作废／替代、调整批次和逐人／批量实际发放历史；个人与单位五险一金、外部个税、绩效和调整全部以整数精确计算并追加 revision。Payroll 通过版本化 Money Payment Delivery 交付实际付款，Money 为每个工资行稳定建立一个义务并独立保存 Payment／Allocation／超额未分配事实；部分失败不回滚成功项，未知结果只能沿原命令恢复。正式 Workbench 工资页在 People＋Payroll 装配时改用 Owner API。本地 P4 门禁通过，未部署 D1／公网；P5 财务申请仍待实施。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
 
 2026-10-25 P3 实现基线（BF-238）：People & Groups 已拥有成员基础资料、部门／岗位、状态生效日期及新增／离职／重新入职事件历史；Payroll 已拥有按 Person ID 挂载、按月份生效的固定工资／社保基数／公积金基数档案、版本化工资账户，以及带地区、权威来源、核对时间、基数上下限、个人／单位万分比和舍入规则的标准／租户自定义缴费方案。两个 Owner 分库保存历史，People 状态变化不改写 Payroll，离职也不成为 Payroll 资格规则；普通账户读取始终脱敏。Workbench 成员管理改为分别调用两个 Owner，并显式处理部分成功。本地 P3 门禁通过，P4 工资生成、计算、同步与实际发放尚未实施，D1／公网未发布。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)

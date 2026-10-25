@@ -1,6 +1,6 @@
 # OMSBizFoundry
 
-当前 OMS1 迭代 P4：People & Groups 与 Payroll 已完成成员／薪酬档案分离，Payroll 又完成月度工资表、冻结计算快照、核对、同步、调整和逐人／批量实际发放；Money 通过版本化交付契约独立保存工资义务、Payment、Allocation 和超额未分配事实。三 Owner／三数据库本地验收及授权、幂等、未知恢复、零／负实发、部分失败和本人可见性门禁通过；尚未部署 D1／公网，跨应用恢复／导出在 P9 收口。当前进入 P5 财务申请、审批占位与付款确认。[P4 验证报告](./docs/reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
+当前 OMS1 迭代 P5：`Internal Finance Requests` 已独立拥有报销／付款申请、不可变 revision、审批占位、收款与费用归属快照、Evidence 稳定引用、敏感读取审计和 Payment Delivery；Money 通过版本化端口独立保存每张申请的稳定义务、每次实际付款、核销与超额未分配事实。双 Owner／双数据库本地验收覆盖分次／超额付款、批量部分成功、结果未知、撤回重提、普通／敏感导出及空目标恢复；尚未部署 D1／公网，Evidence 实时校验留在 P7，全组合授权与恢复在 P9 收口。当前进入 P6 员工 API Key 与开放 API。[P5 验证报告](./docs/reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)
 
 当前财务筛选与批量选择规则（BF-182／BF-183）：财务管理的“全部类型”使用统一自定义选择器并紧邻搜索框，不再被工具栏的自动左边距推到中间；窄视口也不误隐藏选择器。工资和财务批量操作条提供明确的“全选／取消全选”，仅选择当前筛选结果中的可操作记录。两项已随公网 Workbench v1.32 发布；不改变任何 Owner 数据或正式业务边界。[发布报告](./docs/reports/oms-finance-filter-toolbar-publication-20261024.md)
 

@@ -28,6 +28,7 @@ const (
 	SourceKindCostOutsourcingSuggestion = "cost_outsourcing_payable_suggestion"
 	SourceKindBonusSuggestion           = "bonus_payable_suggestion"
 	SourceKindPayrollPayment            = "payroll_payment"
+	SourceKindInternalFinancePayment    = "internal_finance_payment"
 
 	AuditActionDraftCreated      = "obligation_draft_created"
 	AuditActionConfirmed         = "obligation_confirmed"

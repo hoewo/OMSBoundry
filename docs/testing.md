@@ -1,6 +1,14 @@
 # OMSBizFoundry 验证入口
 
-## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4
+## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4／P5
+
+P5 财务申请与付款确认提供双 Owner 隔离重复验收入口：
+
+```sh
+./acceptance/p5-finance-payment/run-isolated
+```
+
+该入口限制 Go 构建并行度，启动一次性 PostgreSQL 18.6、Finance 与 Money 两个真实 HTTP 服务和两个独立数据库；验证付款申请、无需审批快照、分次／超额、批量部分成功、撤回重提、账号遮罩、独立敏感导出及审计，并把两库备份恢复到空目标核对。主申请两笔 Payment 只绑定一个义务、核销 10000 分并留下 1000 分超额未分配；批量 revision 冲突不回滚另一笔成功资金。脚本退出时无论成功失败都关闭进程和容器。该证据不表示 Evidence 实时校验、P6 开放 API、D1 或公网已经完成。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)
 
 P4 工资执行提供三 Owner 隔离重复验收入口：
 

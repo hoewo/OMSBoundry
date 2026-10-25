@@ -68,7 +68,7 @@ func TestMoneyFlowMigrationsFromBootstrapAndReplay(t *testing.T) {
 		`).Scan(&migrationCount, &tableCount, &indexCount, &triggerCount, &foreignKeyCount); err != nil {
 		t.Fatalf("inspect migration objects: %v", err)
 	}
-	if migrationCount != 25 || tableCount != 35 || indexCount != 32 || triggerCount != 53 || foreignKeyCount != 54 {
+	if migrationCount != 26 || tableCount != 35 || indexCount != 32 || triggerCount != 53 || foreignKeyCount != 54 {
 		t.Fatalf("migration objects versions=%d tables=%d indexes=%d triggers=%d foreign_keys=%d", migrationCount, tableCount, indexCount, triggerCount, foreignKeyCount)
 	}
 
@@ -258,7 +258,7 @@ func TestObligationDraftMigrationFromPartySchema(t *testing.T) {
 	`).Scan(&afterVersions, &obligationsAfter, &commandsAfter); err != nil {
 		t.Fatalf("inspect obligation schema state: %v", err)
 	}
-	if afterVersions != 25 || obligationsAfter == nil || commandsAfter == nil {
+	if afterVersions != 26 || obligationsAfter == nil || commandsAfter == nil {
 		t.Fatalf("obligation schema versions=%d obligations=%v commands=%v", afterVersions, obligationsAfter, commandsAfter)
 	}
 }
@@ -345,7 +345,7 @@ func TestObligationConfirmationMigrationFromDraftSchema(t *testing.T) {
 	`).Scan(&versions, &status, &currentRevision, &revisionTable, &commandTable); err != nil {
 		t.Fatalf("inspect confirmation migration: %v", err)
 	}
-	if versions != 25 || status != "draft" || currentRevision != nil || revisionTable == nil || commandTable == nil {
+	if versions != 26 || status != "draft" || currentRevision != nil || revisionTable == nil || commandTable == nil {
 		t.Fatalf("confirmation migration versions=%d status=%s current=%v revisions=%v commands=%v", versions, status, currentRevision, revisionTable, commandTable)
 	}
 }
@@ -408,7 +408,7 @@ func TestCashTransactionMigrationFromConfirmationSchema(t *testing.T) {
 	`).Scan(&versions, &parties, &cashTable, &commandTable); err != nil {
 		t.Fatalf("inspect cash transaction migration: %v", err)
 	}
-	if versions != 25 || parties != 1 || cashTable == nil || commandTable == nil {
+	if versions != 26 || parties != 1 || cashTable == nil || commandTable == nil {
 		t.Fatalf("cash migration versions=%d parties=%d cash=%v commands=%v", versions, parties, cashTable, commandTable)
 	}
 }
@@ -494,7 +494,7 @@ func TestAllocationMigrationFromCashTransactionSchema(t *testing.T) {
 	`).Scan(&versions, &cashTransactions, &allocationTable, &commandTable); err != nil {
 		t.Fatalf("inspect allocation migration: %v", err)
 	}
-	if versions != 25 || cashTransactions != 1 || allocationTable == nil || commandTable == nil {
+	if versions != 26 || cashTransactions != 1 || allocationTable == nil || commandTable == nil {
 		t.Fatalf("allocation migration versions=%d cash=%d allocations=%v commands=%v", versions, cashTransactions, allocationTable, commandTable)
 	}
 }
@@ -581,7 +581,7 @@ func TestInternalTransferMigrationFromAllocationSchema(t *testing.T) {
 	`).Scan(&versions, &cashTransactions, &transferTable, &commandTable); err != nil {
 		t.Fatalf("inspect internal transfer migration: %v", err)
 	}
-	if versions != 25 || cashTransactions != 1 || transferTable == nil || commandTable == nil {
+	if versions != 26 || cashTransactions != 1 || transferTable == nil || commandTable == nil {
 		t.Fatalf("internal transfer migration versions=%d cash=%d transfers=%v commands=%v", versions, cashTransactions, transferTable, commandTable)
 	}
 }
@@ -732,7 +732,7 @@ func TestAllocationReversalMigrationFromInternalTransferSchema(t *testing.T) {
 	`).Scan(&versions, &allocations, &reversals, &netAllocated, &reversalTable, &commandTable); err != nil {
 		t.Fatalf("inspect allocation reversal migration: %v", err)
 	}
-	if versions != 25 || allocations != 1 || reversals != 0 || netAllocated != "40.000000" || reversalTable == nil || commandTable == nil {
+	if versions != 26 || allocations != 1 || reversals != 0 || netAllocated != "40.000000" || reversalTable == nil || commandTable == nil {
 		t.Fatalf("allocation reversal migration versions=%d allocations=%d reversals=%d net=%s tables=%v/%v",
 			versions, allocations, reversals, netAllocated, reversalTable, commandTable)
 	}
@@ -888,7 +888,7 @@ func TestCashTransactionReversalMigrationFromAllocationReversalSchema(t *testing
 	); err != nil {
 		t.Fatalf("inspect cash transaction reversal migration: %v", err)
 	}
-	if versions != 25 || cashTransactions != 1 || allocations != 1 || allocationReversals != 1 ||
+	if versions != 26 || cashTransactions != 1 || allocations != 1 || allocationReversals != 1 ||
 		cashReversals != 0 || netAllocated != "0.000000" || reversalTable == nil || commandTable == nil {
 		t.Fatalf("cash reversal migration versions=%d cash=%d allocations=%d/%d cash_reversals=%d net=%s tables=%v/%v",
 			versions, cashTransactions, allocations, allocationReversals, cashReversals, netAllocated, reversalTable, commandTable)
@@ -1107,7 +1107,7 @@ func TestObligationAmountAdjustmentMigrationFromCashReversalSchema(t *testing.T)
 	); err != nil {
 		t.Fatalf("inspect obligation amount adjustment migration: %v", err)
 	}
-	if versions != 25 || rootOriginal != "100.000000" || effectiveAmount != "100.000000" ||
+	if versions != 26 || rootOriginal != "100.000000" || effectiveAmount != "100.000000" ||
 		netAllocated != "40.000000" || outstanding != "60.000000" || revisionKind != "confirmation" ||
 		sourceDraft != 1 || sourceRevision != nil || recordedKind != "local_user" ||
 		recordedID != "b3000000-0000-4000-8000-000000000001" || recordedName != "调整升级管理员" ||
@@ -1336,7 +1336,7 @@ func TestObligationRemissionMigrationFromAmountAdjustmentSchema(t *testing.T) {
 	); err != nil {
 		t.Fatalf("inspect obligation remission migration: %v", err)
 	}
-	if versions != 25 || effective != "120.000000" || allocated != "40.000000" ||
+	if versions != 26 || effective != "120.000000" || allocated != "40.000000" ||
 		remitted != "0" || outstanding != "80.000000" || revisions != 2 || adjustments != 1 ||
 		allocations != 1 || remissions != 0 || commands != 0 || remissionTable == nil || commandTable == nil {
 		t.Fatalf("remission migration versions=%d amounts=%s/%s/%s/%s facts=%d/%d/%d/%d/%d tables=%v/%v",
@@ -1510,7 +1510,7 @@ func TestObligationClosureMigrationFromRemissionSchema(t *testing.T) {
 	); err != nil {
 		t.Fatalf("inspect obligation closure migration: %v", err)
 	}
-	if versions != 25 || status != "open" || effective != "100.000000" || allocated != "0" ||
+	if versions != 26 || status != "open" || effective != "100.000000" || allocated != "0" ||
 		remitted != "40.000000" || outstanding != "60.000000" || revisions != 1 || remissions != 1 ||
 		closures != 0 || commands != 0 || closureTable == nil || commandTable == nil {
 		t.Fatalf("closure migration versions=%d status=%s amounts=%s/%s/%s/%s facts=%d/%d/%d/%d tables=%v/%v",
@@ -1552,7 +1552,7 @@ func TestObligationRecordedTimeGuardMigrationPreservesValidVersion13Facts(t *tes
 	`).Scan(&versions, &monotonicTriggers, &guardFunction, &revisionIndex, &storedConfirmationAt, &storedRemissionAt); err != nil {
 		t.Fatalf("inspect recorded-time migration: %v", err)
 	}
-	if versions != 25 || monotonicTriggers != 6 || guardFunction == nil || revisionIndex == nil ||
+	if versions != 26 || monotonicTriggers != 6 || guardFunction == nil || revisionIndex == nil ||
 		!storedConfirmationAt.Equal(confirmationAt) || !storedRemissionAt.Equal(remissionAt) {
 		t.Fatalf("recorded-time migration versions=%d triggers=%d function=%v index=%v times=%v/%v",
 			versions, monotonicTriggers, guardFunction, revisionIndex, storedConfirmationAt, storedRemissionAt)
@@ -1616,7 +1616,7 @@ func TestCashExpectationMigrationFromRecordedTimeSchemaPreservesFacts(t *testing
 	`).Scan(&versions, &obligations, &revisions, &remissions, &expectations, &commands, &expectationTable, &commandTable); err != nil {
 		t.Fatalf("inspect version 15 state: %v", err)
 	}
-	if versions != 25 || obligations != beforeObligations || revisions != beforeRevisions || remissions != beforeRemissions ||
+	if versions != 26 || obligations != beforeObligations || revisions != beforeRevisions || remissions != beforeRemissions ||
 		expectations != 0 || commands != 0 || expectationTable == nil || commandTable == nil {
 		t.Fatalf("version 15 state versions=%d facts=%d/%d/%d expectations=%d/%d tables=%v/%v",
 			versions, obligations, revisions, remissions, expectations, commands, expectationTable, commandTable)

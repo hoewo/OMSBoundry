@@ -11,7 +11,7 @@ const server=readFileSync(new URL('./server.go',import.meta.url),'utf8');
 test('formal payroll execution replaces browser persistence only when both owners are assembled',()=>{
   assert.match(internal,/const ownerPayroll=Boolean\(ownerAPI\?\.app\?\.\('people-groups'\)&&ownerAPI\?\.app\?\.\('payroll'\)\)/);
   assert.match(internal,/ownerPayroll\?\{payroll_periods:\[\]\}/);
-  assert.match(internal,/renderMembers\(\);if\(!ownerPayroll\)renderPayroll\(\);renderFinance\(\)/);
+  assert.match(internal,/renderMembers\(\);if\(!ownerPayroll\)renderPayroll\(\);if\(!ownerFinance\)renderFinance\(\)/);
   assert.ok(payroll.includes("if(!root||!model||!ownerAPI?.app?.('people-groups')||!ownerAPI?.app?.('payroll'))return"));
   assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261025\.1/);
 });

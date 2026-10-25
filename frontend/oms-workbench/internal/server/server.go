@@ -336,6 +336,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/assets/oms-phase1-payroll-owner.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1PayrollOwnerJS))
+	case "/assets/oms-phase1-finance-owner.js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(omsPhase1FinanceOwnerJS))
 	case "/assets/oms-phase1-pagination.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1PaginationJS))
@@ -447,6 +450,7 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal.js?v=20261025.2" defer></script>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261025.1" defer></script>
+<script src="assets/oms-phase1-finance-owner.js?v=20261025.1" defer></script>
 {{else}}<div class="ant-layout app-shell">
 <aside class="ant-layout-sider app-shell__sider"><div class="app-sidebar"><div class="app-sidebar__topbar"><a class="app-sidebar__brand" href="/" aria-label="返回 OMS 一期"><img src="assets/jinghong-logo.webp" alt="旧版项目管理系统 Logo" class="app-sidebar__brand-logo"><span class="app-sidebar__brand-copy"><span class="app-sidebar__brand-title">旧版项目管理</span><span class="app-sidebar__brand-subtitle">历史功能与原型对照</span></span></a><button class="app-sidebar__collapse-button" type="button" aria-label="收起侧边栏" data-sidebar-collapse>☰</button></div>
 <div class="app-sidebar__group-label">旧版功能</div><nav class="app-sidebar__nav" aria-label="旧版工作台导航">

@@ -10,6 +10,7 @@ import (
 	"omsbizfoundry/internal-finance-requests/internal/database"
 	"omsbizfoundry/internal-finance-requests/internal/finance"
 	"omsbizfoundry/internal-finance-requests/internal/httpserver"
+	"omsbizfoundry/internal-finance-requests/internal/moneypayment"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,7 +46,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	service, _ := finance.NewService(store)
+	var paymentPort finance.MoneyPayments
+	if cfg.MoneyBaseURL != "" {
+		paymentPort, err = moneypayment.NewHTTPClient(cfg.MoneyBaseURL, cfg.MoneyAccessToken, 5*time.Second)
+		if err != nil {
+			return err
+		}
+	}
+	service, _ := finance.NewServiceWithPayments(store, paymentPort)
 	var authenticator auth.Authenticator
 	if cfg.IdentityProvider == "template" {
 		authenticator, err = auth.NewTemplateProvider(cfg.TemplateTenantID, cfg.TemplateSubjectID, cfg.TemplateDisplayName, cfg.TemplateAccessToken)

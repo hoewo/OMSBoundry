@@ -56,6 +56,9 @@ func (s *Service) CreateSuggestedDraft(ctx context.Context, input CreateSuggeste
 	} else if normalized.Source.Application == "payroll" {
 		sourceKind = SourceKindPayrollPayment
 		auditSummary = "从工资实付请求创建应付义务草稿"
+	} else if normalized.Source.Application == "internal-finance-requests" {
+		sourceKind = SourceKindInternalFinancePayment
+		auditSummary = "从内部财务申请创建应付义务草稿"
 	}
 	created := Obligation{
 		ID: obligationID, Direction: DirectionPayable, Title: normalized.Title,
@@ -134,7 +137,8 @@ func normalizeSuggestedDraftInput(input CreateSuggestedDraftInput) (CreateSugges
 	validSource := (input.Source.Application == "cost-outsourcing" &&
 		(input.Source.ResourceType == "cost_entry" || input.Source.ResourceType == "outsourcing_engagement")) ||
 		(input.Source.Application == "bonus-distribution" && input.Source.ResourceType == "bonus_allocation") ||
-		(input.Source.Application == "payroll" && input.Source.ResourceType == "payroll_line")
+		(input.Source.Application == "payroll" && input.Source.ResourceType == "payroll_line") ||
+		(input.Source.Application == "internal-finance-requests" && input.Source.ResourceType == "finance_request")
 	if !validSource ||
 		!uuidPattern.MatchString(input.Source.ResourceID) || input.Source.Revision < 1 ||
 		len(input.Source.Digest) != 71 || !strings.HasPrefix(input.Source.Digest, "sha256:") {

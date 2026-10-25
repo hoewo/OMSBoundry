@@ -22,25 +22,26 @@ const RoleAdministrator Role = "administrator"
 type Permission string
 
 const (
-	PermissionView                      Permission = "view"
-	PermissionPartyRegister             Permission = "party.register"
-	PermissionObligationManage          Permission = "obligation.manage"
-	PermissionCashRecord                Permission = "cash.record"
-	PermissionCashReverse               Permission = "cash.reverse"
-	PermissionCashEvidenceManage        Permission = "cash.evidence.manage"
-	PermissionAllocationManage          Permission = "allocation.manage"
-	PermissionTransferRecord            Permission = "transfer.record"
-	PermissionExport                    Permission = "export"
-	PermissionStatisticsRead            Permission = "statistics.read"
-	PermissionAmountRead                Permission = "amount.read"
-	PermissionReferenceRead             Permission = "reference.read"
-	PermissionReceiptSetConfirm         Permission = "receipt_set.confirm"
-	PermissionReceiptSetReferenceRead   Permission = "receipt_set.reference.read"
-	PermissionPayableSuggestionSubmit   Permission = "payable_suggestion.submit"
-	PermissionPayableSuggestionRead     Permission = "payable_suggestion.read"
-	PermissionPayableSuggestionWithdraw Permission = "payable_suggestion.withdraw"
-	PermissionPayableSuggestionDecide   Permission = "payable_suggestion.decide"
-	PermissionPayrollPaymentRecord      Permission = "payroll_payment.record"
+	PermissionView                         Permission = "view"
+	PermissionPartyRegister                Permission = "party.register"
+	PermissionObligationManage             Permission = "obligation.manage"
+	PermissionCashRecord                   Permission = "cash.record"
+	PermissionCashReverse                  Permission = "cash.reverse"
+	PermissionCashEvidenceManage           Permission = "cash.evidence.manage"
+	PermissionAllocationManage             Permission = "allocation.manage"
+	PermissionTransferRecord               Permission = "transfer.record"
+	PermissionExport                       Permission = "export"
+	PermissionStatisticsRead               Permission = "statistics.read"
+	PermissionAmountRead                   Permission = "amount.read"
+	PermissionReferenceRead                Permission = "reference.read"
+	PermissionReceiptSetConfirm            Permission = "receipt_set.confirm"
+	PermissionReceiptSetReferenceRead      Permission = "receipt_set.reference.read"
+	PermissionPayableSuggestionSubmit      Permission = "payable_suggestion.submit"
+	PermissionPayableSuggestionRead        Permission = "payable_suggestion.read"
+	PermissionPayableSuggestionWithdraw    Permission = "payable_suggestion.withdraw"
+	PermissionPayableSuggestionDecide      Permission = "payable_suggestion.decide"
+	PermissionPayrollPaymentRecord         Permission = "payroll_payment.record"
+	PermissionInternalFinancePaymentRecord Permission = "internal_finance_payment.record"
 )
 
 type Status string
@@ -96,14 +97,15 @@ func (p Principal) Can(permission Permission) bool {
 			PermissionCashEvidenceManage: "money-flow-ledger.cash.evidence.manage",
 			PermissionTransferRecord:     "money-flow-ledger.transfer.record", PermissionExport: "money-flow-ledger.export",
 			PermissionStatisticsRead: "money-flow-ledger.statistics.read", PermissionAmountRead: "money-flow-ledger.amount.read",
-			PermissionReferenceRead:             "money-flow-ledger.reference.read",
-			PermissionReceiptSetConfirm:         "money-flow-ledger.receipt-set.confirm",
-			PermissionReceiptSetReferenceRead:   "money-flow-ledger.receipt-set.reference.read",
-			PermissionPayableSuggestionSubmit:   "money-flow-ledger.payable-suggestion.submit",
-			PermissionPayableSuggestionRead:     "money-flow-ledger.payable-suggestion.read",
-			PermissionPayableSuggestionWithdraw: "money-flow-ledger.payable-suggestion.withdraw",
-			PermissionPayableSuggestionDecide:   "money-flow-ledger.payable-suggestion.decide",
-			PermissionPayrollPaymentRecord:      "money-flow-ledger.payroll-payment.record",
+			PermissionReferenceRead:                "money-flow-ledger.reference.read",
+			PermissionReceiptSetConfirm:            "money-flow-ledger.receipt-set.confirm",
+			PermissionReceiptSetReferenceRead:      "money-flow-ledger.receipt-set.reference.read",
+			PermissionPayableSuggestionSubmit:      "money-flow-ledger.payable-suggestion.submit",
+			PermissionPayableSuggestionRead:        "money-flow-ledger.payable-suggestion.read",
+			PermissionPayableSuggestionWithdraw:    "money-flow-ledger.payable-suggestion.withdraw",
+			PermissionPayableSuggestionDecide:      "money-flow-ledger.payable-suggestion.decide",
+			PermissionPayrollPaymentRecord:         "money-flow-ledger.payroll-payment.record",
+			PermissionInternalFinancePaymentRecord: "money-flow-ledger.internal-finance-payment.record",
 		}[permission]
 		return action != "" && p.AllowedActions[action]
 	}

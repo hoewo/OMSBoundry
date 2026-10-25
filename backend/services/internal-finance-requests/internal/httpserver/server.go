@@ -10,6 +10,7 @@ import (
 	"omsbizfoundry/internal-finance-requests/internal/auth"
 	"omsbizfoundry/internal-finance-requests/internal/finance"
 	"strings"
+	"time"
 )
 
 const maxRequestBytes = 1 << 20
@@ -18,8 +19,16 @@ type UseCases interface {
 	Ping(context.Context) error
 	Create(context.Context, finance.Actor, finance.CreateInput) (finance.Request, error)
 	Update(context.Context, finance.Actor, string, finance.UpdateInput) (finance.Request, error)
+	Submit(context.Context, finance.Actor, string, finance.SubmitInput) (finance.Request, error)
+	Withdraw(context.Context, finance.Actor, string, finance.WithdrawInput) (finance.Request, error)
+	ConfirmPayment(context.Context, finance.Actor, string, finance.ConfirmPaymentInput) (finance.Request, error)
+	ConfirmPayments(context.Context, finance.Actor, finance.BatchPaymentInput) finance.BatchPaymentResult
 	Get(context.Context, string, string) (finance.Request, error)
+	GetSensitive(context.Context, finance.Actor, string, string) (finance.Request, error)
 	List(context.Context, string, finance.ListFilter) (finance.Page, error)
+	ListCategories(context.Context, string) (finance.CategoryPage, error)
+	CreateCategory(context.Context, finance.Actor, finance.CategoryCreateInput) (finance.ExpenseCategory, error)
+	UpdateCategory(context.Context, finance.Actor, string, finance.CategoryUpdateInput) (finance.ExpenseCategory, error)
 }
 type Server struct {
 	useCases      UseCases
@@ -40,13 +49,33 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /api/v1/finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /api/v1/finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /api/v1/finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
+	mux.Handle("POST /api/v1/finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
+	mux.Handle("POST /api/v1/finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
+	mux.Handle("POST /api/v1/finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
+	mux.Handle("POST /api/v1/finance-payments/batch", s.protected(auth.ActionPaymentBatchConfirm, http.HandlerFunc(s.confirmPayments)))
+	mux.Handle("GET /api/v1/finance-requests/{request_id}/sensitive-account", s.protected(auth.ActionSensitiveAccountRead, http.HandlerFunc(s.getSensitive)))
+	mux.Handle("GET /api/v1/finance-request-exports", s.protected(auth.ActionExport, http.HandlerFunc(s.exportRequests)))
+	mux.Handle("GET /api/v1/finance-request-sensitive-exports", s.protected(auth.ActionSensitiveExport, http.HandlerFunc(s.exportSensitiveRequests)))
 	mux.Handle("GET /api/v1/references/finance-requests/{request_id}", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.reference)))
+	mux.Handle("GET /api/v1/expense-categories", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionSelfManage, auth.ActionTenantRead}, http.HandlerFunc(s.listCategories)))
+	mux.Handle("POST /api/v1/expense-categories", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.createCategory)))
+	mux.Handle("PUT /api/v1/expense-categories/{category_id}", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.updateCategory)))
 	// Gateway strips the public, versioned /internal-finance/v1 prefix.
 	mux.Handle("POST /finance-requests", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.create)))
 	mux.Handle("GET /finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
+	mux.Handle("POST /finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
+	mux.Handle("POST /finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
+	mux.Handle("POST /finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
+	mux.Handle("POST /finance-payments/batch", s.protected(auth.ActionPaymentBatchConfirm, http.HandlerFunc(s.confirmPayments)))
+	mux.Handle("GET /finance-requests/{request_id}/sensitive-account", s.protected(auth.ActionSensitiveAccountRead, http.HandlerFunc(s.getSensitive)))
+	mux.Handle("GET /finance-request-exports", s.protected(auth.ActionExport, http.HandlerFunc(s.exportRequests)))
+	mux.Handle("GET /finance-request-sensitive-exports", s.protected(auth.ActionSensitiveExport, http.HandlerFunc(s.exportSensitiveRequests)))
 	mux.Handle("GET /references/finance-requests/{request_id}", s.protected(auth.ActionReferenceRead, http.HandlerFunc(s.reference)))
+	mux.Handle("GET /expense-categories", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionSelfManage, auth.ActionTenantRead}, http.HandlerFunc(s.listCategories)))
+	mux.Handle("POST /expense-categories", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.createCategory)))
+	mux.Handle("PUT /expense-categories/{category_id}", s.protected(auth.ActionCategoryManage, http.HandlerFunc(s.updateCategory)))
 	s.handler = securityHeaders(mux)
 	return s, nil
 }
@@ -124,6 +153,120 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 	s.writeRequest(w, 200, value, p, err)
 }
 
+func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
+	if !p.CanResource(id) {
+		writeProblem(w, 403, "SCOPE_DENIED", "凭证范围不包含该申请", false)
+		return
+	}
+	var input finance.SubmitInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.Submit(r.Context(), actorFrom(p), id, input)
+	s.writeRequest(w, 200, value, p, err)
+}
+func (s *Server) withdraw(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
+	if !p.CanResource(id) {
+		writeProblem(w, 403, "SCOPE_DENIED", "凭证范围不包含该申请", false)
+		return
+	}
+	var input finance.WithdrawInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.Withdraw(r.Context(), actorFrom(p), id, input)
+	s.writeRequest(w, 200, value, p, err)
+}
+func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
+	if p.ScopeKind != "tenant" || !p.CanResource(id) {
+		writeProblem(w, 403, "SCOPE_DENIED", "确认付款需要本租户范围", false)
+		return
+	}
+	var input finance.ConfirmPaymentInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.ConfirmPayment(r.Context(), actorFrom(p), id, input)
+	s.writeRequest(w, 200, value, p, err)
+}
+func (s *Server) confirmPayments(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "批量确认付款需要本租户范围", false)
+		return
+	}
+	var input finance.BatchPaymentInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	writeJSON(w, 200, s.useCases.ConfirmPayments(r.Context(), actorFrom(p), input))
+}
+func (s *Server) getSensitive(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
+	if p.ScopeKind != "tenant" || !p.CanResource(id) {
+		writeProblem(w, 403, "SCOPE_DENIED", "完整账户读取需要本租户范围", false)
+		return
+	}
+	purpose := strings.TrimSpace(r.URL.Query().Get("purpose"))
+	if purpose == "" || len([]rune(purpose)) > 200 {
+		writeProblem(w, 400, "SENSITIVE_ACCESS_PURPOSE_REQUIRED", "查看完整账户必须填写用途", false)
+		return
+	}
+	value, err := s.useCases.GetSensitive(r.Context(), actorFrom(p), id, purpose)
+	s.writeRequest(w, 200, value, p, err)
+}
+
+func (s *Server) exportRequests(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "导出需要本租户范围", false)
+		return
+	}
+	page, err := s.useCases.List(r.Context(), p.TenantID, finance.ListFilter{})
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.Header().Set("X-Content-Sensitivity", "masked")
+	writeJSON(w, 200, map[string]any{"schema_version": "1", "sensitive": false, "generated_at": time.Now().UTC(), "items": page.Items})
+}
+
+func (s *Server) exportSensitiveRequests(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "敏感导出需要本租户范围", false)
+		return
+	}
+	purpose := strings.TrimSpace(r.URL.Query().Get("purpose"))
+	if purpose == "" || len([]rune(purpose)) > 200 {
+		writeProblem(w, 400, "SENSITIVE_ACCESS_PURPOSE_REQUIRED", "敏感导出必须填写用途", false)
+		return
+	}
+	page, err := s.useCases.List(r.Context(), p.TenantID, finance.ListFilter{})
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	items := make([]finance.Request, 0, len(page.Items))
+	for _, item := range page.Items {
+		value, readErr := s.useCases.GetSensitive(r.Context(), actorFrom(p), item.ID, purpose)
+		if readErr != nil {
+			s.fail(w, readErr)
+			return
+		}
+		items = append(items, value)
+	}
+	w.Header().Set("X-Content-Sensitivity", "full-bank-account")
+	writeJSON(w, 200, map[string]any{"schema_version": "1", "sensitive": true, "purpose": purpose, "generated_at": time.Now().UTC(), "items": items})
+}
+
 func (s *Server) reference(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r)
 	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
@@ -159,6 +302,56 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, page)
 }
+
+func (s *Server) listCategories(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "费用类别列表需要租户范围", false)
+		return
+	}
+	page, err := s.useCases.ListCategories(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, page)
+}
+
+func (s *Server) createCategory(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "费用类别管理需要租户范围", false)
+		return
+	}
+	var input finance.CategoryCreateInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.CreateCategory(r.Context(), actorFrom(p), input)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 201, value)
+}
+
+func (s *Server) updateCategory(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	if p.ScopeKind != "tenant" {
+		writeProblem(w, 403, "SCOPE_DENIED", "费用类别管理需要租户范围", false)
+		return
+	}
+	var input finance.CategoryUpdateInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.UpdateCategory(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("category_id"))), input)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, value)
+}
 func (s *Server) writeRequest(w http.ResponseWriter, status int, value finance.Request, p auth.Principal, err error) {
 	if err != nil {
 		s.fail(w, err)
@@ -175,6 +368,12 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeProblem(w, 409, "FINANCE_REQUEST_REVISION_CONFLICT", err.Error(), true)
 	case errors.Is(err, finance.ErrCommandConflict):
 		writeProblem(w, 409, "COMMAND_PAYLOAD_CONFLICT", err.Error(), false)
+	case errors.Is(err, finance.ErrStateConflict):
+		writeProblem(w, 409, "FINANCE_REQUEST_STATE_CONFLICT", err.Error(), false)
+	case errors.Is(err, finance.ErrPaymentUnknown):
+		writeProblem(w, 503, "PAYMENT_OUTCOME_UNKNOWN", err.Error(), true)
+	case errors.Is(err, finance.ErrPaymentRejected):
+		writeProblem(w, 422, "PAYMENT_REJECTED", err.Error(), false)
 	case strings.Contains(err.Error(), "invalid"):
 		writeProblem(w, 400, "INVALID_REQUEST", err.Error(), false)
 	default:
@@ -188,6 +387,18 @@ func allowedActions(value finance.Request, p auth.Principal) []string {
 	}
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" {
 		actions = append(actions, "update")
+	}
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && (value.Status == "draft" || value.Status == "withdrawn") {
+		actions = append(actions, "submit")
+	}
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "payable" && value.PaidMinor == 0 && value.PaymentUnknownCount == 0 {
+		actions = append(actions, "withdraw")
+	}
+	if p.Can(auth.ActionPaymentConfirm) && value.PaymentUnknownCount == 0 && (value.Status == "payable" || value.Status == "partially_paid") {
+		actions = append(actions, "confirm_payment")
+	}
+	if p.Can(auth.ActionSensitiveAccountRead) && value.Details.Payee.AccountLast4 != "" {
+		actions = append(actions, "read_sensitive_account")
 	}
 	return actions
 }

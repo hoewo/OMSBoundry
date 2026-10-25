@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-25 P5 本地完成，进入 P6。Internal Finance Requests 已扩展为正式报销／付款申请 Owner：明细与类别、收款和费用归属快照、Evidence 引用、无需审批快照、撤回 revision、敏感访问审计、逐笔／批量付款及 Money 稳定引用均已落库。Money 为申请建立稳定义务，保存实际付款、整单核销和超额未分配余额；批量部分失败不回滚成功项。双数据库／双进程隔离验收覆盖分次／超额、批量 revision 冲突、撤回重提、普通／敏感导出、账号遮罩和空目标恢复；Workbench 258 项 Node 测试通过。没有部署 D1／公网，Evidence 实时校验与员工开放 API 留待 P7／P6。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)
+
 2026-10-25 P4 本地完成，进入 P5。Payroll 已从薪酬档案扩展到正式工资执行：月度唯一期间、不可变工资行 revision、成员／薪酬／账户／缴费方案快照、整数五险一金计算、绩效／调整／外部个税、导入预览、核对、同步、作废／替代、调整批次以及逐人／批量发放。Money 新增工资交付契约，每个工资行一个稳定义务，多次实际付款分别登记并按剩余净应发核销，超额保留未分配；批量部分失败不回滚成功项。三数据库／三进程验收 14／14 HTTP 断言通过，四个受影响 Go module、256 项 Workbench Node 测试、Money 25 migration PostgreSQL 18 门禁通过。没有部署 D1／公网，正式缴费比例仍须按地区权威来源核验，跨应用恢复／导出留待 P9。[P4 报告](./reports/oms-v1-iteration-p4-payroll-execution-validation-20261025.md)
 
 2026-10-25 P2 本地完成，进入 P3。新增 `Internal Finance Requests` 与 `Payroll` 两个独立 Go／PostgreSQL Owner：各自拥有 migration、版本化 API、IAM／Tenant／Capability／资源范围校验、幂等命令、不可变 revision／audit、Docker 镜像和备份／空目标恢复。真实 PostgreSQL 18.6 集成测试覆盖跨租户和直接篡改拒绝；隔离验收完成两个独立镜像的写入、重放、冲突、revision、分别恢复和恢复后续写。D1 可选 profile、路由、Suite Manifest、19 镜像发布／提升及恢复清单门禁通过，但未执行正式 D1／公网部署；业务仍只是草稿骨架。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)

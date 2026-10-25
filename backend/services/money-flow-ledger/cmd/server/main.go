@@ -19,6 +19,7 @@ import (
 	"omsbizfoundry/money-flow-ledger/internal/cashtransaction"
 	"omsbizfoundry/money-flow-ledger/internal/config"
 	"omsbizfoundry/money-flow-ledger/internal/database"
+	"omsbizfoundry/money-flow-ledger/internal/financepayment"
 	"omsbizfoundry/money-flow-ledger/internal/httpserver"
 	"omsbizfoundry/money-flow-ledger/internal/identity"
 	"omsbizfoundry/money-flow-ledger/internal/internaltransfer"
@@ -174,6 +175,11 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	identityOptions.PayrollPayments = payrollPaymentService
+	internalFinancePaymentService, err := financepayment.NewService(financepayment.NewPostgresRepository(pool), obligationService, cashTransactionService, allocationService, partyService)
+	if err != nil {
+		return err
+	}
+	identityOptions.InternalFinancePayments = internalFinancePaymentService
 	operatingSummaryService := operatingsummary.NewService(operatingsummary.NewPostgresRepository(pool))
 	ledgerExportService, err := ledgerexport.NewService(ledgerexport.NewPostgresRepository(pool))
 	if err != nil {
