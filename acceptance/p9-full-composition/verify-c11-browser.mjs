@@ -152,6 +152,7 @@ try {
         const denied = page.waitForResponse((response) => response.url() === `${baseURL}/gateway/feedback/config` && response.status() === 403, { timeout: 15000 })
         await page.reload({ waitUntil: 'domcontentloaded' })
         await denied
+        rows.push([actor.label, 'revoked-config', '403'])
         await page.waitForTimeout(100)
         intentionalDenialWindow = false
         await page.locator('[data-oms-v1]').waitFor({ state: 'visible' })
@@ -177,6 +178,7 @@ try {
         unexpected_console_error_or_warning_count: 0,
         page_error_count: 0,
         capability_revocation_checked: actor.label === 'primary',
+        capability_denial_http_status: actor.label === 'primary' ? 403 : null,
       })
     } finally {
       try {

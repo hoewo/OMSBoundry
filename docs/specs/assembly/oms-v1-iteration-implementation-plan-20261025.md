@@ -1,6 +1,6 @@
 # OMS1 2026-10-25 迭代实施拆解
 
-状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P7 已通过本地门禁。P8 的源码／构建及本地真实 Chromium 跨 origin 宿主门禁已通过，见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)，但真实项目 115 通知、运行凭证、双账号／双租户和外部跨域浏览器旅程尚未验收，故 P8 未完成。此前阶段报告保持在 `docs/reports/`；本地通过不表示 D1 或公网已经发布新版本。
+状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P7 已通过本地门禁。P8 的源码／构建及本地真实 Chromium 跨 origin 宿主门禁已通过；P9 已形成 C0～C11 可恢复运行驱动、联合恢复、外部 Feedback API 旅程和双租户真实 Chromium 撤权恢复源码门禁，见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)和[P9 源码报告](../../reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)。真实 D1／公网、项目 115 真人回复与通知、双租户外部浏览器和回滚运行证据尚未验收，因此 P8／P9 均未完成。本地通过不表示 D1 或公网已经发布新版本。
 
 问题 A → 可验证结果 B：本轮同时涉及租户、两个新业务 Owner、开放 API、跨系统资金闭环和外部 Feedback SDK，若按页面并行堆功能会重新形成浏览器事实和隐式耦合 → 按所有权与依赖顺序交付可独立验证的纵向切片，每阶段都有迁移、授权、故障恢复和运行证据。
 
@@ -23,7 +23,7 @@
 | 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接；BF-257 已提供绑定 C0～C2 的双 Tenant 工资周期 C3 驱动 | C3 尚未在真实 D1 执行，且只验证零比例、待核对、未支付；实际发放、Money、恢复／导出仍待公网连续旅程 |
 | 开放平台 | P7 已开放 profile／settings、Evidence 发票上传和本人报销命令／查询，并同步 OpenAPI 与中文说明；BF-259 已提供绑定 C0～C4 的双 Tenant 员工 Key C5 驱动 | C5 尚未在真实 D1 执行且只验证 Key、profile／settings 与本人审计；发票报销业务写和恢复留待后续连续阶段，其他业务 API 不在本轮 |
 | 发票报销闭环 | P7 已用真实 TLS、IAM、Gateway、三个 Owner 和四库完成上传→提交→付款→本人 paid 查询及故障恢复；BF-260 已提供绑定 C0～C5 的双 Tenant 发票上传／本人报销 C6 驱动，BF-261 已提供绑定 C0～C6 的双 Tenant Finance→Money 实际付款 C7 驱动 | C6／C7 尚未在真实 D1 执行；C7 使用 Money 当前本地兼容 Party 且不代表 Party Directory 已统一，商业杀毒／OCR、自动代付和审批不在本轮，恢复仍待后续连续阶段验证 |
-| Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist、OMS Origin 模板及本地真实 Chromium 跨 origin 宿主门禁 | 项目 115 服务端通知开关、有效运行凭证、双账号／双租户、附件／回复／单条已读和外部端到端浏览器仍待验 |
+| Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist、OMS Origin 模板及本地真实 Chromium 跨 origin 宿主门禁；BF-265／BF-267 已提供双 Tenant project 115 回复／通知 API 旅程和浏览器撤权恢复驱动 | C10／C11 尚未在真实 D1 与外部 project 115 执行；有效运行凭证、真人回复／通知、双账号跨域浏览器和回滚记录仍待验 |
 
 ## 3. 依赖顺序
 
@@ -181,12 +181,14 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 
 ### P9：D1 全组合与交付证据
 
+状态：2026-10-26 C0～C11 驱动、固定证据 verifier、可恢复总入口及低资源离线／真实 Chromium 夹具门禁通过；未部署或执行真实 D1，全组合运行和回滚证据待完成。证据见[P9 源码报告](../../reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)。
+
 交付：
 
 - D1 增加两个服务、两个数据库、路由、Grant bootstrap、备份恢复与镜像清单；
 - 本地与 D1 使用同一 API、migration 和镜像，配置只决定端点和放置；
 - 连续完成 Tenant 创建、成员、薪酬、工资、财务申请、开放 API 报销闭环和 Feedback；
-- C0／C1／C2／C3／C4／C5／C6／C7 运行驱动依次绑定固定证据摘要；C2 覆盖成员稳定引用到薪酬档案，C3 用明确非法律依据的六项零比例 fixture 验证工资周期、快照、无需审批与未支付边界，C4 以付款申请验证 Person 快照、无附件显式确认、无需审批与租户隔离，C5 验证默认 180 天员工 Key、证据外一次性 Secret、自助脱敏列表、身份绑定、Webhook 占位与本人调用审计，C6 验证 PDF 实字节上传、Evidence 发票校验、报销引用冻结、本人查询与跨 Tenant 隔离，C7 验证授权财务实际付款、Money Obligation／Payment／Allocation 引用、本人 `paid` 回读及跨 Tenant 隔离；C3 不冒充真实缴费规则或发薪，C4 不放松报销 Evidence 规则或冒充实际付款，C5 不把 Key 建立冒充发票报销业务写，C6 不把待支付冒充 Money 事实，C7 的 Money 本地兼容 Party 不冒充 Party Directory 已统一；
+- C0～C11 运行驱动依次绑定固定证据摘要：C2 覆盖成员稳定引用到薪酬档案，C3 用明确非法律依据的六项零比例 fixture 验证工资周期、快照、无需审批与未支付边界，C4 以付款申请验证 Person 快照、无附件显式确认、无需审批与租户隔离，C5 验证默认 180 天员工 Key、证据外一次性 Secret、自助脱敏列表、身份绑定、Webhook 占位与本人调用审计，C6 验证 PDF 实字节上传、Evidence 发票校验、报销引用冻结、本人查询与跨 Tenant 隔离，C7 验证授权财务实际付款、Money Obligation／Payment／Allocation 引用、本人 `paid` 回读及跨 Tenant 隔离，C8 验证工资实际发放与本人已发工资单，C9 验证停写联合备份、空目标恢复、Evidence 字节和恢复后续写，C10 验证双 Tenant project 115 回复／通知，C11 验证双 Tenant 浏览器点击、跨域 SDK、撤权降级与恢复；C3 不冒充真实缴费规则或发薪，C4 不放松报销 Evidence 规则或冒充实际付款，C5 不把 Key 建立冒充发票报销业务写，C6 不把待支付冒充 Money 事实，C7／C8 的 Money 本地兼容 Party 不冒充 Party Directory 已统一；
 - 生成逐项证据报告、回滚点、镜像 digest、容器健康、数据库恢复和浏览器 console 记录。
 - 新联合备份在停写窗口内生成无秘密数据库事实指纹；空目标恢复必须在业务服务启动前与原 checkpoint 严格一致，随后仍要完成 Evidence 字节和关键业务读取／续写。
 

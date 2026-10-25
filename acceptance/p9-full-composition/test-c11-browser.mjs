@@ -166,6 +166,11 @@ try {
   const manifestPath = join(consoleLeak, 'checksums.sha256'); writeFileSync(manifestPath, readFileSync(manifestPath, 'utf8').replace(/^[0-9a-f]{64}  state-after-c11\.json$/m, `${sha256(readFileSync(statePath))}  state-after-c11.json`))
   assert.equal(verifierRejects(consoleLeak), true, 'C11 accepted a browser console warning')
 
+  const missingDenial = join(runtime, 'missing-denial'); cpSync(evidence, missingDenial, { recursive: true })
+  const httpPath = join(missingDenial, 'browser-evidence.tsv'); writeFileSync(httpPath, readFileSync(httpPath, 'utf8').split('\n').filter((line) => !line.includes('\trevoked-config\t')).join('\n'))
+  const denialManifest = join(missingDenial, 'checksums.sha256'); writeFileSync(denialManifest, readFileSync(denialManifest, 'utf8').replace(/^[0-9a-f]{64}  browser-evidence\.tsv$/m, `${sha256(readFileSync(httpPath))}  browser-evidence.tsv`))
+  assert.equal(verifierRejects(missingDenial), true, 'C11 accepted missing browser authorization-denial evidence')
+
   const secretLeak = join(runtime, 'secret-leak'); cpSync(evidence, secretLeak, { recursive: true }); const resultPath = join(secretLeak, 'result.md'); writeFileSync(resultPath, `${readFileSync(resultPath, 'utf8')}ak_leaked_0123456789abcdef\n`)
   const secretManifest = join(secretLeak, 'checksums.sha256'); writeFileSync(secretManifest, readFileSync(secretManifest, 'utf8').replace(/^[0-9a-f]{64}  result\.md$/m, `${sha256(readFileSync(resultPath))}  result.md`))
   assert.equal(verifierRejects(secretLeak), true, 'C11 accepted a Feedback API Key leak')
