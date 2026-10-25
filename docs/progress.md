@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发进度
 
-2026-10-26 BF-245：P9 运行前审计发现 D1 把 `FEEDBACK_SDK_URL` 错放在 Bonus 环境而未交给 Workbench，且部分 Feedback 参数会延迟到容器启动才失败。现已修正配置归属，并在 `d1` 状态变化前成组校验首发 `apiKey`、项目 115、HTTPS／回环 URL、HMAC、通知布尔值及单／双 Key 轮换；实际 Compose JSON 正例和七组负例通过，未启动容器。P8 真实运行和 P9 全组合仍待执行。
+2026-10-26 BF-245：P9 运行前审计发现 D1 把 `FEEDBACK_SDK_URL` 错放在 Bonus 环境而未交给 Workbench，且部分 Feedback 参数会延迟到容器启动才失败。现已修正配置归属，并在 `d1` 状态变化前成组校验首发 `apiKey`、项目 115、HTTPS／回环 URL、HMAC、通知布尔值及单／双 Key 轮换；实际 Compose JSON 正例和七组负例通过。另新增只读 P9 C0 入口与 mock 自测，真实窗口将先核对十四应用、十九服务、19／19 健康、镜像、入口与 schema，且不落盘原始 Compose／inspect 或 Feedback secret。本批未启动容器；P8 真实运行和 P9 全组合仍待执行。
 
 2026-10-26 P9 装配源码门禁已完成，真实全组合与恢复待执行。审计发现 D1 的 Finance／Payroll 虽可健康启动，却未完整接入下游：现已为 Finance 增加独立工作负载身份、Evidence／Money 短期 Capability、401 单次换票和 D1 key lifecycle；Payroll 补上 Money 端点；选择器强制 Finance→Money＋Evidence、Payroll→People＋Money。静态 Compose、相关 Go test／vet、IAM policy、release bundle 与 P9 组合测试通过，未启动容器。P8 真实 Feedback、P9 连续旅程、联合恢复、digest 和浏览器证据仍待执行，不能标记整轮完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 

@@ -10,6 +10,19 @@ make d1-p9-composition-test
 
 该入口渲染 Finance＋Payroll＋People＋Money＋Evidence 的实际 Compose JSON，结构化核对 Finance 工作负载 key、两个下游端点、volume、健康依赖和 Payroll 装配，并验证四种缺失依赖的配置在 Docker 调用前失败；同时覆盖 Feedback 单 Key／双 Key 正例和部分配置、错误项目、不安全 URL、歧义或过量 Key、短 HMAC、Session 模式七组负例，锁定 SDK URL 只进入 Workbench。随后用无状态 Docker mock 核对同选装联合备份／空目标恢复命令图包含两个 Owner 的 dump、选择声明、校验清单和 restore 命令。另已实际通过 Finance、Payroll、IAM、workload-identity 的 Go test／vet 和 D1 release bundle。mock 编排不替代 P9 的真实数据库联合备份／空目标恢复，也不替代全组合连续旅程、恢复后复跑、镜像 digest 或浏览器 Console 记录；当前没有启动常驻容器。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
+P9 真实运行窗口先执行只读 C0：
+
+```sh
+D1_ENV_FILE=/受限目录/p9.env \
+D1_PROJECT_NAME=omsbizfoundry-p9 \
+D1_PUBLIC_URL=https://目标域名 \
+D1_SUITE_MANIFEST_PATH=/受限目录/suite-manifest.json \
+P9_EVIDENCE_DIR=/受限目录/p9-evidence/c0 \
+acceptance/p9-full-composition/verify-c0
+```
+
+必须使用空证据目录。入口不启动、不停止服务，只接受十四个领域应用、十九个精确长运行服务、19／19 healthy、Nginx 唯一发布端口、项目 115＋通知、当前 schema／contract 和公共 readiness；只保存脱敏拓扑、镜像 ID／repo digest 和检查摘要，不落盘原始 Compose／inspect 或 Feedback secret。离线回归为 `make p9-full-composition-preflight-test`；该回归不等于真实 C0 通过。
+
 ## 2026-10-26 OMS1 迭代 P7
 
 P7 员工发票报销闭环提供低资源、退出自动清理的独立入口：

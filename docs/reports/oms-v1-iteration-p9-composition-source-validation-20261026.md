@@ -43,6 +43,8 @@ git diff --check
 
 `test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景，并验证 Feedback 单 Key、双 Key 轮换正例及部分配置、错误项目、不安全 URL、歧义 Key、过量轮换 Key、短 HMAC、Session 模式负例。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；该项只证明运维编排，不是数据库恢复证据。
 
+`acceptance/p9-full-composition/verify-c0` 已提供真实运行窗口的只读前置入口：它要求十四个领域应用、十九个长运行服务精确匹配且全部健康，要求项目 115 通知配置，核对 Nginx 唯一发布端口、Suite Manifest、公共 readiness 与 D1 check，并记录镜像 ID／repo digest。原始 Compose 和 inspect 不落盘，防止部署秘密进入证据；`test-preflight` 用 mock 覆盖 19／19 正例、缺 Payroll 负例和 Feedback secret 不落盘。C0 尚未在真实全组合运行，不能记为通过。
+
 ## 4. P9 尚未完成
 
 仍需在一次有界运行窗口内完成并在退出后清理：

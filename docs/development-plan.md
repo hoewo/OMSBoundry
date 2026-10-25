@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-26 BF-245 修正 P8-P9 运行前门禁：Feedback SDK URL 已从错误的 Bonus 环境迁回 Workbench，D1 对项目 115、`apiKey`、URL、HMAC、通知和轮换 Key 成组失败关闭。该修复只消除启动后才暴露的配置错误，不提高 P8／P9 运行完成度；下一步仍是取得非占位运行配置后，在一次有界窗口执行真实全组合、跨域 Feedback、联合恢复和清理。
+2026-10-26 BF-245 修正 P8-P9 运行前门禁：Feedback SDK URL 已从错误的 Bonus 环境迁回 Workbench，D1 对项目 115、`apiKey`、URL、HMAC、通知和轮换 Key 成组失败关闭；P9 另增加只读 C0 入口，真实窗口将先核对十四应用、十九服务、镜像 digest、健康、入口与 schema，再创建业务夹具。上述离线自测只消除启动后才暴露的配置／证据泄露风险，不提高 P8／P9 运行完成度；下一步仍是取得非占位运行配置后，在一次有界窗口执行真实全组合、跨域 Feedback、联合恢复和清理。
 
 2026-10-26 当前实施检查点：P9 的 D1 源码装配门禁已补齐 Finance／Payroll 下游短期凭证、依赖选择、key lifecycle 与静态组合回归（BF-244），但没有启动全组合，不能登记 P9 完成。P8 的项目 115 通知、真实运行凭证、双账号／双租户与浏览器跨域验收仍未完成；P9 还需一次有界全组合连续旅程、联合备份／空目标恢复、恢复后复跑、镜像 digest 和浏览器 Console 证据。由于当前开发机资源紧张，先保持常驻容器为零，在具备运行配置后再一次性执行并清理，不得以源码／Compose 通过替代 P8／P9 运行结论。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)、[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 

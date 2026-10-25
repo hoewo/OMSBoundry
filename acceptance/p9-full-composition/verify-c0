@@ -1,0 +1,155 @@
+#!/bin/sh
+set -eu
+umask 077
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+d1_dir=${D1_DIR:-"$repo/deployments/d1"}
+d1_ops=${D1_OPS_SCRIPT:-"$d1_dir/ops/d1"}
+env_file=${D1_ENV_FILE:-"$d1_dir/.env"}
+project=${D1_PROJECT_NAME:-omsbizfoundry-p9}
+manifest=${D1_SUITE_MANIFEST_PATH:-"$d1_dir/.runtime/suite-manifest.json"}
+evidence_dir=${P9_EVIDENCE_DIR:-"$script_dir/.evidence/c0"}
+
+[ -f "$env_file" ] || { echo "P9 D1 environment file not found: $env_file" >&2; exit 2; }
+[ -x "$d1_ops" ] || { echo "P9 D1 operations script is not executable: $d1_ops" >&2; exit 2; }
+[ -f "$manifest" ] || { echo "P9 Suite Manifest not found: $manifest" >&2; exit 2; }
+for command_name in curl docker jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+
+env_value() {
+  key=$1
+  fallback=${2:-}
+  value=$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); value=$0} END {print value}' "$env_file")
+  if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' "$fallback"; fi
+}
+
+ingress_mode=$(env_value D1_INGRESS_MODE http)
+if [ -n "${D1_PUBLIC_URL:-}" ]; then
+  base_url=$D1_PUBLIC_URL
+elif [ "$ingress_mode" = https ]; then
+  public_host=$(env_value D1_PUBLIC_HOST)
+  public_https_port=$(env_value PUBLIC_HTTPS_PORT 443)
+  [ -n "$public_host" ] || { echo "D1_PUBLIC_HOST is required for P9 HTTPS verification" >&2; exit 2; }
+  if [ "$public_https_port" = 443 ]; then base_url="https://$public_host"; else base_url="https://$public_host:$public_https_port"; fi
+else
+  base_url="http://$(env_value PUBLIC_BIND 127.0.0.1):$(env_value PUBLIC_PORT 18000)"
+fi
+
+domain_flags='ENABLE_CONTRACT ENABLE_MONEY ENABLE_PEOPLE ENABLE_PARTY ENABLE_PROJECT ENABLE_EVIDENCE ENABLE_BUSINESS_ENGAGEMENT ENABLE_BILLING ENABLE_PRODUCTION ENABLE_APPROVAL_AUDIT_RESULTS ENABLE_COST_OUTSOURCING ENABLE_BONUS_DISTRIBUTION ENABLE_INTERNAL_FINANCE_REQUESTS ENABLE_PAYROLL'
+for flag in $domain_flags; do
+  [ "$(env_value "$flag" false)" = true ] || { echo "$flag must be true for P9 full composition" >&2; exit 1; }
+done
+
+[ "$(env_value FEEDBACK_AUTH_MODE)" = apiKey ] || { echo "P9 requires Feedback apiKey mode" >&2; exit 1; }
+[ "$(env_value FEEDBACK_PROJECT_ID)" = 115 ] || { echo "P9 requires Feedback project 115" >&2; exit 1; }
+[ "$(env_value FEEDBACK_NOTIFICATIONS_ENABLED false)" = true ] || { echo "P9 requires Feedback notifications enabled" >&2; exit 1; }
+[ -n "$(env_value FEEDBACK_SDK_URL)" ] || { echo "P9 requires the Feedback SDK URL" >&2; exit 1; }
+[ -n "$(env_value FEEDBACK_GATEWAY_URL)" ] || { echo "P9 requires the Feedback Gateway URL" >&2; exit 1; }
+[ -n "$(env_value FEEDBACK_API_KEY)$(env_value FEEDBACK_API_KEYS)" ] || { echo "P9 requires a Feedback API Key" >&2; exit 1; }
+[ -n "$(env_value FEEDBACK_IDENTITY_HMAC_KEY)" ] || { echo "P9 requires the Feedback identity HMAC key" >&2; exit 1; }
+
+domain_ids='contract-ledger money-flow-ledger people-groups party-directory project-workspace evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution internal-finance-requests payroll'
+for application in $domain_ids; do
+  jq -e --arg id "$application" 'any(.applications[]; .id == $id and .enabled == true)' "$manifest" >/dev/null || {
+    echo "$application is not enabled in the P9 Suite Manifest" >&2
+    exit 1
+  }
+done
+
+if [ -d "$evidence_dir" ] && [ -n "$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+  echo "P9 evidence directory must be empty: $evidence_dir" >&2
+  exit 2
+fi
+mkdir -p "$evidence_dir"
+chmod 700 "$evidence_dir"
+cp "$manifest" "$evidence_dir/suite-manifest.json"
+chmod 600 "$evidence_dir/suite-manifest.json"
+
+# Never persist the raw Compose model: it contains deployment secrets. Keep
+# only topology, image references, health dependencies and published ports.
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME="$project" "$d1_ops" config --format json |
+  jq '{schema_version:"1", services:(.services | to_entries | map({service:.key,image:.value.image,profiles:(.value.profiles // []),depends_on:((.value.depends_on // {}) | keys | sort),networks:((.value.networks // {}) | if type == "array" then sort else keys | sort end),ports:(.value.ports // [])}) | sort_by(.service)),volumes:((.volumes // {}) | keys | sort),networks:((.networks // {}) | keys | sort)}' \
+  >"$evidence_dir/compose-topology.json"
+chmod 600 "$evidence_dir/compose-topology.json"
+published=$(jq -c '[.services[] | select((.ports | length) > 0) | .service] | sort' "$evidence_dir/compose-topology.json")
+[ "$published" = '["nginx"]' ] || { echo "only nginx may publish a host port, got $published" >&2; exit 1; }
+
+expected_services='approval-audit-results
+billing-invoice
+bonus-distribution
+business-engagement
+contract-ledger
+cost-outsourcing
+evidence-service
+gateway
+identity-access
+internal-finance-requests
+money-flow-ledger
+nginx
+party-directory
+payroll
+people-groups
+postgres
+production-operations
+project-workspace
+unified-workbench'
+running_ids=$(docker ps --filter "label=com.docker.compose.project=$project" --quiet)
+[ -n "$running_ids" ] || { echo "no running containers found for P9 project $project" >&2; exit 1; }
+docker inspect $running_ids |
+  jq '[.[] | {service:.Config.Labels["com.docker.compose.service"],container:(.Name | ltrimstr("/")),configured_image:.Config.Image,image_id:.Image,state:.State.Status,health:(.State.Health.Status // "not-configured")} ] | sort_by(.service)' \
+  >"$evidence_dir/services-and-health.json"
+chmod 600 "$evidence_dir/services-and-health.json"
+actual_services=$(jq -r '.[].service' "$evidence_dir/services-and-health.json")
+[ "$actual_services" = "$expected_services" ] || {
+  echo "P9 running service set does not match the required 19-service composition" >&2
+  exit 1
+}
+running_count=$(jq 'length' "$evidence_dir/services-and-health.json")
+healthy_count=$(jq '[.[] | select(.state == "running" and .health == "healthy")] | length' "$evidence_dir/services-and-health.json")
+[ "$running_count" -eq 19 ] && [ "$healthy_count" -eq 19 ] || {
+  echo "P9 requires 19/19 healthy services, got $running_count/$healthy_count" >&2
+  exit 1
+}
+
+: >"$evidence_dir/images.jsonl"
+jq -r '.[].configured_image' "$evidence_dir/services-and-health.json" | sort -u | while IFS= read -r configured_image; do
+  metadata=$(docker image inspect --format '{{.Id}}|{{json .RepoDigests}}' "$configured_image")
+  image_id=${metadata%%|*}
+  repo_digests=${metadata#*|}
+  jq -nc --arg configured_image "$configured_image" --arg image_id "$image_id" --argjson repo_digests "$repo_digests" \
+    '{configured_image:$configured_image,image_id:$image_id,repo_digests:($repo_digests // [])}' >>"$evidence_dir/images.jsonl"
+done
+jq -s 'sort_by(.configured_image)' "$evidence_dir/images.jsonl" >"$evidence_dir/images.json"
+rm -f "$evidence_dir/images.jsonl"
+chmod 600 "$evidence_dir/images.json"
+
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME="$project" "$d1_ops" check >"$evidence_dir/schema-and-contract-check.log" 2>&1
+chmod 600 "$evidence_dir/schema-and-contract-check.log"
+ready_status=$(curl --silent --show-error --output "$evidence_dir/readiness.json" --write-out '%{http_code}' "$base_url/health/ready")
+[ "$ready_status" = 200 ] || { echo "P9 public readiness returned HTTP $ready_status" >&2; exit 1; }
+chmod 600 "$evidence_dir/readiness.json"
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+tenant_id=$(env_value TENANT_ID)
+image_mode=$(env_value D1_IMAGE_MODE build)
+enabled_applications=$(jq -c '[.applications[] | select(.enabled == true) | .id] | sort' "$manifest")
+feedback_key_count=1
+if [ -n "$(env_value FEEDBACK_API_KEYS)" ]; then
+  feedback_key_count=$(printf '%s' "$(env_value FEEDBACK_API_KEYS)" | awk -F, '{print NF}')
+fi
+manifest_sha256=$(openssl dgst -sha256 -r "$evidence_dir/suite-manifest.json" | awk '{print $1}')
+topology_sha256=$(openssl dgst -sha256 -r "$evidence_dir/compose-topology.json" | awk '{print $1}')
+check_sha256=$(openssl dgst -sha256 -r "$evidence_dir/schema-and-contract-check.log" | awk '{print $1}')
+jq -n \
+  --arg schema_version 1 --arg scenario_id oms-v1-p9-full-composition-v1 --arg phase C0 \
+  --arg captured_at "$captured_at" --arg tenant_id "$tenant_id" --arg project "$project" --arg base_url "$base_url" \
+  --arg image_mode "$image_mode" --arg manifest_sha256 "$manifest_sha256" --arg topology_sha256 "$topology_sha256" --arg check_sha256 "$check_sha256" \
+  --argjson enabled_applications "$enabled_applications" --argjson feedback_key_count "$feedback_key_count" \
+  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,deployment:{profile:"D1",compose_project:$project,public_url:$base_url,image_mode:$image_mode,running_services:19,healthy_services:19},suite:{enabled_applications:$enabled_applications,domain_application_count:14},feedback:{auth_mode:"apiKey",project_id:115,notifications_enabled:true,configured_key_count:$feedback_key_count,secrets_recorded:false},checks:{exact_service_set:"pass",nginx_only_host_port:"pass",schemas_current_and_contracts_valid:"pass",public_readiness:"pass",suite_manifest_sha256:$manifest_sha256,compose_topology_sha256:$topology_sha256,schema_and_contract_log_sha256:$check_sha256},artifacts:["suite-manifest.json","compose-topology.json","services-and-health.json","images.json","schema-and-contract-check.log","readiness.json"]}' \
+  >"$evidence_dir/state-after-c0.json"
+chmod 600 "$evidence_dir/state-after-c0.json"
+
+echo "PASS P9 C0 full composition preflight: $running_count/$healthy_count services healthy"
+echo "evidence: $evidence_dir/state-after-c0.json"

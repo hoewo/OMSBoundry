@@ -1,0 +1,154 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-p9-c0-test.XXXXXX")
+trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+
+services_file="$runtime/services.txt"
+cat >"$services_file" <<'SERVICES'
+approval-audit-results
+billing-invoice
+bonus-distribution
+business-engagement
+contract-ledger
+cost-outsourcing
+evidence-service
+gateway
+identity-access
+internal-finance-requests
+money-flow-ledger
+nginx
+party-directory
+payroll
+people-groups
+postgres
+production-operations
+project-workspace
+unified-workbench
+SERVICES
+
+domain_ids='contract-ledger money-flow-ledger people-groups party-directory project-workspace evidence-service business-engagement billing-invoice production-operations approval-audit-results cost-outsourcing bonus-distribution internal-finance-requests payroll'
+applications=$(printf '%s\n' $domain_ids | jq -Rsc 'split("\n") | map(select(length > 0)) | map({id:.,enabled:true})')
+jq -n --arg tenant_id 22222222-2222-4222-8222-222222222222 --argjson applications "$applications" \
+  '{schema_version:"1",suite_id:"p9-test",tenant_id:$tenant_id,applications:$applications}' >"$runtime/suite-manifest.json"
+
+feedback_key='ak_test_0123456789abcdef0123456789abcdef0123456789abcdef'
+feedback_hmac='0123456789abcdef0123456789abcdef'
+cat >"$runtime/d1.env" <<ENV
+D1_IMAGE_MODE=pull
+D1_INGRESS_MODE=https
+D1_PUBLIC_HOST=oms.example.test
+TENANT_ID=22222222-2222-4222-8222-222222222222
+ENABLE_CONTRACT=true
+ENABLE_MONEY=true
+ENABLE_PEOPLE=true
+ENABLE_PARTY=true
+ENABLE_PROJECT=true
+ENABLE_EVIDENCE=true
+ENABLE_BUSINESS_ENGAGEMENT=true
+ENABLE_BILLING=true
+ENABLE_PRODUCTION=true
+ENABLE_APPROVAL_AUDIT_RESULTS=true
+ENABLE_COST_OUTSOURCING=true
+ENABLE_BONUS_DISTRIBUTION=true
+ENABLE_INTERNAL_FINANCE_REQUESTS=true
+ENABLE_PAYROLL=true
+FEEDBACK_SDK_URL=https://feedback.example.test/sdk.js
+FEEDBACK_AUTH_MODE=apiKey
+FEEDBACK_GATEWAY_URL=https://feedback.example.test
+FEEDBACK_PROJECT_ID=115
+FEEDBACK_API_KEY=$feedback_key
+FEEDBACK_IDENTITY_HMAC_KEY=$feedback_hmac
+FEEDBACK_NOTIFICATIONS_ENABLED=true
+ENV
+
+mock_bin="$runtime/mock-bin"
+mkdir -p "$mock_bin"
+cat >"$mock_bin/d1" <<'MOCK_D1'
+#!/bin/sh
+set -eu
+case "${1:-}" in
+  config)
+    services=$(jq -Rn '[inputs | select(length > 0)]' <"$P9_TEST_SERVICES_FILE")
+    jq -n --argjson services "$services" '{services:(reduce $services[] as $service ({}; .[$service]={image:("test/"+$service+"@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),depends_on:{},networks:["test"],ports:(if $service=="nginx" then [{published:"443",target:443}] else [] end)})),volumes:{test:{}},networks:{test:{}}}'
+    ;;
+  check) echo 'mock schemas and contracts current' ;;
+  *) echo "unexpected mock d1 command: $*" >&2; exit 2 ;;
+esac
+MOCK_D1
+cat >"$mock_bin/docker" <<'MOCK_DOCKER'
+#!/bin/sh
+set -eu
+case "${1:-} ${2:-}" in
+  'ps --filter')
+    awk '{print "container-" NR}' "$P9_TEST_SERVICES_FILE"
+    ;;
+  'inspect container-1')
+    jq -Rn '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:("sha256:"+.),State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
+    ;;
+  'image inspect')
+    printf '%s\n' 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|["registry.example/test@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"]'
+    ;;
+  *)
+    # docker inspect receives every generated container ID; match by command
+    # name instead of enumerating all nineteen arguments.
+    if [ "${1:-}" = inspect ]; then
+      jq -Rn '[inputs | select(length > 0)] | map({Config:{Labels:{"com.docker.compose.service":.},Image:("test/"+. + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")},Name:("/"+.),Image:("sha256:"+.),State:{Status:"running",Health:{Status:"healthy"}}})' <"$P9_TEST_SERVICES_FILE"
+    else
+      echo "unexpected mock docker command: $*" >&2
+      exit 2
+    fi
+    ;;
+esac
+MOCK_DOCKER
+cat >"$mock_bin/curl" <<'MOCK_CURL'
+#!/bin/sh
+set -eu
+output=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    --write-out) shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ -n "$output" ] || exit 2
+printf '%s\n' '{"status":"ready"}' >"$output"
+printf '200'
+MOCK_CURL
+chmod +x "$mock_bin/d1" "$mock_bin/docker" "$mock_bin/curl"
+
+evidence="$runtime/evidence"
+PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$evidence" \
+  "$script_dir/verify-c0" >"$runtime/pass.out"
+
+jq -e '.result=="pass" and .deployment.running_services==19 and .feedback.project_id==115 and .feedback.secrets_recorded==false' "$evidence/state-after-c0.json" >/dev/null
+[ "$(jq 'length' "$evidence/services-and-health.json")" -eq 19 ]
+[ "$(jq 'length' "$evidence/images.json")" -eq 19 ]
+if grep -R -F -e "$feedback_key" -e "$feedback_hmac" "$evidence" >/dev/null 2>&1; then
+  echo 'P9 C0 evidence leaked a Feedback secret' >&2
+  exit 1
+fi
+if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$evidence" \
+  "$script_dir/verify-c0" >"$runtime/reuse.out" 2>"$runtime/reuse.err"; then
+  echo 'P9 C0 overwrote a non-empty evidence directory' >&2
+  exit 1
+fi
+grep -Fq 'P9 evidence directory must be empty' "$runtime/reuse.err"
+
+grep -v '^payroll$' "$services_file" >"$runtime/services-missing.txt"
+if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$runtime/services-missing.txt" \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$runtime/evidence-missing" \
+  "$script_dir/verify-c0" >"$runtime/missing.out" 2>"$runtime/missing.err"; then
+  echo 'P9 C0 accepted a composition without Payroll' >&2
+  exit 1
+fi
+grep -Fq 'P9 running service set does not match the required 19-service composition' "$runtime/missing.err"
+
+echo 'PASS P9 C0 preflight self-test'
