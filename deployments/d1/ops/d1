@@ -655,6 +655,149 @@ digest_file() {
   openssl dgst -sha256 -r "$1" | awk '{print $1}'
 }
 
+digest_text() {
+  openssl dgst -sha256 -r | awk '{print $1}'
+}
+
+# Record only table counts, row counts and SHA-256 values.  The canonical row
+# stream is reduced to one SHA-256 per row inside PostgreSQL before it crosses
+# the container boundary, so password hashes, API Key verifiers, account
+# details and other business values never enter the backup evidence file.
+capture_database_fingerprints() {
+  output=$1
+  shift
+  fingerprint_contract=$1
+  fingerprint_money=$2
+  fingerprint_people=$3
+  fingerprint_party=$4
+  fingerprint_project=$5
+  fingerprint_evidence=$6
+  fingerprint_business_engagement=$7
+  fingerprint_billing=$8
+  fingerprint_production=$9
+  fingerprint_approval_audit_results=${10}
+  fingerprint_cost_outsourcing=${11}
+  fingerprint_bonus_distribution=${12}
+  fingerprint_internal_finance_requests=${13}
+  fingerprint_payroll=${14}
+
+  databases=identity_access
+  [ "$fingerprint_contract" != true ] || databases="$databases contract_ledger"
+  [ "$fingerprint_money" != true ] || databases="$databases money_flow"
+  [ "$fingerprint_people" != true ] || databases="$databases people_groups"
+  [ "$fingerprint_party" != true ] || databases="$databases party_directory"
+  [ "$fingerprint_project" != true ] || databases="$databases project_workspace"
+  [ "$fingerprint_evidence" != true ] || databases="$databases evidence_service"
+  [ "$fingerprint_business_engagement" != true ] || databases="$databases business_engagement"
+  [ "$fingerprint_billing" != true ] || databases="$databases billing_invoice"
+  [ "$fingerprint_production" != true ] || databases="$databases design_operations"
+  [ "$fingerprint_approval_audit_results" != true ] || databases="$databases approval_audit_results"
+  [ "$fingerprint_cost_outsourcing" != true ] || databases="$databases cost_outsourcing"
+  [ "$fingerprint_bonus_distribution" != true ] || databases="$databases bonus_distribution"
+  [ "$fingerprint_internal_finance_requests" != true ] || databases="$databases internal_finance_requests"
+  [ "$fingerprint_payroll" != true ] || databases="$databases payroll"
+
+  temporary="$output.tmp"
+  rm -f "$temporary"
+  {
+    printf 'FORMAT\tomsbizfoundry.d1-database-fingerprints/v1\n'
+    printf 'EXCLUDED_DATA\tidentity_access.public.suite_sessions\n'
+    printf 'DATABASE\tTABLE_COUNT\tROW_COUNT\tSCHEMA_SHA256\tFACT_SHA256\n'
+  } >"$temporary"
+  chmod 600 "$temporary"
+
+  for database in $databases; do
+    excluded_table=''
+    [ "$database" != identity_access ] || excluded_table=suite_sessions
+
+    schema_rows=$(compose exec -T postgres sh -eu -c '
+      psql --quiet --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+        --username "$POSTGRES_USER" --dbname "$1"
+    ' sh "$database" <<'SQL'
+WITH metadata AS (
+  SELECT jsonb_build_object(
+    'kind','column','table',table_name,'name',column_name,
+    'ordinal',ordinal_position,'type',data_type,'nullable',is_nullable,
+    'default',column_default
+  ) AS item
+  FROM information_schema.columns
+  WHERE table_schema='public'
+  UNION ALL
+  SELECT jsonb_build_object(
+    'kind','constraint','table',c.conrelid::regclass::text,'name',c.conname,
+    'definition',pg_get_constraintdef(c.oid,true)
+  )
+  FROM pg_constraint c
+  JOIN pg_namespace n ON n.oid=c.connamespace
+  WHERE n.nspname='public'
+  UNION ALL
+  SELECT jsonb_build_object(
+    'kind','index','table',tablename,'name',indexname,'definition',indexdef
+  )
+  FROM pg_indexes
+  WHERE schemaname='public'
+  UNION ALL
+  SELECT jsonb_build_object(
+    'kind','trigger','table',event_object_table,'name',trigger_name,
+    'timing',action_timing,'event',event_manipulation,
+    'statement',action_statement
+  )
+  FROM information_schema.triggers
+  WHERE trigger_schema='public'
+)
+SELECT item::text FROM metadata ORDER BY item::text;
+SQL
+    )
+
+    fact_rows=$(compose exec -T postgres sh -eu -c '
+      psql --quiet --tuples-only --no-align --field-separator="|" --set=ON_ERROR_STOP=1 \
+        --set=excluded_table="$2" --username "$POSTGRES_USER" --dbname "$1"
+    ' sh "$database" "$excluded_table" <<'SQL'
+CREATE TEMP TABLE d1_fingerprint_tables(table_name text PRIMARY KEY);
+INSERT INTO d1_fingerprint_tables(table_name)
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema='public'
+  AND table_type='BASE TABLE'
+  AND (:'excluded_table'='' OR table_name<>:'excluded_table');
+
+CREATE TEMP TABLE d1_fingerprint_rows(
+  record_kind text NOT NULL,
+  table_name text NOT NULL,
+  row_digest text NOT NULL
+);
+INSERT INTO d1_fingerprint_rows(record_kind,table_name,row_digest)
+SELECT 'T',table_name,'' FROM d1_fingerprint_tables;
+
+DO $$
+DECLARE item record;
+BEGIN
+  FOR item IN SELECT table_name FROM d1_fingerprint_tables ORDER BY table_name
+  LOOP
+    EXECUTE format(
+      'INSERT INTO d1_fingerprint_rows(record_kind,table_name,row_digest) '
+      'SELECT ''R'',%L,encode(sha256(convert_to(to_jsonb(value)::text,''UTF8'')),''hex'') FROM %I AS value',
+      item.table_name,item.table_name
+    );
+  END LOOP;
+END $$;
+SELECT record_kind,table_name,row_digest
+FROM d1_fingerprint_rows
+ORDER BY record_kind,table_name,row_digest;
+SQL
+    )
+
+    table_count=$(printf '%s\n' "$fact_rows" | awk -F '|' '$1=="T" {n++} END {print n+0}')
+    row_count=$(printf '%s\n' "$fact_rows" | awk -F '|' '$1=="R" {n++} END {print n+0}')
+    schema_sha=$(printf '%s' "$schema_rows" | digest_text)
+    fact_sha=$(printf '%s' "$fact_rows" | digest_text)
+    printf '%s\t%s\t%s\t%s\t%s\n' "$database" "$table_count" "$row_count" "$schema_sha" "$fact_sha" >>"$temporary"
+  done
+
+  mv "$temporary" "$output"
+  chmod 600 "$output"
+}
+
 create_backup() {
   selection_source=${1:-configured}
   backup_enable_contract=$enable_contract
@@ -885,6 +1028,12 @@ create_backup() {
     printf 'OMS_OPERATING_PARTY_ID=%s\n' "$backup_oms_qualification_party_id"
   } >"$target/suite-selection.env"
 
+  capture_database_fingerprints "$target/database-fingerprints.tsv" \
+    "$backup_enable_contract" "$backup_enable_money" "$backup_enable_people" "$backup_enable_party" \
+    "$backup_enable_project" "$backup_enable_evidence" "$backup_enable_business_engagement" "$backup_enable_billing" \
+    "$backup_enable_production" "$backup_enable_approval_audit_results" "$backup_enable_cost_outsourcing" \
+    "$backup_enable_bonus_distribution" "$backup_enable_internal_finance_requests" "$backup_enable_payroll"
+
   manifest="$target/checksums.sha256"
   : >"$manifest"
   for artifact in "$target"/*; do
@@ -1046,6 +1195,7 @@ restore_backup() {
   restore_host_uid=$(id -u)
   restore_host_gid=$(id -g)
   restore_backup_owner=host
+  restore_fingerprint_temp=''
   restore_backup_permissions() {
     if [ "$restore_backup_owner" = container ]; then
       compose run --rm --no-deps --user 0:0 \
@@ -1055,6 +1205,7 @@ restore_backup() {
         >/dev/null 2>&1 || true
       restore_backup_owner=host
     fi
+    [ -z "$restore_fingerprint_temp" ] || rm -f "$restore_fingerprint_temp"
     chmod 0700 "$backup_dir" >/dev/null 2>&1 || true
   }
   trap restore_backup_permissions EXIT HUP INT TERM
@@ -1144,6 +1295,21 @@ restore_backup() {
       'pg_restore --dbname "$DATABASE_URL" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$BACKUP_ID/payroll.dump"'
   fi
   restore_backup_permissions
+  if [ -f "$target/database-fingerprints.tsv" ]; then
+    restore_fingerprint_temp=$(mktemp "${TMPDIR:-/tmp}/omsbizfoundry-d1-restored-fingerprints.XXXXXX")
+    capture_database_fingerprints "$restore_fingerprint_temp" \
+      "$enable_contract" "$enable_money" "$enable_people" "$enable_party" \
+      "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" \
+      "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" \
+      "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll"
+    if ! cmp -s "$target/database-fingerprints.tsv" "$restore_fingerprint_temp"; then
+      echo 'restored database fingerprints do not match the quiesced backup checkpoint' >&2
+      diff -u "$target/database-fingerprints.tsv" "$restore_fingerprint_temp" >&2 || true
+      exit 1
+    fi
+    rm -f "$restore_fingerprint_temp"
+    restore_fingerprint_temp=''
+  fi
   trap - EXIT HUP INT TERM
   compose_enabled up --detach --wait
   remove_disabled

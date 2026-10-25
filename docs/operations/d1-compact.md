@@ -59,6 +59,8 @@ D1_BACKUP_DRAIN_SECONDS=5
 
 `d1 backup` 会先确认当前 Nginx 是否运行；若运行，则先关闭这个唯一公网入口并等待 `D1_BACKUP_DRAIN_SECONDS`（允许 0～30 秒，正式环境默认 5 秒）让已经进入 Owner 的请求收敛，再顺序生成联合检查点。所有 dump、Evidence 对象清单和 checksum 完成后才恢复 Nginx；任一备份步骤失败也通过清理 trap 恢复入口。备份目录中的 `backup-consistency.env` 记录这一停写边界并进入 checksum。数据库越大，入口维护窗口会超过 drain 秒数，应在业务低峰执行并提前公告。升级的预变更备份成功后不会短暂重开入口，而是直接进入 Compose 替换，避免备份后又接受无法包含在回滚点中的新写入。
 
+新格式还在同一停写窗口内生成 `database-fingerprints.tsv`。全选组合覆盖 IAM 和十四个业务 Owner；每条数据库事实先在 PostgreSQL 内变成 SHA-256，文件只保存数据库名、表数、行数及 schema／事实摘要，不保存原始账号、密码哈希、API Key verifier、金额或业务正文。IAM 的 `suite_sessions` 数据按既有 dump 契约排除。该文件受外层 checksum 保护，空目标恢复会在业务服务启动前重算并逐字比较，任一差异直接停止恢复。它不替代 Evidence 对象字节核验或恢复后的 API／浏览器业务复跑。
+
 HTTPS 模式由 `compose.https.yaml` 覆盖基础 HTTP 配置。`d1` 会在任何操作前校验证书有效期、主机名、私钥权限和证书／私钥匹配关系；私钥必须是未加密 PEM 且权限为 `0400` 或 `0600`。具体端口、证书落盘和验收规则以 [D1 公网 HTTPS 入口实施方案](./d1-https-ingress.md)为准。证书私钥不得进入仓库、镜像或 `.env`。
 
 启用应用：
@@ -190,7 +192,7 @@ deployments/d1/ops/d1 party-map money /absolute/path/money-review.json
 deployments/d1/ops/d1 backup
 ```
 
-命令返回 UTC 备份 ID。确认目录包含 `identity-access.dump`、`signing-keys.json`、`suite-selection.env`、启用台账应用的 ZIP、启用 People & Groups 时的 `people-groups.dump`、启用 Party Directory 时的 `party-directory.zip`、启用 Project Workspace 时的 `project-workspace.dump`、启用 Evidence 时的 `evidence-service.zip`、启用 Business Engagement 时的 `business-engagement.dump`、启用 Billing 时的 `billing-invoice.dump`、启用 Production 时的 `production-operations.dump`、启用 Approval & Audit Results 时的 `approval-audit-results.dump`、启用 Cost 时的 `cost-outsourcing.dump`、启用 Bonus 时的 `bonus-distribution.dump` 和 `checksums.sha256`，随后把整个 ID 目录复制到 ECS 之外的受控加密存储。`suite-selection.env` 记录实际覆盖的 12 个应用开关、公开选装 profile，以及 Workbench 实际使用的 `OMS_QUALIFICATION_PARTY_ID`；文件参与校验和，恢复时必须与旧环境核对。profile 与 OMS 资质单位 ID 都来自运行中的所有者／Workbench 容器，不取候选新环境；未知 profile、非法 Party UUID、v3 缺 D01 配套或恢复时 ID 不一致都会失败关闭。Evidence 备份期间写入进程会被短暂停止，以形成数据库和本地对象的一致集合。仅有云盘快照、仅有数据库 dump 或仅有业务 ZIP 都不构成当前组合的完整恢复材料。
+命令返回 UTC 备份 ID。确认目录包含 `identity-access.dump`、`signing-keys.json`、`suite-selection.env`、`backup-consistency.env`、`database-fingerprints.tsv`、启用台账应用的 ZIP、启用 People & Groups 时的 `people-groups.dump`、启用 Party Directory 时的 `party-directory.zip`、启用 Project Workspace 时的 `project-workspace.dump`、启用 Evidence 时的 `evidence-service.zip`、启用 Business Engagement 时的 `business-engagement.dump`、启用 Billing 时的 `billing-invoice.dump`、启用 Production 时的 `production-operations.dump`、启用 Approval & Audit Results 时的 `approval-audit-results.dump`、启用 Cost 时的 `cost-outsourcing.dump`、启用 Bonus 时的 `bonus-distribution.dump`、启用 Internal Finance Requests 时的 `internal-finance-requests.dump`、启用 Payroll 时的 `payroll.dump` 和 `checksums.sha256`，随后把整个 ID 目录复制到 ECS 之外的受控加密存储。`suite-selection.env` 记录实际应用开关、公开选装 profile 和 Workbench 使用的 OMS 经营主体 ID；文件参与校验和，恢复时必须与旧环境核对。profile 与 OMS 主体 ID 都来自运行中的所有者／Workbench 容器，不取候选新环境；未知 profile、非法 Party UUID、v3 缺 D01 配套或恢复时 ID 不一致都会失败关闭。Evidence 备份期间写入进程会被短暂停止，以形成数据库和本地对象的一致集合。仅有云盘快照、仅有数据库 dump 或仅有业务 ZIP 都不构成当前组合的完整恢复材料。
 
 ## 7. 升级
 
@@ -212,7 +214,7 @@ deployments/d1/ops/d1 upgrade
 D1_CONFIRM_EMPTY_RESTORE=yes deployments/d1/ops/d1 restore 备份ID
 ```
 
-脚本先校验外层 SHA-256；新格式备份逐项核对恢复配置中的 `ENABLE_*` 和两个公开 profile 与 `suite-selection.env`，错配、未知值或重复 profile 声明在删除任何卷前失败。旧格式备份缺该文件或 profile 声明时，仅兼容两项 profile 均关闭的恢复配置，且操作者仍必须人工核对原选择集；不能凭缺失元数据推断已启用版本，不能直接用候选 v3 配置恢复旧 v2 检查点。随后脚本重建空 PostgreSQL、恢复 IAM dump 与签名私钥、恢复全部已启用业务应用的独立 dump／台账备份、Party Directory 与 Evidence 数据库＋本地对象，最后启动并检查全部已启用应用数据库 schema 与 Evidence Provider。恢复前脚本还会在 IAM 使用的实际跨容器数据库地址上等待 PostgreSQL 可连接，避免“容器本机健康但业务容器 TCP 尚未就绪”的恢复竞态。恢复后：
+脚本先校验外层 SHA-256；新格式备份逐项核对恢复配置中的 `ENABLE_*` 和两个公开 profile 与 `suite-selection.env`，错配、未知值或重复 profile 声明在删除任何卷前失败。旧格式备份缺该文件或 profile 声明时，仅兼容两项 profile 均关闭的恢复配置，且操作者仍必须人工核对原选择集；不能凭缺失元数据推断已启用版本，不能直接用候选 v3 配置恢复旧 v2 检查点。随后脚本重建空 PostgreSQL、恢复 IAM dump 与签名私钥、恢复全部已启用业务应用的独立 dump／台账备份、Party Directory 与 Evidence 数据库＋本地对象；若备份带数据库指纹，则先在只有 PostgreSQL 开放的状态重算并比较，完全一致后才启动并检查全部已启用应用数据库 schema 与 Evidence Provider。恢复前脚本还会在 IAM 使用的实际跨容器数据库地址上等待 PostgreSQL 可连接，避免“容器本机健康但业务容器 TCP 尚未就绪”的恢复竞态。恢复后：
 
 - 旧浏览器 Session 应返回 401；
 - 原账号可以重新登录；

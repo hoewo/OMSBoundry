@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-248（已接受／P9 联合恢复事实指纹门禁）：新格式 D1 联合备份必须在 BF-247 的公网停写窗口内，为 IAM 和每个实际选装 Owner 生成 `database-fingerprints.tsv`。指纹覆盖 public schema 的表集合、列／约束／索引／触发器定义、逐表当前行和总行数；每行在 PostgreSQL 内先约化为 SHA-256，备份只保存数据库名、表数、行数和聚合摘要，不保存密码哈希、API Key verifier、账号、金额或其他原始值。IAM 的 `suite_sessions` 数据继续按既有备份契约排除，其表结构仍纳入 schema 指纹。空目标恢复在重新启动业务服务前重算并逐字比较，任何差异失败关闭；旧格式备份缺少该文件时保持兼容，仍按既有 checksum／schema／业务复验恢复。该门禁证明的是备份 checkpoint 与空目标数据库事实一致，不替代 Evidence 字节核验、恢复后继续写入、正式 API／浏览器业务复跑或真实 P9 运行证据。
+
 2026-10-26 BF-247（已接受／P9 联合备份停写边界）：D1 的 Finance／Payroll 交付绑定均已位于各自 Owner 整库 dump，Money 也保存自身对应事实；真正缺口是原联合备份在公网入口开放时顺序 dump，跨 Owner 写入可能落在不同检查点。`d1 backup` 现先核对 Nginx 运行态，关闭 D1 唯一主机发布入口并等待 0～30 秒的有界收敛期，再生成全部 Owner／Evidence 检查点和 checksum；成功或任一 dump 失败均恢复原本运行的 Nginx。升级预变更备份成功后不重新开放写入口，直接进入 Compose 替换，避免备份后新写入落在回滚点之外。`backup-consistency.env` 记录停写模式、入口原状态和 drain 秒数并受 checksum 保护；旧备份保持兼容。该机制依赖 D1“仅 Nginx 发布主机端口”且当前 Owner 没有后台业务写任务；它减少顺序 dump 漂移但不替代真实全组合空目标恢复、恢复前后事实比对和故障演练，故 P9 仍未完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
 2026-10-26 BF-246（已接受／P8 本地真实浏览器桥接门禁通过，外部运行仍待执行）：Feedback 宿主不能只用源码字符串断言代替浏览器行为。新增低资源 Playwright 验收，以两个随机回环端口形成真实跨 origin Workbench／SDK，直接加载生产 `oms_phase1_feedback.js`，验证单 iframe、项目 115 配置、受限诊断上下文、提交／状态、未读与迟到响应、精确消息来源、关闭／换票、退出清理、403 不可发现及 503 局部降级；真实 Chromium 29 项断言通过，页面其他业务保持可操作，结束后浏览器与两个临时服务全部关闭。夹具只使用明显无效的测试 Key，不连接外部 Feedback 项目，因此不替代项目 115 通知、有效凭证、双账号／双租户、附件／回复／单条已读、生产 Origin 白名单和公网 Console 门禁，P8 仍不得标记完整通过。[P8 源码与本地浏览器报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)

@@ -22,6 +22,8 @@ make d1-p9-composition-test
 
 该入口渲染 Finance＋Payroll＋People＋Money＋Evidence 的实际 Compose JSON，结构化核对 Finance 工作负载 key、两个下游端点、volume、健康依赖和 Payroll 装配，并验证四种缺失依赖的配置在 Docker 调用前失败；同时覆盖 Feedback 单 Key／双 Key 正例和部分配置、错误项目、不安全 URL、歧义或过量 Key、短 HMAC、Session 模式七组负例，锁定 SDK URL 只进入 Workbench。随后用无状态 Docker mock 核对同选装联合备份／空目标恢复命令图包含两个 Owner 的 dump、选择声明、校验清单和 restore 命令；BF-247 进一步要求 Nginx 停止早于首个 Owner dump、恢复晚于最后一个 dump，注入 Payroll dump 失败时也必须通过 trap 恢复入口，非法 drain 参数必须失败关闭，且一致性声明进入 checksum。另已实际通过 Finance、Payroll、IAM、workload-identity 的 Go test／vet、upgrade selection 和 D1 release bundle。mock 编排不替代 P9 的真实数据库联合备份／空目标恢复，也不替代全组合连续旅程、恢复后复跑、镜像 digest 或浏览器 Console 记录；当前没有启动常驻容器。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
+BF-248 在同一门禁中增加受 checksum 保护的 `database-fingerprints.tsv`：无状态 mock 验证匹配恢复通过、故意漂移在业务服务启动前失败；短生命周期 PostgreSQL 18 又实际执行 schema／事实 SQL，覆盖 2 张表（含空表）、1 行事实和原始敏感值不出库，退出后临时容器已删除。指纹覆盖全选时的 IAM＋十四 Owner，IAM `suite_sessions` 数据按原 dump 契约排除。该 SQL／编排证据仍不等于真实十五库联合恢复、Evidence 字节、恢复后续写或连续浏览器旅程通过。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

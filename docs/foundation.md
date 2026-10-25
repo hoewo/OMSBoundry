@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P9 联合恢复指纹基线（BF-248；真实恢复待执行）：新 D1 备份在停写窗口内生成 `database-fingerprints.tsv`，对 IAM 和每个选装 Owner 的表集合、schema 元数据与当前事实做无秘密摘要；原始行只在 PostgreSQL 内参与 SHA-256，不写入证据。恢复到空目标后、业务服务启动前必须重算并完全相等，差异失败关闭；IAM `suite_sessions` 数据按原备份语义排除。旧备份保持兼容。真实跨库恢复、Evidence 字节、恢复后读取／续写和连续浏览器旅程仍须 P9 运行窗口实际执行。
+
 2026-10-26 P9 联合检查点基线（BF-247；真实恢复待执行）：D1 当前只有 Nginx 发布主机端口，Owner 没有后台业务写循环，因此联合备份必须把这个入口作为停写屏障。普通备份记录原运行态、停 Nginx、等待 0～30 秒 drain、顺序生成 Owner／Evidence 检查点和 checksum，再按原状态恢复入口；异常也恢复。升级预备份成功后不重开入口，直接替换组合。`backup-consistency.env` 进入 checksum；该运维编排已过 mock，不能替代真实跨库空目标恢复和事实比对。
 
 2026-10-26 Feedback D1 配置失败关闭基线（BF-245）：SDK URL 属于 Workbench 宿主配置，不得注入 Bonus 或其他业务 Owner；Gateway 的项目、认证、Key、脱敏身份和通知参数与 Workbench SDK URL 必须成组配置。首发固定项目 115 和 `apiKey` 模式，只接受 HTTPS／本机回环、独立身份 HMAC、单 Key 或至多两把轮换 Key；任何部分／歧义／不安全配置在 D1 状态变化前拒绝。本门禁不包含有效 Key 或真实 Feedback 运行证据。

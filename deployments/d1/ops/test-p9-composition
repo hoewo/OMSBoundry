@@ -209,6 +209,13 @@ postgres}"
     exit 0
     ;;
 esac
+case " $* " in
+  *' exec -T postgres sh -eu -c '*psql*)
+    printf 'T|test_table%s|%s\n' "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}"
+    printf 'R|test_table%s|%s\n' "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}" "${D1_DOCKER_MOCK_FINGERPRINT_SUFFIX:-}"
+    exit 0
+    ;;
+esac
 if [ "${D1_DOCKER_MOCK_FAIL_PAYROLL:-}" = 1 ]; then
   case " $* " in
     *' payroll sh -eu -c '*pg_dump*) exit 17 ;;
@@ -238,8 +245,19 @@ grep -qx 'ENABLE_PAYROLL=true' "$backup/suite-selection.env"
 grep -q 'internal-finance-requests.dump' "$backup/checksums.sha256"
 grep -q 'payroll.dump' "$backup/checksums.sha256"
 grep -q 'backup-consistency.env' "$backup/checksums.sha256"
+grep -q 'database-fingerprints.tsv' "$backup/checksums.sha256"
 grep -qx 'CONSISTENCY_MODE=public-ingress-quiesced-v1' "$backup/backup-consistency.env"
 grep -qx 'PUBLIC_INGRESS_WAS_RUNNING=true' "$backup/backup-consistency.env"
+grep -qx 'FORMAT	omsbizfoundry.d1-database-fingerprints/v1' "$backup/database-fingerprints.tsv"
+grep -qx 'EXCLUDED_DATA	identity_access.public.suite_sessions' "$backup/database-fingerprints.tsv"
+grep -q '^internal_finance_requests	' "$backup/database-fingerprints.tsv"
+grep -q '^payroll	' "$backup/database-fingerprints.tsv"
+awk -F '\t' '
+  NR <= 3 { next }
+  $2 != 1 || $3 != 1 { exit 1 }
+  { databases++ }
+  END { if (databases != 6) exit 1 }
+' "$backup/database-fingerprints.tsv"
 stop_line=$(grep -n ' stop nginx' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
 first_dump_line=$(grep -n 'identity-access sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
 last_dump_line=$(grep -n 'payroll sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
@@ -257,6 +275,28 @@ grep -q 'internal-finance-requests sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'payroll sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'run --rm --no-deps .*internal-finance-requests sh -eu -c .*pg_restore' "$mock_log"
 grep -q 'run --rm --no-deps .*payroll sh -eu -c .*pg_restore' "$mock_log"
+
+# Backups created before BF-248 have no database fingerprint artifact. They
+# remain restorable after their original checksum manifest is verified.
+legacy_backup_id="$backup_id-legacy"
+legacy_backup="$test_dir/backups/$legacy_backup_id"
+cp -R "$backup" "$legacy_backup"
+rm "$legacy_backup/database-fingerprints.tsv"
+awk '$2 != "database-fingerprints.tsv"' "$legacy_backup/checksums.sha256" >"$legacy_backup/checksums.sha256.tmp"
+mv "$legacy_backup/checksums.sha256.tmp" "$legacy_backup/checksums.sha256"
+PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
+  D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static \
+  "$d1" restore "$legacy_backup_id" >"$test_dir/restore-legacy.out"
+grep -Fq "backup restored and verified: $legacy_backup_id" "$test_dir/restore-legacy.out"
+
+if PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_DOCKER_MOCK_FINGERPRINT_SUFFIX=-changed \
+  D1_TEST_BACKUP_DIR="$test_dir/backups" D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" \
+  D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" restore "$backup_id" \
+  >"$test_dir/restore-mismatch.out" 2>"$test_dir/restore-mismatch.err"; then
+  echo 'P9 restore accepted mismatched database fingerprints' >&2
+  exit 1
+fi
+grep -Fq 'restored database fingerprints do not match the quiesced backup checkpoint' "$test_dir/restore-mismatch.err"
 
 # A failed Owner dump must still restore the public edge through the trap.
 failure_env="$test_dir/failure.env"

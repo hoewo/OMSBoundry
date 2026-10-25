@@ -24,6 +24,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - build／pull、停用清理、示例环境、workload policy、Makefile tidy 与静态组合门禁同步更新。
 - BF-245 运行前复核又修正 `FEEDBACK_SDK_URL` 错注入 Bonus、Workbench 缺失的问题，并把项目 115、首发 `apiKey`、URL、HMAC、通知及单／双 Key 轮换改为 D1 状态变化前的成组失败关闭。
 - BF-247 让 D1 联合备份先关闭唯一公网 Nginx、等待 0～30 秒的可配置 drain，再开始首个 dump；普通备份成功或失败恢复原入口，升级成功备份保持停写直到 Compose 替换。一致性模式、入口原状态与 drain 秒数写入受 checksum 保护的 `backup-consistency.env`，旧备份保持可恢复。
+- BF-248 在同一停写窗口为 IAM 与实际选装 Owner 生成 `database-fingerprints.tsv`：表集合、行数、列／约束／索引／触发器和逐行事实都进入 SHA-256，但原始值不出 PostgreSQL；空目标恢复在业务服务启动前重算并严格比较。IAM Session 数据按原 dump 契约排除，旧备份无该文件时继续兼容。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -43,7 +44,7 @@ deployments/d1/ops/test-release-bundle
 git diff --check
 ```
 
-`test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景，并验证 Feedback 单 Key、双 Key 轮换正例及部分配置、错误项目、不安全 URL、歧义 Key、过量轮换 Key、短 HMAC、Session 模式负例。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；BF-247 增加停入口→全部 dump→恢复入口的严格顺序、Payroll dump 故障 trap、非法 drain 和一致性文件 checksum。该项只证明运维编排，不是数据库恢复证据。
+`test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景，并验证 Feedback 单 Key、双 Key 轮换正例及部分配置、错误项目、不安全 URL、歧义 Key、过量轮换 Key、短 HMAC、Session 模式负例。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；BF-247 增加停入口→全部 dump→恢复入口的严格顺序、Payroll dump 故障 trap、非法 drain 和一致性文件 checksum，BF-248 增加指纹 checksum、匹配恢复和故意漂移失败关闭。另用短生命周期 PostgreSQL 18 实际执行指纹 SQL，验证 2 张表（含空表）、1 行事实及原始敏感值不出库，退出后容器删除。上述仍只证明运维编排和 SQL 可执行，不是十五库真实恢复证据。
 
 `acceptance/p9-full-composition/verify-c0` 已提供真实运行窗口的只读前置入口：它要求十四个领域应用、十九个长运行服务精确匹配且全部健康，要求项目 115 通知配置，核对 Nginx 唯一发布端口、Suite Manifest、公共 readiness 与 D1 check，并记录镜像 ID／repo digest。原始 Compose 和 inspect 不落盘，防止部署秘密进入证据；`test-preflight` 用 mock 覆盖 19／19 正例、缺 Payroll 负例和 Feedback secret 不落盘。C0 尚未在真实全组合运行，不能记为通过。
 
@@ -53,7 +54,7 @@ git diff --check
 
 1. 使用非占位部署秘密和当前镜像启动全组合，记录镜像 digest 与全部容器健康；
 2. 连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、实际付款与 Feedback 旅程；
-3. 创建带 `public-ingress-quiesced-v1` 声明的联合备份，恢复到空目标，再次执行关键读取与续写；
+3. 创建带 `public-ingress-quiesced-v1` 声明和十五库无秘密事实指纹的联合备份，恢复到空目标并通过自动指纹比对，再次执行 Evidence 字节、关键读取与续写；
 4. 对比恢复前后 Tenant、稳定 ID、revision、精确金额、File Version、Money 引用、Key 非秘密元数据、反馈身份映射与审计；
 5. 记录真实浏览器 Console、跨租户／撤权负例及回滚点。
 
