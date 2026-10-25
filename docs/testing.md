@@ -1,5 +1,17 @@
 # OMSBizFoundry 验证入口
 
+## 2026-10-26 OMS1 迭代 P8 Feedback 本地真实浏览器门禁
+
+不启动 Docker，用两个随机回环端口形成真实跨 origin Workbench／SDK，并让真实 Chromium 直接加载生产宿主脚本：
+
+```sh
+PLAYWRIGHT_MODULE_PATH=/absolute/path/to/playwright/index.mjs \
+BROWSER_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+make p8-feedback-browser-test
+```
+
+当前实际结果为 3 个场景、29 项断言通过：跨域单 iframe／精确消息来源／项目 115 配置形状／诊断 allowlist／提交／状态／未读与迟到响应／关闭／换票／退出清理，以及 403 不可发现、503 局部降级且 OMS 业务按钮仍可操作。测试 Key 明显无效，浏览器和两个临时服务在 `finally` 中关闭，不生成含配置的持久证据。该入口不连接真实 Feedback 项目，不替代通知、有效凭证、双账号／双租户、附件／回复／单条已读、生产 Origin 白名单和公网 Console 验收。[说明](../acceptance/p8-feedback-browser/README.md)
+
 ## 2026-10-26 OMS1 迭代 P9 D1 装配源码门禁
 
 低资源、无容器启动的 P9 组合门禁：
@@ -35,7 +47,7 @@ P7 员工发票报销闭环提供低资源、退出自动清理的独立入口�
 
 ## 2026-10-26 OMS1 迭代 P8 Feedback V2 源码门禁
 
-OMS Gateway、Workbench、Identity、D1 静态交付和 Arckit SDK 的 P8 源码检查已实际通过：Gateway／Workbench／Identity 分别执行 `go test ./...` 与 `go vet ./...`；Workbench Node 466／466、Feedback 宿主 16／16；D1 Compose config、release bundle、grant shell 语法通过且没有启动容器；Arckit 定向 8／8 和 TypeScript／Vite V2 构建通过。真实项目 115 通知、运行凭证、双账号／双租户、附件／回复／单条已读与跨域浏览器仍未验收，不能登记 P8 完成或上线。详见 [P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)。
+OMS Gateway、Workbench、Identity、D1 静态交付和 Arckit SDK 的 P8 源码检查已实际通过：Gateway／Workbench／Identity 分别执行 `go test ./...` 与 `go vet ./...`；Workbench Node 466／466、Feedback 宿主 16／16；D1 Compose config、release bundle、grant shell 语法通过且没有启动容器；Arckit 定向 8／8 和 TypeScript／Vite V2 构建通过。BF-246 又以真实 Chromium 和两个随机跨 origin 回环服务完成本地宿主 29 项断言。真实项目 115 通知、运行凭证、双账号／双租户、附件／回复／单条已读与外部跨域浏览器仍未验收，不能登记 P8 完成或上线。详见 [P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)。
 
 ## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4／P5／P6
 

@@ -2,7 +2,7 @@
 
 日期：2026-10-26
 
-结论：P8 的 OMS 宿主、Gateway 适配、D1 配置边界和 Arckit SDK 兼容修改已通过本地源码门禁；真实项目 115 的通知开关、有效部署凭证、两个账号／两个租户、附件、回复／单条已读和浏览器跨域旅程尚未运行，因此 P8 运行验收未完成，也未部署 D1 或公网。
+结论：P8 的 OMS 宿主、Gateway 适配、D1 配置边界和 Arckit SDK 兼容修改已通过本地源码门禁；BF-246 又以真实 Chromium 和两个随机跨 origin 回环服务完成生产宿主脚本的本地浏览器门禁。真实项目 115 的通知开关、有效部署凭证、两个账号／两个租户、附件、回复／单条已读和外部跨域旅程尚未运行，因此 P8 运行验收未完成，也未部署 D1 或公网。
 
 ## 1. 问题与可验证结果
 
@@ -47,6 +47,11 @@ go vet ./...
 node --test internal/server/*.test.mjs frontend/src/*.test.mjs
 node --check internal/server/oms_phase1_feedback.js
 
+# 本地真实 Chromium 跨 origin 宿主门禁
+PLAYWRIGHT_MODULE_PATH=/absolute/path/to/playwright/index.mjs \
+BROWSER_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+make p8-feedback-browser-test
+
 # Identity & Access
 go test ./...
 go vet ./...
@@ -63,7 +68,7 @@ npm run build:v2:check
 git diff --check
 ```
 
-Workbench Node 回归为 466／466；新增 Feedback 宿主静态门禁为 16／16；Arckit 定向用例为 8／8。Gateway 测试另覆盖稳定／隔离身份、不安全配置拒绝、Capability 拒绝、响应不泄露身份、Session Key 轮换回退和 Feedback 服务不可用。
+Workbench Node 回归为 466／466；新增 Feedback 宿主静态门禁为 16／16；本地真实 Chromium 为 3 个场景、29 项断言；Arckit 定向用例为 8／8。浏览器门禁覆盖跨域单 iframe、项目 115 配置形状、诊断 allowlist、精确消息来源、提交／状态、未读与迟到响应、关闭／换票、退出清理、403 不可发现和 503 局部降级，退出时关闭浏览器及两个临时服务。Gateway 测试另覆盖稳定／隔离身份、不安全配置拒绝、Capability 拒绝、响应不泄露身份、Session Key 轮换回退和 Feedback 服务不可用。
 
 ## 5. 尚未完成的运行门禁
 
@@ -73,6 +78,6 @@ Workbench Node 回归为 466／466；新增 Feedback 宿主静态门禁为 16／
 2. 注入项目专用、可撤销、有限流的运行 Key 和独立随机 HMAC Key，确认它们不进入 Git、命令输出、日志或 URL；
 3. 两个账号和两个 Tenant 分别提交、查询与读取未读，证明相互不可见；
 4. 验证图片附件、开发者回复、只读当前反馈、0 角标隐藏、错误 Key／Project／Origin、SDK／API 停机降级、Key 轮换和退出登录清理；
-5. 用真实浏览器确认桌面侧栏与移动入口、唯一 iframe、Console 零敏感泄露和 OMS 首屏／其他业务不被 Feedback 阻塞。
+5. 在真实外部 SDK／项目 115 环境中确认桌面侧栏与移动入口、生产 Origin 白名单、唯一 iframe、Console 零敏感泄露和 OMS 首屏／其他业务不被 Feedback 阻塞；本地 Chromium 夹具已覆盖宿主行为，但不能替代这一项。
 
 以上运行证据取得前，不得把 P8 描述为已经上线或完整通过。P9 全组合、恢复和连续业务验收也尚未开始。

@@ -1,6 +1,6 @@
 # OMS1 2026-10-25 迭代实施拆解
 
-状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P7 已通过本地门禁。P8 的源码与构建门禁已通过，见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)，但真实项目 115 通知、运行凭证、双账号／双租户和跨域浏览器旅程尚未验收，故 P8 未完成。此前阶段报告保持在 `docs/reports/`；本地通过不表示 D1 或公网已经发布新版本。
+状态：实施中。BF-184～BF-237 已形成无产品待确认项的需求基线；P0～P7 已通过本地门禁。P8 的源码／构建及本地真实 Chromium 跨 origin 宿主门禁已通过，见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)，但真实项目 115 通知、运行凭证、双账号／双租户和外部跨域浏览器旅程尚未验收，故 P8 未完成。此前阶段报告保持在 `docs/reports/`；本地通过不表示 D1 或公网已经发布新版本。
 
 问题 A → 可验证结果 B：本轮同时涉及租户、两个新业务 Owner、开放 API、跨系统资金闭环和外部 Feedback SDK，若按页面并行堆功能会重新形成浏览器事实和隐式耦合 → 按所有权与依赖顺序交付可独立验证的纵向切片，每阶段都有迁移、授权、故障恢复和运行证据。
 
@@ -23,7 +23,7 @@
 | 工资 | P4 已有工资期间／行快照、计算、核对、调整、发放及 Money 连接 | 待 P9 补跨应用恢复／导出并完成 D1／公网连续旅程 |
 | 开放平台 | P7 已开放 profile／settings、Evidence 发票上传和本人报销命令／查询，并同步 OpenAPI 与中文说明 | 其他业务 API 不在本轮；D1／公网留待 P9 |
 | 发票报销闭环 | P7 已用真实 TLS、IAM、Gateway、三个 Owner 和四库完成上传→提交→付款→本人 paid 查询及故障恢复 | 商业杀毒／OCR、自动代付、审批和公网连续旅程不在 P7 |
-| Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist 与 OMS Origin 模板 | 项目 115 服务端通知开关、有效运行凭证、双账号／双租户、附件／回复／单条已读和端到端浏览器仍待验 |
+| Feedback V2 | P8 已完成正式 Capability、Gateway 配置适配、主 OMS1 桌面／移动入口、iframe bridge、未读角标、Arckit 诊断 allowlist、OMS Origin 模板及本地真实 Chromium 跨 origin 宿主门禁 | 项目 115 服务端通知开关、有效运行凭证、双账号／双租户、附件／回复／单条已读和外部端到端浏览器仍待验 |
 
 ## 3. 依赖顺序
 
@@ -164,7 +164,7 @@ Feedback V2 不依赖报销闭环的数据事实，但放在其后可避免在 I
 
 ### P8：Feedback SDK V2
 
-状态：2026-10-26 源码／构建门禁通过，运行验收待执行；未部署 D1／公网。证据见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)。
+状态：2026-10-26 源码／构建及本地真实 Chromium 跨 origin 宿主门禁通过，外部运行验收待执行；未部署 D1／公网。证据见[P8 源码报告](../../reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)。
 
 覆盖：BF-235～BF-237。
 

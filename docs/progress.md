@@ -1,10 +1,12 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-246：P8 新增低资源真实浏览器验收。真实 Chromium 在两个随机回环端口加载生产 Feedback 宿主并通过 29 项断言，覆盖跨 origin 单 iframe、项目 115 运行配置形状、诊断 allowlist、提交／状态、未读、迟到响应拒绝、精确 source／origin、关闭／换票、退出清理、403 不可发现与 503 局部降级；其他业务按钮始终可操作。脚本退出已关闭浏览器和临时服务，未启动 Docker。该夹具不连接外部项目，项目 115 通知、有效凭证、双账号／双租户、附件／回复／单条已读和公网 Console 仍待一次真实窗口，P8／P9 状态不提高为完成。
+
 2026-10-26 BF-245：P9 运行前审计发现 D1 把 `FEEDBACK_SDK_URL` 错放在 Bonus 环境而未交给 Workbench，且部分 Feedback 参数会延迟到容器启动才失败。现已修正配置归属，并在 `d1` 状态变化前成组校验首发 `apiKey`、项目 115、HTTPS／回环 URL、HMAC、通知布尔值及单／双 Key 轮换；实际 Compose JSON 正例和七组负例通过。另新增只读 P9 C0 入口与 mock 自测，真实窗口将先核对十四应用、十九服务、19／19 健康、镜像、入口与 schema，且不落盘原始 Compose／inspect 或 Feedback secret。本批未启动容器；P8 真实运行和 P9 全组合仍待执行。
 
 2026-10-26 P9 装配源码门禁已完成，真实全组合与恢复待执行。审计发现 D1 的 Finance／Payroll 虽可健康启动，却未完整接入下游：现已为 Finance 增加独立工作负载身份、Evidence／Money 短期 Capability、401 单次换票和 D1 key lifecycle；Payroll 补上 Money 端点；选择器强制 Finance→Money＋Evidence、Payroll→People＋Money。静态 Compose、相关 Go test／vet、IAM policy、release bundle 与 P9 组合测试通过，未启动容器。P8 真实 Feedback、P9 连续旅程、联合恢复、digest 和浏览器证据仍待执行，不能标记整轮完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
-2026-10-26 P8 Feedback V2 源码门禁已完成，运行验收待执行。Gateway 已提供受会话、CSRF 和 `feedback.use` 约束的运行配置，Workbench 已接入桌面／移动入口、单 iframe、未读、精确消息校验、退出清理和降级；D1 只接受环境秘密。Arckit SDK 独立本地提交已增加闭集诊断上下文和 OMS Origin。Go／Node／SDK 构建／release bundle 均通过且未启动常驻服务。项目 115 通知、有效 Key、双账号／双租户与真实浏览器跨域旅程尚未验收，未部署 D1／公网；通过后才进入 P9 全组合与恢复。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+2026-10-26 P8 Feedback V2 源码门禁和本地真实浏览器宿主门禁已完成，外部运行验收待执行。Gateway 已提供受会话、CSRF 和 `feedback.use` 约束的运行配置，Workbench 已接入桌面／移动入口、单 iframe、未读、精确消息校验、退出清理和降级；D1 只接受环境秘密。Arckit SDK 独立本地提交已增加闭集诊断上下文和 OMS Origin。Go／Node／SDK 构建／release bundle 及本地 Chromium 29 项断言均通过且未启动常驻服务。项目 115 通知、有效 Key、双账号／双租户与外部真实跨域旅程尚未验收，未部署 D1／公网；完成这些门禁后才能关闭 P8。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 
 2026-10-26 P7 本地完成，进入 P8。员工 API Key 已可经正式 `/open-api/v1/` 上传发票、建立／提交本人报销并查询结果；Evidence 完成有界格式／结构／危险主动内容校验与失败关闭清理，Finance 完成重复识别、草稿生命周期和本人资源授权，财务确认后 Money 保存唯一付款／核销。真实 TLS 五进程／四库验收 13／13 通过，故障恢复、危险 PDF、强重复、付款唯一性和撤权均有证据；相关单元、vet 与 PostgreSQL 集成测试通过。没有部署 D1／公网，下一步为 P8 Feedback V2，随后 P9 全组合／恢复／公网验收。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
