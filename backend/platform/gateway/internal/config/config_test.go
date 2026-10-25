@@ -61,3 +61,27 @@ func TestLoadRejectsOpenAPITenantLimitBelowDefaultKeyOverride(t *testing.T) {
 		t.Fatal("per-Key limit above the tenant limit was accepted")
 	}
 }
+
+func TestLoadFeedbackConfigurationIsOptionalAndSecretsStayExplicit(t *testing.T) {
+	t.Setenv("SUITE_MANIFEST_PATH", "/config/suite.json")
+	t.Setenv("IAM_PUBLIC_KEYS_PATH", "/public/keys.json")
+	t.Setenv("IAM_ISSUER", "https://oms.example.test/auth")
+	value, err := Load()
+	if err != nil || value.FeedbackAuthMode != "" {
+		t.Fatalf("disabled feedback config = %#v %v", value, err)
+	}
+	t.Setenv("FEEDBACK_AUTH_MODE", "apiKey")
+	t.Setenv("FEEDBACK_GATEWAY_URL", "https://api.feitianchengzi.com")
+	t.Setenv("FEEDBACK_PROJECT_ID", "115")
+	t.Setenv("FEEDBACK_API_KEY", "ak_0123456789abcdef")
+	t.Setenv("FEEDBACK_IDENTITY_HMAC_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("FEEDBACK_NOTIFICATIONS_ENABLED", "true")
+	value, err = Load()
+	if err != nil || value.FeedbackProjectID != 115 || len(value.FeedbackAPIKeys) != 1 || !value.FeedbackNotificationsEnabled || value.FeedbackIdentityVersion != "v1" {
+		t.Fatalf("feedback config = %#v %v", value, err)
+	}
+	t.Setenv("FEEDBACK_IDENTITY_HMAC_KEY", "short")
+	if _, err := Load(); err == nil {
+		t.Fatal("short feedback identity HMAC key was accepted")
+	}
+}

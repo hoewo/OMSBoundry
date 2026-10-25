@@ -181,6 +181,8 @@ func TestHomeHidesTechnicalApplications(t *testing.T) {
 		`data-workflow-assistant`,
 		`data-workflow-settings`,
 		`data-feedback-toggle`,
+		`data-feedback-mobile-toggle`,
+		`data-feedback-mobile-menu`,
 		`data-feedback-menu`,
 		"临河新区岩土勘察试验报告.pdf",
 		"文件保存后自动计入勘察试验阶段",
@@ -530,7 +532,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewWithProfiles(path, ReferenceOAProfiles{OMSOperatingPartyID: operatingPartyID})
+	handler, err := NewWithProfiles(path, ReferenceOAProfiles{OMSOperatingPartyID: operatingPartyID, FeedbackSDKURL: "https://feedback.example.test/sdk-v2/index.html?embed=web"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -539,6 +541,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	body := response.Body.String()
+	if csp := response.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "frame-src 'self' blob: https://feedback.example.test") || strings.Contains(csp, "frame-src *") {
+		t.Fatalf("feedback iframe CSP is not exact: %q", csp)
+	}
 	for _, marker := range []string{
 		`<body class="oms-v1-active"`,
 		`data-view="oms-v1"`,
@@ -547,6 +552,10 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1`,
 		`data-identity-route-prefix="/configured-iam"`,
 		`data-operating-party-id="` + operatingPartyID + `"`,
+		`data-feedback-sdk-url="https://feedback.example.test/sdk-v2/index.html?embed=web"`,
+		`data-feedback-toggle`,
+		`data-feedback-mode="submit"`,
+		`data-feedback-mode="status"`,
 		`data-oms-v1-nav="overview"`,
 		`data-oms-v1-nav="projects"`,
 		`data-oms-v1-nav="receivable"`,
@@ -626,6 +635,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"assets/oms-phase1-payroll-owner.js?v=20261025.1",
 		"assets/oms-phase1-finance-owner.js?v=20261025.1",
 		"assets/oms-phase1-open-api.js?v=20261025.1",
+		"assets/oms-phase1-feedback.js?v=20261026.1",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -684,6 +694,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		{"/assets/oms-phase1-payroll-owner.js", "application/javascript; charset=utf-8", "payments:batch"},
 		{"/assets/oms-phase1-finance-owner.js", "application/javascript; charset=utf-8", "finance-payments/batch"},
 		{"/assets/oms-phase1-open-api.js", "application/javascript; charset=utf-8", "完整 secret 只显示一次"},
+		{"/assets/oms-phase1-feedback.js", "application/javascript; charset=utf-8", "event.origin !== sdkOrigin"},
 		{"/assets/oms-phase1-evidence.js", "application/javascript; charset=utf-8", "createEvidenceTransfer"},
 		{"/assets/workbench.js", "application/javascript; charset=utf-8", "window.location.assign('/workbench/?view=oms-v1')"},
 	} {
@@ -706,7 +717,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS P3 owner composition asset missing %q status=%d", marker, ownerAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261025.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261025.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261025.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261025.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-feedback.js?v=20261026.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -827,6 +838,33 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	if _, err := NewWithProfiles(path, ReferenceOAProfiles{OMSOperatingPartyID: "not-a-party-id"}); err == nil {
 		t.Fatal("invalid OMS operating Party ID accepted")
+	}
+}
+
+func TestOMSPhase1FeedbackSDKHostIsFailClosedAndEphemeral(t *testing.T) {
+	for _, marker := range []string{
+		"event.origin !== sdkOrigin",
+		"event.source !== frame.contentWindow",
+		"message.source !== 'feedback-sdk-web'",
+		"source: 'feedback-sdk-host'",
+		"feedback-sdk:get-unread-count",
+		"message.request_id === unreadRequestID",
+		"form.addEventListener('submit', clearRuntime)",
+		"window.addEventListener('pagehide', clearRuntime",
+		"Feedback is auxiliary. Preparation failure must never affect OMS.",
+		"badge.hidden = count === 0",
+		"hostContext: buildHostContext()",
+		"setEntryVisible(true)",
+		"error.status !== 401 && error.status !== 403",
+	} {
+		if !strings.Contains(omsPhase1FeedbackJS, marker) {
+			t.Fatalf("feedback host missing invariant %q", marker)
+		}
+	}
+	for _, forbidden := range []string{"localStorage", "sessionStorage", "navigator.userAgent,", "tenantId:", "subjectId:", "outerHTML", "innerHTML"} {
+		if strings.Contains(omsPhase1FeedbackJS, forbidden) {
+			t.Fatalf("feedback host contains forbidden persistence or diagnostic source %q", forbidden)
+		}
 	}
 }
 

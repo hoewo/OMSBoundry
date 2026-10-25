@@ -10,6 +10,10 @@ P7 员工发票报销闭环提供低资源、退出自动清理的独立入口�
 
 入口实际启动真实 TLS Nginx、Gateway、IAM、Evidence、Internal Finance Requests、Money、People 引用端口和一个限 1 CPU／768 MiB 的 PostgreSQL 18.6 容器；四个 Owner／平台数据库相互独立。当前结果为 13 个 HTTP 状态断言、0 个不匹配，覆盖 Evidence／Finance 停机后原幂等键恢复、Money 未知结果原命令恢复且只产生 1 个交付／1 笔资金／1 笔核销、危险 PDF `422`、强重复 `409`、本人 paid 投影和 Key 撤销 `401`。五个受影响 Go module 的低并发 `go test ./...`、`go vet ./...`，Evidence／Finance PostgreSQL integration tests、JSON／shell 校验及 `git diff --check` 均通过。容器与进程已停止；未运行 D1／公网发布。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
+## 2026-10-26 OMS1 迭代 P8 Feedback V2 源码门禁
+
+OMS Gateway、Workbench、Identity、D1 静态交付和 Arckit SDK 的 P8 源码检查已实际通过：Gateway／Workbench／Identity 分别执行 `go test ./...` 与 `go vet ./...`；Workbench Node 466／466、Feedback 宿主 16／16；D1 Compose config、release bundle、grant shell 语法通过且没有启动容器；Arckit 定向 8／8 和 TypeScript／Vite V2 构建通过。真实项目 115 通知、运行凭证、双账号／双租户、附件／回复／单条已读与跨域浏览器仍未验收，不能登记 P8 完成或上线。详见 [P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)。
+
 ## 2026-10-25 OMS1 迭代 P0／P1／P2／P3／P4／P5／P6
 
 P6 员工 API Key 与开放 API 本地门禁：Identity & Access、Gateway、Workbench 分别以 `GOMAXPROCS=2 go test -p 1 -count=1 ./...` 和 `go vet` 通过；`node --check` 与 `node frontend/oms-workbench/internal/server/oms_phase1_open_api.test.mjs` 验证一次 secret 必须先展示再刷新、嵌套错误码、默认 180／可选 365 天。一次性 PostgreSQL 18.6 中 `go test -tags=integration ./internal/apikey ./internal/httpserver` 验证 migration 7、bcrypt verifier、期限／上限、撤销、撤权、Person 停用、IAM HTTP、本人／租户审计和 180 天清理；Gateway 契约测试覆盖 HTTPS 先于凭证解析、allowlist、签名 scope、60／600 双层及来源限流、统一错误、脱敏 IP、审计回写和内部 IAM 路由不可公网访问。测试容器已停止删除；没有运行 D1 或公网发布。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)

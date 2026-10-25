@@ -1,5 +1,5 @@
 {{define "oms-phase1-body"}}
-  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-subject-id="{{.SubjectID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}">
+  <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-subject-id="{{.SubjectID}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}" data-feedback-sdk-url="{{.FeedbackSDKURL}}">
     <div hidden data-oms-v1-routes>{{range .BusinessApplications}}<span data-oms-v1-application="{{.ID}}" data-oms-v1-route="{{.RoutePrefix}}"></span>{{end}}</div>
 
     <aside class="oms-v1__rail" aria-label="OMS 一期主导航">
@@ -24,6 +24,13 @@
         </div>
         <button class="oms-v1__nav-main" type="button" data-oms-v1-nav="open-api"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 12a4 4 0 1 1 3-3l7 0v3h-2v2h-2v2h-3v-4zM5 8h.01"/></svg></i><span><strong>开放平台</strong></span></button>
       </nav>
+      <div class="oms-v1__feedback-entry" data-feedback-entry hidden>
+        <button class="oms-v1__feedback-toggle" type="button" aria-expanded="false" aria-haspopup="menu" data-feedback-toggle><span>产品反馈</span><b data-feedback-unread hidden></b></button>
+        <div class="oms-v1__feedback-menu" role="menu" aria-label="产品反馈" data-feedback-menu hidden>
+          <button type="button" role="menuitem" data-feedback-mode="submit"><strong>提交反馈</strong><small>报告问题或提出建议</small></button>
+          <button type="button" role="menuitem" data-feedback-mode="status"><strong>我的反馈</strong><small>查看处理状态</small><b data-feedback-unread hidden></b></button>
+        </div>
+      </div>
       <div class="oms-v1__rail-foot"><span class="oms-v1__live-dot"></span><span>经营工作台</span></div>
     </aside>
 
@@ -167,8 +174,12 @@
       </main>
 
       <nav class="oms-v1__mobile-nav" aria-label="OMS 一期移动导航">
-        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button><button type="button" data-oms-v1-nav="internal"><i>内</i><span>内部</span></button><button type="button" data-oms-v1-nav="open-api"><i>钥</i><span>开放</span></button>
+        <button class="is-active" type="button" data-oms-v1-nav="overview"><i>⌁</i><span>总览</span></button><button type="button" data-oms-v1-nav="projects"><i>项</i><span>项目</span></button><button type="button" data-oms-v1-nav="receivable"><i>收</i><span>应收</span></button><button type="button" data-oms-v1-nav="payable"><i>付</i><span>应付</span></button><button type="button" data-oms-v1-nav="internal"><i>内</i><span>内部</span></button><button type="button" data-oms-v1-nav="open-api"><i>钥</i><span>开放</span></button><button type="button" data-feedback-mobile-toggle hidden aria-expanded="false"><i>言</i><span>反馈</span><b data-feedback-unread hidden></b></button>
       </nav>
+      <div class="oms-v1__feedback-mobile-menu" data-feedback-mobile-menu hidden>
+        <button type="button" data-feedback-mode="submit"><strong>提交反馈</strong><small>报告问题或提出建议</small></button>
+        <button type="button" data-feedback-mode="status"><strong>我的反馈</strong><small>查看处理状态</small><b data-feedback-unread hidden></b></button>
+      </div>
     </div>
 
     <div class="oms-v1__project-detail" data-oms-v1-project-detail hidden>

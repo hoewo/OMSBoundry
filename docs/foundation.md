@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P8 Feedback V2 源码基线（BF-243；运行验收待执行）：OMS 只拥有受 `feedback.use` 门禁的宿主入口和运行适配，Feedback 平台继续独占反馈、附件、消息、未读与处理状态。Gateway 从可信 Tenant＋Subject 派生版本化 HMAC 身份，Workbench 只保存内存配置并以单一 iframe 和精确 origin／source 通信；桌面、移动、未读、退出清理和故障降级均已接线。部署 Key／HMAC 只允许环境注入，Arckit SDK 另以闭集 allowlist 接收最小非标识诊断。源码、构建和 release bundle 门禁已过，但项目 115 通知、有效凭证、双账号／双租户和真实浏览器尚未验收，P8 未完成、未上线。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+
 2026-10-26 P7 实现基线（BF-242）：`/open-api/v1/` 已从凭证底座扩展为员工本人发票报销闭环。Evidence 在独立数据库保存发票 File Version 校验与清理事实，Finance 保存本人申请、发票指纹、提交／撤回／归档／恢复／软删除 revision 和 Money 引用，Money 保存实际资金与核销；三者继续通过版本化端口连接而不共享表。正式 TLS 本地验收覆盖 Evidence／Finance／Money 故障恢复、强重复、危险 PDF、付款唯一性、本人 paid 查询与 Key 撤销。格式／结构和危险主动内容校验不等同通用杀毒；本批未部署 D1／公网，P8／P9 仍待实施。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
 2026-10-25 P6 实现基线（BF-241）：员工开放凭证已经进入正式 IAM／Gateway 边界。Key 绑定唯一 Tenant、Subject 与当前 People Person，完整 secret 只在创建响应展示一次，数据库仅保存 bcrypt verifier；有效期只允许 30／90／180／365 天且默认 180 天，每人每租户最多 5 个有效 Key。Gateway 只开放版本化 allowlist，经 HTTPS 验证后删除外部认证头、签发 5 分钟有界上下文，并执行每 Key 60／分钟、每 Tenant 600／分钟和来源 IP 防护。员工可在 Workbench 管理 Key、查看本人脱敏调用记录，Webhook 只显示未开放占位；180 天调用元数据有独立清理审计。该阶段没有开放发票上传或报销写入，P7 才实现 BF-221～BF-225、BF-230～BF-234 的业务闭环；未部署 D1／公网。[P6 报告](./reports/oms-v1-iteration-p6-open-api-validation-20261025.md)

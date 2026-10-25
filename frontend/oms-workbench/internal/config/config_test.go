@@ -53,3 +53,20 @@ func TestOMSOperatingPartyIDMustBeCanonicalAndLegacyAliasRemainsCompatible(t *te
 		t.Fatal("conflicting operating Party declarations accepted")
 	}
 }
+
+func TestFeedbackSDKURLMustBeHTTPSOrLoopbackHTTP(t *testing.T) {
+	t.Setenv("SUITE_MANIFEST_PATH", "test.json")
+	for _, valid := range []string{"", "https://feedback.example.test/sdk-v2/index.html?embed=web", "http://127.0.0.1:4180/sdk"} {
+		t.Setenv("FEEDBACK_SDK_URL", valid)
+		cfg, err := Load()
+		if err != nil || cfg.FeedbackSDKURL != valid {
+			t.Fatalf("valid feedback SDK URL %q rejected: %#v %v", valid, cfg, err)
+		}
+	}
+	for _, invalid := range []string{"http://feedback.example.test/sdk", "javascript:alert(1)", "https://user:pass@feedback.example.test/sdk", "https://feedback.example.test/sdk#secret"} {
+		t.Setenv("FEEDBACK_SDK_URL", invalid)
+		if _, err := Load(); err == nil {
+			t.Fatalf("invalid feedback SDK URL %q accepted", invalid)
+		}
+	}
+}

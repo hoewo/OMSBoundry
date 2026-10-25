@@ -35,7 +35,7 @@ func run(logger *slog.Logger) error {
 	if err := verifier.Ready(); err != nil {
 		return err
 	}
-	handler, err := gatewayserver.New(suite, verifier, logger, gatewayserver.Options{CookieSecure: cfg.CookieSecure, TrustProxyClientIP: cfg.TrustProxyClientIP, RequestsPerMinute: cfg.RequestsPerMinute, OpenAPIKeyRequestsPerMinute: cfg.OpenAPIKeyRequestsPerMinute, OpenAPITenantRequestsPerMinute: cfg.OpenAPITenantRequestsPerMinute, OpenAPIUploadConcurrency: cfg.OpenAPIUploadConcurrency, OpenAPIRequireHTTPS: cfg.OpenAPIRequireHTTPS})
+	handler, err := gatewayserver.New(suite, verifier, logger, gatewayserver.Options{CookieSecure: cfg.CookieSecure, TrustProxyClientIP: cfg.TrustProxyClientIP, RequestsPerMinute: cfg.RequestsPerMinute, OpenAPIKeyRequestsPerMinute: cfg.OpenAPIKeyRequestsPerMinute, OpenAPITenantRequestsPerMinute: cfg.OpenAPITenantRequestsPerMinute, OpenAPIUploadConcurrency: cfg.OpenAPIUploadConcurrency, OpenAPIRequireHTTPS: cfg.OpenAPIRequireHTTPS, Feedback: gatewayserver.FeedbackOptions{AuthMode: cfg.FeedbackAuthMode, GatewayURL: cfg.FeedbackGatewayURL, ProjectID: cfg.FeedbackProjectID, APIKeys: cfg.FeedbackAPIKeys, IdentityHMACKey: cfg.FeedbackIdentityHMACKey, IdentityVersion: cfg.FeedbackIdentityVersion, NotificationsEnabled: cfg.FeedbackNotificationsEnabled}})
 	if err != nil {
 		return err
 	}

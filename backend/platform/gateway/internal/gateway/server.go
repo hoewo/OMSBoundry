@@ -34,6 +34,7 @@ type Options struct {
 	OpenAPITenantRequestsPerMinute int
 	OpenAPIUploadConcurrency       int
 	OpenAPIRequireHTTPS            bool
+	Feedback                       FeedbackOptions
 }
 type Server struct {
 	suite                manifest.Suite
@@ -49,6 +50,7 @@ type Server struct {
 	openAPITenantLimiter *rateLimiter
 	openAPIRequireHTTPS  bool
 	openAPIUploadSlots   chan struct{}
+	feedback             feedbackRuntime
 	handler              http.Handler
 }
 type sessionResponse struct {
@@ -92,7 +94,11 @@ func New(suite manifest.Suite, verifier *credential.Verifier, logger *slog.Logge
 	if options.OpenAPIKeyRequestsPerMinute < 1 || options.OpenAPITenantRequestsPerMinute < options.OpenAPIKeyRequestsPerMinute || options.OpenAPIUploadConcurrency < 1 || options.OpenAPIUploadConcurrency > 128 {
 		return nil, fmt.Errorf("open API rate limits are invalid")
 	}
-	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute), openAPIKeyLimiter: newRateLimiter(options.OpenAPIKeyRequestsPerMinute), openAPITenantLimiter: newRateLimiter(options.OpenAPITenantRequestsPerMinute), openAPIRequireHTTPS: options.OpenAPIRequireHTTPS, openAPIUploadSlots: make(chan struct{}, options.OpenAPIUploadConcurrency)}
+	feedback, err := newFeedbackRuntime(options.Feedback)
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{suite: suite, verifier: verifier, logger: logger, client: &http.Client{Timeout: 5 * time.Second}, proxies: map[string]*httputil.ReverseProxy{}, iam: iam, cookieSecure: options.CookieSecure, trustProxyClientIP: options.TrustProxyClientIP, limiter: newRateLimiter(options.RequestsPerMinute), openAPIKeyLimiter: newRateLimiter(options.OpenAPIKeyRequestsPerMinute), openAPITenantLimiter: newRateLimiter(options.OpenAPITenantRequestsPerMinute), openAPIRequireHTTPS: options.OpenAPIRequireHTTPS, openAPIUploadSlots: make(chan struct{}, options.OpenAPIUploadConcurrency), feedback: feedback}
 	for _, app := range suite.Applications {
 		if app.Enabled {
 			proxy, err := server.proxyFor(app)
@@ -167,6 +173,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		return
 	case r.URL.Path == "/gateway/logout" && r.Method == http.MethodPost:
 		s.logout(w, r)
+		return
+	case r.URL.Path == "/gateway/feedback/config" && r.Method == http.MethodPost:
+		s.feedbackConfig(w, r)
 		return
 	case strings.HasPrefix(r.URL.Path, "/gateway/authorize/") && r.Method == http.MethodPost:
 		s.authorize(w, r)

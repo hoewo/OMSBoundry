@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -16,6 +17,7 @@ type Config struct {
 	BonusProfile               string
 	ProductionStageProfile     string
 	OMSOperatingPartyID        string
+	FeedbackSDKURL             string
 }
 
 func Load() (Config, error) {
@@ -27,7 +29,7 @@ func Load() (Config, error) {
 	if operatingPartyID == "" {
 		operatingPartyID = legacyPartyID
 	}
-	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSOperatingPartyID: operatingPartyID}
+	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSOperatingPartyID: operatingPartyID, FeedbackSDKURL: strings.TrimSpace(os.Getenv("FEEDBACK_SDK_URL"))}
 	value.ProductionStageProfile = strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_STAGE_PROFILE"))
 	if value.HTTPAddress == "" {
 		value.HTTPAddress = ":8082"
@@ -46,6 +48,13 @@ func Load() (Config, error) {
 	}
 	if value.OMSOperatingPartyID != "" && !canonicalUUIDPattern.MatchString(value.OMSOperatingPartyID) {
 		return Config{}, fmt.Errorf("OMS_OPERATING_PARTY_ID must be a canonical lowercase UUID")
+	}
+	if value.FeedbackSDKURL != "" {
+		parsed, err := url.Parse(value.FeedbackSDKURL)
+		loopback := parsed != nil && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "::1")
+		if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || (parsed.Scheme != "https" && !(parsed.Scheme == "http" && loopback)) {
+			return Config{}, fmt.Errorf("FEEDBACK_SDK_URL must be an absolute HTTPS URL or loopback HTTP URL")
+		}
 	}
 	return value, nil
 }

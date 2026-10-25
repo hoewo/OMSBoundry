@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 P8 Feedback V2 源码门禁已完成，运行验收待执行。Gateway 已提供受会话、CSRF 和 `feedback.use` 约束的运行配置，Workbench 已接入桌面／移动入口、单 iframe、未读、精确消息校验、退出清理和降级；D1 只接受环境秘密。Arckit SDK 独立本地提交已增加闭集诊断上下文和 OMS Origin。Go／Node／SDK 构建／release bundle 均通过且未启动常驻服务。项目 115 通知、有效 Key、双账号／双租户与真实浏览器跨域旅程尚未验收，未部署 D1／公网；通过后才进入 P9 全组合与恢复。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+
 2026-10-26 P7 本地完成，进入 P8。员工 API Key 已可经正式 `/open-api/v1/` 上传发票、建立／提交本人报销并查询结果；Evidence 完成有界格式／结构／危险主动内容校验与失败关闭清理，Finance 完成重复识别、草稿生命周期和本人资源授权，财务确认后 Money 保存唯一付款／核销。真实 TLS 五进程／四库验收 13／13 通过，故障恢复、危险 PDF、强重复、付款唯一性和撤权均有证据；相关单元、vet 与 PostgreSQL 集成测试通过。没有部署 D1／公网，下一步为 P8 Feedback V2，随后 P9 全组合／恢复／公网验收。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
 2026-10-25 P5 本地完成，进入 P6。Internal Finance Requests 已扩展为正式报销／付款申请 Owner：明细与类别、收款和费用归属快照、Evidence 引用、无需审批快照、撤回 revision、敏感访问审计、逐笔／批量付款及 Money 稳定引用均已落库。Money 为申请建立稳定义务，保存实际付款、整单核销和超额未分配余额；批量部分失败不回滚成功项。双数据库／双进程隔离验收覆盖分次／超额、批量 revision 冲突、撤回重提、普通／敏感导出、账号遮罩和空目标恢复；Workbench 258 项 Node 测试通过。没有部署 D1／公网，Evidence 实时校验与员工开放 API 留待 P7／P6。[P5 报告](./reports/oms-v1-iteration-p5-finance-payment-validation-20261025.md)

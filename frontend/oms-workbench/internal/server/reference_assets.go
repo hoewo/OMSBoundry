@@ -121,6 +121,12 @@ var omsPhase1FinanceOwnerJS string
 //go:embed oms_phase1_open_api.js
 var omsPhase1OpenAPIJS string
 
+// omsPhase1Feedback mounts one isolated Feedback SDK V2 iframe and obtains its
+// runtime credential only after Gateway verifies the current IAM capability.
+//
+//go:embed oms_phase1_feedback.js
+var omsPhase1FeedbackJS string
+
 //go:embed oms_phase1_pagination.js
 var omsPhase1PaginationJS string
 
