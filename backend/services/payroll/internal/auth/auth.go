@@ -7,9 +7,13 @@ import (
 )
 
 const (
-	ActionTenantRead    = "payroll.tenant.read"
-	ActionRunManage     = "payroll.run.manage"
-	ActionReferenceRead = "payroll.reference.read"
+	ActionTenantRead               = "payroll.tenant.read"
+	ActionRunManage                = "payroll.run.manage"
+	ActionReferenceRead            = "payroll.reference.read"
+	ActionCompensationManage       = "payroll.compensation-profile.manage"
+	ActionPaymentProfileManage     = "payroll.payment-profile.manage"
+	ActionSensitiveAccountRead     = "payroll.sensitive-account.read"
+	ActionContributionSchemeManage = "payroll.contribution-scheme.manage"
 )
 
 var AllActions = []string{"payroll.self.read", ActionTenantRead, "payroll.compensation-profile.manage", "payroll.payment-profile.manage", "payroll.sensitive-account.read", "payroll.sensitive-account.export", "payroll.contribution-scheme.manage", ActionRunManage, "payroll.payment.confirm", "payroll.payment.batch-confirm", "payroll.export", ActionReferenceRead}
@@ -24,6 +28,9 @@ type Principal struct {
 func (p Principal) Can(action string) bool { return p.AllowedActions[action] }
 func (p Principal) CanResource(id string) bool {
 	return p.ScopeKind == "tenant" || (p.ScopeKind == "resources" && p.Resources["payroll_run"][id])
+}
+func (p Principal) CanResourceType(resourceType, id string) bool {
+	return p.ScopeKind == "tenant" || (p.ScopeKind == "resources" && p.Resources[resourceType][id])
 }
 
 type Authenticator interface {

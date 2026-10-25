@@ -1,6 +1,14 @@
 # OMSBizFoundry 验证入口
 
-## 2026-10-25 OMS1 迭代 P0／P1／P2
+## 2026-10-25 OMS1 迭代 P0／P1／P2／P3
+
+P3 成员与薪酬档案提供独立重复验收入口：
+
+```sh
+./acceptance/p3-member-payroll-profiles/run-isolated
+```
+
+该入口构建 People & Groups 与 Payroll 独立镜像，启动一次性 PostgreSQL 18.6 与两个真实 HTTP 服务，经版本化 People Reference 完成成员新增、离职、离职状态下薪酬 revision、重新入职、薪酬生效月、工资账户缺失、账号遮罩与换卡历史、稳定 Payroll 快照、未知 Person 和匿名拒绝；退出时清理自身资源。PG18 集成测试另覆盖双租户隔离、当前投影一致性、不可变历史、自定义缴费方案复制／修订；HTTP 单测覆盖完整账号精确资源授权和撤权。该证据不表示 P4 工资计算／发放、正式 D1 或公网已完成。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)
 
 P2 新增两个独立 Owner，并提供一键隔离验收：
 

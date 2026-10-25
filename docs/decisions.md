@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-25 BF-238（已接受／P3 本地实现）：成员与薪酬档案正式拆分为 People & Groups 与 Payroll 两个 Owner。People 独占成员当前档案、部门／岗位、在离职状态、生效日期和任职事件；Payroll 以稳定 Person ID 独占 Compensation Profile、Payment Profile 与 Contribution Scheme 的当前投影和不可变 revision。Payroll 只通过版本化 People Reference 校验 Person，停用／离职状态仅作为显示与默认选择提示，不得阻止离职结算、补发／扣回准备或重入职薪酬 revision。普通支付档案读取只返回脱敏账号，完整读取要求独立能力、精确资源范围、用途和审计。Workbench 分别提交两个 Owner，任一后续步骤失败时保留并提示已成功事实，不伪造跨库回滚。P3 已通过本地独立 PostgreSQL 18、双进程 HTTP、隔离／撤权、历史与遮罩门禁；未部署 D1 或公网，工资计算／工资表发放仍属于 P4。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)
+
 2026-10-25 BF-237（已接受／需求确认／尚未实施）：Feedback V2 提交自动携带最小非敏感诊断上下文，字段 allowlist 仅包括 OMS release／build、当前模块、无资源标识的路由模板、粗粒度浏览器／系统类型、语言、客户端时间和当前关联 request ID。禁止自动发送 Tenant／Subject／Person、实际 URL 查询、资源 ID／名称、表单数据、金额、文件 URL、完整 User-Agent、认证数据、Header／Cookie、错误堆栈或业务正文，也不自动截屏。实现必须逐字段构建 `data`，不得序列化页面全局状态或任意上下文对象；用户主动选择的附件继续由 Feedback 平台拥有。该项关闭本轮产品待确认清单，实施按 P0～P9 拆解开始。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md) [实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
 
 2026-10-25 BF-236（已接受／需求确认／尚未实施）：Feedback 项目 115 在 OMS1 首阶段启用 V2 通知。Workbench“产品反馈”入口展示当前 `customUserId` 的未读数字，0 时隐藏；查询未读数不得改变已读状态，打开某条反馈后只标记该反馈的通知已读，不得一并清空其他反馈。通知范围继续由 Tenant＋Subject 派生的稳定脱敏身份隔离，跨账号／跨租户读取必须拒绝。Feedback 通知接口、轮询、实时连接或角标失败仅使入口降级并提供重试，不得阻塞 OMS 其他业务页面；服务端须将项目 115 显式加入通知开关范围，客户端同时显式开启通知配置。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)

@@ -118,6 +118,10 @@ services:
     image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
   payroll:
     image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
+  payroll-workload-key-permissions:
+    image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
+  payroll-workload-keys:
+    image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
 
   unified-workbench:
     image: ${D1_WORKBENCH_IMAGE:?set D1_WORKBENCH_IMAGE to a digest-pinned image}

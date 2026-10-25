@@ -30,7 +30,7 @@ func TestVerticalSliceWithHistorySnapshotAndConcurrency(t *testing.T) {
 	if err := database.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	_, err = pool.Exec(ctx, `TRUNCATE people_groups_audit_entries,business_commands,roster_snapshots,group_capability_revisions,group_capability_assignments,membership_revisions,memberships,group_revisions,groups,definition_revisions,definitions,person_revisions,persons`)
+	_, err = pool.Exec(ctx, `TRUNCATE people_groups_audit_entries,business_commands,roster_snapshots,group_capability_revisions,group_capability_assignments,membership_revisions,memberships,group_revisions,groups,definition_revisions,definitions,person_employment_events,person_revisions,persons`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,6 +146,23 @@ func TestVerticalSliceWithHistorySnapshotAndConcurrency(t *testing.T) {
 	}
 	if string(old.Payload) != originalPayload {
 		t.Fatal("published snapshot changed after person update")
+	}
+
+	employee, err := service.CreatePerson(ctx, actor, CreatePersonInput{CommandID: id(70), ReferenceCode: "P-EMP", DisplayName: "任职周期成员", Department: "财务部", PositionTitle: "出纳", EmploymentStartDate: "2026-01-10"})
+	if err != nil || employee.StatusEffectiveDate != "2026-01-10" {
+		t.Fatalf("create employment profile: %+v %v", employee, err)
+	}
+	employee, err = service.SetPersonStatus(ctx, actor, employee.ID, SetPersonStatusInput{CommandID: id(71), ExpectedRevision: employee.Revision, Status: "inactive", EffectiveDate: "2026-08-31", Reason: "离职"})
+	if err != nil || employee.Status != "inactive" || employee.Revision != 2 {
+		t.Fatalf("offboard person: %+v %v", employee, err)
+	}
+	employee, err = service.SetPersonStatus(ctx, actor, employee.ID, SetPersonStatusInput{CommandID: id(72), ExpectedRevision: employee.Revision, Status: "active", EffectiveDate: "2026-10-01", Reason: "重新入职"})
+	if err != nil || employee.Status != "active" || employee.Revision != 3 {
+		t.Fatalf("rehire person: %+v %v", employee, err)
+	}
+	history, err := service.ListEmploymentEvents(ctx, testTenant, employee.ID)
+	if err != nil || len(history) != 3 || history[0].EventKind != "hired" || history[1].EventKind != "offboarded" || history[2].EventKind != "rehired" || history[2].PersonID != employee.ID {
+		t.Fatalf("employment history: %+v %v", history, err)
 	}
 
 	ended, err := service.EndMembership(ctx, actor, team1.ID, m1.ID, EndMembershipInput{CommandID: id(37), ExpectedGroupRevision: team1.Revision, ExpectedRevision: m1.Revision, EndDate: "2026-09-10"})

@@ -93,6 +93,7 @@
     state.authorized.add(id);
     return response.status===204?{}:response.json();
   }
+  globalThis.OMSPhase1OwnerAPI=Object.freeze({api,authorize,app});
   async function evidenceFetch(path,options={}){
     const config=app('evidence-service'),value=String(path);
     if(!config||!/^\/evidence(?:\/|$)/.test(config.route||''))throw new Error('附件功能暂不可用，请稍后重试');

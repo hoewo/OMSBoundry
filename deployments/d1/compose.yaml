@@ -563,6 +563,33 @@ services:
       - iam-workload-public:/workload-public
     restart: "no"
 
+  payroll-workload-key-permissions:
+    profiles: [payroll]
+    image: omsbizfoundry/payroll:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - payroll-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  payroll-workload-keys:
+    profiles: [payroll]
+    image: omsbizfoundry/payroll:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: payroll
+      WORKLOAD_SUBJECT_ID: ${PAYROLL_WORKLOAD_SUBJECT_ID:-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee}
+      WORKLOAD_KEY_FILE: /workload-private/payroll.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/payroll.json
+    depends_on:
+      payroll-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - payroll-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
   people-migrate:
     profiles: [people]
     build:
@@ -1116,8 +1143,16 @@ services:
       IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
       IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PEOPLE_BASE_URL: ${PAYROLL_PEOPLE_BASE_URL:-http://people-groups:8084}
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: payroll
+      WORKLOAD_SUBJECT_ID: ${PAYROLL_WORKLOAD_SUBJECT_ID:-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee}
+      WORKLOAD_KEY_FILE: /workload-private/payroll.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      REFERENCE_TIMEOUT: ${REFERENCE_TIMEOUT:-3s}
     depends_on:
       postgres-provision: {condition: service_completed_successfully}
+      payroll-workload-keys: {condition: service_completed_successfully}
     volumes: [iam-public-keys:/public:ro]
     networks: [data]
     restart: "no"
@@ -1131,6 +1166,7 @@ services:
     depends_on:
       payroll-migrate: {condition: service_completed_successfully}
       public-keys: {condition: service_completed_successfully}
+      payroll-workload-keys: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8093/health/ready >/dev/null"]
       interval: 2s
@@ -1138,6 +1174,7 @@ services:
       retries: 30
     volumes:
       - iam-public-keys:/public:ro
+      - payroll-workload-private:/workload-private:ro
       - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
     networks: [app, data]
     restart: unless-stopped
@@ -1294,5 +1331,6 @@ volumes:
   contract-workload-private:
   money-workload-private:
   people-workload-private:
+  payroll-workload-private:
   contract-evidence:
   evidence-data:

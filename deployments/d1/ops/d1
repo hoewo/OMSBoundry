@@ -439,7 +439,7 @@ remove_disabled() {
     disabled_services="$disabled_services internal-finance-requests internal-finance-requests-migrate"
   fi
   if [ "$enable_payroll" != true ]; then
-    disabled_services="$disabled_services payroll payroll-migrate"
+    disabled_services="$disabled_services payroll payroll-migrate payroll-workload-keys payroll-workload-key-permissions"
   fi
   if [ -n "$disabled_services" ]; then
     # Service names are fixed literals selected above, not user input.

@@ -4,9 +4,12 @@
   const root=document.querySelector('[data-oms-v1]'),model=globalThis.OMSInternalModel;
   if(!root||!model)return;
 
-  // This public candidate is intentionally browser-local. Authentication controls
-  // access to the page; Tenant and Subject isolate the browser storage key. No
-  // member, payroll or finance record is sent to an Owner service by this script.
+  // Member and compensation facts use People & Groups and Payroll when both
+  // applications are assembled. The unfinished payroll-run and finance-request
+  // screens remain browser-local until their later vertical slices replace them.
+
+  const ownerAPI=globalThis.OMSPhase1OwnerAPI;
+  const ownerMembers=Boolean(ownerAPI?.app?.('people-groups')&&ownerAPI?.app?.('payroll'));
 
   const safe=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const uuid=()=>globalThis.crypto?.randomUUID?.()||'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,value=>{const random=Math.random()*16|0,part=value==='x'?random:(random&3|8);return part.toString(16)});
@@ -19,6 +22,7 @@
   const percentToBps=value=>{const match=String(value??'').trim().match(/^(\d{1,3})(?:\.(\d{1,2}))?$/);if(!match)return null;const bps=Number(match[1])*100+Number((match[2]||'').padEnd(2,'0'));return bps<=10000?bps:null};
   const bpsToPercent=value=>(Number(value||0)/100).toFixed(2);
   const minorInput=value=>{try{const raw=BigInt(String(value||0)),negative=raw<0n,absolute=negative?-raw:raw;return (negative?'-':'')+String(absolute/100n)+'.'+String(absolute%100n).padStart(2,'0')}catch{return '0.00'}};
+  const minorJSON=value=>{const raw=BigInt(String(value)),number=Number(raw);if(!Number.isSafeInteger(number))throw new Error('金额超出当前版本可安全处理的范围');return number};
   const compare=(a,b)=>{if(typeof a==='bigint'||typeof b==='bigint'){const left=typeof a==='bigint'?a:BigInt(a),right=typeof b==='bigint'?b:BigInt(b);return left===right?0:left>right?1:-1}return typeof a==='number'&&typeof b==='number'?a-b:String(a??'').localeCompare(String(b??''),'zh-CN',{numeric:true,sensitivity:'base'})};
 
   const defaultScheme=()=>({
@@ -42,7 +46,7 @@
   }
   let data=readStore();
   const view={pages:{members:1,payroll:1,finance:1},pageSize:{members:20,payroll:20,finance:20},sorts:{members:{key:'updated_at',direction:'desc'},payroll:{key:'pay_date',direction:'desc'},finance:{key:'created_at',direction:'desc'}},selectedPayroll:new Set(),selectedFinance:new Set(),selectablePayroll:[],selectableFinance:[]};
-  const persist=()=>localStorage.setItem(storeKey,JSON.stringify(data));
+  const persist=()=>localStorage.setItem(storeKey,JSON.stringify(ownerMembers?{...data,members:[]}:data));
   const show=detail=>root.dispatchEvent(new CustomEvent('oms-v1:show-dialog',{detail}));
   const close=()=>root.dispatchEvent(new CustomEvent('oms-v1:close-dialog'));
   const formStatus=copy=>'<div class="oms-v1__form-status is-wide" data-oms-v1-form-status>'+safe(copy||'')+'</div>';
@@ -73,31 +77,63 @@
   function statusTone(status){return status==='paid'||status==='active'?'positive':status==='confirm'||status==='pending'||status==='partial'?'warning':status==='inactive'?'muted':''}
   function emptyRow(columns,title,copy){return '<tr><td colspan="'+columns+'"><div class="oms-v1__empty"><strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div></td></tr>'}
 
+  async function loadOwnerMembers(){
+    if(!ownerMembers)return;
+    try{
+      const [people,compensations,payments]=await Promise.all([
+        ownerAPI.api('people-groups','/api/v1/persons'),
+        ownerAPI.api('payroll','/api/v1/compensation-profiles'),
+        ownerAPI.api('payroll','/api/v1/payment-profiles'),
+      ]),compByPerson=new Map((Array.isArray(compensations)?compensations:[]).map(item=>[item.person_id,item])),paymentByPerson=new Map((Array.isArray(payments)?payments:[]).map(item=>[item.person_id,item]));
+      data.members=(Array.isArray(people)?people:[]).map(person=>{const comp=compByPerson.get(person.id),payment=paymentByPerson.get(person.id);return {id:person.id,name:person.display_name,reference_code:person.reference_code||'',department:person.department||'',position:person.position_title||'',joined_on:person.status_effective_date||'',status_effective_date:person.status_effective_date||'',status:person.status,person_revision:person.revision,fixed_salary_minor:String(comp?.fixed_salary_minor??0),social_base_minor:String(comp?.social_insurance_base_minor??0),housing_base_minor:String(comp?.housing_fund_base_minor??0),compensation_revision:Number(comp?.revision||0),compensation_effective_month:comp?.effective_month||currentMonth(),compensation_configured:Boolean(comp),payment_profile_id:payment?.id||'',payment_revision:Number(payment?.revision||0),payment_account_name:payment?.account_name||'',payment_bank_name:payment?.bank_name||'',payment_masked_account:payment?.masked_account_number||'',payment_status:payment?.status||'',payment_effective_month:payment?.effective_month||currentMonth(),operator:'Owner 服务',created_at:person.created_at,updated_at:[person.updated_at,comp?.updated_at,payment?.updated_at].filter(Boolean).sort().at(-1)||person.updated_at}});
+      renderMembers();
+    }catch(error){
+      data.members=[];renderMembers();const body=root.querySelector('[data-internal-member-body]');if(body)body.innerHTML=emptyRow(9,'成员数据暂不可用',error instanceof Error?error.message:'请稍后重试');
+    }
+  }
+
   function memberForm(member){
-    const value=member||{name:'',department:'',position:'',joined_on:today(),fixed_salary_minor:'0',social_base_minor:'0',housing_base_minor:'0',status:'active',operator:'本地操作人'};
+    const value=member||{name:'',department:'',position:'',joined_on:today(),fixed_salary_minor:'0',social_base_minor:'0',housing_base_minor:'0',status:'active',operator:'当前操作人',compensation_effective_month:currentMonth(),payment_effective_month:currentMonth()};
     return '<form class="oms-v1__form-grid">'+
       field('姓名 *','<input name="name" required maxlength="80" value="'+safe(value.name)+'" placeholder="请输入成员姓名">')+
       field('状态','<select name="status">'+option('active','在职',value.status)+option('inactive','停用',value.status)+'</select>')+
       field('部门','<input name="department" maxlength="80" value="'+safe(value.department)+'" placeholder="选填">')+
       field('岗位','<input name="position" maxlength="80" value="'+safe(value.position)+'" placeholder="选填">')+
-      field('入职日期','<input name="joined_on" type="date" value="'+safe(value.joined_on||today())+'">')+
+      field(member?'当前状态生效日期':'入职日期','<input name="status_effective_date" type="date" required value="'+safe(member?today():(value.joined_on||today()))+'">')+
+      field('薪酬生效月份 *','<input name="compensation_effective_month" type="month" required value="'+safe(value.compensation_effective_month||currentMonth())+'">')+
       field('固定工资（元） *','<input name="fixed_salary" inputmode="decimal" required value="'+safe(minorInput(value.fixed_salary_minor))+'">')+
       field('社保缴费基数（元） *','<input name="social_base" inputmode="decimal" required value="'+safe(minorInput(value.social_base_minor))+'">')+
       field('公积金缴费基数（元） *','<input name="housing_base" inputmode="decimal" required value="'+safe(minorInput(value.housing_base_minor))+'">')+
-      field('操作人 *','<input name="operator" required maxlength="80" value="'+safe(value.operator||'本地操作人')+'">')+
-      '<div class="oms-v1__form-note is-wide">绩效不写入成员固定档案，在每个月的工资表中单独录入。金额按分保存并显示两位小数。</div>'+formStatus('')+'</form>';
+      field('变更原因 *','<input name="reason" required maxlength="200" value="'+safe(member?'成员档案维护':'首次建档')+'">')+
+      field('账户名','<input name="account_name" maxlength="100" value="'+safe(value.payment_account_name||value.name||'')+'" placeholder="可稍后补充">')+
+      field('开户行','<input name="bank_name" maxlength="160" value="'+safe(value.payment_bank_name||'')+'" placeholder="可稍后补充">')+
+      field(member?'新工资账号':'工资账号','<input name="account_number" inputmode="numeric" autocomplete="off" value="" placeholder="'+(member?'不填写表示不变':'可稍后补充')+'">')+
+      field('账户生效月份','<input name="payment_effective_month" type="month" value="'+safe(value.payment_effective_month||currentMonth())+'">')+
+      '<div class="oms-v1__form-note is-wide">成员资料由 People & Groups 保存；固定工资、缴费基数和收款账户由 Payroll 分别保存。提交是两个 Owner 的连续命令，若后一步失败，已成功的前一步不会被伪装回滚，可再次进入成员档案续办。</div>'+formStatus('')+'</form>';
   }
   function openMemberEditor(member=null){
     show({kicker:'公司成员',title:member?'编辑成员':'新增成员',submit:member?'保存修改':'保存成员',enabled:true,body:memberForm(member),onSubmit:async formData=>{
       const fixed=model.decimalMinor(formData.get('fixed_salary')),social=model.decimalMinor(formData.get('social_base')),housing=model.decimalMinor(formData.get('housing_base'));
       if(fixed===null||social===null||housing===null||BigInt(fixed)<0n||BigInt(social)<0n||BigInt(housing)<0n)throw new Error('工资和缴费基数必须是大于等于 0、最多两位小数的金额');
-      const record={id:member?.id||uuid(),name:String(formData.get('name')||'').trim(),department:String(formData.get('department')||'').trim(),position:String(formData.get('position')||'').trim(),joined_on:String(formData.get('joined_on')||today()),fixed_salary_minor:fixed,social_base_minor:social,housing_base_minor:housing,status:String(formData.get('status')||'active'),operator:String(formData.get('operator')||'').trim(),created_at:member?.created_at||now(),updated_at:now()};
-      if(member)data.members=data.members.map(item=>item.id===member.id?record:item);else data.members.push(record);
-      persist();close();renderMembers();
+      const name=String(formData.get('name')||'').trim(),department=String(formData.get('department')||'').trim(),position=String(formData.get('position')||'').trim(),status=String(formData.get('status')||'active'),effectiveDate=String(formData.get('status_effective_date')||today()),effectiveMonth=String(formData.get('compensation_effective_month')||currentMonth()),reason=String(formData.get('reason')||'').trim(),accountNumber=String(formData.get('account_number')||'').replace(/[\s-]+/g,''),accountName=String(formData.get('account_name')||'').trim(),bankName=String(formData.get('bank_name')||'').trim(),paymentMonth=String(formData.get('payment_effective_month')||currentMonth());
+      if(ownerMembers){
+        let person=member?{...member,revision:member.person_revision}:null,peopleSaved=false;
+        try{
+          if(!member){person=await ownerAPI.api('people-groups','/api/v1/persons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),display_name:name,department,position_title:position,employment_start_date:effectiveDate})});peopleSaved=true}
+          else if(name!==member.name||department!==member.department||position!==member.position){person=await ownerAPI.api('people-groups','/api/v1/persons/'+member.id+'/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:member.person_revision,reference_code:member.reference_code||'',display_name:name,department,position_title:position})});peopleSaved=true}
+          if(status!==person.status){person=await ownerAPI.api('people-groups','/api/v1/persons/'+person.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:person.revision,status,effective_date:effectiveDate,reason})});peopleSaved=true}
+          const compensationChanged=!member||fixed!==String(member.fixed_salary_minor)||social!==String(member.social_base_minor)||housing!==String(member.housing_base_minor)||effectiveMonth!==member.compensation_effective_month;
+          if(compensationChanged)await ownerAPI.api('payroll','/api/v1/compensation-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.compensation_revision||0),person_id:person.id,effective_month:effectiveMonth,fixed_salary_minor:minorJSON(fixed),social_insurance_base_minor:minorJSON(social),housing_fund_base_minor:minorJSON(housing),reason})});
+          if(accountNumber){if(!accountName||!bankName)throw new Error('填写工资账号时，账户名和开户行必须同时填写');await ownerAPI.api('payroll','/api/v1/payment-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.payment_revision||0),person_id:person.id,account_name:accountName,bank_name:bankName,account_number:accountNumber,status:'active',effective_month:paymentMonth,reason,confirmed:true})})}
+          await loadOwnerMembers();close();
+        }catch(error){await loadOwnerMembers();if(peopleSaved)throw new Error('成员基础资料已保存，但薪酬或账户档案未全部完成：'+(error instanceof Error?error.message:'请稍后续办'));throw error}
+        return;
+      }
+      const record={id:member?.id||uuid(),name,department,position,joined_on:effectiveDate,fixed_salary_minor:fixed,social_base_minor:social,housing_base_minor:housing,status,operator:'本地操作人',created_at:member?.created_at||now(),updated_at:now()};if(member)data.members=data.members.map(item=>item.id===member.id?record:item);else data.members.push(record);persist();close();renderMembers();
     }});
   }
   function openMemberDetail(member){
-    show({kicker:'成员详情',title:member.name,dismissOnly:true,body:'<section class="oms-v1__record-detail"><div class="oms-v1__record-status"><span>当前状态</span><strong>'+safe(statusLabel(member.status))+'</strong></div><div class="oms-v1__record-metrics"><article><span>固定工资</span><strong>'+model.money(member.fixed_salary_minor)+'</strong></article><article><span>社保基数</span><strong>'+model.money(member.social_base_minor)+'</strong></article><article><span>公积金基数</span><strong>'+model.money(member.housing_base_minor)+'</strong></article></div><dl class="oms-v1__record-facts"><div><dt>部门</dt><dd>'+safe(member.department||'—')+'</dd></div><div><dt>岗位</dt><dd>'+safe(member.position||'—')+'</dd></div><div><dt>入职日期</dt><dd>'+date(member.joined_on)+'</dd></div><div><dt>最近操作人</dt><dd>'+safe(member.operator||'—')+'</dd></div><div><dt>更新时间</dt><dd>'+dateTime(member.updated_at)+'</dd></div></dl></section>'});
+    show({kicker:'成员详情',title:member.name,dismissOnly:true,body:'<section class="oms-v1__record-detail"><div class="oms-v1__record-status"><span>当前状态</span><strong>'+safe(statusLabel(member.status))+'</strong></div><div class="oms-v1__record-metrics"><article><span>固定工资</span><strong>'+(member.compensation_configured?model.money(member.fixed_salary_minor):'未配置')+'</strong></article><article><span>社保基数</span><strong>'+(member.compensation_configured?model.money(member.social_base_minor):'未配置')+'</strong></article><article><span>公积金基数</span><strong>'+(member.compensation_configured?model.money(member.housing_base_minor):'未配置')+'</strong></article></div><h3 class="oms-v1__record-subtitle">People & Groups 成员事实</h3><dl class="oms-v1__record-facts"><div><dt>部门</dt><dd>'+safe(member.department||'—')+'</dd></div><div><dt>岗位</dt><dd>'+safe(member.position||'—')+'</dd></div><div><dt>状态生效日期</dt><dd>'+date(member.status_effective_date||member.joined_on)+'</dd></div><div><dt>Person revision</dt><dd>'+safe(member.person_revision||'本地演示')+'</dd></div></dl><h3 class="oms-v1__record-subtitle">Payroll 薪酬与支付档案</h3><dl class="oms-v1__record-facts"><div><dt>薪酬生效月份</dt><dd>'+safe(member.compensation_configured?member.compensation_effective_month:'未配置')+'</dd></div><div><dt>工资账户</dt><dd>'+safe(member.payment_masked_account||'未配置')+'</dd></div><div><dt>开户行</dt><dd>'+safe(member.payment_bank_name||'—')+'</dd></div><div><dt>Payroll revision</dt><dd>'+safe(member.compensation_revision||'—')+'</dd></div><div><dt>更新时间</dt><dd>'+dateTime(member.updated_at)+'</dd></div></dl></section>'});
   }
   function renderMembers(){
     const search=root.querySelector('[data-internal-member-search]').value.trim().toLowerCase(),status=root.querySelector('[data-internal-member-status]').value;
@@ -105,7 +141,7 @@
     items=sorted(items,'members',(item,key)=>key==='fixed_salary'?BigInt(item.fixed_salary_minor):item[key]);
     const range=pager('members',items.length,renderMembers),body=root.querySelector('[data-internal-member-body]');
     root.querySelector('[data-internal-member-total]').textContent=String(items.length);
-    body.innerHTML=items.length?items.slice(range.start,range.end).map(item=>'<tr><td><strong title="'+safe(item.name)+'">'+safe(item.name)+'</strong></td><td>'+safe(item.department||'—')+'</td><td>'+safe(item.position||'—')+'</td><td class="is-number is-money">'+model.money(item.fixed_salary_minor)+'</td><td class="is-number is-money">'+model.money(item.social_base_minor)+'</td><td class="is-number is-money">'+model.money(item.housing_base_minor)+'</td><td>'+tag(statusLabel(item.status),statusTone(item.status))+'</td><td>'+safe(item.operator||'—')+'</td><td><span class="oms-v1__row-actions"><button type="button" data-detail="'+item.id+'">详情</button><button type="button" data-edit="'+item.id+'">编辑</button></span></td></tr>').join(''):emptyRow(9,'暂无公司成员','新增成员后可生成工资表。');
+    body.innerHTML=items.length?items.slice(range.start,range.end).map(item=>{const salary=item.compensation_configured===false?'未配置':model.money(item.fixed_salary_minor),social=item.compensation_configured===false?'未配置':model.money(item.social_base_minor),housing=item.compensation_configured===false?'未配置':model.money(item.housing_base_minor);return '<tr><td><strong title="'+safe(item.name)+'">'+safe(item.name)+'</strong></td><td>'+safe(item.department||'—')+'</td><td>'+safe(item.position||'—')+'</td><td class="is-number is-money">'+salary+'</td><td class="is-number is-money">'+social+'</td><td class="is-number is-money">'+housing+'</td><td>'+tag(statusLabel(item.status),statusTone(item.status))+'</td><td>'+safe(item.operator||'—')+'</td><td><span class="oms-v1__row-actions"><button type="button" data-detail="'+item.id+'">详情</button><button type="button" data-edit="'+item.id+'">编辑</button></span></td></tr>'}).join(''):emptyRow(9,'暂无公司成员','新增成员后可生成工资表。');
     for(const button of body.querySelectorAll('[data-detail]'))button.addEventListener('click',()=>openMemberDetail(data.members.find(item=>item.id===button.dataset.detail)));
     for(const button of body.querySelectorAll('[data-edit]'))button.addEventListener('click',()=>openMemberEditor(data.members.find(item=>item.id===button.dataset.edit)));
     bindSort('members',renderMembers);
@@ -204,4 +240,5 @@
   for(const select of root.querySelectorAll('[data-internal-finance-type],[data-internal-finance-status]'))select.addEventListener('change',()=>{view.pages.finance=1;view.selectedFinance.clear();renderFinance()});
 
   renderMembers();renderPayroll();renderFinance();
+  if(ownerMembers)void loadOwnerMembers();
 })();

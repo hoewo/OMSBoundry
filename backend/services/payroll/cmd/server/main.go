@@ -10,6 +10,8 @@ import (
 	"omsbizfoundry/payroll/internal/database"
 	"omsbizfoundry/payroll/internal/httpserver"
 	domain "omsbizfoundry/payroll/internal/payroll"
+	"omsbizfoundry/payroll/internal/personreference"
+	workloadidentity "omsbizfoundry/workload-identity"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,7 +47,28 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	service, _ := domain.NewService(store)
+	var personReferences domain.PersonReferencePort
+	if cfg.PeopleBaseURL != "" && cfg.IdentityProvider == "iam" {
+		credentials, credentialErr := workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
+		if credentialErr != nil {
+			return credentialErr
+		}
+		personReferences, err = personreference.NewHTTPValidator(cfg.PeopleBaseURL, "", credentials, cfg.ReferenceTimeout)
+	} else if cfg.PeopleBaseURL != "" {
+		personReferences, err = personreference.NewHTTPValidator(cfg.PeopleBaseURL, cfg.PeopleAccessToken, nil, cfg.ReferenceTimeout)
+	}
+	if err != nil {
+		return err
+	}
+	var service *domain.Service
+	if personReferences == nil {
+		service, err = domain.NewService(store)
+	} else {
+		service, err = domain.NewService(store, personReferences)
+	}
+	if err != nil {
+		return err
+	}
 	var authenticator auth.Authenticator
 	if cfg.IdentityProvider == "template" {
 		authenticator, err = auth.NewTemplateProvider(cfg.TemplateTenantID, cfg.TemplateSubjectID, cfg.TemplateDisplayName, cfg.TemplateAccessToken)

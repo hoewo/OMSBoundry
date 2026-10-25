@@ -151,18 +151,20 @@ type applicationPresentation struct {
 }
 
 var applicationPresentations = map[string]applicationPresentation{
-	"project-workspace":      {Title: "项目管理", Description: "项目列表、立项、责任分工与项目资料", Glyph: "项", Section: "project"},
-	"business-engagement":    {Title: "经营管理", Description: "经营方式、承接材料与业务进度", Glyph: "经", Section: "project"},
-	"contract-ledger":        {Title: "合同管理", Description: "合同当前状态、签约主体与历史版本", Glyph: "合", Section: "operation"},
-	"billing-invoice":        {Title: "开票管理", Description: "开票登记、金额与项目来源追溯", Glyph: "票", Section: "operation"},
-	"money-flow-ledger":      {Title: "资金台账", Description: "应收应付、实际收付、核销与余额", Glyph: "款", Section: "operation"},
-	"production-operations":  {Title: "生产管理", Description: "设计阶段、负责人、成果与进度", Glyph: "产", Section: "production"},
-	"approval-audit-results": {Title: "批复与审计", Description: "批复、审计结果及不可变纠正历史", Glyph: "审", Section: "production"},
-	"cost-outsourcing":       {Title: "成本与委外", Description: "项目成本、外委承接与交付状态", Glyph: "本", Section: "production"},
-	"bonus-distribution":     {Title: "奖金分配", Description: "经营与生产奖池、分配与发布记录", Glyph: "奖", Section: "production"},
-	"party-directory":        {Title: "主体管理", Description: "客户、合作方及其他业务主体档案", Glyph: "主", Section: "resource"},
-	"people-groups":          {Title: "人员与组织", Description: "人员、小组、成员关系与能力画像", Glyph: "人", Section: "resource"},
-	"evidence-service":       {Title: "项目资料管理", Description: "文件版本、业务引用与授权下载", Glyph: "资", Section: "resource"},
+	"project-workspace":         {Title: "项目管理", Description: "项目列表、立项、责任分工与项目资料", Glyph: "项", Section: "project"},
+	"business-engagement":       {Title: "经营管理", Description: "经营方式、承接材料与业务进度", Glyph: "经", Section: "project"},
+	"contract-ledger":           {Title: "合同管理", Description: "合同当前状态、签约主体与历史版本", Glyph: "合", Section: "operation"},
+	"billing-invoice":           {Title: "开票管理", Description: "开票登记、金额与项目来源追溯", Glyph: "票", Section: "operation"},
+	"money-flow-ledger":         {Title: "资金台账", Description: "应收应付、实际收付、核销与余额", Glyph: "款", Section: "operation"},
+	"production-operations":     {Title: "生产管理", Description: "设计阶段、负责人、成果与进度", Glyph: "产", Section: "production"},
+	"approval-audit-results":    {Title: "批复与审计", Description: "批复、审计结果及不可变纠正历史", Glyph: "审", Section: "production"},
+	"cost-outsourcing":          {Title: "成本与委外", Description: "项目成本、外委承接与交付状态", Glyph: "本", Section: "production"},
+	"bonus-distribution":        {Title: "奖金分配", Description: "经营与生产奖池、分配与发布记录", Glyph: "奖", Section: "production"},
+	"party-directory":           {Title: "主体管理", Description: "客户、合作方及其他业务主体档案", Glyph: "主", Section: "resource"},
+	"people-groups":             {Title: "人员与组织", Description: "人员、小组、成员关系与能力画像", Glyph: "人", Section: "resource"},
+	"payroll":                   {Title: "工资管理", Description: "薪酬档案、工资账户、缴费方案与工资批次", Glyph: "薪", Section: "resource"},
+	"internal-finance-requests": {Title: "财务申请", Description: "报销与付款申请的草稿、处理与支付确认", Glyph: "财", Section: "operation"},
+	"evidence-service":          {Title: "项目资料管理", Description: "文件版本、业务引用与授权下载", Glyph: "资", Section: "resource"},
 }
 
 func presentationFor(id string) applicationPresentation {
@@ -440,7 +442,7 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-pagination.js?v=20261022.6" defer></script>
 <script src="assets/oms-phase1.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
-<script src="assets/oms-phase1-internal.js?v=20261023.4" defer></script>
+<script src="assets/oms-phase1-internal.js?v=20261025.1" defer></script>
 {{else}}<div class="ant-layout app-shell">
 <aside class="ant-layout-sider app-shell__sider"><div class="app-sidebar"><div class="app-sidebar__topbar"><a class="app-sidebar__brand" href="/" aria-label="返回 OMS 一期"><img src="assets/jinghong-logo.webp" alt="旧版项目管理系统 Logo" class="app-sidebar__brand-logo"><span class="app-sidebar__brand-copy"><span class="app-sidebar__brand-title">旧版项目管理</span><span class="app-sidebar__brand-subtitle">历史功能与原型对照</span></span></a><button class="app-sidebar__collapse-button" type="button" aria-label="收起侧边栏" data-sidebar-collapse>☰</button></div>
 <div class="app-sidebar__group-label">旧版功能</div><nav class="app-sidebar__nav" aria-label="旧版工作台导航">

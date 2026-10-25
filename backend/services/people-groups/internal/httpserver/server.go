@@ -29,6 +29,7 @@ type UseCases interface {
 	SetPersonIAMSubject(context.Context, peoplegroups.Actor, string, peoplegroups.SetIAMSubjectInput) (peoplegroups.Person, error)
 	ListPersons(context.Context, string) ([]peoplegroups.Person, error)
 	GetPerson(context.Context, string, string) (peoplegroups.Person, error)
+	ListEmploymentEvents(context.Context, string, string) ([]peoplegroups.EmploymentEvent, error)
 	CreateDefinition(context.Context, peoplegroups.Actor, peoplegroups.DefinitionKind, peoplegroups.CreateDefinitionInput) (peoplegroups.Definition, error)
 	UpdateDefinition(context.Context, peoplegroups.Actor, peoplegroups.DefinitionKind, string, peoplegroups.UpdateDefinitionInput) (peoplegroups.Definition, error)
 	ListDefinitions(context.Context, string) ([]peoplegroups.Definition, error)
@@ -554,7 +555,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
 	segments := splitPath(path)
 	if p.ScopeKind == "resources" {
-		allowed := r.Method == http.MethodGet && len(segments) == 2 && ((segments[0] == "persons" && p.CanResource("person", segments[1])) || (segments[0] == "groups" && p.CanResource("group", segments[1])))
+		allowed := r.Method == http.MethodGet && ((len(segments) == 2 && ((segments[0] == "persons" && p.CanResource("person", segments[1])) || (segments[0] == "groups" && p.CanResource("group", segments[1])))) || (len(segments) == 3 && segments[0] == "persons" && segments[2] == "employment-history" && p.CanResource("person", segments[1])))
 		if !allowed {
 			writeProblem(w, http.StatusForbidden, "scope_denied", "凭证范围不包含该人员与编组资源")
 			return
@@ -588,6 +589,11 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && len(segments) == 2 {
 			value, err := s.useCases.GetPerson(r.Context(), p.TenantID, id)
 			s.writeResult(w, value, err)
+			return
+		}
+		if r.Method == http.MethodGet && len(segments) == 3 && segments[2] == "employment-history" {
+			values, err := s.useCases.ListEmploymentEvents(r.Context(), p.TenantID, id)
+			s.writeResult(w, values, err)
 			return
 		}
 		if r.Method == http.MethodPost && len(segments) == 3 {

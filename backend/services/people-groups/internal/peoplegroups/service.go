@@ -65,6 +65,14 @@ func (s *Service) CreatePerson(ctx context.Context, actor Actor, input CreatePer
 	if err != nil {
 		return Person{}, err
 	}
+	department, err := cleanOptional("department", input.Department, 100)
+	if err != nil {
+		return Person{}, err
+	}
+	positionTitle, err := cleanOptional("position_title", input.PositionTitle, 100)
+	if err != nil {
+		return Person{}, err
+	}
 	iamSubjectID, err := cleanUUID("iam_subject_id", input.IAMSubjectID, true)
 	if err != nil {
 		return Person{}, err
@@ -73,10 +81,17 @@ func (s *Service) CreatePerson(ctx context.Context, actor Actor, input CreatePer
 	if err != nil {
 		return Person{}, err
 	}
+	employmentStartDate := strings.TrimSpace(input.EmploymentStartDate)
+	if employmentStartDate == "" {
+		employmentStartDate = s.now().Format("2006-01-02")
+	}
+	if employmentStartDate, err = cleanDate("employment_start_date", employmentStartDate); err != nil {
+		return Person{}, err
+	}
 	fingerprint := fingerprintOf(struct {
-		ReferenceCode, DisplayName, IAMSubjectID, IAMSubjectStatus string
-		IAMSubjectRevision                                         int64
-	}{referenceCode, displayName, iamSubjectID, iamSubjectStatus, iamSubjectRevision})
+		ReferenceCode, DisplayName, Department, PositionTitle, EmploymentStartDate, IAMSubjectID, IAMSubjectStatus string
+		IAMSubjectRevision                                                                                         int64
+	}{referenceCode, displayName, department, positionTitle, employmentStartDate, iamSubjectID, iamSubjectStatus, iamSubjectRevision})
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return Person{}, err
@@ -92,11 +107,15 @@ func (s *Service) CreatePerson(ctx context.Context, actor Actor, input CreatePer
 		return Person{}, err
 	}
 	now := s.now()
-	_, err = tx.Exec(ctx, `INSERT INTO persons(id,tenant_id,reference_code,display_name,status,iam_subject_id,iam_subject_status,iam_subject_revision,revision,created_at,updated_at) VALUES($1,$2,NULLIF($3,''),$4,'active',NULLIF($5,'')::uuid,NULLIF($6,''),NULLIF($7,0),1,$8,$8)`, id, actor.TenantID, referenceCode, displayName, iamSubjectID, iamSubjectStatus, iamSubjectRevision, now)
+	_, err = tx.Exec(ctx, `INSERT INTO persons(id,tenant_id,reference_code,display_name,department,position_title,status,status_effective_date,iam_subject_id,iam_subject_status,iam_subject_revision,revision,created_at,updated_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,'active',$7::date,NULLIF($8,'')::uuid,NULLIF($9,''),NULLIF($10,0),1,$11,$11)`, id, actor.TenantID, referenceCode, displayName, department, positionTitle, employmentStartDate, iamSubjectID, iamSubjectStatus, iamSubjectRevision, now)
 	if err != nil {
 		return Person{}, translateWriteError(err)
 	}
-	if err := insertPersonRevision(ctx, tx, actor, Person{ID: id, TenantID: actor.TenantID, ReferenceCode: referenceCode, DisplayName: displayName, Status: "active", IAMSubjectID: iamSubjectID, IAMSubjectStatus: iamSubjectStatus, IAMSubjectRevision: iamSubjectRevision, Revision: 1, CreatedAt: now, UpdatedAt: now}, "created", now); err != nil {
+	created := Person{ID: id, TenantID: actor.TenantID, ReferenceCode: referenceCode, DisplayName: displayName, Department: department, PositionTitle: positionTitle, Status: "active", StatusEffectiveDate: employmentStartDate, IAMSubjectID: iamSubjectID, IAMSubjectStatus: iamSubjectStatus, IAMSubjectRevision: iamSubjectRevision, Revision: 1, CreatedAt: now, UpdatedAt: now}
+	if err := insertPersonRevision(ctx, tx, actor, created, "created", now); err != nil {
+		return Person{}, err
+	}
+	if err := insertEmploymentEvent(ctx, tx, actor, created, "hired", employmentStartDate, "", now); err != nil {
 		return Person{}, err
 	}
 	if err := insertAudit(ctx, tx, actor, "person.created", "person", id, map[string]any{"revision": 1}); err != nil {
@@ -121,11 +140,19 @@ func (s *Service) UpdatePersonProfile(ctx context.Context, actor Actor, personID
 		if err != nil {
 			return Person{}, nil, err
 		}
-		current.DisplayName, current.ReferenceCode = displayName, referenceCode
+		department, err := cleanOptional("department", input.Department, 100)
+		if err != nil {
+			return Person{}, nil, err
+		}
+		positionTitle, err := cleanOptional("position_title", input.PositionTitle, 100)
+		if err != nil {
+			return Person{}, nil, err
+		}
+		current.DisplayName, current.ReferenceCode, current.Department, current.PositionTitle = displayName, referenceCode, department, positionTitle
 		return current, fingerprintOf(struct {
-			Expected                   int64
-			ReferenceCode, DisplayName string
-		}{input.ExpectedRevision, referenceCode, displayName}), nil
+			Expected                                              int64
+			ReferenceCode, DisplayName, Department, PositionTitle string
+		}{input.ExpectedRevision, referenceCode, displayName, department, positionTitle}), nil
 	})
 }
 
@@ -135,11 +162,24 @@ func (s *Service) SetPersonStatus(ctx context.Context, actor Actor, personID str
 		if status != "active" && status != "inactive" {
 			return Person{}, nil, &ValidationError{Field: "status", Message: "status must be active or inactive"}
 		}
+		if status == current.Status {
+			return Person{}, nil, ErrConflict
+		}
+		effectiveDate, err := cleanDate("effective_date", input.EffectiveDate)
+		if err != nil {
+			return Person{}, nil, err
+		}
+		reason, err := cleanOptional("reason", input.Reason, 500)
+		if err != nil {
+			return Person{}, nil, err
+		}
 		current.Status = status
+		current.StatusEffectiveDate = effectiveDate
+		current.employmentReason = reason
 		return current, fingerprintOf(struct {
-			Expected int64
-			Status   string
-		}{input.ExpectedRevision, status}), nil
+			Expected                      int64
+			Status, EffectiveDate, Reason string
+		}{input.ExpectedRevision, status, effectiveDate, reason}), nil
 	})
 }
 
@@ -209,7 +249,7 @@ func (s *Service) updatePerson(ctx context.Context, actor Actor, personID, opera
 	} else if found {
 		return s.getPerson(ctx, tx, actor.TenantID, receipt.ResultID)
 	}
-	if next.ReferenceCode == current.ReferenceCode && next.DisplayName == current.DisplayName && next.Status == current.Status && next.IAMSubjectID == current.IAMSubjectID && next.IAMSubjectStatus == current.IAMSubjectStatus && next.IAMSubjectRevision == current.IAMSubjectRevision {
+	if next.ReferenceCode == current.ReferenceCode && next.DisplayName == current.DisplayName && next.Department == current.Department && next.PositionTitle == current.PositionTitle && next.Status == current.Status && next.IAMSubjectID == current.IAMSubjectID && next.IAMSubjectStatus == current.IAMSubjectStatus && next.IAMSubjectRevision == current.IAMSubjectRevision {
 		return Person{}, ErrConflict
 	}
 	if current.Revision != expected {
@@ -218,12 +258,21 @@ func (s *Service) updatePerson(ctx context.Context, actor Actor, personID, opera
 	now := s.now()
 	next.Revision = current.Revision + 1
 	next.UpdatedAt = now
-	_, err = tx.Exec(ctx, `UPDATE persons SET reference_code=NULLIF($1,''),display_name=$2,status=$3,iam_subject_id=NULLIF($4,'')::uuid,iam_subject_status=NULLIF($5,''),iam_subject_revision=NULLIF($6,0),revision=$7,updated_at=$8 WHERE tenant_id=$9 AND id=$10 AND revision=$11`, next.ReferenceCode, next.DisplayName, next.Status, next.IAMSubjectID, next.IAMSubjectStatus, next.IAMSubjectRevision, next.Revision, now, actor.TenantID, personID, expected)
+	_, err = tx.Exec(ctx, `UPDATE persons SET reference_code=NULLIF($1,''),display_name=$2,department=$3,position_title=$4,status=$5,status_effective_date=$6::date,iam_subject_id=NULLIF($7,'')::uuid,iam_subject_status=NULLIF($8,''),iam_subject_revision=NULLIF($9,0),revision=$10,updated_at=$11 WHERE tenant_id=$12 AND id=$13 AND revision=$14`, next.ReferenceCode, next.DisplayName, next.Department, next.PositionTitle, next.Status, next.StatusEffectiveDate, next.IAMSubjectID, next.IAMSubjectStatus, next.IAMSubjectRevision, next.Revision, now, actor.TenantID, personID, expected)
 	if err != nil {
 		return Person{}, translateWriteError(err)
 	}
 	if err := insertPersonRevision(ctx, tx, actor, next, eventKind, now); err != nil {
 		return Person{}, err
+	}
+	if eventKind == "status_changed" {
+		event := "offboarded"
+		if next.Status == "active" {
+			event = "rehired"
+		}
+		if err := insertEmploymentEvent(ctx, tx, actor, next, event, next.StatusEffectiveDate, next.employmentReason, now); err != nil {
+			return Person{}, err
+		}
 	}
 	if err := s.bumpGroupsForPerson(ctx, tx, actor, personID, now); err != nil {
 		return Person{}, err
@@ -1069,6 +1118,22 @@ func (s *Service) ListPersons(ctx context.Context, tenantID string) ([]Person, e
 func (s *Service) GetPerson(ctx context.Context, tenantID, id string) (Person, error) {
 	return s.getPerson(ctx, s.pool, tenantID, id)
 }
+func (s *Service) ListEmploymentEvents(ctx context.Context, tenantID, personID string) ([]EmploymentEvent, error) {
+	rows, err := s.pool.Query(ctx, `SELECT person_id::text,sequence,person_revision,event_kind,effective_date::text,reason,department,position_title,occurred_at FROM person_employment_events WHERE tenant_id=$1 AND person_id=$2 ORDER BY sequence`, tenantID, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []EmploymentEvent{}
+	for rows.Next() {
+		var value EmploymentEvent
+		if err := rows.Scan(&value.PersonID, &value.Sequence, &value.PersonRevision, &value.EventKind, &value.EffectiveDate, &value.Reason, &value.Department, &value.PositionTitle, &value.OccurredAt); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
 func (s *Service) ListDefinitions(ctx context.Context, tenantID string) ([]Definition, error) {
 	rows, err := s.pool.Query(ctx, definitionSelect+` WHERE tenant_id=$1 ORDER BY kind,key`, tenantID)
 	if err != nil {
@@ -1136,7 +1201,7 @@ func (s *Service) GetSnapshot(ctx context.Context, tenantID, groupID string, rev
 	return scanSnapshot(s.pool.QueryRow(ctx, `SELECT id::text,tenant_id::text,group_id::text,group_revision,payload,sha256,created_at FROM roster_snapshots WHERE tenant_id=$1 AND group_id=$2 AND group_revision=$3`, tenantID, groupID, revision))
 }
 
-const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,status,COALESCE(iam_subject_id::text,''),COALESCE(iam_subject_status,''),COALESCE(iam_subject_revision,0),revision,created_at,updated_at FROM persons`
+const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,department,position_title,status,status_effective_date::text,COALESCE(iam_subject_id::text,''),COALESCE(iam_subject_status,''),COALESCE(iam_subject_revision,0),revision,created_at,updated_at FROM persons`
 const definitionSelect = `SELECT kind,key,display_name,description,status,revision,created_at,updated_at FROM definitions`
 const groupSelect = `SELECT id::text,tenant_id::text,group_type_key,name,purpose,status,revision,created_at,updated_at FROM groups`
 
@@ -1148,7 +1213,7 @@ func (s *Service) lockPerson(ctx context.Context, tx pgx.Tx, tenantID, id string
 }
 func scanPerson(row pgx.Row) (Person, error) {
 	var p Person
-	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Status, &p.IAMSubjectID, &p.IAMSubjectStatus, &p.IAMSubjectRevision, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Department, &p.PositionTitle, &p.Status, &p.StatusEffectiveDate, &p.IAMSubjectID, &p.IAMSubjectStatus, &p.IAMSubjectRevision, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return Person{}, translateReadError(err)
 	}
 	return p, nil
@@ -1307,7 +1372,15 @@ func requireActiveDefinition(ctx context.Context, q queryer, tenant string, kind
 	return nil
 }
 func insertPersonRevision(ctx context.Context, tx pgx.Tx, actor Actor, p Person, event string, at time.Time) error {
-	_, err := tx.Exec(ctx, `INSERT INTO person_revisions(tenant_id,person_id,revision,event_kind,reference_code,display_name,status,iam_subject_id,iam_subject_status,iam_subject_revision,occurred_at,actor_kind,actor_id,actor_display_name) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,NULLIF($8,'')::uuid,NULLIF($9,''),NULLIF($10,0),$11,$12,$13,$14)`, actor.TenantID, p.ID, p.Revision, event, p.ReferenceCode, p.DisplayName, p.Status, p.IAMSubjectID, p.IAMSubjectStatus, p.IAMSubjectRevision, at, actor.Kind, actor.ID, actor.DisplayName)
+	_, err := tx.Exec(ctx, `INSERT INTO person_revisions(tenant_id,person_id,revision,event_kind,reference_code,display_name,department,position_title,status,status_effective_date,iam_subject_id,iam_subject_status,iam_subject_revision,occurred_at,actor_kind,actor_id,actor_display_name) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,$8,$9,$10::date,NULLIF($11,'')::uuid,NULLIF($12,''),NULLIF($13,0),$14,$15,$16,$17)`, actor.TenantID, p.ID, p.Revision, event, p.ReferenceCode, p.DisplayName, p.Department, p.PositionTitle, p.Status, p.StatusEffectiveDate, p.IAMSubjectID, p.IAMSubjectStatus, p.IAMSubjectRevision, at, actor.Kind, actor.ID, actor.DisplayName)
+	return err
+}
+func insertEmploymentEvent(ctx context.Context, tx pgx.Tx, actor Actor, p Person, event, effectiveDate, reason string, at time.Time) error {
+	var sequence int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(sequence),0)+1 FROM person_employment_events WHERE tenant_id=$1 AND person_id=$2`, actor.TenantID, p.ID).Scan(&sequence); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO person_employment_events(tenant_id,person_id,sequence,person_revision,event_kind,effective_date,reason,department,position_title,occurred_at,actor_kind,actor_id,actor_display_name) VALUES($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13)`, actor.TenantID, p.ID, sequence, p.Revision, event, effectiveDate, reason, p.Department, p.PositionTitle, at, actor.Kind, actor.ID, actor.DisplayName)
 	return err
 }
 func insertDefinitionRevision(ctx context.Context, tx pgx.Tx, actor Actor, d Definition, event string, at time.Time) error {

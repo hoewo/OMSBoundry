@@ -41,17 +41,33 @@ type Actor struct {
 }
 
 type Person struct {
-	ID                 string    `json:"id"`
-	TenantID           string    `json:"tenant_id"`
-	ReferenceCode      string    `json:"reference_code,omitempty"`
-	DisplayName        string    `json:"display_name"`
-	Status             string    `json:"status"`
-	IAMSubjectID       string    `json:"iam_subject_id,omitempty"`
-	IAMSubjectStatus   string    `json:"iam_subject_status,omitempty"`
-	IAMSubjectRevision int64     `json:"iam_subject_revision,omitempty"`
-	Revision           int64     `json:"revision"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                  string    `json:"id"`
+	TenantID            string    `json:"tenant_id"`
+	ReferenceCode       string    `json:"reference_code,omitempty"`
+	DisplayName         string    `json:"display_name"`
+	Department          string    `json:"department,omitempty"`
+	PositionTitle       string    `json:"position_title,omitempty"`
+	Status              string    `json:"status"`
+	StatusEffectiveDate string    `json:"status_effective_date"`
+	IAMSubjectID        string    `json:"iam_subject_id,omitempty"`
+	IAMSubjectStatus    string    `json:"iam_subject_status,omitempty"`
+	IAMSubjectRevision  int64     `json:"iam_subject_revision,omitempty"`
+	Revision            int64     `json:"revision"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	employmentReason    string
+}
+
+type EmploymentEvent struct {
+	PersonID       string    `json:"person_id"`
+	Sequence       int64     `json:"sequence"`
+	PersonRevision int64     `json:"person_revision"`
+	EventKind      string    `json:"event_kind"`
+	EffectiveDate  string    `json:"effective_date"`
+	Reason         string    `json:"reason,omitempty"`
+	Department     string    `json:"department,omitempty"`
+	PositionTitle  string    `json:"position_title,omitempty"`
+	OccurredAt     time.Time `json:"occurred_at"`
 }
 
 type IAMSubjectReference struct {
@@ -148,21 +164,28 @@ type RosterSnapshot struct {
 }
 
 type CreatePersonInput struct {
-	CommandID     string `json:"command_id,omitempty"`
-	ReferenceCode string `json:"reference_code,omitempty"`
-	DisplayName   string `json:"display_name"`
-	IAMSubjectID  string `json:"iam_subject_id,omitempty"`
+	CommandID           string `json:"command_id,omitempty"`
+	ReferenceCode       string `json:"reference_code,omitempty"`
+	DisplayName         string `json:"display_name"`
+	Department          string `json:"department,omitempty"`
+	PositionTitle       string `json:"position_title,omitempty"`
+	EmploymentStartDate string `json:"employment_start_date,omitempty"`
+	IAMSubjectID        string `json:"iam_subject_id,omitempty"`
 }
 type UpdatePersonProfileInput struct {
 	CommandID        string `json:"command_id,omitempty"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	ReferenceCode    string `json:"reference_code,omitempty"`
 	DisplayName      string `json:"display_name"`
+	Department       string `json:"department,omitempty"`
+	PositionTitle    string `json:"position_title,omitempty"`
 }
 type SetPersonStatusInput struct {
 	CommandID        string `json:"command_id,omitempty"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	Status           string `json:"status"`
+	EffectiveDate    string `json:"effective_date"`
+	Reason           string `json:"reason,omitempty"`
 }
 type SetIAMSubjectInput struct {
 	CommandID        string `json:"command_id,omitempty"`

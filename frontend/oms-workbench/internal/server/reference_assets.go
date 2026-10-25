@@ -96,8 +96,9 @@ var omsPhase1JS string
 //go:embed oms_phase1_internal_model.js
 var omsPhase1InternalModelJS string
 
-// omsPhase1Internal is a local-only interaction candidate for members, payroll
-// and internal expense requests. It persists only in the current browser.
+// omsPhase1Internal composes People & Groups and Payroll for member profiles.
+// Payroll-run and internal expense-request candidates remain browser-local
+// until their later vertical slices replace those views.
 //
 //go:embed oms_phase1_internal.js
 var omsPhase1InternalJS string

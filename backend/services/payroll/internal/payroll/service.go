@@ -22,13 +22,23 @@ type Store interface {
 	Get(context.Context, string, string) (Run, error)
 	List(context.Context, string) ([]Run, error)
 }
-type Service struct{ store Store }
+type Service struct {
+	store            Store
+	personReferences PersonReferencePort
+}
 
-func NewService(store Store) (*Service, error) {
+func NewService(store Store, references ...PersonReferencePort) (*Service, error) {
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
-	return &Service{store: store}, nil
+	if len(references) > 1 {
+		return nil, fmt.Errorf("at most one person reference port is allowed")
+	}
+	service := &Service{store: store}
+	if len(references) == 1 {
+		service.personReferences = references[0]
+	}
+	return service, nil
 }
 func (s *Service) Ping(ctx context.Context) error { return s.store.Ping(ctx) }
 func (s *Service) Create(ctx context.Context, actor Actor, input CreateInput) (Run, error) {

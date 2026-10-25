@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P3 实现基线（BF-238）：People & Groups 已拥有成员基础资料、部门／岗位、状态生效日期及新增／离职／重新入职事件历史；Payroll 已拥有按 Person ID 挂载、按月份生效的固定工资／社保基数／公积金基数档案、版本化工资账户，以及带地区、权威来源、核对时间、基数上下限、个人／单位万分比和舍入规则的标准／租户自定义缴费方案。两个 Owner 分库保存历史，People 状态变化不改写 Payroll，离职也不成为 Payroll 资格规则；普通账户读取始终脱敏。Workbench 成员管理改为分别调用两个 Owner，并显式处理部分成功。本地 P3 门禁通过，P4 工资生成、计算、同步与实际发放尚未实施，D1／公网未发布。[P3 报告](./reports/oms-v1-iteration-p3-member-payroll-profiles-validation-20261025.md)
+
 2026-10-25 P2 实现基线：`Internal Finance Requests` 与 `Payroll` 是两个独立事实 Owner，而不是 Workbench 浏览器状态或同一个“内部管理后端”。两者各自拥有数据库、ID、Tenant、revision、命令幂等和审计；第一条可运行切片分别是报销／付款申请草稿与月度工资批次草稿。Owner 从可信 IAM 凭证取得 Actor、Tenant、Capability 和资源范围，并在资源层执行本人／租户授权；当前投影必须与最新不可变 revision 一致。P2 只建立演进和恢复骨架，成员薪酬、工资计算／发放、财务附件／审批／Money 连接仍待 P3～P7。[P2 报告](./reports/oms-v1-iteration-p2-owner-skeleton-validation-20261025.md)
 
 2026-10-25 P1 实现基线：同一 OMS1 服务域允许多个组织共享 IAM 和各 Owner 进程，Tenant 由登录账号／已验证凭证唯一确定，首版无租户切换。平台运维创建 Tenant 与首管理员；租户管理员管理本租户账号和能力。IAM Subject 与 People Person 是两个独立稳定身份，通过租户内唯一、带状态与 revision 的版本化引用关联；账号停用不删除 Person，人员状态也不改写 IAM 账号。业务服务和工作负载调用必须使用请求 Tenant，不得使用浏览器参数或部署默认 Tenant 扩权。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)

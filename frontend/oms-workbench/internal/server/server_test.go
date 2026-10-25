@@ -622,7 +622,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-subject-id="88888888-8888-4888-8888-888888888888"`,
 		"体验版数据仅保存在当前登录账号的本浏览器中",
 		"assets/oms-phase1-internal-model.js?v=20261023.2",
-		"assets/oms-phase1-internal.js?v=20261023.4",
+		"assets/oms-phase1-internal.js?v=20261025.1",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -687,7 +687,20 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261024.1", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261023.4", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	ownerAsset := httptest.NewRecorder()
+	handler.ServeHTTP(ownerAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-internal.js", nil))
+	for _, marker := range []string{
+		"ownerAPI.api('people-groups','/api/v1/persons')",
+		"ownerAPI.api('payroll','/api/v1/compensation-profiles')",
+		"ownerAPI.api('payroll','/api/v1/payment-profiles')",
+		"person=member?{...member,revision:member.person_revision}:null",
+		"成员基础资料已保存，但薪酬或账户档案未全部完成",
+	} {
+		if ownerAsset.Code != http.StatusOK || !strings.Contains(ownerAsset.Body.String(), marker) {
+			t.Fatalf("OMS P3 owner composition asset missing %q status=%d", marker, ownerAsset.Code)
+		}
+	}
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261024.1", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {

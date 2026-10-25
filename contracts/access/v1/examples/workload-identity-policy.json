@@ -294,6 +294,19 @@
       ]
     },
     {
+      "id": "payroll",
+      "subject_id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "display_name": "Payroll",
+      "public_keys_path": "/workload-public/payroll.json",
+      "permissions": [
+        {
+          "audience": "people-groups",
+          "action": "people-groups.person.reference.read",
+          "resource_types": ["person"]
+        }
+      ]
+    },
+    {
       "id": "people-groups",
       "subject_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       "display_name": "People & Groups",

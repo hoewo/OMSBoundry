@@ -1,0 +1,138 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+suffix="$(date +%s)-$$"
+network="oms-p3-profiles-$suffix"
+postgres="oms-p3-postgres-$suffix"
+people_image="oms-p3-people:$suffix"
+payroll_image="oms-p3-payroll:$suffix"
+people_server="oms-p3-people-$suffix"
+payroll_server="oms-p3-payroll-$suffix"
+temporary=$(mktemp -d)
+
+cleanup() {
+  docker rm -f "$people_server" "$payroll_server" "$postgres" >/dev/null 2>&1 || true
+  docker network rm "$network" >/dev/null 2>&1 || true
+  docker image rm "$people_image" "$payroll_image" >/dev/null 2>&1 || true
+  case "$temporary" in /tmp/*|/private/tmp/*|/var/folders/*) rm -rf "$temporary";; esac
+}
+trap cleanup EXIT HUP INT TERM
+
+for command_name in docker curl jq; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 1; }
+done
+
+docker network create "$network" >/dev/null
+docker run -d --name "$postgres" --network "$network" --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=512m \
+  -e POSTGRES_PASSWORD=postgres postgres:18.6-alpine >/dev/null
+ready=false
+for _ in $(seq 1 60); do
+  if docker exec "$postgres" pg_isready -U postgres >/dev/null 2>&1; then ready=true; break; fi
+  sleep 1
+done
+[ "$ready" = true ] || { docker logs "$postgres" >&2; exit 1; }
+docker exec "$postgres" createdb -U postgres people
+docker exec "$postgres" createdb -U postgres payroll
+
+docker build -q -f "$repo/deployments/d1/docker/Dockerfile.people" -t "$people_image" "$repo" >/dev/null
+docker build -q -f "$repo/deployments/d1/docker/Dockerfile.payroll" -t "$payroll_image" "$repo" >/dev/null
+
+people_database="postgres://postgres:postgres@$postgres:5432/people?sslmode=disable"
+payroll_database="postgres://postgres:postgres@$postgres:5432/payroll?sslmode=disable"
+tenant="11111111-1111-4111-8111-111111111111"
+subject="22222222-2222-4222-8222-222222222222"
+people_token="p3-people-template-token-123456"
+payroll_token="p3-payroll-template-token-123456"
+
+docker run --rm --network "$network" -e DATABASE_URL="$people_database" -e IDENTITY_PROVIDER=template \
+  -e TEMPLATE_TENANT_ID="$tenant" -e TEMPLATE_SUBJECT_ID="$subject" -e TEMPLATE_DISPLAY_NAME='P3 People Operator' \
+  -e TEMPLATE_ACCESS_TOKEN="$people_token" "$people_image" /app/ops migrate >/dev/null
+docker run --rm --network "$network" -e DATABASE_URL="$payroll_database" "$payroll_image" /app/ops migrate >/dev/null
+
+docker run -d --name "$people_server" --network "$network" -p 127.0.0.1::8084 \
+  -e HTTP_ADDR=:8084 -e DATABASE_URL="$people_database" -e MIGRATION_MODE=verify -e IDENTITY_PROVIDER=template \
+  -e TEMPLATE_TENANT_ID="$tenant" -e TEMPLATE_SUBJECT_ID="$subject" -e TEMPLATE_DISPLAY_NAME='P3 People Operator' \
+  -e TEMPLATE_ACCESS_TOKEN="$people_token" "$people_image" >/dev/null
+people_port=$(docker port "$people_server" 8084/tcp | sed 's/.*://')
+people_base="http://127.0.0.1:$people_port"
+
+docker run -d --name "$payroll_server" --network "$network" -p 127.0.0.1::8093 \
+  -e HTTP_ADDR=:8093 -e DATABASE_URL="$payroll_database" -e MIGRATION_MODE=verify -e IDENTITY_PROVIDER=template \
+  -e TEMPLATE_TENANT_ID="$tenant" -e TEMPLATE_SUBJECT_ID="$subject" -e TEMPLATE_DISPLAY_NAME='P3 Payroll Operator' \
+  -e TEMPLATE_ACCESS_TOKEN="$payroll_token" -e PEOPLE_BASE_URL="http://$people_server:8084" \
+  -e PEOPLE_ACCESS_TOKEN="$people_token" "$payroll_image" >/dev/null
+payroll_port=$(docker port "$payroll_server" 8093/tcp | sed 's/.*://')
+payroll_base="http://127.0.0.1:$payroll_port"
+
+for pair in "$people_base $people_server" "$payroll_base $payroll_server"; do
+  base=${pair%% *}
+  container=${pair#* }
+  ready=false
+  for _ in $(seq 1 60); do
+    if curl -fsS "$base/health/ready" >/dev/null 2>&1; then ready=true; break; fi
+    sleep 1
+  done
+  [ "$ready" = true ] || { docker logs "$container" >&2; exit 1; }
+done
+
+[ "$(curl -sS -o /dev/null -w '%{http_code}' "$people_base/api/v1/persons")" = 401 ]
+[ "$(curl -sS -o /dev/null -w '%{http_code}' "$payroll_base/api/v1/compensation-profiles")" = 401 ]
+
+person=$(curl -fsS -X POST "$people_base/api/v1/persons" \
+  -H "Authorization: Bearer $people_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","reference_code":"P3-001","display_name":"P3成员甲","department":"产品部","position_title":"产品经理","employment_start_date":"2026-01-10"}')
+person_id=$(printf '%s' "$person" | jq -er 'select(.revision == 1 and .status == "active" and .department == "产品部") | .id')
+
+missing_status=$(curl -sS -o "$temporary/missing-payment.json" -w '%{http_code}' \
+  "$payroll_base/api/v1/payment-profiles/$person_id" -H "Authorization: Bearer $payroll_token")
+[ "$missing_status" = 404 ]
+
+curl -fsS -X PUT "$payroll_base/api/v1/compensation-profiles/$person_id" \
+  -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1","expected_revision":0,"effective_month":"2026-10","fixed_salary_minor":1000000,"social_insurance_base_minor":800000,"housing_fund_base_minor":800000,"reason":"首次建档"}' \
+  | jq -e '.revision == 1 and .person_source_revision == 1 and .fixed_salary_minor == 1000000' >/dev/null
+
+payment=$(curl -fsS -X PUT "$payroll_base/api/v1/payment-profiles/$person_id" \
+  -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"cccccccc-cccc-4ccc-8ccc-ccccccccccc1","expected_revision":0,"account_name":"P3成员甲","bank_name":"测试银行","account_number":"6222021234567890","status":"active","effective_month":"2026-10","reason":"首次建档","confirmed":true}')
+printf '%s' "$payment" | jq -e '.revision == 1 and .masked_account_number == "**** **** **** 7890" and (has("account_number") | not)' >/dev/null
+
+offboard=$(curl -fsS -X POST "$people_base/api/v1/persons/$person_id/status" \
+  -H "Authorization: Bearer $people_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2","expected_revision":1,"status":"inactive","effective_date":"2026-08-31","reason":"离职"}')
+printf '%s' "$offboard" | jq -e '.revision == 2 and .status == "inactive"' >/dev/null
+
+# Inactive is a People display state, not a Payroll eligibility rule.
+curl -fsS -X PUT "$payroll_base/api/v1/compensation-profiles/$person_id" \
+  -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2","expected_revision":1,"effective_month":"2026-11","fixed_salary_minor":1050000,"social_insurance_base_minor":800000,"housing_fund_base_minor":800000,"reason":"离职结算调整"}' \
+  | jq -e '.revision == 2 and .person_source_revision == 2' >/dev/null
+
+rehire=$(curl -fsS -X POST "$people_base/api/v1/persons/$person_id/status" \
+  -H "Authorization: Bearer $people_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3","expected_revision":2,"status":"active","effective_date":"2026-10-01","reason":"重新入职"}')
+printf '%s' "$rehire" | jq -e '.revision == 3 and .status == "active"' >/dev/null
+curl -fsS "$people_base/api/v1/persons/$person_id/employment-history" -H "Authorization: Bearer $people_token" \
+  | jq -e 'length == 3 and .[0].event_kind == "hired" and .[1].event_kind == "offboarded" and .[2].event_kind == "rehired"' >/dev/null
+
+# The People rehire revision does not rewrite Payroll's captured revision.
+curl -fsS "$payroll_base/api/v1/compensation-profiles/$person_id" -H "Authorization: Bearer $payroll_token" \
+  | jq -e '.revision == 2 and .person_source_revision == 2' >/dev/null
+
+payment2=$(curl -fsS -X PUT "$payroll_base/api/v1/payment-profiles/$person_id" \
+  -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"cccccccc-cccc-4ccc-8ccc-ccccccccccc2","expected_revision":1,"account_name":"P3成员甲","bank_name":"测试银行","account_number":"6222029876543210","status":"active","effective_month":"2026-11","reason":"换卡","confirmed":true}')
+printf '%s' "$payment2" | jq -e '.revision == 2 and .masked_account_number == "**** **** **** 3210" and .person_source_revision == 3' >/dev/null
+curl -fsS "$payroll_base/api/v1/payment-profiles/$person_id/history" -H "Authorization: Bearer $payroll_token" \
+  | jq -e 'length == 2 and .[0].masked_account_number == "**** **** **** 7890" and .[1].masked_account_number == "**** **** **** 3210" and (map(has("account_number")) | any | not)' >/dev/null
+
+unknown_status=$(curl -sS -o "$temporary/unknown-person.json" -w '%{http_code}' -X PUT \
+  "$payroll_base/api/v1/compensation-profiles/99999999-9999-4999-8999-999999999999" \
+  -H "Authorization: Bearer $payroll_token" -H 'Content-Type: application/json' \
+  -d '{"command_id":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","expected_revision":0,"effective_month":"2026-10","fixed_salary_minor":1,"social_insurance_base_minor":1,"housing_fund_base_minor":1,"reason":"未知成员"}')
+[ "$unknown_status" = 409 ]
+jq -e '.code == "PERSON_REFERENCE_INVALID" and .retryable == false' "$temporary/unknown-person.json" >/dev/null
+
+echo 'P3 member/payroll profile acceptance passed: separate Owners + lifecycle + effective profiles + missing account + masking/history + stable snapshots'
