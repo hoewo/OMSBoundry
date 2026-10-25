@@ -43,7 +43,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-264 增加显式确认后才可执行的 C9 原项目联合备份／清卷恢复门禁，并在恢复后核对十五库指纹、Evidence 字节、C7／C8 稳定重放和 Open API 审计续写；离线正反例通过，真实 D1 尚未执行。
 - BF-265 增加 C10 Feedback V2 真实旅程门禁：绑定 C0／C1／C9，两个 Tenant 各两条会话，没有开发者回复时保持 `PENDING`，回复后核对逐会话未读／已读隔离；离线 pending／resume 与证据负例通过，真实 project 115 尚未执行。
 - BF-266 增加随 release bundle 交付的 `run-c0-c10` 与 `verify-run-c0-c10`：总入口复用已有 C0～C8，再执行或复用 C9／C10；C9 仍需显式破坏性确认，C10 仍可在人工回复点安全暂停。最终 verifier 独立核对十一套固定制品、单一 Compose project／Origin、C0～C8 checksum DAG、C9 对 C0～C8 及 C10 对 C0／C1／C9 的绑定。离线完整复用、checksum-valid 断链和未确认 C9 负例通过；执行器不管理服务生命周期，也没有擅自引入未确认的 soak 时长。
-- BF-267 增加 C11 真实浏览器门禁、`run-c0-c11` 与十二阶段全链 verifier：两个 C1 Tenant 管理员分别在真实 Chromium 中核对页面身份并点击 Feedback submit／status，SDK iframe 必须来自同一配置跨域 Origin；主 Tenant 撤销 `feedback.use` 后入口隐藏、OMS 导航仍可用，恢复授权后入口返回。低资源双 Origin 夹具实际运行生产 Feedback bridge 并确认最终 Grant 恢复，摘要漂移、非预期 Console 错误和 API Key 注入负例通过；真实 D1 尚未执行。
+- BF-267 增加 C11 真实浏览器门禁、`run-c0-c11` 与十二阶段全链 verifier：两个 C1 Tenant 管理员分别在真实 Chromium 中核对页面身份并点击 Feedback submit／status，SDK iframe 必须来自同一配置跨域 Origin；主 Tenant 撤销 `feedback.use` 后入口隐藏、明确返回 403、OMS 导航仍可用，恢复授权后入口返回。总入口在 C0～C10／破坏性 C9 前先验证凭证并实际启动／关闭目标浏览器；完整 C11 存在时只读验证全链并零执行退出。低资源双 Origin 夹具实际运行生产 Feedback bridge 并确认最终 Grant 恢复，摘要漂移、错误 Actor／Origin、缺 403、非预期 Console 错误和 API Key 注入负例通过；真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 

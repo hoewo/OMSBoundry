@@ -7,16 +7,41 @@ required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || 
 root=$(required_env P9_RUN_EVIDENCE_ROOT)
 case "$root" in /*) ;; *) echo 'P9_RUN_EVIDENCE_ROOT must be absolute' >&2; exit 2;; esac
 
-"$script_dir/run-c0-c10"
-
 if [ -e "$root/c11" ]; then
   [ -d "$root/c11" ] || { echo "P9 C11 evidence path is not a directory: $root/c11" >&2; exit 2; }
-  "$script_dir/verify-c11-evidence" "$root/c11" >/dev/null
-  echo 'verified existing C11 evidence'
-else
-  env P9_C11_EVIDENCE_DIR="$root/c11" node "$script_dir/verify-c11-browser.mjs"
-  "$script_dir/verify-c11-evidence" "$root/c11" >/dev/null
-  echo 'created and verified C11 evidence'
+  "$script_dir/verify-run-c0-c11" "$root"
+  echo 'verified existing C0-C11 evidence; no stage was executed'
+  exit 0
 fi
+
+for name in P9_PRIMARY_ADMIN_USERNAME P9_PRIMARY_ADMIN_PASSWORD_FILE P9_SECONDARY_ADMIN_USERNAME P9_SECONDARY_ADMIN_PASSWORD_FILE; do required_env "$name" >/dev/null; done
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+for file in "$P9_PRIMARY_ADMIN_PASSWORD_FILE" "$P9_SECONDARY_ADMIN_PASSWORD_FILE"; do
+  case "$file" in /*) ;; *) echo "protected input path must be absolute: $file" >&2; exit 2;; esac
+  [ -f "$file" ] && [ "$(file_mode "$file")" = 600 ] || { echo "protected input must be a regular file with mode 0600: $file" >&2; exit 2; }
+done
+command -v node >/dev/null 2>&1 || { echo 'node is required for C10/C11' >&2; exit 2; }
+case "${BROWSER_EXECUTABLE:-}" in '') ;; /*) [ -x "$BROWSER_EXECUTABLE" ] || { echo "BROWSER_EXECUTABLE is not executable: $BROWSER_EXECUTABLE" >&2; exit 2; };; *) echo 'BROWSER_EXECUTABLE must be absolute' >&2; exit 2;; esac
+PLAYWRIGHT_MODULE_PATH=${PLAYWRIGHT_MODULE_PATH:-playwright} BROWSER_EXECUTABLE=${BROWSER_EXECUTABLE:-} node --input-type=module -e '
+  let browser;
+  try {
+    const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH);
+    if (!chromium) throw new Error("Playwright chromium export is missing");
+    const options = { headless: true };
+    if (process.env.BROWSER_EXECUTABLE) options.executablePath = process.env.BROWSER_EXECUTABLE;
+    browser = await chromium.launch(options);
+  } catch (error) {
+    console.error(`C11 browser preflight failed: ${error.message}`);
+    process.exitCode = 2;
+  } finally {
+    if (browser) await browser.close();
+  }
+' || exit $?
+
+"$script_dir/run-c0-c10"
+
+env P9_C11_EVIDENCE_DIR="$root/c11" node "$script_dir/verify-c11-browser.mjs"
+"$script_dir/verify-c11-evidence" "$root/c11" >/dev/null
+echo 'created and verified C11 evidence'
 
 "$script_dir/verify-run-c0-c11" "$root"

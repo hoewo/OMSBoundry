@@ -147,6 +147,15 @@ try {
   const secretDir = join(runtime, 'secrets'); mkdirSync(secretDir, { mode: 0o700 })
   const resumed = execFileSync(join(scriptDir, 'run-c0-c11'), [], { env: { ...process.env, P9_RUN_EVIDENCE_ROOT: fixture, P9_C5_SECRET_DIR: secretDir, P9_PRIMARY_ADMIN_USERNAME: 'primary-admin', P9_PRIMARY_ADMIN_PASSWORD_FILE: join(fixture, 'primary.password'), P9_SECONDARY_ADMIN_USERNAME: 'secondary-admin', P9_SECONDARY_ADMIN_PASSWORD_FILE: join(fixture, 'secondary.password') }, encoding: 'utf8' })
   assert.match(resumed, /PASS P9 continuous C0-C11 evidence chain/)
+  assert.match(resumed, /no stage was executed/)
+
+  const missingBrowser = join(runtime, 'missing-browser'); cpSync(fixture, missingBrowser, { recursive: true }); rmSync(join(missingBrowser, 'c9'), { recursive: true }); rmSync(join(missingBrowser, 'c10'), { recursive: true }); rmSync(join(missingBrowser, 'c11'), { recursive: true })
+  let preflightError = ''
+  try {
+    execFileSync(join(scriptDir, 'run-c0-c11'), [], { env: { ...process.env, P9_RUN_EVIDENCE_ROOT: missingBrowser, P9_C5_SECRET_DIR: secretDir, P9_PRIMARY_ADMIN_USERNAME: 'primary-admin', P9_PRIMARY_ADMIN_PASSWORD_FILE: join(missingBrowser, 'primary.password'), P9_SECONDARY_ADMIN_USERNAME: 'secondary-admin', P9_SECONDARY_ADMIN_PASSWORD_FILE: join(missingBrowser, 'secondary.password'), PLAYWRIGHT_MODULE_PATH: join(runtime, 'missing-playwright.mjs') }, stdio: ['ignore', 'ignore', 'pipe'] })
+  } catch (error) { preflightError = String(error.stderr || '') }
+  assert.match(preflightError, /C11 browser preflight failed:/)
+  assert.doesNotMatch(preflightError, /P9_C9_CONFIRM_IN_PLACE_RESTORE/, 'browser preflight must fail before the destructive C9 gate')
 
   const wrongActor = join(runtime, 'wrong-actor'); cpSync(fixture, wrongActor, { recursive: true })
   const wrongActorStatePath = join(wrongActor, 'c11/state-after-c11.json'); const wrongActorState = JSON.parse(readFileSync(wrongActorStatePath, 'utf8')); wrongActorState.tenants[0].tenant_id = '99999999-9999-4999-8999-999999999999'; writeFileSync(wrongActorStatePath, `${JSON.stringify(wrongActorState, null, 2)}\n`); refreshC11StateChecksum(wrongActor)

@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-10-26 P9 浏览器闭环基线（BF-267）：最终全链入口为 `run-c0-c11`；C11 必须以两个 C1 Tenant 管理员在真实 Chromium 中核对 Workbench 身份并点击 Feedback submit／status，SDK 必须来自同一已配置跨域 Origin。主 Tenant 撤销 `feedback.use` 后入口应隐藏但 OMS 其他导航可用，恢复授权后入口应返回；预期 403 与非预期 Console／Page error 分开记录。固定证据不保存任何反馈运行 Secret 或派生身份。离线真实浏览器夹具通过只证明驱动和生产 bridge 可执行，真实 D1 和回滚记录仍待完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+2026-10-26 P9 浏览器闭环基线（BF-267）：最终全链入口为 `run-c0-c11`；C11 必须以两个 C1 Tenant 管理员在真实 Chromium 中核对 Workbench 身份并点击 Feedback submit／status，SDK 必须来自同一已配置跨域 Origin。主 Tenant 撤销 `feedback.use` 后入口应隐藏但 OMS 其他导航可用，恢复授权后入口应返回；预期 403 与非预期 Console／Page error 分开记录。总入口必须在任何早期阶段／破坏性恢复前实际启动并关闭一次目标浏览器，缺依赖立即失败；完整 C11 存在时只复验全链，不重复业务或恢复动作。固定证据不保存任何反馈运行 Secret 或派生身份。离线真实浏览器夹具通过只证明驱动和生产 bridge 可执行，真实 D1 和回滚记录仍待完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
 2026-10-26 P9 全程执行基线（BF-266）：C0～C10 使用一个可恢复入口；C9 缺失时必须再次显式授权原项目清卷恢复，C10 等待真实开发者回复时保持 `PENDING`，不能生成成功证据。最终独立 verifier 复验十一阶段闭集、单一 Compose project／Origin 及完整 checksum 绑定。执行器不负责部署或服务生命周期，且当前未定义最小 soak 时长；真实浏览器 Console／点击和回滚记录仍是独立运行证据，不能由离线总入口代替。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 

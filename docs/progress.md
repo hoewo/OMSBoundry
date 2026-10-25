@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发进度
 
-2026-10-26：完成 BF-267 的 P9 C11 真实浏览器验收驱动与 C0～C11 可恢复总入口。低资源测试用两个短生命周期 loopback Origin、生产 Feedback bridge 和真实 Chrome 验证两个 Tenant 的 submit／status 点击、跨域 iframe、主 Tenant capability 撤销后入口隐藏但 OMS 导航可用、授权恢复后入口返回，并确认最终 Grant 已还原；摘要漂移、非预期 Console 错误和 API Key 注入均被拒绝。C11／全链脚本已进入 D1 release bundle，测试结束无常驻服务。真实 D1 与回滚证据仍待执行，P9 尚未完成。
+2026-10-26：完成 BF-267 的 P9 C11 真实浏览器验收驱动与 C0～C11 可恢复总入口。低资源测试用两个短生命周期 loopback Origin、生产 Feedback bridge 和真实 Chrome 验证两个 Tenant 的 submit／status 点击、跨域 iframe、主 Tenant capability 撤销后入口隐藏但 OMS 导航可用、授权恢复后入口返回，并确认最终 Grant 已还原；摘要漂移、错误 Actor／Origin、缺 403、非预期 Console 错误和 API Key 注入均被拒绝。总入口会在破坏性 C9 前实际启动／关闭浏览器，依赖缺失立即停止；完整 C11 则全链复验后零执行退出。C11／全链脚本已进入 D1 release bundle，测试结束无常驻服务。真实 D1 与回滚证据仍待执行，P9 尚未完成。
 
 2026-10-26：完成 BF-266 的 P9 C0～C10 可恢复总入口和独立全链 verifier。总入口复用已有阶段，缺失 C9 时仍要求显式清卷确认，C10 等开发者回复时保留 `PENDING`；最终核对十一套固定制品、单一 project／Origin 和跨 C0～C10 checksum 绑定。离线完整复用、重算 checksum 后的 C9 断链与未确认恢复负例通过，脚本进入 D1 release bundle。未启动 Docker 或 OMS 常驻服务；真实 D1、真实浏览器 Console／点击与回滚记录仍待执行，P9 未完成，且未擅自增加未确认的 soak 时长。
 

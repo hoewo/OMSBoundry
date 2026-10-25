@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-26 P9 增量（BF-267）：新增随 D1 release bundle 交付的 C11 真实 Chromium 驱动、固定证据 verifier、`run-c0-c11` 与全链 verifier。C11 双 Tenant 打开 Feedback submit／status，核对跨域 SDK，并在主 Tenant 完成撤销 capability→入口隐藏且 OMS 可用→恢复 capability→入口返回。低资源双 Origin 夹具实际使用生产 Feedback bridge 通过，且授权最终恢复、摘要／Console／Secret 负例失败关闭。下一步只在真实 D1 使用 `run-c0-c11` 完成全组合并单独补回滚记录；不再新增业务阶段，也不自行增加未确认的 soak 时长。
+2026-10-26 P9 增量（BF-267）：新增随 D1 release bundle 交付的 C11 真实 Chromium 驱动、固定证据 verifier、`run-c0-c11` 与全链 verifier。C11 双 Tenant 打开 Feedback submit／status，核对跨域 SDK，并在主 Tenant 完成撤销 capability→入口隐藏且 OMS 可用→恢复 capability→入口返回。总入口先验证凭证并真实启动／关闭浏览器，再允许进入早期阶段或破坏性 C9；已有完整 C11 时只读复验全链并零执行退出。低资源双 Origin 夹具实际使用生产 Feedback bridge 通过，且授权最终恢复、摘要／Actor／Origin／403／Console／Secret 负例失败关闭。下一步只在真实 D1 使用 `run-c0-c11` 完成全组合并单独补回滚记录；不再新增业务阶段，也不自行增加未确认的 soak 时长。
 
 2026-10-26 P9 增量（BF-266）：新增随 D1 release bundle 交付的 `run-c0-c10` 与只读 `verify-run-c0-c10`，把 C0～C8 连续业务、C9 原项目空目标恢复和 C10 外部 Feedback 收成一个可中断恢复入口；C9 仍需独立显式确认，C10 的开发者回复等待仍以 exit 3 暂停。离线完整制品复用、checksum-valid C9 断链和未授权 C9 拒绝通过。下一步只执行真实全组合窗口并补真实浏览器 Console／点击与回滚记录；需求没有规定 soak 时长，实施不得自行制造时长门槛，也不得继续增加业务阶段。
 

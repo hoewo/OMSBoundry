@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前工程架构
 
-2026-10-26 P9 浏览器验收边界（BF-267）：C11 是外部验收驱动，不是 Workbench、IAM、Gateway、Feedback 或业务事实 Owner。它只能用现有版本化登录／Session／Grant 和 Gateway Feedback 配置入口验证浏览器行为，不得读取服务端 Secret、绕过 Gateway、修改业务事实或把 Playwright 变成运行时依赖。撤权后的故意 403 是独立记录的预期拒绝；只有其余 Console／Page error 为零才通过。`run-c0-c11` 不拥有部署和服务启停，C11 的四文件证据只保存摘要、稳定 Tenant／Subject、非秘密 Origin 和计数。
+2026-10-26 P9 浏览器验收边界（BF-267）：C11 是外部验收驱动，不是 Workbench、IAM、Gateway、Feedback 或业务事实 Owner。它只能用现有版本化登录／Session／Grant 和 Gateway Feedback 配置入口验证浏览器行为，不得读取服务端 Secret、绕过 Gateway、修改业务事实或把 Playwright 变成运行时依赖。撤权后的故意 403 是独立记录的预期拒绝；只有其余 Console／Page error 为零才通过。`run-c0-c11` 不拥有部署和服务启停，但必须在可能发生 C9 清卷前启动／关闭目标浏览器以证明依赖可用；若 C11 已存在，则必须先复验完整链并且不执行任何阶段。C11 的四文件证据只保存摘要、稳定 Tenant／Subject、非秘密 Origin 和计数。
 
 2026-10-26 P9 全程执行器边界（BF-266）：`run-c0-c10` 只编排已有 C0～C10 验收入口，不是部署器、服务管理器、业务应用或事实 Owner。它不能自动授权破坏性恢复，C9 仍要求显式确认；不能把外部人工依赖伪装为成功，C10 缺开发者回复仍返回 `PENDING`。最终 verifier 只证明固定证据闭集和 checksum 有向链连续，不是发布者签名，也不替代真实浏览器、回滚或尚未接受的时间稳定性要求。
 
