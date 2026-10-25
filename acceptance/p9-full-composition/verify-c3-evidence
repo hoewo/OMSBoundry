@@ -1,0 +1,73 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-c3-evidence EVIDENCE_DIR' >&2; exit 2; }
+evidence_dir=$1
+[ -d "$evidence_dir" ] || { echo "P9 C3 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C3 evidence must not contain symbolic links' >&2; exit 1; }
+
+expected_entries='checksums.sha256
+http-evidence.tsv
+result.md
+state-after-c3.json'
+actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort)
+[ "$actual_entries" = "$expected_entries" ] || { echo 'P9 C3 evidence directory does not contain the fixed artifact set' >&2; exit 1; }
+expected_files='http-evidence.tsv
+result.md
+state-after-c3.json'
+actual_files=$(awk 'NF!=2 || $1!~/^[0-9a-f]{64}$/ {exit 1} {print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C3 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual_files" = "$expected_files" ] || { echo 'P9 C3 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r expected artifact; do
+  actual=$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}')
+  [ "$actual" = "$expected" ] || { echo "P9 C3 checksum mismatch for $artifact" >&2; exit 1; }
+done <"$evidence_dir/checksums.sha256"
+
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C3" and .result=="pass" and
+  .deployment.profile=="D1" and
+  ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c2_checksums_sha256] | all(test("^[0-9a-f]{64}$"))) and
+  (.scheme.id|test($uuid)) and .scheme.revision>=1 and .scheme.kind=="standard" and .scheme.region_code=="P9-C3" and
+  .scheme.synthetic_zero_rates==true and .scheme.statutorily_authoritative==false and
+  (.tenants|length)==2 and (.tenants[0].id != .tenants[1].id) and
+  all(.tenants[]; (.id|test($uuid)) and (.person_id|test($uuid)) and (.payroll_run.id|test($uuid)) and
+      .payroll_run.revision>=1 and (.payroll_run.line_id|test($uuid)) and .payroll_run.line_revision>=1 and
+      .payroll_run.status=="review_pending" and .payroll_run.approval_status=="not_required") and
+  .checks.c2_compensation_snapshot_preserved=="pass" and .checks.payroll_period_list_isolation=="pass" and
+  .checks.cross_tenant_payroll_period_not_found=="pass" and .checks.planned_date_did_not_pay=="pass" and
+  .checks.money_written==false and .checks.secrets_recorded==false
+' "$evidence_dir/state-after-c3.json" >/dev/null || { echo 'P9 C3 state has an invalid schema or failed check' >&2; exit 1; }
+
+awk -F '\t' '
+  NR==1 {if ($0!="request\texpected_status\tactual_status\ttime_seconds") exit 1; next}
+  NF!=4 {exit 1}
+  $4 !~ /^[0-9]+([.][0-9]+)?$/ {exit 1}
+  $1=="GET /auth/api/v1/csrf" {csrf++}
+  $1=="POST /auth/api/v1/login" {login++}
+  $1=="GET /auth/api/v1/session" {session++}
+  $1=="POST Payroll grant" {grant++}
+  $1=="POST /gateway/authorize/payroll" {authorize++}
+  $1=="GET primary Contribution Scheme list" {primary_scheme++}
+  $1=="GET secondary Contribution Scheme list" {secondary_scheme++}
+  $1=="GET primary Compensation Profile" {primary_profile++}
+  $1=="GET secondary Compensation Profile" {secondary_profile++}
+  $1=="POST primary Payroll Period" {primary_create++}
+  $1=="POST secondary Payroll Period" {secondary_create++}
+  $1=="GET primary Payroll Period list" {primary_list++}
+  $1=="GET secondary Payroll Period list" {secondary_list++}
+  $1=="GET primary cross-tenant Payroll Period" {primary_cross++}
+  $1=="GET secondary cross-tenant Payroll Period" {secondary_cross++}
+  $2==$3 {next}
+  $2=="204/409" && ($3=="204" || $3=="409") {next}
+  {exit 1}
+  END {
+    if (csrf!=2 || login!=2 || session!=2 || grant!=4 || authorize!=2 || primary_scheme!=1 || secondary_scheme!=1 ||
+        primary_profile!=1 || secondary_profile!=1 || primary_create!=1 || secondary_create!=1 || primary_list!=1 ||
+        secondary_list!=1 || primary_cross!=1 || secondary_cross!=1) exit 1
+  }
+' "$evidence_dir/http-evidence.tsv" || { echo 'P9 C3 HTTP evidence contains a failed or incomplete assertion matrix' >&2; exit 1; }
+
+echo 'PASS P9 C3 evidence integrity and assertion matrix'

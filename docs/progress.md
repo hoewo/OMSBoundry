@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-257：新增绑定 C0～C2 的 P9 C3 运行驱动和固定证据校验器；通过 Payroll 自有 ops 幂等导入明确非法律依据的六项零比例验收方案，两个管理员经同一 Origin 分别生成待核对、无需审批且未支付的常规工资表，并验证 C1 Person／C2 Compensation revision 快照、整数计算、Tenant 列表隔离与交叉 404。离线 Docker／curl 首次／重跑、既有 Grant 409、密码扫描、摘要漂移和重算摘要但 HTTP 矩阵缺失负例通过；脚本进入 D1 release bundle。未启动服务，未执行真实 D1、真实缴费规则、发薪或 Money 写入。
+
 2026-10-26 BF-256：新增绑定 C0／C1 的 P9 C2 运行驱动和固定证据校验器；两个管理员经同一 Origin 分别取得 Payroll 最小能力，以稳定 Command ID 为 C1 Person 建立独立薪酬档案，并验证 Person source revision、整数最小货币单位、Tenant 列表隔离与交叉 404。离线 curl 首次／重跑、既有 Grant 409、密码扫描、摘要漂移和重算摘要但 HTTP 矩阵缺失负例通过；脚本进入 D1 release bundle。未启动服务，未验证真实 D1、缴费比例、工资生成或发放。
 
 2026-10-26 BF-255：新增 P9 C1 双租户运行入口及固定证据校验器，覆盖 C0 绑定、第二 Tenant 创建／复用、同 Origin 双登录、双 People Grant、Person 幂等重放、两侧列表隔离、交叉 ID 404、Workbench 会话 Tenant 和秘密不落 argv／证据；离线 Docker／curl 回归及篡改负例通过，并进入 D1 release bundle。未启动容器，尚无真实 D1 C1 证据。

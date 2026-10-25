@@ -6,6 +6,7 @@ tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
 runtime=$(mktemp -d "$tmp_root/oms-p9-c2-test.XXXXXX")
 trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
 mkdir -p "$runtime/c0" "$runtime/c1" "$runtime/bin"
+export_dir=$(printenv P9_C2_TEST_ARTIFACT_DIR 2>/dev/null || true)
 
 services='approval-audit-results
 billing-invoice
@@ -221,6 +222,15 @@ mv "$schema_tampered/checksums.tmp" "$schema_tampered/checksums.sha256"
 if "$script_dir/verify-c2-evidence" "$schema_tampered" >/dev/null 2>&1; then
   echo 'P9 C2 evidence verifier accepted a recomputed but incomplete HTTP matrix' >&2
   exit 1
+fi
+
+if [ -n "$export_dir" ]; then
+  [ ! -e "$export_dir" ] || { echo "P9_C2_TEST_ARTIFACT_DIR already exists: $export_dir" >&2; exit 2; }
+  mkdir -p "$export_dir"
+  cp -R "$runtime/c0" "$runtime/c1" "$runtime/c2" "$export_dir/"
+  cp "$runtime/primary.password" "$runtime/secondary.password" "$export_dir/"
+  chmod 700 "$export_dir"
+  chmod 600 "$export_dir/primary.password" "$export_dir/secondary.password"
 fi
 
 echo 'PASS P9 C2 offline member-to-payroll driver and evidence regression'

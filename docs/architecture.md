@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C3 工资表连续门禁（BF-257）：C3 只编排既有 IAM、People 与 Payroll 所有权，不新增共享事实或跨库写。方案 fixture 由 Payroll ops 写入 Payroll 自己的数据库，Person 仍由 People 拥有，Compensation Profile 与 Payroll Period 仍由 Payroll 拥有；公网命令经过 Gateway 和版本化 Payroll API。工资表冻结上游稳定 ID／revision 与方案快照，计划发薪日、`review_pending` 和 `not_required` 都不形成资金事实，C3 不调用 Money。零比例 fixture 只隔离验证快照和整数计算，不能作为国家或地区规定复用。该入口只在已经运行的 C0 组合上执行，不负责启动／停止服务；离线 mock 通过不等于真实 D1 通过。
+
 2026-10-26 P9 C2 连续所有权边界（BF-256）：C1 的 Person 稳定引用进入 Payroll 时不复制 People 当前档案或共享表，而由 Payroll 独立保存 Person ID／source revision 快照及自身 Compensation Profile revision。工资、社保基数和公积金基数是挂载到 Person 引用的 Payroll 属性，仍不属于 People；所有金额为整数最小货币单位。C2 经 IAM→Gateway→Payroll 正式入口验证每个 Tenant 的最终隔离，且不把测试基数解释为法定比例、工资计算或实际发放。证据用前序 checksum 串联 C0→C1→C2，但摘要链不是发布者签名，真实 D1 仍待执行。
 
 2026-10-26 P9 C1 运行边界（BF-255）：双租户验证从通过完整性校验的 C0 制品绑定到同一 D1 Compose project 和公网 Origin；只允许经 IAM 会话→Gateway Capability→People Owner 的正式入口创建和读取 Person。第二 Tenant 的平台级建立仍由 IAM `tenantctl` 承担，不把 Tenant 事实交给 Workbench 或 People；业务数据隔离最终由 People 按签名 Tenant 执行。验收驱动可发现运行中 IAM 容器，但不拥有服务生命周期，也不把管理员秘密、Session 或 Capability 写入证据。

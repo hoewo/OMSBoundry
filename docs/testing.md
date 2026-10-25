@@ -25,6 +25,14 @@ make p9-member-payroll-driver-test
 
 该入口用假的 curl 与真实 jq／checksum 构造并独立校验 C0／C1，随后验证双登录、Payroll 最小 Grant、两份幂等 Compensation Profile、Person source revision、整数最小货币单位、列表隔离、交叉 404、重跑和固定 C2 制品；摘要漂移以及“重算摘要但删除一项 HTTP 证据”都必须失败。密码不会进入证据。生产 `verify-c2-member-payroll` 只绑定同一 C0／C1 和已经运行的 D1，不启动或停止服务，不校验法定比例，也不生成／发放工资。离线通过不表示真实 C2 已执行。
 
+BF-257 的低资源离线回归：
+
+```sh
+make p9-payroll-period-driver-test
+```
+
+该入口先复用 C2 的受校验 fixture，再用假的 Docker／curl 与真实 jq／checksum 验证：Payroll 自有 ops 的零比例标准方案导入、双登录与最小 Grant、两张幂等工资表、C1 Person 和 C2 Compensation revision 快照、`review_pending`、明确 `not_required`、计划日期不自动发薪、Tenant 列表隔离与交叉 404。首次／重跑、既有 Grant 409、密码扫描、摘要漂移和“重算摘要但删除一项 HTTP 证据”均必须通过或按预期失败。生产 `verify-c3-payroll-periods` 只发现 C0 中已运行的 Payroll 容器，不启动／停止服务，不使用真实法定比例、不调用付款端点、不写 Money。离线通过不表示真实 C3 已执行。
+
 ## 2026-10-26 OMS1 迭代 P8 Feedback 本地真实浏览器门禁
 
 不启动 Docker，用两个随机回环端口形成真实跨 origin Workbench／SDK，并让真实 Chromium 直接加载生产宿主脚本：

@@ -1,0 +1,244 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+required_env() {
+  value=$(printenv "$1" 2>/dev/null || true)
+  [ -n "$value" ] || { echo "set $1" >&2; exit 2; }
+  printf '%s' "$value"
+}
+
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR)
+c1_dir=$(required_env P9_C1_EVIDENCE_DIR)
+c2_dir=$(required_env P9_C2_EVIDENCE_DIR)
+evidence_dir=$(required_env P9_C3_EVIDENCE_DIR)
+primary_username=$(required_env P9_PRIMARY_ADMIN_USERNAME)
+primary_password_file=$(required_env P9_PRIMARY_ADMIN_PASSWORD_FILE)
+secondary_username=$(required_env P9_SECONDARY_ADMIN_USERNAME)
+secondary_password_file=$(required_env P9_SECONDARY_ADMIN_PASSWORD_FILE)
+ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+
+for command_name in curl docker jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null
+"$script_dir/verify-c1-evidence" "$c1_dir" >/dev/null
+"$script_dir/verify-c2-evidence" "$c2_dir" >/dev/null
+[ ! -e "$evidence_dir" ] || {
+  [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || {
+    echo "P9 C3 evidence directory must be absent or empty: $evidence_dir" >&2
+    exit 2
+  }
+}
+
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+for secret_file in "$primary_password_file" "$secondary_password_file"; do
+  [ -f "$secret_file" ] || { echo "administrator password file not found: $secret_file" >&2; exit 2; }
+  [ "$(file_mode "$secret_file")" = 600 ] || { echo "administrator password file must have mode 0600: $secret_file" >&2; exit 2; }
+  [ -s "$secret_file" ] || { echo "administrator password file is empty: $secret_file" >&2; exit 2; }
+done
+if [ -n "$ca_bundle" ]; then
+  [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }
+fi
+
+c0_state="$c0_dir/state-after-c0.json"
+c1_state="$c1_dir/state-after-c1.json"
+c2_state="$c2_dir/state-after-c2.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state")
+base_url=$(jq -er '.deployment.public_url | sub("/+$";"")' "$c0_state")
+primary_tenant_id=$(jq -er '.tenants[0].id' "$c1_state")
+secondary_tenant_id=$(jq -er '.tenants[1].id' "$c1_state")
+primary_person_id=$(jq -er '.tenants[0].person.id' "$c1_state")
+secondary_person_id=$(jq -er '.tenants[1].person.id' "$c1_state")
+primary_person_revision=$(jq -er '.tenants[0].person.revision' "$c1_state")
+secondary_person_revision=$(jq -er '.tenants[1].person.revision' "$c1_state")
+c0_checksums_sha256=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256" | awk '{print $1}')
+c1_checksums_sha256=$(openssl dgst -sha256 -r "$c1_dir/checksums.sha256" | awk '{print $1}')
+c2_checksums_sha256=$(openssl dgst -sha256 -r "$c2_dir/checksums.sha256" | awk '{print $1}')
+
+[ "$(jq -er '.deployment.compose_project' "$c1_state")" = "$compose_project" ] || { echo 'C1 Compose project does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.compose_project' "$c2_state")" = "$compose_project" ] || { echo 'C2 Compose project does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.public_url | sub("/+$";"")' "$c2_state")" = "$base_url" ] || { echo 'C2 public origin does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.c0_checksums_sha256' "$c2_state")" = "$c0_checksums_sha256" ] || { echo 'C2 does not bind the supplied C0 evidence' >&2; exit 1; }
+[ "$(jq -er '.deployment.c1_checksums_sha256' "$c2_state")" = "$c1_checksums_sha256" ] || { echo 'C2 does not bind the supplied C1 evidence' >&2; exit 1; }
+jq -e --arg a "$primary_tenant_id" --arg b "$secondary_tenant_id" --arg pa "$primary_person_id" --arg pb "$secondary_person_id" '
+  .tenants[0].id==$a and .tenants[1].id==$b and .tenants[0].person_id==$pa and .tenants[1].person_id==$pb
+' "$c2_state" >/dev/null || { echo 'C2 Tenant or Person continuity is invalid' >&2; exit 1; }
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not an allowed HTTPS or loopback origin' >&2; exit 1;; esac
+
+payroll_containers=$(docker ps --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=payroll' --filter status=running --format '{{.ID}}')
+[ "$(printf '%s\n' "$payroll_containers" | awk 'NF{n++} END{print n+0}')" -eq 1 ] || { echo 'expected exactly one running Payroll container from the C0 Compose project' >&2; exit 1; }
+payroll_container=$(printf '%s\n' "$payroll_containers" | awk 'NF{print; exit}')
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
+workspace=$(mktemp -d "$tmp_root/oms-p9-c3.XXXXXX")
+evidence_stage=
+trap 'rm -rf -- "$workspace"; if [ -n "$evidence_stage" ]; then rm -rf -- "$evidence_stage"; fi' EXIT HUP INT TERM
+chmod 700 "$workspace"
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+
+stable_uuid() {
+  digest=$(printf '%s' "$1" | openssl dgst -sha256 -r | awk '{print $1}')
+  printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$digest" | cut -c1-8)" "$(printf '%s' "$digest" | cut -c9-12)" "$(printf '%s' "$digest" | cut -c14-16)" "$(printf '%s' "$digest" | cut -c18-20)" "$(printf '%s' "$digest" | cut -c21-32)"
+}
+
+scheme_command_id=$(stable_uuid "oms-v1-p9-c3-zero-scheme:$primary_tenant_id")
+jq -n --arg command "$scheme_command_id" '{
+  command_id:$command,title:"P9 C3 验收零比例方案",region_code:"P9-C3",region_name:"验收隔离区域",effective_month:"2026-10",
+  authority_source:"urn:omsbizfoundry:acceptance:p9-c3-zero-rates",authority_verified_at:"2026-10-26T00:00:00Z",
+  components:[
+    {key:"pension",base_kind:"social"},{key:"medical",base_kind:"social"},{key:"unemployment",base_kind:"social"},
+    {key:"work_injury",base_kind:"social"},{key:"maternity",base_kind:"social"},{key:"housing_fund",base_kind:"housing"}
+  ] | map(. + {individual_rate_bps:0,employer_rate_bps:0,base_floor_minor:0,base_cap_minor:999999999999,rounding_mode:"half_up"}),
+  reason:"P9 C3 运行验收专用零比例方案，不代表任何地区法定比例"
+}' >"$workspace/zero-scheme.json"
+docker exec -i \
+  -e "PLATFORM_TENANT_ID=$primary_tenant_id" \
+  -e "PLATFORM_ACTOR_ID=$(jq -er '.tenants[0].administrator_subject_id' "$c1_state")" \
+  -e 'PLATFORM_ACTOR_NAME=P9 C3 runtime verifier' \
+  -e 'PLATFORM_CREDENTIAL_ID=p9-c3-local-ops' \
+  "$payroll_container" sh -eu -c 'payload=$(mktemp /tmp/p9-c3-scheme.XXXXXX); trap '\''rm -f "$payload"'\'' EXIT HUP INT TERM; cat >"$payload"; /app/ops import-standard-scheme "$payload"' \
+  <"$workspace/zero-scheme.json" >"$workspace/scheme-import.out"
+scheme_id=$(sed -n 's/^imported standard contribution scheme id=\([0-9a-f-]*\) revision=[0-9][0-9]*$/\1/p' "$workspace/scheme-import.out")
+scheme_revision=$(sed -n 's/^imported standard contribution scheme id=[0-9a-f-]* revision=\([0-9][0-9]*\)$/\1/p' "$workspace/scheme-import.out")
+[ -n "$scheme_id" ] && [ -n "$scheme_revision" ] || { echo 'Payroll scheme import did not return a stable ID and revision' >&2; exit 1; }
+
+curl_result() {
+  output_file=$1; shift
+  set -- --silent --show-error --connect-timeout 10 --max-time 30 --output "$output_file" --write-out '%{http_code} %{time_total}' "$@"
+  if [ -n "$ca_bundle" ]; then set -- --cacert "$ca_bundle" "$@"; fi
+  curl "$@"
+}
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+expect_status() {
+  expected=$1; actual=$2; label=$3
+  case "$expected:$actual" in 204/409:204|204/409:409) return 0;; esac
+  [ "$actual" = "$expected" ] || { echo "$label returned HTTP $actual, expected $expected" >&2; exit 1; }
+}
+request() {
+  method=$1; path=$2; cookie_file=$3; csrf_token=$4; payload_file=$5; output_file=$6; expected=$7; label=$8
+  set -- --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file"
+  if [ -n "$csrf_token" ]; then set -- "$@" -H "X-CSRF-Token: $csrf_token"; fi
+  if [ -n "$payload_file" ]; then set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload_file"; fi
+  result=$(curl_result "$output_file" "$@" "$base_url$path")
+  actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http "$label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$label"; printf '%s' "$actual"
+}
+fetch_csrf() {
+  result=$(curl_result "$2" --cookie-jar "$1" "$base_url/auth/api/v1/csrf")
+  actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"; expect_status 200 "$actual" 'fetch CSRF'; chmod 600 "$1"; jq -er '.csrf_token' "$2"
+}
+login() {
+  payload_file="$workspace/login-$(openssl rand -hex 6).json"
+  jq -Rs --arg username "$3" '{username:$username,password:(rtrimstr("\n")|rtrimstr("\r"))}' "$4" >"$payload_file"; chmod 600 "$payload_file"
+  request POST /auth/api/v1/login "$1" "$2" "$payload_file" "$5" 200 'POST /auth/api/v1/login' >/dev/null; rm -f -- "$payload_file"
+}
+grant_payroll() {
+  for action in payroll.tenant.read payroll.run.manage; do
+    suffix=$(printf '%s' "$action" | awk -F. '{print $NF}')
+    jq -n --arg subject "$3" --arg action "$action" '{subject_id:$subject,audience:"payroll",action:$action}' >"$workspace/grant-$4-$suffix.json"
+    grant_status=$(request POST /auth/api/v1/admin/grants "$1" "$2" "$workspace/grant-$4-$suffix.json" "$workspace/grant-$4-$suffix.out" 204/409 'POST Payroll grant')
+    if [ "$grant_status" = 409 ]; then jq -e '.error.code=="conflict"' "$workspace/grant-$4-$suffix.out" >/dev/null || exit 1; fi
+  done
+}
+authorize_payroll() {
+  result=$(curl_result "$3" --request POST --cookie "$1" --cookie-jar "$1" --data-urlencode "csrf_token=$2" "$base_url/gateway/authorize/payroll")
+  actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http 'POST /gateway/authorize/payroll' 303 "$actual" "$duration"; expect_status 303 "$actual" 'authorize Payroll'
+}
+
+primary_cookies="$workspace/primary.cookies"; primary_csrf=$(fetch_csrf "$primary_cookies" "$workspace/primary-csrf.json")
+login "$primary_cookies" "$primary_csrf" "$primary_username" "$primary_password_file" "$workspace/primary-login.json"
+request GET /auth/api/v1/session "$primary_cookies" '' '' "$workspace/primary-session.json" 200 'GET /auth/api/v1/session' >/dev/null
+secondary_cookies="$workspace/secondary.cookies"; secondary_csrf=$(fetch_csrf "$secondary_cookies" "$workspace/secondary-csrf.json")
+login "$secondary_cookies" "$secondary_csrf" "$secondary_username" "$secondary_password_file" "$workspace/secondary-login.json"
+request GET /auth/api/v1/session "$secondary_cookies" '' '' "$workspace/secondary-session.json" 200 'GET /auth/api/v1/session' >/dev/null
+primary_subject_id=$(jq -er --arg tenant "$primary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/primary-session.json")
+secondary_subject_id=$(jq -er --arg tenant "$secondary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/secondary-session.json")
+[ "$primary_subject_id" = "$(jq -er '.tenants[0].administrator_subject_id' "$c1_state")" ] || { echo 'primary administrator Subject changed since C1' >&2; exit 1; }
+[ "$secondary_subject_id" = "$(jq -er '.tenants[1].administrator_subject_id' "$c1_state")" ] || { echo 'secondary administrator Subject changed since C1' >&2; exit 1; }
+grant_payroll "$primary_cookies" "$primary_csrf" "$primary_subject_id" primary
+grant_payroll "$secondary_cookies" "$secondary_csrf" "$secondary_subject_id" secondary
+authorize_payroll "$primary_cookies" "$primary_csrf" "$workspace/primary-authorize.out"
+authorize_payroll "$secondary_cookies" "$secondary_csrf" "$workspace/secondary-authorize.out"
+
+request GET /payroll/v1/contribution-schemes "$primary_cookies" '' '' "$workspace/primary-schemes.json" 200 'GET primary Contribution Scheme list' >/dev/null
+request GET /payroll/v1/contribution-schemes "$secondary_cookies" '' '' "$workspace/secondary-schemes.json" 200 'GET secondary Contribution Scheme list' >/dev/null
+for file in "$workspace/primary-schemes.json" "$workspace/secondary-schemes.json"; do
+  jq -e --arg id "$scheme_id" --argjson revision "$scheme_revision" 'any(.[]; .id==$id and .revision==$revision and .scheme_kind=="standard" and .region_code=="P9-C3" and (.components|length)==6 and all(.components[];.individual_rate_bps==0 and .employer_rate_bps==0))' "$file" >/dev/null || { echo 'synthetic C3 scheme is not visible through Payroll' >&2; exit 1; }
+done
+
+request GET "/payroll/v1/compensation-profiles/$primary_person_id" "$primary_cookies" '' '' "$workspace/primary-profile.json" 200 'GET primary Compensation Profile' >/dev/null
+request GET "/payroll/v1/compensation-profiles/$secondary_person_id" "$secondary_cookies" '' '' "$workspace/secondary-profile.json" 200 'GET secondary Compensation Profile' >/dev/null
+primary_profile_id=$(jq -er '.tenants[0].compensation_profile.id' "$c2_state")
+primary_profile_revision=$(jq -er '.tenants[0].compensation_profile.revision' "$c2_state")
+secondary_profile_id=$(jq -er '.tenants[1].compensation_profile.id' "$c2_state")
+secondary_profile_revision=$(jq -er '.tenants[1].compensation_profile.revision' "$c2_state")
+jq -e --arg id "$primary_profile_id" --argjson revision "$primary_profile_revision" '.id==$id and .revision==$revision and .currency=="CNY" and .fixed_salary_minor>0' "$workspace/primary-profile.json" >/dev/null || { echo 'primary Compensation Profile changed since C2' >&2; exit 1; }
+jq -e --arg id "$secondary_profile_id" --argjson revision "$secondary_profile_revision" '.id==$id and .revision==$revision and .currency=="CNY" and .fixed_salary_minor>0' "$workspace/secondary-profile.json" >/dev/null || { echo 'secondary Compensation Profile changed since C2' >&2; exit 1; }
+
+primary_command_id=$(stable_uuid "oms-v1-p9-c3-primary-run:$primary_tenant_id:$primary_person_id")
+secondary_command_id=$(stable_uuid "oms-v1-p9-c3-secondary-run:$secondary_tenant_id:$secondary_person_id")
+jq -n --arg command "$primary_command_id" --arg scheme "$scheme_id" --argjson revision "$scheme_revision" --arg person "$primary_person_id" '{command_id:$command,period:"2026-10",label:"P9 C3 2026-10 工资",planned_pay_date:"2026-10-31",contribution_scheme_id:$scheme,contribution_scheme_revision:$revision,person_ids:[$person]}' >"$workspace/primary-run-request.json"
+jq -n --arg command "$secondary_command_id" --arg scheme "$scheme_id" --argjson revision "$scheme_revision" --arg person "$secondary_person_id" '{command_id:$command,period:"2026-10",label:"P9 C3 2026-10 工资",planned_pay_date:"2026-10-31",contribution_scheme_id:$scheme,contribution_scheme_revision:$revision,person_ids:[$person]}' >"$workspace/secondary-run-request.json"
+request POST /payroll/v1/payroll-periods "$primary_cookies" "$primary_csrf" "$workspace/primary-run-request.json" "$workspace/primary-run.json" 201 'POST primary Payroll Period' >/dev/null
+request POST /payroll/v1/payroll-periods "$secondary_cookies" "$secondary_csrf" "$workspace/secondary-run-request.json" "$workspace/secondary-run.json" 201 'POST secondary Payroll Period' >/dev/null
+
+validate_run() {
+  run_file=$1; tenant=$2; person=$3; person_revision=$4; profile_file=$5; profile_id=$6; profile_revision=$7
+  fixed=$(jq -er '.fixed_salary_minor' "$profile_file")
+  jq -e --arg tenant "$tenant" --arg person "$person" --argjson person_revision "$person_revision" --arg profile "$profile_id" --argjson profile_revision "$profile_revision" --arg scheme "$scheme_id" --argjson scheme_revision "$scheme_revision" --argjson fixed "$fixed" '
+    .tenant_id==$tenant and .period=="2026-10" and .run_kind=="regular" and .status=="review_pending" and .revision>=1 and
+    .planned_pay_date=="2026-10-31" and .approval_status=="not_required" and .approval_policy_snapshot.mode=="not_required" and
+    .contribution_scheme_id==$scheme and .contribution_scheme_revision==$scheme_revision and
+    .contribution_scheme_snapshot.region_code=="P9-C3" and (.contribution_scheme_snapshot.components|length)==6 and
+    all(.contribution_scheme_snapshot.components[];.individual_rate_bps==0 and .employer_rate_bps==0) and
+    (.lines|length)==1 and .lines[0].tenant_id==$tenant and .lines[0].person_id==$person and .lines[0].person_source_revision==$person_revision and
+    .lines[0].compensation_profile_id==$profile and .lines[0].compensation_profile_revision==$profile_revision and
+    .lines[0].status=="review_pending" and .lines[0].payment_account_missing==true and .lines[0].fixed_salary_minor==$fixed and
+    .lines[0].gross_minor==$fixed and .lines[0].employee_contribution_minor==0 and .lines[0].employer_contribution_minor==0 and
+    .lines[0].tax_minor==0 and .lines[0].net_payable_minor==$fixed and .lines[0].actual_paid_minor==0 and .lines[0].allocated_paid_minor==0
+  ' "$run_file" >/dev/null || { echo 'generated Payroll Period or line snapshot is invalid' >&2; exit 1; }
+}
+validate_run "$workspace/primary-run.json" "$primary_tenant_id" "$primary_person_id" "$primary_person_revision" "$workspace/primary-profile.json" "$primary_profile_id" "$primary_profile_revision"
+validate_run "$workspace/secondary-run.json" "$secondary_tenant_id" "$secondary_person_id" "$secondary_person_revision" "$workspace/secondary-profile.json" "$secondary_profile_id" "$secondary_profile_revision"
+primary_run_id=$(jq -er '.id' "$workspace/primary-run.json"); secondary_run_id=$(jq -er '.id' "$workspace/secondary-run.json")
+
+request GET /payroll/v1/payroll-periods "$primary_cookies" '' '' "$workspace/primary-runs.json" 200 'GET primary Payroll Period list' >/dev/null
+request GET /payroll/v1/payroll-periods "$secondary_cookies" '' '' "$workspace/secondary-runs.json" 200 'GET secondary Payroll Period list' >/dev/null
+jq -e --arg own "$primary_run_id" --arg other "$secondary_run_id" 'any(.items[];.id==$own) and all(.items[];.id!=$other)' "$workspace/primary-runs.json" >/dev/null || { echo 'primary Payroll Period list failed Tenant isolation' >&2; exit 1; }
+jq -e --arg own "$secondary_run_id" --arg other "$primary_run_id" 'any(.items[];.id==$own) and all(.items[];.id!=$other)' "$workspace/secondary-runs.json" >/dev/null || { echo 'secondary Payroll Period list failed Tenant isolation' >&2; exit 1; }
+request GET "/payroll/v1/payroll-periods/$secondary_run_id" "$primary_cookies" '' '' "$workspace/primary-cross-run.json" 404 'GET primary cross-tenant Payroll Period' >/dev/null
+request GET "/payroll/v1/payroll-periods/$primary_run_id" "$secondary_cookies" '' '' "$workspace/secondary-cross-run.json" 404 'GET secondary cross-tenant Payroll Period' >/dev/null
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" \
+  --arg c0 "$c0_checksums_sha256" --arg c1 "$c1_checksums_sha256" --arg c2 "$c2_checksums_sha256" \
+  --arg scheme "$scheme_id" --argjson scheme_revision "$scheme_revision" \
+  --arg ta "$primary_tenant_id" --arg pa "$primary_person_id" --arg ra "$primary_run_id" --argjson rra "$(jq -er '.revision' "$workspace/primary-run.json")" --arg la "$(jq -er '.lines[0].id' "$workspace/primary-run.json")" --argjson lra "$(jq -er '.lines[0].revision' "$workspace/primary-run.json")" \
+  --arg tb "$secondary_tenant_id" --arg pb "$secondary_person_id" --arg rb "$secondary_run_id" --argjson rrb "$(jq -er '.revision' "$workspace/secondary-run.json")" --arg lb "$(jq -er '.lines[0].id' "$workspace/secondary-run.json")" --argjson lrb "$(jq -er '.lines[0].revision' "$workspace/secondary-run.json")" \
+  '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C3",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2},scheme:{id:$scheme,revision:$scheme_revision,kind:"standard",region_code:"P9-C3",synthetic_zero_rates:true,statutorily_authoritative:false},tenants:[{id:$ta,person_id:$pa,payroll_run:{id:$ra,revision:$rra,line_id:$la,line_revision:$lra,status:"review_pending",approval_status:"not_required"}},{id:$tb,person_id:$pb,payroll_run:{id:$rb,revision:$rrb,line_id:$lb,line_revision:$lrb,status:"review_pending",approval_status:"not_required"}}],checks:{c2_compensation_snapshot_preserved:"pass",payroll_period_list_isolation:"pass",cross_tenant_payroll_period_not_found:"pass",planned_date_did_not_pay:"pass",money_written:false,secrets_recorded:false}}' >"$workspace/state-after-c3.json"
+cat >"$workspace/result.md" <<EOF
+# P9 C3 Payroll Period result
+
+- Result: pass
+- Captured at: $captured_at
+- Public origin: $base_url
+- Checks: C2 Compensation snapshots frozen into one review-pending Payroll Period per Tenant, explicit not-required approval policy, zero payment facts, isolated lists and cross-Tenant 404.
+- Contribution scheme: synthetic zero-rate acceptance fixture; not a statutory rate claim.
+- Money written: no
+- Secrets recorded: no
+EOF
+
+mkdir -p "$(dirname -- "$evidence_dir")"
+evidence_stage=$(mktemp -d "$(dirname -- "$evidence_dir")/.p9-c3-evidence.XXXXXX"); chmod 700 "$evidence_stage"
+cp "$http_evidence" "$evidence_stage/http-evidence.tsv"; cp "$workspace/result.md" "$evidence_stage/result.md"; cp "$workspace/state-after-c3.json" "$evidence_stage/state-after-c3.json"
+chmod 600 "$evidence_stage/"*; : >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv result.md state-after-c3.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact" | awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"; done
+chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c3-evidence" "$evidence_stage" >/dev/null
+if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi
+mv "$evidence_stage" "$evidence_dir"; evidence_stage=
+echo 'PASS P9 C3 Payroll Period generation, snapshots and Tenant isolation'

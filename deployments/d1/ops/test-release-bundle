@@ -75,6 +75,8 @@ for path in \
   acceptance/p9-full-composition/verify-c1-evidence \
   acceptance/p9-full-composition/verify-c2-member-payroll \
   acceptance/p9-full-composition/verify-c2-evidence \
+  acceptance/p9-full-composition/verify-c3-payroll-periods \
+  acceptance/p9-full-composition/verify-c3-evidence \
   docs/operations/d1-environment-promotion.md \
   RELEASE-CHECKSUMS.sha256; do
   grep -q "/$path$" "$listing" || { echo "D1 release is missing $path" >&2; exit 1; }

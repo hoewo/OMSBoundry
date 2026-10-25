@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 BF-257 为 P9 增加 C3 工资表连续验收入口：它绑定 C0～C2，在同一公网 Origin 为两个 Tenant 的既有 Person／Compensation Profile 各生成一张待核对工资表，冻结成员、薪酬和方案 revision，并验证无需审批快照、零实付、列表隔离与交叉 404。六项零比例方案只用于验收快照机制，明确不是法定规则；C3 不发薪、不写 Money。当前只完成离线驱动／证据回归，真实 D1 尚未运行。
+
 2026-10-26 BF-256 为 P9 增加 C2 成员→薪酬档案连续验收入口：它绑定 C0／C1，在同一公网 Origin 让两个 Tenant 分别把已有 Person 稳定引用挂载为 Payroll Compensation Profile，并验证 source revision、整数金额、列表隔离与交叉 404。该阶段明确不声明五险一金比例、不生成工资表、不发薪；当前只完成离线驱动／证据回归，真实 D1 尚未运行。
 
 2026-10-26 BF-255 为 P9 增加 C1 双租户连续验收入口：它绑定已校验 C0 和同一公网 Origin，安全创建／复用第二 Tenant，分别完成登录、People 授权、Person 稳定重放、列表隔离、跨租户 404 与 Workbench Tenant 投影；秘密不进入 argv 或证据。当前只完成离线驱动／证据回归，真实 D1 尚未运行。

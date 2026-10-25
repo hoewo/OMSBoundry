@@ -33,6 +33,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-254 发现并修复同域名双租户入口缺口：Gateway 原先把会话和 Capability Tenant 强制等同于 Manifest 默认 Tenant，现改为信任同一 IAM issuer 的签名 Tenant，并让 Workbench 使用当前会话 Tenant；成功登录同步清除旧应用能力 Cookie。源码回归已过，真实 D1 双租户仍待执行。
 - BF-255 增加绑定 C0 的 P9 C1 驱动和独立证据 verifier：同一公网 Origin 下安全创建／复用第二 Tenant，分别验证 IAM 登录、People 能力、Person 稳定重放、列表隔离、交叉 ID 404 与 Workbench 会话 Tenant；密码只经 `0600` 文件、stdin 和临时文件传递。离线 Docker／curl 回归及证据篡改负例通过并进入 release bundle，但真实 D1 尚未执行。
 - BF-256 增加绑定 C0／C1 的 P9 C2 驱动和独立证据 verifier：两个管理员经同一 Origin 取得 Payroll 最小能力，以稳定命令把各自 C1 Person 引用保存为独立 Compensation Profile，核对 source revision、整数金额、列表隔离与交叉 404。离线首次／重跑、既有 Grant 冲突、秘密扫描和证据篡改负例通过并进入 release bundle；该阶段不声明法定比例、不生成或发放工资，真实 D1 尚未执行。
+- BF-257 增加绑定 C0～C2 的 P9 C3 驱动和独立证据 verifier：Payroll 自有 ops 幂等导入明确非法律依据的六项零比例验收方案，两个管理员经同一 Origin 各生成一张待核对、无需审批且未支付的常规工资表；验证 C1 Person／C2 Compensation／Scheme revision 快照、整数结果、列表隔离与交叉 404。离线首次／重跑、既有 Grant、秘密扫描和两类篡改负例通过并进入 release bundle；未调用发放或 Money，真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -50,6 +51,7 @@ python3 -m json.tool contracts/access/v1/examples/workload-identity-policy.json
 deployments/d1/ops/test-p9-composition
 deployments/d1/ops/test-release-bundle
 acceptance/p9-full-composition/test-c2-member-payroll
+acceptance/p9-full-composition/test-c3-payroll-periods
 git diff --check
 ```
 
