@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 P9 增量（BF-262）：C8 工资实际发放驱动和固定证据 verifier 已进入源码及 D1 release bundle。它绑定 C0～C7，为两个 Tenant 的既有 C3 工资行分别建立 Payment Profile、显式同步支付快照、完成工资核对并经 Payroll→Money 发放精确净应发金额；验证完整核销、零超额、本人工资单和跨 Tenant 404。完整银行卡号不落证据，成功支付命令可安全重放；该阶段不直写数据库且明确沿用 Money 本地兼容 Party，不宣称 Party Directory 已统一。下一阶段进入同一连续链的联合备份／空目标恢复、恢复后读取／续写和 Feedback 真实旅程；真实 D1 C8 尚未执行。
+
 2026-10-26 P9 增量（BF-261）：C7 报销实际付款驱动和固定证据 verifier 已进入源码及 D1 release bundle。它绑定 C0～C6，为两个 Tenant 分别经 Money 公网命令登记本地兼容 Party、经 Money 审计 ops 设置 Finance 账簿主体及精确 Person 收款映射，再由授权财务管理员确认两笔完整实际付款；验证 Money Obligation／Payment／Allocation 引用、本人 Open API `paid` 回读和跨 Tenant 404。该阶段不直写数据库、不宣称 Party Directory 已统一。下一连续阶段单独补齐工资支付档案、工资核对与实际发放，再进入联合备份／空目标恢复和 Feedback；真实 D1 C7 尚未执行。
 
 2026-10-26 P9 增量（BF-260）：C6 员工发票上传／报销驱动和固定证据 verifier 已进入源码及 D1 release bundle。它绑定 C0～C5，用两把既有员工 Key 分别完成虚构 PDF 实字节直传、Evidence `invoice-v1` 校验、稳定引用冻结、本人报销提交／列表／详情和跨 Tenant 404；报销停在待支付，未调用实际付款或 Money。下一连续阶段由授权财务人员确认两笔实际付款并核对 Money 唯一事实，再进入联合备份／空目标恢复和 Feedback；真实 D1 C6 尚未执行。

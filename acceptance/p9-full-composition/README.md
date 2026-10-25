@@ -148,4 +148,25 @@ acceptance/p9-full-composition/verify-c7-reimbursement-payments
 
 C7 re-verifies and binds C0 through C6. For each Tenant, an authorized Finance administrator registers an acceptance-only ledger owner and employee payee through Money's protected public Party command, then uses Money's audited per-Tenant operations commands to set the internal-finance ledger owner and map the exact C1 Person revision/digest to that payee. Finance confirms the exact remaining amount, writes the obligation／payment／allocation through its versioned Money connector, and the employee reads `paid` from Open API detail and list. The gate requires stable Money references, full allocation, no overage, isolated Tenant results and cross-Tenant 404. This is explicitly Money's current local compatibility Party path: it performs no direct database write and does not claim Party Directory unification or migration. Payroll actual payment is not part of C7. Validate a handed-off artifact with `verify-c7-evidence EVIDENCE_DIR`.
 
+Continue with the actual Payroll payment gate against the same C0 through C7 evidence chain:
+
+```sh
+P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
+P9_C1_EVIDENCE_DIR=/absolute/path/to/evidence/c1 \
+P9_C2_EVIDENCE_DIR=/absolute/path/to/evidence/c2 \
+P9_C3_EVIDENCE_DIR=/absolute/path/to/evidence/c3 \
+P9_C4_EVIDENCE_DIR=/absolute/path/to/evidence/c4 \
+P9_C5_EVIDENCE_DIR=/absolute/path/to/evidence/c5 \
+P9_C6_EVIDENCE_DIR=/absolute/path/to/evidence/c6 \
+P9_C7_EVIDENCE_DIR=/absolute/path/to/evidence/c7 \
+P9_C8_EVIDENCE_DIR=/absolute/path/to/evidence/c8 \
+P9_PRIMARY_ADMIN_USERNAME=admin-a \
+P9_PRIMARY_ADMIN_PASSWORD_FILE=/restricted/admin-a.password \
+P9_SECONDARY_ADMIN_USERNAME=admin-b \
+P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
+acceptance/p9-full-composition/verify-c8-payroll-payments
+```
+
+C8 re-verifies and binds C0 through C7. For each Tenant it creates an independently owned Payroll payment profile, explicitly synchronizes that snapshot into the existing C3 line, reviews the run, and confirms the exact net amount through Payroll's versioned Money connector. The same C1 employee must then read the settled line from `/payroll/v1/me/payslips`, while a cross-Tenant payment guess returns 404. Full bank account numbers are transient protected inputs and are excluded from evidence. The gate reuses C7's audited Money local-compatibility Party mapping, performs no direct database write, and explicitly does not claim Party Directory unification. A successful payment command must replay without a second Money write if evidence capture is interrupted. Validate a handed-off artifact with `verify-c8-evidence EVIDENCE_DIR`.
+
 After the continuous fixture has been created, `d1 backup` must produce both `backup-consistency.env` and `database-fingerprints.tsv`. The latter contains only database names, table/row counts and SHA-256 values; raw rows and sequence values never enter the artifact. Its schema/fact digests cover public sequence definitions and `last_value`/`is_called` as well as tables. Before deleting target volumes, `d1 restore` validates its fixed format and exact database selection; it then recomputes the same fingerprints before starting business services and fails closed on any mismatch. A passing fingerprint comparison proves database checkpoint equality only; the P9 runtime window must still verify Evidence bytes and repeat key reads and one bounded continuation write after restore.

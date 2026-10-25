@@ -1,0 +1,109 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR); c1_dir=$(required_env P9_C1_EVIDENCE_DIR)
+c2_dir=$(required_env P9_C2_EVIDENCE_DIR); c3_dir=$(required_env P9_C3_EVIDENCE_DIR)
+c4_dir=$(required_env P9_C4_EVIDENCE_DIR); c5_dir=$(required_env P9_C5_EVIDENCE_DIR)
+c6_dir=$(required_env P9_C6_EVIDENCE_DIR); c7_dir=$(required_env P9_C7_EVIDENCE_DIR)
+evidence_dir=$(required_env P9_C8_EVIDENCE_DIR); primary_username=$(required_env P9_PRIMARY_ADMIN_USERNAME); primary_password_file=$(required_env P9_PRIMARY_ADMIN_PASSWORD_FILE)
+secondary_username=$(required_env P9_SECONDARY_ADMIN_USERNAME); secondary_password_file=$(required_env P9_SECONDARY_ADMIN_PASSWORD_FILE); ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+for command_name in curl docker jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null
+for phase in 1 2 3 4 5 6 7; do eval dir=\$c${phase}_dir; "$script_dir/verify-c${phase}-evidence" "$dir" >/dev/null; done
+case "$evidence_dir" in /*) ;; *) echo 'P9_C8_EVIDENCE_DIR must be absolute' >&2; exit 2;; esac
+[ ! -e "$evidence_dir" ] || { [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || { echo "P9 C8 evidence directory must be absent or empty: $evidence_dir" >&2; exit 2; }; }
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+for file in "$primary_password_file" "$secondary_password_file"; do [ -f "$file" ] && [ "$(file_mode "$file")" = 600 ] || { echo "administrator password file must exist with mode 0600: $file" >&2; exit 2; }; done
+[ -z "$ca_bundle" ] || [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }
+
+c0_state="$c0_dir/state-after-c0.json"; c1_state="$c1_dir/state-after-c1.json"; c3_state="$c3_dir/state-after-c3.json"; c7_state="$c7_dir/state-after-c7.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state"); base_url=$(jq -er '.deployment.public_url|sub("/+$";"")' "$c0_state")
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not allowed' >&2; exit 1;; esac
+c0_sha=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256"|awk '{print $1}'); c1_sha=$(openssl dgst -sha256 -r "$c1_dir/checksums.sha256"|awk '{print $1}')
+c2_sha=$(openssl dgst -sha256 -r "$c2_dir/checksums.sha256"|awk '{print $1}'); c3_sha=$(openssl dgst -sha256 -r "$c3_dir/checksums.sha256"|awk '{print $1}')
+c4_sha=$(openssl dgst -sha256 -r "$c4_dir/checksums.sha256"|awk '{print $1}'); c5_sha=$(openssl dgst -sha256 -r "$c5_dir/checksums.sha256"|awk '{print $1}')
+c6_sha=$(openssl dgst -sha256 -r "$c6_dir/checksums.sha256"|awk '{print $1}'); c7_sha=$(openssl dgst -sha256 -r "$c7_dir/checksums.sha256"|awk '{print $1}')
+for phase in 1 2 3 4 5 6 7; do eval state=\$c${phase}_dir/state-after-c${phase}.json; [ "$(jq -er '.deployment.compose_project' "$state")" = "$compose_project" ] || { echo "C$phase Compose project changed" >&2; exit 1; }; done
+for phase in 0 1 2 3 4 5 6; do eval expected=\$c${phase}_sha; [ "$(jq -er ".deployment.c${phase}_checksums_sha256" "$c7_state")" = "$expected" ] || { echo "C7 does not bind C$phase" >&2; exit 1; }; done
+money_container=$(docker ps --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=money-flow-ledger' --filter status=running --format '{{.ID}}')
+[ "$(printf '%s\n' "$money_container"|awk 'NF{n++} END{print n+0}')" -eq 1 ] || { echo 'P9 C8 requires exactly one running Money container' >&2; exit 1; }
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); workspace=$(mktemp -d "$tmp_root/oms-p9-c8.XXXXXX"); evidence_stage=
+trap 'rm -rf -- "$workspace"; [ -z "$evidence_stage" ] || rm -rf -- "$evidence_stage"' EXIT HUP INT TERM
+chmod 700 "$workspace"; http_evidence="$workspace/http-evidence.tsv"; operations="$workspace/operations.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"; printf 'tenant_role\toperation\tresult\n' >"$operations"
+stable_uuid() { digest=$(printf '%s' "$1"|openssl dgst -sha256 -r|awk '{print $1}'); printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$digest"|cut -c1-8)" "$(printf '%s' "$digest"|cut -c9-12)" "$(printf '%s' "$digest"|cut -c14-16)" "$(printf '%s' "$digest"|cut -c18-20)" "$(printf '%s' "$digest"|cut -c21-32)"; }
+curl_result() { output=$1; shift; set -- --silent --show-error --connect-timeout 10 --max-time 45 --output "$output" --write-out '%{http_code} %{time_total}' "$@"; [ -z "$ca_bundle" ] || set -- --cacert "$ca_bundle" "$@"; curl "$@"; }
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+expect_status() { case "$1:$2" in 204/409:204|204/409:409) return 0;; esac; [ "$2" = "$1" ] || { echo "$3 returned HTTP $2, expected $1" >&2; exit 1; }; }
+request() { method=$1; path=$2; cookies=$3; csrf=$4; payload=$5; output=$6; expected=$7; label=$8; set -- --request "$method" --cookie "$cookies" --cookie-jar "$cookies"; [ -z "$csrf" ] || set -- "$@" -H "X-CSRF-Token: $csrf"; [ -z "$payload" ] || set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload"; result=$(curl_result "$output" "$@" "$base_url$path"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "$label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$label"; printf '%s' "$actual"; }
+fetch_csrf() { result=$(curl_result "$2" --cookie-jar "$1" "$base_url/auth/api/v1/csrf"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "GET $3 auth CSRF" 200 "$actual" "$duration"; expect_status 200 "$actual" 'fetch CSRF'; chmod 600 "$1"; jq -er .csrf_token "$2"; }
+login() { payload="$workspace/$1-login.json"; jq -Rs --arg username "$4" '{username:$username,password:(rtrimstr("\n")|rtrimstr("\r"))}' "$5" >"$payload"; chmod 600 "$payload"; request POST /auth/api/v1/login "$2" "$3" "$payload" "$workspace/$1-login.out" 200 "POST $1 login" >/dev/null; rm -f "$payload"; }
+grant() { actor=$1; cookies=$2; csrf=$3; subject=$4; action=$5; suffix=$(printf '%s' "$action"|tr '.-' '__'); jq -n --arg subject "$subject" --arg action "$action" '{subject_id:$subject,audience:"payroll",action:$action}' >"$workspace/$actor-grant-$suffix.json"; status=$(request POST /auth/api/v1/admin/grants "$cookies" "$csrf" "$workspace/$actor-grant-$suffix.json" "$workspace/$actor-grant-$suffix.out" 204/409 "POST $actor $action grant"); [ "$status" != 409 ] || jq -e '.error.code=="conflict"' "$workspace/$actor-grant-$suffix.out" >/dev/null; }
+authorize() { result=$(curl_result "$workspace/$1-authorize.out" --request POST --cookie "$2" --cookie-jar "$2" --data-urlencode "csrf_token=$3" "$base_url/gateway/authorize/payroll"); actual=$(printf '%s' "$result"|awk '{print $1}'); duration=$(printf '%s' "$result"|awk '{print $2}'); record_http "POST $1 authorize Payroll" 303 "$actual" "$duration"; expect_status 303 "$actual" 'authorize Payroll'; }
+money_ops() { actor=$1; tenant=$2; output=$3; shift 3; docker exec -e "IAM_TENANT_ID=$tenant" "$money_container" /app/ops payroll-owner-set "$@" >"$output"; printf '%s\tpayroll-owner-set\tpass\n' "$actor" >>"$operations"; }
+
+run_actor() {
+  actor=$1; index=$2; username=$3; password_file=$4
+  tenant=$(jq -er ".tenants[$index].id" "$c3_state"); person=$(jq -er ".tenants[$index].person_id" "$c3_state"); run=$(jq -er ".tenants[$index].payroll_run.id" "$c3_state"); line=$(jq -er ".tenants[$index].payroll_run.line_id" "$c3_state")
+  base_run_revision=$(jq -er ".tenants[$index].payroll_run.revision" "$c3_state"); base_line_revision=$(jq -er ".tenants[$index].payroll_run.line_revision" "$c3_state"); owner=$(jq -er ".tenants[$index].money_compatibility_parties.owner_id" "$c7_state")
+  cookies="$workspace/$actor.cookies"; csrf=$(fetch_csrf "$cookies" "$workspace/$actor-csrf.json" "$actor"); login "$actor" "$cookies" "$csrf" "$username" "$password_file"
+  request GET /auth/api/v1/session "$cookies" '' '' "$workspace/$actor-session.json" 200 "GET $actor session" >/dev/null
+  subject=$(jq -er --arg tenant "$tenant" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/$actor-session.json"); display=$(jq -r '.principal.display_name // "P9 工资经办人"' "$workspace/$actor-session.json")
+  for action in payroll.tenant.read payroll.payment-profile.manage payroll.run.manage payroll.payment.confirm payroll.self.read; do grant "$actor" "$cookies" "$csrf" "$subject" "$action"; done
+  authorize "$actor" "$cookies" "$csrf"
+  profile_command=$(stable_uuid "oms-v1-p9-c8-$actor-payment-profile:$tenant:$person"); account="62220299123456$((index+70))"
+  jq -n --arg command "$profile_command" --arg person "$person" --arg name "P9 $actor 验收员工" --arg account "$account" '{command_id:$command,expected_revision:0,person_id:$person,account_name:$name,bank_name:"P9 验收银行",account_number:$account,status:"active",effective_month:"2026-10",reason:"P9 C8 工资支付档案建档",confirmed:true}' >"$workspace/$actor-profile-request.json"
+  request PUT "/payroll/v1/payment-profiles/$person" "$cookies" "$csrf" "$workspace/$actor-profile-request.json" "$workspace/$actor-profile.json" 200 "PUT $actor Payment Profile" >/dev/null; rm -f "$workspace/$actor-profile-request.json"
+  profile_id=$(jq -er --arg tenant "$tenant" --arg person "$person" 'select(.tenant_id==$tenant and .person_id==$person and .revision>=1 and .status=="active" and (.masked_account_number|length)>0 and (has("account_number")|not))|.id' "$workspace/$actor-profile.json"); profile_revision=$(jq -er .revision "$workspace/$actor-profile.json")
+  owner_command=$(stable_uuid "oms-v1-p9-c8-$actor-payroll-owner:$tenant"); money_ops "$actor" "$tenant" "$workspace/$actor-owner.json" --command-id "$owner_command" --tenant-id "$tenant" --local-party-id "$owner" --actor-kind iam_subject --actor-id "$subject" --actor-display-name "$display" --reason 'P9 C8 工资账簿主体复核'
+  jq -e --arg tenant "$tenant" --arg owner "$owner" '.tenant_id==$tenant and .local_party_id==$owner and .revision>=1' "$workspace/$actor-owner.json" >/dev/null
+  request GET "/payroll/v1/payroll-periods/$run" "$cookies" '' '' "$workspace/$actor-current.json" 200 "GET $actor Payroll Period before payment" >/dev/null
+  status=$(jq -er --arg line "$line" '.lines[]|select(.id==$line)|.status' "$workspace/$actor-current.json")
+  if [ "$status" = review_pending ] && [ "$(jq -er --arg line "$line" '.lines[]|select(.id==$line)|.payment_account_missing' "$workspace/$actor-current.json")" = true ]; then
+    request GET "/payroll/v1/payroll-periods/$run/lines/$line/payment-profile-sync-preview" "$cookies" '' '' "$workspace/$actor-preview.json" 200 "GET $actor Payment Profile sync preview" >/dev/null
+    sync_command=$(stable_uuid "oms-v1-p9-c8-$actor-profile-sync:$tenant:$line")
+    jq -n --arg command "$sync_command" --arg hash "$(jq -er .preview_hash "$workspace/$actor-preview.json")" --argjson rr "$(jq -er .payroll_run_revision "$workspace/$actor-preview.json")" --argjson lr "$(jq -er .payroll_line_revision "$workspace/$actor-preview.json")" '{command_id:$command,expected_run_revision:$rr,expected_line_revision:$lr,preview_hash:$hash,reason:"P9 C8 同步工资支付档案"}' >"$workspace/$actor-sync.json"
+    request POST "/payroll/v1/payroll-periods/$run/lines/$line/payment-profile:sync" "$cookies" "$csrf" "$workspace/$actor-sync.json" "$workspace/$actor-current.json" 200 "POST $actor Payment Profile sync" >/dev/null
+  fi
+  status=$(jq -er --arg line "$line" '.lines[]|select(.id==$line)|.status' "$workspace/$actor-current.json")
+  if [ "$status" = review_pending ]; then
+    review_command=$(stable_uuid "oms-v1-p9-c8-$actor-review:$tenant:$run")
+    jq -n --arg command "$review_command" --argjson revision "$((base_run_revision+1))" '{command_id:$command,expected_revision:$revision,reason:"P9 C8 工资核对完成"}' >"$workspace/$actor-review.json"
+    request POST "/payroll/v1/payroll-periods/$run/review" "$cookies" "$csrf" "$workspace/$actor-review.json" "$workspace/$actor-current.json" 200 "POST $actor Payroll review" >/dev/null
+  fi
+  net=$(jq -er --arg line "$line" '.lines[]|select(.id==$line)|.net_payable_minor' "$workspace/$actor-current.json"); [ "$net" -gt 0 ] || { echo "$actor payroll net amount must be positive" >&2; exit 1; }
+  payment_command=$(stable_uuid "oms-v1-p9-c8-$actor-payroll-payment:$tenant:$line")
+  jq -n --arg command "$payment_command" --argjson rr "$((base_run_revision+2))" --argjson lr "$((base_line_revision+2))" --argjson amount "$net" '{command_id:$command,expected_run_revision:$rr,expected_line_revision:$lr,actual_amount_minor:$amount,occurred_on:"2026-10-26",note:"P9 C8 工资实际发放",overage_confirmed:false,overage_reason:""}' >"$workspace/$actor-payment.json"
+  request POST "/payroll/v1/payroll-periods/$run/lines/$line/payments" "$cookies" "$csrf" "$workspace/$actor-payment.json" "$workspace/$actor-paid.json" 200 "POST $actor Payroll payment" >/dev/null
+  jq -e --arg tenant "$tenant" --arg run "$run" --arg line "$line" --arg person "$person" --arg profile "$profile_id" --argjson profile_revision "$profile_revision" --argjson net "$net" '.tenant_id==$tenant and .id==$run and .status=="paid" and (.lines|length)==1 and (.lines[0].id==$line and .lines[0].person_id==$person and .lines[0].payment_profile_id==$profile and .lines[0].payment_profile_revision==$profile_revision and .lines[0].payment_account_missing==false and .lines[0].status=="paid" and .lines[0].net_payable_minor==$net and .lines[0].actual_paid_minor==$net and .lines[0].allocated_paid_minor==$net and .lines[0].overage_minor==0)' "$workspace/$actor-paid.json" >/dev/null || { echo "$actor paid Payroll Period is invalid" >&2; exit 1; }
+  request GET /payroll/v1/me/payslips "$cookies" '' '' "$workspace/$actor-payslips.json" 200 "GET $actor self payslips" >/dev/null
+  jq -e --arg person "$person" --arg run "$run" --arg line "$line" --argjson net "$net" '.person_id==$person and any(.items[];.payroll_run_id==$run and .payroll_line_id==$line and .status=="paid" and .net_payable_minor==$net and .allocated_paid_minor==$net)' "$workspace/$actor-payslips.json" >/dev/null
+  jq -n --arg tenant "$tenant" --arg person "$person" --arg profile "$profile_id" --argjson profile_revision "$profile_revision" --arg run "$run" --arg line "$line" --arg command "$payment_command" --argjson net "$net" --slurpfile paid "$workspace/$actor-paid.json" '{tenant_id:$tenant,person_id:$person,payment_profile:{id:$profile,revision:$profile_revision},payroll:{run_id:$run,run_revision:$paid[0].revision,status:$paid[0].status,line_id:$line,line_revision:$paid[0].lines[0].revision,line_status:$paid[0].lines[0].status,net_payable_minor:$net,actual_paid_minor:$paid[0].lines[0].actual_paid_minor,allocated_paid_minor:$paid[0].lines[0].allocated_paid_minor,overage_minor:$paid[0].lines[0].overage_minor,payment_command_id:$command}}' >"$workspace/$actor-result.json"
+}
+
+run_actor primary 0 "$primary_username" "$primary_password_file"; run_actor secondary 1 "$secondary_username" "$secondary_password_file"
+secondary_run=$(jq -er '.tenants[1].payroll_run.id' "$c3_state"); secondary_line=$(jq -er '.tenants[1].payroll_run.line_id' "$c3_state")
+jq -n --arg command "$(stable_uuid "oms-v1-p9-c8-cross:$secondary_line")" --argjson rr "$(( $(jq -er '.tenants[1].payroll_run.revision' "$c3_state") + 2 ))" --argjson lr "$(( $(jq -er '.tenants[1].payroll_run.line_revision' "$c3_state") + 2 ))" '{command_id:$command,expected_run_revision:$rr,expected_line_revision:$lr,actual_amount_minor:1,occurred_on:"2026-10-26",note:"must not cross tenant",overage_confirmed:false,overage_reason:""}' >"$workspace/cross.json"
+request POST "/payroll/v1/payroll-periods/$secondary_run/lines/$secondary_line/payments" "$workspace/primary.cookies" "$(jq -er .csrf_token "$workspace/primary-csrf.json")" "$workspace/cross.json" "$workspace/cross.out" 404 'POST primary cross-tenant Payroll payment' >/dev/null
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" --arg c6 "$c6_sha" --arg c7 "$c7_sha" --slurpfile a "$workspace/primary-result.json" --slurpfile b "$workspace/secondary-result.json" '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C8",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5,c6_checksums_sha256:$c6,c7_checksums_sha256:$c7},party_runtime:{mode:"local_compatibility",party_directory_unified:false},tenants:[$a[0],$b[0]],checks:{payment_profile_snapshot:"pass",payroll_review:"pass",payroll_to_money_write:"pass",self_payslip_projection:"pass",cross_tenant_payment_not_found:"pass",direct_database_write:false,secrets_recorded:false}}' >"$workspace/state-after-c8.json"
+cat >"$workspace/result.md" <<EOF
+# P9 C8 payroll payment result
+
+- Result: pass
+- Captured at: $captured_at
+- Checks: two Tenant-bound payment profiles, reviewed payroll lines, Payroll to Money payment, self payslip projection and cross-Tenant 404.
+- Party runtime: C7 local compatibility mapping reused; Party Directory unification is not claimed.
+- Direct database write: no
+- Secrets or full bank accounts recorded in evidence: no
+EOF
+mkdir -p "$(dirname -- "$evidence_dir")"; evidence_stage=$(mktemp -d "$(dirname -- "$evidence_dir")/.p9-c8-evidence.XXXXXX"); chmod 700 "$evidence_stage"
+cp "$http_evidence" "$operations" "$workspace/result.md" "$workspace/state-after-c8.json" "$evidence_stage/"; chmod 600 "$evidence_stage/"*; : >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv operations.tsv result.md state-after-c8.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact"|awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"; done
+chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c8-evidence" "$evidence_stage" >/dev/null
+[ ! -d "$evidence_dir" ] || rmdir "$evidence_dir"; mv "$evidence_stage" "$evidence_dir"; evidence_stage=
+echo 'PASS P9 C8 Payroll payment, Money delivery and self payslip isolation'

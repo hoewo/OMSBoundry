@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); runtime=$(mktemp -d "$tmp_root/oms-p9-c8-test.XXXXXX")
+trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+mkdir -p "$runtime/bin" "$runtime/mock-state"; artifact_dir=${P9_C8_TEST_ARTIFACT_DIR:-}
+P9_C7_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c7-reimbursement-payments" >/dev/null
+
+cat >"$runtime/bin/docker" <<'MOCK'
+#!/bin/sh
+set -eu
+case "${1:-}" in
+  ps) printf 'money-container\n';;
+  exec)
+    shift; tenant=
+    if [ "${1:-}" = -e ]; then tenant=${2#IAM_TENANT_ID=}; shift 2; fi
+    [ "${1:-}" = money-container ]; shift; [ "${1:-}" = /app/ops ]; shift
+    [ "${1:-}" = payroll-owner-set ]; shift; local_party=
+    while [ "$#" -gt 0 ]; do
+      case "$1" in --local-party-id) local_party=$2; shift 2;; *) shift;; esac
+    done
+    printf '{"tenant_id":"%s","local_party_id":"%s","revision":1,"replayed":false}\n' "$tenant" "$local_party";;
+  *) echo "unexpected mock docker command: $*" >&2; exit 2;;
+esac
+MOCK
+chmod 0755 "$runtime/bin/docker"
+
+cat >"$runtime/bin/curl" <<'MOCK'
+#!/bin/sh
+set -eu
+output= method=GET url= data_file= cookies= cookie_jar=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2;; --request) method=$2; shift 2;;
+    --cookie) cookies=$2; shift 2;; --cookie-jar) cookie_jar=$2; shift 2;;
+    --data-binary) data_file=${2#@}; shift 2;;
+    --write-out|--connect-timeout|--max-time|--cacert|-H|--data-urlencode) shift 2;;
+    --silent|--show-error) shift;; http://*|https://*) url=$1; shift;; *) shift;;
+  esac
+done
+[ -n "$output" ] || exit 2; : >"$output"; [ -z "$cookie_jar" ] || printf '# mock cookie\n' >"$cookie_jar"
+actor=primary; case "$cookies$cookie_jar" in *secondary*) actor=secondary;; esac
+if [ "$actor" = primary ]; then
+  tenant=11111111-1111-4111-8111-111111111111; person=aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa; subject=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+  run=aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa; line=aaaaaaaa-5555-4555-8555-aaaaaaaaaaaa; other_run=bbbbbbbb-4444-4444-8444-bbbbbbbbbbbb; other_line=bbbbbbbb-5555-4555-8555-bbbbbbbbbbbb
+  profile=aaaaaaaa-6666-4666-8666-aaaaaaaaaaaa; net=1000000
+else
+  tenant=22222222-2222-4222-8222-222222222222; person=bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb; subject=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+  run=bbbbbbbb-4444-4444-8444-bbbbbbbbbbbb; line=bbbbbbbb-5555-4555-8555-bbbbbbbbbbbb; other_run=aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa; other_line=aaaaaaaa-5555-4555-8555-aaaaaaaaaaaa
+  profile=bbbbbbbb-6666-4666-8666-bbbbbbbbbbbb; net=1200000
+fi
+status=200; path=$(printf '%s' "$url"|sed -E 's#^https?://[^/]+##')
+run_json() {
+  run_status=review_pending; line_status=review_pending; missing=true; run_revision=1; line_revision=1; actual=0; allocated=0
+  if [ -f "$P9_C8_MOCK_STATE/$actor-synced" ]; then missing=false; run_revision=2; line_revision=2; fi
+  if [ -f "$P9_C8_MOCK_STATE/$actor-reviewed" ]; then missing=false; run_status=ready_to_pay; line_status=ready_to_pay; run_revision=3; line_revision=3; fi
+  if [ -f "$P9_C8_MOCK_STATE/$actor-paid" ]; then missing=false; run_status=paid; line_status=paid; run_revision=4; line_revision=4; actual=$net; allocated=$net; fi
+  printf '{"id":"%s","tenant_id":"%s","period":"2026-10","run_kind":"regular","status":"%s","revision":%s,"planned_pay_date":"2026-10-31","approval_status":"not_required","lines":[{"id":"%s","tenant_id":"%s","person_id":"%s","person_source_revision":1,"person_display_name":"P9 employee","payment_profile_id":"%s","payment_profile_revision":1,"payment_account_missing":%s,"fixed_salary_minor":%s,"gross_minor":%s,"net_payable_minor":%s,"actual_paid_minor":%s,"allocated_paid_minor":%s,"overage_minor":0,"status":"%s","revision":%s}]}\n' "$run" "$tenant" "$run_status" "$run_revision" "$line" "$tenant" "$person" "$profile" "$missing" "$net" "$net" "$net" "$actual" "$allocated" "$line_status" "$line_revision"
+}
+case "$method $path" in
+  'GET /auth/api/v1/csrf') printf '{"csrf_token":"csrf-%s"}\n' "$actor" >"$output";;
+  'POST /auth/api/v1/login') jq -e '.username!="" and .password!=""' "$data_file" >/dev/null; printf '{"principal":{"subject_id":"%s"}}\n' "$subject" >"$output";;
+  'GET /auth/api/v1/session') printf '{"principal":{"tenant_id":"%s","subject_id":"%s","display_name":"P9 %s admin"}}\n' "$tenant" "$subject" "$actor" >"$output";;
+  'POST /auth/api/v1/admin/grants') jq -e '.audience=="payroll" and (.action|IN("payroll.tenant.read","payroll.payment-profile.manage","payroll.run.manage","payroll.payment.confirm","payroll.self.read"))' "$data_file" >/dev/null; status=204;;
+  'POST /gateway/authorize/payroll') status=303;;
+  "PUT /payroll/v1/payment-profiles/$person")
+    jq -e --arg person "$person" '.person_id==$person and .expected_revision==0 and .confirmed==true and (.account_number|test("^[0-9]{16}$"))' "$data_file" >/dev/null
+    printf '{"id":"%s","tenant_id":"%s","person_id":"%s","masked_account_number":"************%s","status":"active","revision":1}\n' "$profile" "$tenant" "$person" "$(jq -r '.account_number[-4:]' "$data_file")" >"$output";;
+  "GET /payroll/v1/payroll-periods/$run") run_json >"$output";;
+  "GET /payroll/v1/payroll-periods/$run/lines/$line/payment-profile-sync-preview")
+    printf '{"payroll_run_revision":1,"payroll_line_revision":1,"preview_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\n' >"$output";;
+  "POST /payroll/v1/payroll-periods/$run/lines/$line/payment-profile:sync")
+    jq -e '.expected_run_revision==1 and .expected_line_revision==1 and (.preview_hash|length)==64' "$data_file" >/dev/null
+    touch "$P9_C8_MOCK_STATE/$actor-synced"; run_json >"$output";;
+  "POST /payroll/v1/payroll-periods/$run/review")
+    jq -e '.expected_revision==2' "$data_file" >/dev/null; touch "$P9_C8_MOCK_STATE/$actor-reviewed"; run_json >"$output";;
+  "POST /payroll/v1/payroll-periods/$run/lines/$line/payments")
+    jq -e --argjson net "$net" '.expected_run_revision==3 and .expected_line_revision==3 and .actual_amount_minor==$net and .overage_confirmed==false' "$data_file" >/dev/null
+    touch "$P9_C8_MOCK_STATE/$actor-paid"; run_json >"$output";;
+  'GET /payroll/v1/me/payslips')
+    printf '{"person_id":"%s","person_display_name":"P9 employee","person_status":"active","person_source_revision":1,"items":[{"payroll_run_id":"%s","payroll_run_revision":4,"payroll_line_id":"%s","payroll_line_revision":4,"period":"2026-10","status":"paid","net_payable_minor":%s,"actual_paid_minor":%s,"allocated_paid_minor":%s,"overage_minor":0}]}\n' "$person" "$run" "$line" "$net" "$net" "$net" >"$output";;
+  "POST /payroll/v1/payroll-periods/$other_run/lines/$other_line/payments") status=404; printf '{"error":{"code":"not_found"}}\n' >"$output";;
+  *) echo "unexpected mock curl request: $method $path" >&2; exit 2;;
+esac
+printf '%s 0.001' "$status"
+MOCK
+chmod 0755 "$runtime/bin/curl"
+
+run_c8() {
+  target=$1
+  env PATH="$runtime/bin:$PATH" P9_C8_MOCK_STATE="$runtime/mock-state" \
+    P9_C0_EVIDENCE_DIR="$runtime/fixture/c0" P9_C1_EVIDENCE_DIR="$runtime/fixture/c1" P9_C2_EVIDENCE_DIR="$runtime/fixture/c2" \
+    P9_C3_EVIDENCE_DIR="$runtime/fixture/c3" P9_C4_EVIDENCE_DIR="$runtime/fixture/c4" P9_C5_EVIDENCE_DIR="$runtime/fixture/c5" \
+    P9_C6_EVIDENCE_DIR="$runtime/fixture/c6" P9_C7_EVIDENCE_DIR="$runtime/fixture/c7" P9_C8_EVIDENCE_DIR="$runtime/$target" \
+    P9_PRIMARY_ADMIN_USERNAME=p9-primary P9_PRIMARY_ADMIN_PASSWORD_FILE="$runtime/fixture/primary.password" \
+    P9_SECONDARY_ADMIN_USERNAME=p9-secondary P9_SECONDARY_ADMIN_PASSWORD_FILE="$runtime/fixture/secondary.password" \
+    "$script_dir/verify-c8-payroll-payments" >"$runtime/$target.out"
+}
+
+run_c8 c8; grep -Fq 'PASS P9 C8' "$runtime/c8.out"; "$script_dir/verify-c8-evidence" "$runtime/c8" >/dev/null
+jq -e '.phase=="C8" and ([.tenants[].payroll.status]|all(.=="paid")) and .checks.payroll_to_money_write=="pass" and .checks.direct_database_write==false' "$runtime/c8/state-after-c8.json" >/dev/null
+run_c8 c8-replay; "$script_dir/verify-c8-evidence" "$runtime/c8-replay" >/dev/null
+jq -s -e '.[0].tenants==.[1].tenants' "$runtime/c8/state-after-c8.json" "$runtime/c8-replay/state-after-c8.json" >/dev/null || { echo 'P9 C8 replay changed stable business results' >&2; exit 1; }
+
+tampered="$runtime/c8-tampered"; cp -R "$runtime/c8" "$tampered"; printf 'tamper\n' >>"$tampered/result.md"
+if "$script_dir/verify-c8-evidence" "$tampered" >/dev/null 2>&1; then echo 'P9 C8 accepted digest drift' >&2; exit 1; fi
+incomplete="$runtime/c8-incomplete"; cp -R "$runtime/c8" "$incomplete"
+awk -F '\t' '$1!="POST primary cross-tenant Payroll payment"' "$incomplete/http-evidence.tsv" >"$incomplete/http.tmp"; mv "$incomplete/http.tmp" "$incomplete/http-evidence.tsv"
+http_sha=$(openssl dgst -sha256 -r "$incomplete/http-evidence.tsv"|awk '{print $1}'); awk -v sha="$http_sha" '$2=="http-evidence.tsv"{$1=sha}{print $1"  "$2}' "$incomplete/checksums.sha256" >"$incomplete/checksums.tmp"; mv "$incomplete/checksums.tmp" "$incomplete/checksums.sha256"
+if "$script_dir/verify-c8-evidence" "$incomplete" >/dev/null 2>&1; then echo 'P9 C8 accepted incomplete HTTP evidence' >&2; exit 1; fi
+leaked="$runtime/c8-leaked"; cp -R "$runtime/c8" "$leaked"; printf '\n6222029912345670\n' >>"$leaked/result.md"
+result_sha=$(openssl dgst -sha256 -r "$leaked/result.md"|awk '{print $1}'); awk -v sha="$result_sha" '$2=="result.md"{$1=sha}{print $1"  "$2}' "$leaked/checksums.sha256" >"$leaked/checksums.tmp"; mv "$leaked/checksums.tmp" "$leaked/checksums.sha256"
+if "$script_dir/verify-c8-evidence" "$leaked" >/dev/null 2>&1; then echo 'P9 C8 accepted a full bank account leak' >&2; exit 1; fi
+
+if [ -n "$artifact_dir" ]; then
+  [ ! -e "$artifact_dir" ] || { echo "P9 C8 test artifact directory already exists: $artifact_dir" >&2; exit 2; }
+  mkdir -p "$artifact_dir/secrets"; chmod 0700 "$artifact_dir/secrets"
+  for phase in c0 c1 c2 c3 c4 c5 c6 c7; do cp -R "$runtime/fixture/$phase" "$artifact_dir/$phase"; done
+  cp -R "$runtime/c8" "$artifact_dir/c8"; cp "$runtime/fixture/primary.password" "$runtime/fixture/secondary.password" "$artifact_dir/"
+  cp "$runtime/fixture/secrets/"* "$artifact_dir/secrets/"; chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password" "$artifact_dir/secrets/"*
+fi
+echo 'PASS P9 C8 offline Payroll payment and evidence regression'

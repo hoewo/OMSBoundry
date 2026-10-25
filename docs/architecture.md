@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C8 工资发放边界（BF-262）：People 继续拥有 Person 当前档案，Payroll 独占 Payment Profile、工资行快照、复核状态、发放编排和 Money 结果引用，Money 独占账簿主体、Person→收款主体映射、义务、实际支付与核销；员工工资单是 Payroll 的本人只读投影。支付档案须先以 revision 快照显式同步到工资行，核对不会自动付款，付款只能经 Payroll 的版本化 Money connector 完成。完整银行卡号只用于受保护请求和内部交付，不得进入固定证据。相同支付 Command 在 Money 已成功后由 Payroll 本地交付记录优先重放，不能按当前 revision 再次创建资金事实。当前 C8 复用 C7 的 Money `local_compatibility` Party 映射且明确 `party_directory_unified=false`，禁止跨库或直接 SQL；真实 D1 仍待执行。
+
 2026-10-26 P9 C7 报销付款边界（BF-261）：Finance 继续独占报销申请、付款编排状态和 Money 稳定引用，Money 独占账簿主体、Person→收款主体映射、义务、实际支付与核销；员工 Open API 只读 Finance 投影，不直接查询或改写 Money。C7 通过 Money 公网命令登记本地兼容 Party，通过 Money 自有审计 ops 按 Tenant 配置 Finance owner 和精确 Person revision／digest 映射，再由 Finance 的版本化连接器写入 Money，全程禁止跨库或直接 SQL。该路径明确为 `local_compatibility`，不得被描述为 Party Directory 统一或迁移完成。固定证据串联 C0～C6 checksum，只保存稳定 ID／revision／状态而不保存密码、API Key、账号正文或响应；真实 D1 仍待执行。
 
 2026-10-26 P9 C6 发票报销边界（BF-260）：员工 Key 只在 Gateway 换取短期 Open API／Owner Capability；Evidence 独占 PDF 字节、上传会话、校验状态与 File Version，Finance 独占报销、Person／发票／收款／Evidence 快照和审批占位，二者不共享表或数据库。签名上传 URL 只授权一个有界数据面动作，不进入业务证据；Finance 通过版本化端口复验 Evidence 后才提交。`payable`／`not_applicable` 仍不形成资金事实，C6 不调用 Money。固定证据以 C0～C5 checksum 串联稳定 ID／revision／摘要，但不保存 Key、签名 URL、账号正文或业务响应。真实 D1 仍待执行。
