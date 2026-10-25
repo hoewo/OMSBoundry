@@ -1,0 +1,177 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR)
+c1_dir=$(required_env P9_C1_EVIDENCE_DIR)
+c2_dir=$(required_env P9_C2_EVIDENCE_DIR)
+c3_dir=$(required_env P9_C3_EVIDENCE_DIR)
+c4_dir=$(required_env P9_C4_EVIDENCE_DIR)
+evidence_dir=$(required_env P9_C5_EVIDENCE_DIR)
+secret_dir=$(required_env P9_C5_SECRET_DIR)
+primary_username=$(required_env P9_PRIMARY_ADMIN_USERNAME)
+primary_password_file=$(required_env P9_PRIMARY_ADMIN_PASSWORD_FILE)
+secondary_username=$(required_env P9_SECONDARY_ADMIN_USERNAME)
+secondary_password_file=$(required_env P9_SECONDARY_ADMIN_PASSWORD_FILE)
+ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+
+for command_name in curl jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null
+"$script_dir/verify-c1-evidence" "$c1_dir" >/dev/null
+"$script_dir/verify-c2-evidence" "$c2_dir" >/dev/null
+"$script_dir/verify-c3-evidence" "$c3_dir" >/dev/null
+"$script_dir/verify-c4-evidence" "$c4_dir" >/dev/null
+case "$secret_dir" in /*) ;; *) echo 'P9_C5_SECRET_DIR must be an absolute path outside evidence' >&2; exit 2;; esac
+case "$evidence_dir" in /*) ;; *) echo 'P9_C5_EVIDENCE_DIR must be an absolute path' >&2; exit 2;; esac
+case "$secret_dir/" in "$evidence_dir/"*|"$evidence_dir/") echo 'P9 C5 secret directory must not be inside evidence' >&2; exit 2;; esac
+case "$evidence_dir/" in "$secret_dir/"*|"$secret_dir/") echo 'P9 C5 evidence directory must not be inside the secret directory' >&2; exit 2;; esac
+[ ! -e "$evidence_dir" ] || { [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || { echo "P9 C5 evidence directory must be absent or empty: $evidence_dir" >&2; exit 2; }; }
+
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+for secret_file in "$primary_password_file" "$secondary_password_file"; do
+  [ -f "$secret_file" ] && [ -s "$secret_file" ] || { echo "administrator password file is missing or empty: $secret_file" >&2; exit 2; }
+  [ "$(file_mode "$secret_file")" = 600 ] || { echo "administrator password file must have mode 0600: $secret_file" >&2; exit 2; }
+done
+if [ -n "$ca_bundle" ]; then [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }; fi
+mkdir -p "$secret_dir"
+chmod 0700 "$secret_dir"
+[ "$(file_mode "$secret_dir")" = 700 ] || { echo 'P9 C5 secret directory must have mode 0700' >&2; exit 2; }
+
+c0_state="$c0_dir/state-after-c0.json"; c1_state="$c1_dir/state-after-c1.json"; c2_state="$c2_dir/state-after-c2.json"; c3_state="$c3_dir/state-after-c3.json"; c4_state="$c4_dir/state-after-c4.json"
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state")
+base_url=$(jq -er '.deployment.public_url | sub("/+$";"")' "$c0_state")
+primary_tenant_id=$(jq -er '.tenants[0].id' "$c1_state"); secondary_tenant_id=$(jq -er '.tenants[1].id' "$c1_state")
+primary_person_id=$(jq -er '.tenants[0].person.id' "$c1_state"); secondary_person_id=$(jq -er '.tenants[1].person.id' "$c1_state")
+c0_sha=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256" | awk '{print $1}')
+c1_sha=$(openssl dgst -sha256 -r "$c1_dir/checksums.sha256" | awk '{print $1}')
+c2_sha=$(openssl dgst -sha256 -r "$c2_dir/checksums.sha256" | awk '{print $1}')
+c3_sha=$(openssl dgst -sha256 -r "$c3_dir/checksums.sha256" | awk '{print $1}')
+c4_sha=$(openssl dgst -sha256 -r "$c4_dir/checksums.sha256" | awk '{print $1}')
+for state in "$c1_state" "$c2_state" "$c3_state" "$c4_state"; do [ "$(jq -er '.deployment.compose_project' "$state")" = "$compose_project" ] || { echo 'continuous phase Compose project changed' >&2; exit 1; }; done
+[ "$(jq -er '.deployment.public_url | sub("/+$";"")' "$c4_state")" = "$base_url" ] || { echo 'C4 public origin does not match C0' >&2; exit 1; }
+[ "$(jq -er '.deployment.c0_checksums_sha256' "$c4_state")" = "$c0_sha" ] && [ "$(jq -er '.deployment.c1_checksums_sha256' "$c4_state")" = "$c1_sha" ] && [ "$(jq -er '.deployment.c2_checksums_sha256' "$c4_state")" = "$c2_sha" ] && [ "$(jq -er '.deployment.c3_checksums_sha256' "$c4_state")" = "$c3_sha" ] || { echo 'C4 evidence chain is invalid' >&2; exit 1; }
+jq -e --arg a "$primary_tenant_id" --arg b "$secondary_tenant_id" --arg pa "$primary_person_id" --arg pb "$secondary_person_id" '.tenants[0].id==$a and .tenants[1].id==$b and .tenants[0].person_id==$pa and .tenants[1].person_id==$pb' "$c4_state" >/dev/null || { echo 'C4 Tenant or Person continuity is invalid' >&2; exit 1; }
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not an allowed HTTPS or loopback origin' >&2; exit 1;; esac
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
+workspace=$(mktemp -d "$tmp_root/oms-p9-c5.XXXXXX"); evidence_stage=
+trap 'rm -rf -- "$workspace"; if [ -n "$evidence_stage" ]; then rm -rf -- "$evidence_stage"; fi' EXIT HUP INT TERM
+chmod 700 "$workspace"; http_evidence="$workspace/http-evidence.tsv"; printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+
+curl_result() {
+  output_file=$1; shift
+  set -- --silent --show-error --connect-timeout 10 --max-time 30 --output "$output_file" --write-out '%{http_code} %{time_total}' "$@"
+  if [ -n "$ca_bundle" ]; then set -- --cacert "$ca_bundle" "$@"; fi
+  curl "$@"
+}
+record_http() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"; }
+expect_status() { [ "$2" = "$1" ] || { echo "$3 returned HTTP $2, expected $1" >&2; exit 1; }; }
+request() {
+  method=$1; path=$2; cookie_file=$3; csrf_token=$4; payload_file=$5; output_file=$6; expected=$7; request_label=$8
+  set -- --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file"
+  if [ -n "$csrf_token" ]; then set -- "$@" -H "X-CSRF-Token: $csrf_token"; fi
+  if [ -n "$payload_file" ]; then set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload_file"; fi
+  result=$(curl_result "$output_file" "$@" "$base_url$path"); actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http "$request_label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$request_label"
+}
+fetch_csrf() {
+  result=$(curl_result "$2" --cookie-jar "$1" "$base_url/auth/api/v1/csrf"); actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"; expect_status 200 "$actual" 'fetch CSRF'; chmod 600 "$1"; jq -er '.csrf_token' "$2"
+}
+login() {
+  login_payload="$workspace/login-$(openssl rand -hex 6).json"
+  jq -Rs --arg username "$3" '{username:$username,password:(rtrimstr("\n")|rtrimstr("\r"))}' "$4" >"$login_payload"; chmod 600 "$login_payload"
+  request POST /auth/api/v1/login "$1" "$2" "$login_payload" "$5" 200 'POST /auth/api/v1/login'; rm -f -- "$login_payload"
+}
+grant_open_api() {
+  for action in open-api.invoice-reimbursement.use open-api.key.manage open-api.self-audit.read; do
+    suffix=$(printf '%s' "$action" | awk -F. '{print $NF}')
+    jq -n --arg subject "$3" --arg action "$action" '{subject_id:$subject,audience:"open-api",action:$action}' >"$workspace/grant-$4-$suffix.json"
+    result=$(curl_result "$workspace/grant-$4-$suffix.out" --request POST --cookie "$1" --cookie-jar "$1" -H "X-CSRF-Token: $2" -H 'Content-Type: application/json' --data-binary "@$workspace/grant-$4-$suffix.json" "$base_url/auth/api/v1/admin/grants")
+    actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}'); record_http 'POST Open API grant' '204/409' "$actual" "$duration"
+    case "$actual" in 204) ;; 409) jq -e '.error.code=="conflict"' "$workspace/grant-$4-$suffix.out" >/dev/null || exit 1;; *) echo "Open API grant returned HTTP $actual" >&2; exit 1;; esac
+  done
+}
+open_request() {
+  actor_label=$1; method=$2; path=$3; key_file=$4; output_file=$5; expected=$6; request_label=$7
+  auth_config="$workspace/$actor_label-open-api-auth.conf"
+  { printf 'header = "Authorization: ApiKey '; tr -d '\r\n' <"$key_file"; printf '"\n'; } >"$auth_config"; chmod 600 "$auth_config"
+  result=$(curl_result "$output_file" --config "$auth_config" --request "$method" "$base_url$path"); rm -f -- "$auth_config"
+  actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}'); record_http "$request_label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$request_label"
+}
+provision_key() {
+  actor_label=$1; cookies=$2; csrf=$3; person_id=$4
+  key_file="$secret_dir/$actor_label.api-key"; metadata_file="$secret_dir/$actor_label.json"
+  if [ -e "$key_file" ] || [ -e "$metadata_file" ]; then
+    [ -f "$key_file" ] && [ -f "$metadata_file" ] || { echo "$actor_label API Key recovery files are incomplete" >&2; exit 2; }
+    [ "$(file_mode "$key_file")" = 600 ] && [ "$(file_mode "$metadata_file")" = 600 ] || { echo "$actor_label API Key recovery files must have mode 0600" >&2; exit 2; }
+    provisioning=reused
+  else
+    jq -n --arg label "P9 C5 $actor_label 连续验收" '{label:$label,ttl_days:180}' >"$workspace/$actor_label-key-request.json"
+    request POST /auth/api/v1/api-keys "$cookies" "$csrf" "$workspace/$actor_label-key-request.json" "$workspace/$actor_label-key-created.json" 201 "POST $actor_label API Key"
+    jq -e --arg person "$person_id" '.person_id==$person and .person_revision>=1 and .status=="active" and (.secret|test("^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$"))' "$workspace/$actor_label-key-created.json" >/dev/null || { echo "$actor_label API Key response is invalid" >&2; exit 1; }
+    jq -er '.secret' "$workspace/$actor_label-key-created.json" >"$key_file"
+    jq 'del(.secret)' "$workspace/$actor_label-key-created.json" >"$metadata_file"
+    chmod 0600 "$key_file" "$metadata_file"; rm -f -- "$workspace/$actor_label-key-created.json"
+    provisioning=created
+  fi
+  tr -d '\r\n' <"$key_file" | grep -Eq '^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$' || { echo "$actor_label API Key recovery secret is invalid" >&2; exit 1; }
+  jq -e --arg person "$person_id" '.person_id==$person and .person_revision>=1 and .status=="active" and (.id|test("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$")) and (has("secret")|not)' "$metadata_file" >/dev/null || { echo "$actor_label API Key metadata is invalid" >&2; exit 1; }
+  printf '%s' "$provisioning"
+}
+
+primary_cookies="$workspace/primary.cookies"; primary_csrf=$(fetch_csrf "$primary_cookies" "$workspace/primary-csrf.json"); login "$primary_cookies" "$primary_csrf" "$primary_username" "$primary_password_file" "$workspace/primary-login.json"
+request GET /auth/api/v1/session "$primary_cookies" '' '' "$workspace/primary-session.json" 200 'GET /auth/api/v1/session'
+secondary_cookies="$workspace/secondary.cookies"; secondary_csrf=$(fetch_csrf "$secondary_cookies" "$workspace/secondary-csrf.json"); login "$secondary_cookies" "$secondary_csrf" "$secondary_username" "$secondary_password_file" "$workspace/secondary-login.json"
+request GET /auth/api/v1/session "$secondary_cookies" '' '' "$workspace/secondary-session.json" 200 'GET /auth/api/v1/session'
+primary_subject_id=$(jq -er --arg tenant "$primary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/primary-session.json"); secondary_subject_id=$(jq -er --arg tenant "$secondary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/secondary-session.json")
+[ "$primary_subject_id" = "$(jq -er '.tenants[0].administrator_subject_id' "$c1_state")" ] && [ "$secondary_subject_id" = "$(jq -er '.tenants[1].administrator_subject_id' "$c1_state")" ] || { echo 'administrator Subject changed since C1' >&2; exit 1; }
+grant_open_api "$primary_cookies" "$primary_csrf" "$primary_subject_id" primary; grant_open_api "$secondary_cookies" "$secondary_csrf" "$secondary_subject_id" secondary
+primary_provisioning=$(provision_key primary "$primary_cookies" "$primary_csrf" "$primary_person_id")
+secondary_provisioning=$(provision_key secondary "$secondary_cookies" "$secondary_csrf" "$secondary_person_id")
+primary_key_id=$(jq -er '.id' "$secret_dir/primary.json"); secondary_key_id=$(jq -er '.id' "$secret_dir/secondary.json")
+primary_prefix=$(jq -er '.prefix' "$secret_dir/primary.json"); secondary_prefix=$(jq -er '.prefix' "$secret_dir/secondary.json")
+
+request GET /auth/api/v1/api-keys "$primary_cookies" '' '' "$workspace/primary-keys.json" 200 'GET primary API Key list'
+request GET /auth/api/v1/api-keys "$secondary_cookies" '' '' "$workspace/secondary-keys.json" 200 'GET secondary API Key list'
+jq -e --arg own "$primary_key_id" --arg other "$secondary_key_id" --arg person "$primary_person_id" 'any(.items[];.id==$own and .person_id==$person and .status=="active") and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/primary-keys.json" >/dev/null || { echo 'primary API Key list failed isolation or redaction' >&2; exit 1; }
+jq -e --arg own "$secondary_key_id" --arg other "$primary_key_id" --arg person "$secondary_person_id" 'any(.items[];.id==$own and .person_id==$person and .status=="active") and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/secondary-keys.json" >/dev/null || { echo 'secondary API Key list failed isolation or redaction' >&2; exit 1; }
+
+open_request primary GET /open-api/v1/me "$secret_dir/primary.api-key" "$workspace/primary-me.json" 200 'GET primary Open API profile'
+open_request secondary GET /open-api/v1/me "$secret_dir/secondary.api-key" "$workspace/secondary-me.json" 200 'GET secondary Open API profile'
+open_request primary GET /open-api/v1/settings "$secret_dir/primary.api-key" "$workspace/primary-settings.json" 200 'GET primary Open API settings'
+open_request secondary GET /open-api/v1/settings "$secret_dir/secondary.api-key" "$workspace/secondary-settings.json" 200 'GET secondary Open API settings'
+jq -e --arg tenant "$primary_tenant_id" --arg subject "$primary_subject_id" --arg person "$primary_person_id" --arg key "$primary_key_id" --arg prefix "$primary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .person_id==$person and .key_id==$key and .key_prefix==$prefix' "$workspace/primary-me.json" >/dev/null || { echo 'primary Open API profile identity is invalid' >&2; exit 1; }
+jq -e --arg tenant "$secondary_tenant_id" --arg subject "$secondary_subject_id" --arg person "$secondary_person_id" --arg key "$secondary_key_id" --arg prefix "$secondary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .person_id==$person and .key_id==$key and .key_prefix==$prefix' "$workspace/secondary-me.json" >/dev/null || { echo 'secondary Open API profile identity is invalid' >&2; exit 1; }
+for settings in "$workspace/primary-settings.json" "$workspace/secondary-settings.json"; do jq -e '.webhook.available==false and .webhook.status=="not_available" and .webhook.callback_url_editable==false' "$settings" >/dev/null || { echo 'Open API Webhook placeholder is invalid' >&2; exit 1; }; done
+
+request GET '/auth/api/v1/open-api-usage?limit=20' "$primary_cookies" '' '' "$workspace/primary-usage.json" 200 'GET primary Open API usage'
+request GET '/auth/api/v1/open-api-usage?limit=20' "$secondary_cookies" '' '' "$workspace/secondary-usage.json" 200 'GET secondary Open API usage'
+jq -e --arg key "$primary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200)' "$workspace/primary-usage.json" >/dev/null || { echo 'primary Open API usage audit is incomplete' >&2; exit 1; }
+jq -e --arg key "$secondary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200)' "$workspace/secondary-usage.json" >/dev/null || { echo 'secondary Open API usage audit is incomplete' >&2; exit 1; }
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" \
+  --arg ta "$primary_tenant_id" --arg pa "$primary_person_id" --arg ka "$primary_key_id" --arg xa "$primary_prefix" --arg za "$primary_provisioning" \
+  --arg tb "$secondary_tenant_id" --arg pb "$secondary_person_id" --arg kb "$secondary_key_id" --arg xb "$secondary_prefix" --arg zb "$secondary_provisioning" \
+  '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C5",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4},tenants:[{id:$ta,person_id:$pa,api_key:{id:$ka,prefix:$xa,status:"active",ttl_days:180,provisioning:$za}},{id:$tb,person_id:$pb,api_key:{id:$kb,prefix:$xb,status:"active",ttl_days:180,provisioning:$zb}}],checks:{one_time_secret_externalized:"pass",api_key_list_isolation:"pass",open_api_identity_binding:"pass",settings_webhook_placeholder:"pass",self_usage_audit:"pass",business_write_performed:false,secrets_recorded:false}}' >"$workspace/state-after-c5.json"
+cat >"$workspace/result.md" <<EOF
+# P9 C5 employee API Key result
+
+- Result: pass
+- Captured at: $captured_at
+- Public origin: $base_url
+- Checks: two Tenant-bound employee API Keys, one-time secret externalization, redacted self lists, profile/settings calls and self usage audit.
+- Business write performed through Open API: no
+- Secrets recorded in evidence: no
+EOF
+
+mkdir -p "$(dirname -- "$evidence_dir")"; evidence_stage=$(mktemp -d "$(dirname -- "$evidence_dir")/.p9-c5-evidence.XXXXXX"); chmod 700 "$evidence_stage"
+cp "$http_evidence" "$evidence_stage/http-evidence.tsv"; cp "$workspace/result.md" "$evidence_stage/result.md"; cp "$workspace/state-after-c5.json" "$evidence_stage/state-after-c5.json"; chmod 600 "$evidence_stage/"*; : >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv result.md state-after-c5.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact" | awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"; done
+chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c5-evidence" "$evidence_stage" >/dev/null
+if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi
+mv "$evidence_stage" "$evidence_dir"; evidence_stage=
+echo 'PASS P9 C5 employee API Key identity, settings and audit isolation'

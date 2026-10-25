@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26：完成 BF-259 的 P9 C5 员工 API Key 运行入口和低资源离线回归。C5 串联 C0～C4 checksum，为两个 Tenant 的既有 Subject／Person 各创建或复用一把默认 180 天 Key，验证自助列表脱敏与隔离、Open API profile 精确身份、Webhook 未开放占位及本人调用审计。一次性 Secret 仅写入证据外 `0700`／`0600` 恢复位置，证据扫描和独立 verifier 拒绝 Secret；首次、重跑、既有 Grant、摘要漂移、缺失 HTTP 断言及重算 checksum 后注入 Secret 的负例通过，并已纳入 D1 release bundle。未执行发票／报销业务写，未启动真实全组合，P9 仍未完成。
+
 2026-10-26：完成 BF-258 的 P9 C4 财务申请运行入口和低资源离线回归。C4 串联 C0～C3 checksum、同一 Origin、两个 Tenant／管理员／Person，在最小 Finance 本人能力下分别形成一笔 `payable` 付款申请，固定无需审批快照、明确无附件确认、账号脱敏、本人列表隔离和跨 Tenant 404；未调用支付或 Money。首次、重复运行、既有 Grant、秘密扫描、摘要漂移及重算 checksum 后删断言的负例通过，并已纳入 D1 release bundle。真实全组合未启动，P9 仍未完成。
 
 2026-10-26 BF-257：新增绑定 C0～C2 的 P9 C3 运行驱动和固定证据校验器；通过 Payroll 自有 ops 幂等导入明确非法律依据的六项零比例验收方案，两个管理员经同一 Origin 分别生成待核对、无需审批且未支付的常规工资表，并验证 C1 Person／C2 Compensation revision 快照、整数计算、Tenant 列表隔离与交叉 404。离线 Docker／curl 首次／重跑、既有 Grant 409、密码扫描、摘要漂移和重算摘要但 HTTP 矩阵缺失负例通过；脚本进入 D1 release bundle。未启动服务，未执行真实 D1、真实缴费规则、发薪或 Money 写入。

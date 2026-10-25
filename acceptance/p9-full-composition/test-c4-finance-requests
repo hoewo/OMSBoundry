@@ -6,6 +6,7 @@ tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
 runtime=$(mktemp -d "$tmp_root/oms-p9-c4-test.XXXXXX")
 trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
 mkdir -p "$runtime/bin"
+artifact_dir=${P9_C4_TEST_ARTIFACT_DIR:-}
 
 P9_C3_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c3-payroll-periods" >/dev/null
 primary_password=$(cat "$runtime/fixture/primary.password")
@@ -118,5 +119,15 @@ awk -F '\t' '$1!="GET secondary cross-tenant Finance request"' "$incomplete/http
 http_sha=$(openssl dgst -sha256 -r "$incomplete/http-evidence.tsv" | awk '{print $1}')
 awk -v sha="$http_sha" '$2=="http-evidence.tsv" {$1=sha} {print $1"  "$2}' "$incomplete/checksums.sha256" >"$incomplete/checksums.tmp"; mv "$incomplete/checksums.tmp" "$incomplete/checksums.sha256"
 if "$script_dir/verify-c4-evidence" "$incomplete" >/dev/null 2>&1; then echo 'P9 C4 evidence verifier accepted a recomputed but incomplete HTTP matrix' >&2; exit 1; fi
+
+if [ -n "$artifact_dir" ]; then
+  [ ! -e "$artifact_dir" ] || { echo "P9 C4 test artifact directory already exists: $artifact_dir" >&2; exit 2; }
+  mkdir -p "$artifact_dir"
+  for phase in c0 c1 c2 c3; do cp -R "$runtime/fixture/$phase" "$artifact_dir/$phase"; done
+  cp -R "$runtime/c4" "$artifact_dir/c4"
+  cp "$runtime/fixture/primary.password" "$artifact_dir/primary.password"
+  cp "$runtime/fixture/secondary.password" "$artifact_dir/secondary.password"
+  chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password"
+fi
 
 echo 'PASS P9 C4 offline Finance request driver and evidence regression'

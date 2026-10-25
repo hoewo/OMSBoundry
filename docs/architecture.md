@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C5 开放 API 身份边界（BF-259）：API Key 由 IAM 拥有，绑定签名 Tenant／Subject 和 People 解析出的当前 Person 引用；Gateway 只把有效 Key 换成短期、有界的 Open API／Owner Capability，不拥有账号、Person 或业务事实。一次性 Secret 只允许进入证据外的受限恢复文件，固定证据只保存不可用来认证的 Key ID／prefix／status／TTL；重跑依靠恢复文件而非重复签发。`/open-api/v1/me` 和本人 usage audit 用于验证绑定与隔离，settings 的 Webhook 字段只是未来能力占位。C5 不调用 Evidence／Finance／Money，因此不能冒充发票报销或资金闭环已经发生；真实 D1 仍待执行。
+
 2026-10-26 P9 C4 财务申请连续边界（BF-258）：C4 只编排既有 IAM、People 与 Internal Finance Requests 所有权，不新增共享事实或跨库写。Person 当前档案仍由 People 拥有；Finance 只冻结本申请所需的 Person ID／revision／digest／display snapshot，并独占付款申请、审批占位和历史。无附件只适用于付款申请且必须记录显式确认，报销的 Evidence 强制条件不因验收而放松。`payable` 与 `not_required` 不代表实际付款，C4 不调用付款端点或 Money。该入口只消费已经运行的 C0～C3 连续环境，不管理服务生命周期；离线 mock 通过不等于真实 D1 通过。
 
 2026-10-26 P9 C3 工资表连续门禁（BF-257）：C3 只编排既有 IAM、People 与 Payroll 所有权，不新增共享事实或跨库写。方案 fixture 由 Payroll ops 写入 Payroll 自己的数据库，Person 仍由 People 拥有，Compensation Profile 与 Payroll Period 仍由 Payroll 拥有；公网命令经过 Gateway 和版本化 Payroll API。工资表冻结上游稳定 ID／revision 与方案快照，计划发薪日、`review_pending` 和 `not_required` 都不形成资金事实，C3 不调用 Money。零比例 fixture 只隔离验证快照和整数计算，不能作为国家或地区规定复用。该入口只在已经运行的 C0 组合上执行，不负责启动／停止服务；离线 mock 通过不等于真实 D1 通过。

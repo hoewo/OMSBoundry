@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C5 员工 API Key 连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/verify-c5-api-keys` 会重新验证并绑定 C0～C4 固定证据，在同一公网 Origin 下为两个既有员工授予 Open API 三项当前能力并创建或复用默认 180 天 Key。一次性 Secret 只写入证据外的受限目录；断言覆盖脱敏本人 Key 列表、Tenant／Subject／Person／Key 身份绑定、Webhook 未开放占位和本人 profile／settings 调用审计。本阶段不调用 Evidence、Finance 或 Money。
+
+`make p9-api-key-driver-test` 已实际通过：离线 curl fixture 覆盖首次签发、使用原 Secret 恢复文件重跑且不重复签发、Grant 204／409、密码与 Key Secret 不落证据、checksum 漂移拒绝、删掉 settings 断言后重算 checksum 仍失败，以及在证据中注入完整 Secret 并重算 checksum 仍失败。该测试不启动服务、容器或数据库，不构成真实 D1／公网、发票报销、恢复或 P9 完成证据。
+
 ## P9 C4 财务申请连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/verify-c4-finance-requests` 会重新验证并绑定 C0～C3 固定证据，在同一公网 Origin 下登录两名管理员、读取既有 C1 Person 快照、取得最小 Finance 本人能力，并各自建立／提交一笔付款申请。断言覆盖 `payable`、`not_required`、明确无附件确认、账号只显示后四位、零支付／零 Money、本人列表隔离和跨 Tenant 404。报销的 Evidence 强制条件保持不变。
