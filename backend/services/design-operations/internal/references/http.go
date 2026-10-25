@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"omsbizfoundry/design-operations/internal/design"
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 const maxResponseBytes = 1 << 20
@@ -67,7 +68,7 @@ func validateEndpoint(endpoint Endpoint) error {
 
 func (v *HTTPValidator) ValidateProject(ctx context.Context, tenantID, id string, revision int64) (design.ProjectReference, error) {
 	var value design.ProjectReference
-	if err := v.get(ctx, v.project, "/api/v1/references/projects/"+url.PathEscape(id), "project", id, &value); err != nil {
+	if err := v.get(ctx, tenantID, v.project, "/api/v1/references/projects/"+url.PathEscape(id), "project", id, &value); err != nil {
 		return design.ProjectReference{}, err
 	}
 	if value.ID != id || value.TenantID != tenantID || value.Revision != revision {
@@ -79,7 +80,7 @@ func (v *HTTPValidator) ValidateProject(ctx context.Context, tenantID, id string
 func (v *HTTPValidator) ValidateAssignment(ctx context.Context, tenantID, projectID, id string, revision int64) (design.AssignmentReference, error) {
 	var value design.AssignmentReference
 	path := "/api/v1/references/projects/" + url.PathEscape(projectID) + "/assignments/" + url.PathEscape(id)
-	if err := v.get(ctx, v.project, path, "project", projectID, &value); err != nil {
+	if err := v.get(ctx, tenantID, v.project, path, "project", projectID, &value); err != nil {
 		return design.AssignmentReference{}, err
 	}
 	if value.ID != id || value.TenantID != tenantID || value.ProjectID != projectID || value.Revision != revision {
@@ -91,7 +92,7 @@ func (v *HTTPValidator) ValidateAssignment(ctx context.Context, tenantID, projec
 func (v *HTTPValidator) ValidatePersonIAMSubject(ctx context.Context, tenantID, id string, revision int64) (design.PersonIAMSubjectFact, error) {
 	var value design.PersonIAMSubjectFact
 	path := "/api/v1/policy-facts/persons/" + url.PathEscape(id)
-	if err := v.get(ctx, v.people, path, "person", id, &value); err != nil {
+	if err := v.get(ctx, tenantID, v.people, path, "person", id, &value); err != nil {
 		return design.PersonIAMSubjectFact{}, err
 	}
 	if value.SchemaVersion != "1" || value.SourceApplication != "people-groups" || value.FactKind != "person-iam-subject-link" ||
@@ -104,7 +105,7 @@ func (v *HTTPValidator) ValidatePersonIAMSubject(ctx context.Context, tenantID, 
 func (v *HTTPValidator) ValidateEvidence(ctx context.Context, tenantID, fileID string, version int, revision int64) (design.EvidenceReference, error) {
 	var value design.EvidenceReference
 	path := fmt.Sprintf("/v1/references/files/%s/versions/%d", url.PathEscape(fileID), version)
-	if err := v.get(ctx, v.evidence, path, "file", fileID, &value); err != nil {
+	if err := v.get(ctx, tenantID, v.evidence, path, "file", fileID, &value); err != nil {
 		return design.EvidenceReference{}, err
 	}
 	if value.FileID != fileID || value.TenantID != tenantID || value.Version != version || value.Revision != revision || strings.TrimSpace(value.DisplayName) == "" {
@@ -113,19 +114,19 @@ func (v *HTTPValidator) ValidateEvidence(ctx context.Context, tenantID, fileID s
 	return value, nil
 }
 
-func (v *HTTPValidator) get(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID string, destination any) error {
+func (v *HTTPValidator) get(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID string, destination any) error {
 	token := endpoint.AccessToken
 	if endpoint.CredentialSource != nil {
 		var err error
-		token, err = endpoint.CredentialSource.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		token, err = workloadidentity.CredentialForTenant(ctx, endpoint.CredentialSource, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if err != nil || strings.TrimSpace(token) == "" {
 			return design.ErrReferenceUnavailable
 		}
 	}
-	return v.getWithToken(ctx, endpoint, path, resourceType, resourceID, token, destination, true)
+	return v.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, token, destination, true)
 }
 
-func (v *HTTPValidator) getWithToken(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID, token string, destination any, retry bool) error {
+func (v *HTTPValidator) getWithToken(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID, token string, destination any, retry bool) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.BaseURL+path, nil)
 	if err != nil {
 		return design.ErrReferenceUnavailable
@@ -139,12 +140,12 @@ func (v *HTTPValidator) getWithToken(ctx context.Context, endpoint Endpoint, pat
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && endpoint.CredentialSource != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		endpoint.CredentialSource.Invalidate(endpoint.Audience, endpoint.Action, resourceType, resourceID)
-		fresh, credentialErr := endpoint.CredentialSource.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		workloadidentity.InvalidateForTenant(endpoint.CredentialSource, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, endpoint.CredentialSource, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if credentialErr != nil {
 			return design.ErrReferenceUnavailable
 		}
-		return v.getWithToken(ctx, endpoint, path, resourceType, resourceID, fresh, destination, false)
+		return v.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, fresh, destination, false)
 	}
 	switch response.StatusCode {
 	case http.StatusNotFound, http.StatusUnprocessableEntity:

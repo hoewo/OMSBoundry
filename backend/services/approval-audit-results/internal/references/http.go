@@ -100,7 +100,7 @@ func (r *HTTPResolver) ResolveProject(ctx context.Context, tenantID string, refe
 }
 
 func (r *HTTPResolver) projectReference(ctx context.Context, tenantID string, reference results.ProjectRef) (projectReference, error) {
-	body, err := r.get(ctx, r.project, "/api/v1/references/projects/"+url.PathEscape(reference.ID), "project", reference.ID)
+	body, err := r.get(ctx, tenantID, r.project, "/api/v1/references/projects/"+url.PathEscape(reference.ID), "project", reference.ID)
 	if err != nil {
 		return projectReference{}, err
 	}
@@ -123,7 +123,7 @@ func (r *HTTPResolver) ResolveSource(ctx context.Context, tenantID string, proje
 		return results.SourceReference{}, results.ErrReferenceInvalid
 	}
 	path := "/api/v1/references/" + reference.ResourceType + "s/" + url.PathEscape(reference.ResourceID)
-	body, err := r.get(ctx, r.contract, path, reference.ResourceType, reference.ResourceID)
+	body, err := r.get(ctx, tenantID, r.contract, path, reference.ResourceType, reference.ResourceID)
 	if err != nil {
 		return results.SourceReference{}, err
 	}
@@ -245,7 +245,7 @@ func decimalToMinor(raw string) (int64, error) {
 
 func (r *HTTPResolver) ResolveEvidence(ctx context.Context, tenantID string, reference results.EvidenceRef) (results.EvidenceReference, error) {
 	path := fmt.Sprintf("/v1/references/files/%s/versions/%d", url.PathEscape(reference.FileID), reference.Version)
-	body, err := r.get(ctx, r.evidence, path, "file", reference.FileID)
+	body, err := r.get(ctx, tenantID, r.evidence, path, "file", reference.FileID)
 	if err != nil {
 		return results.EvidenceReference{}, err
 	}
@@ -272,19 +272,19 @@ func (r *HTTPResolver) ResolveEvidence(ctx context.Context, tenantID string, ref
 	}, nil
 }
 
-func (r *HTTPResolver) get(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
+func (r *HTTPResolver) get(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
 	token := endpoint.AccessToken
 	if endpoint.Credentials != nil {
 		var err error
-		token, err = endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		token, err = workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if err != nil || strings.TrimSpace(token) == "" {
 			return nil, results.ErrReferenceUnavailable
 		}
 	}
-	return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, token, true)
+	return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, token, true)
 }
 
-func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
+func (r *HTTPResolver) getWithToken(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(endpoint.BaseURL, "/")+path, nil)
 	if err != nil {
 		return nil, results.ErrReferenceUnavailable
@@ -298,12 +298,12 @@ func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		endpoint.Credentials.Invalidate(endpoint.Audience, endpoint.Action, resourceType, resourceID)
-		fresh, credentialErr := endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		workloadidentity.InvalidateForTenant(endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if credentialErr != nil || strings.TrimSpace(fresh) == "" {
 			return nil, results.ErrReferenceUnavailable
 		}
-		return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, fresh, false)
+		return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, fresh, false)
 	}
 	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity {
 		return nil, results.ErrReferenceInvalid

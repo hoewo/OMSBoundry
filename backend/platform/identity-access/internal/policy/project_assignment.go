@@ -28,7 +28,6 @@ type Config struct {
 	ProjectBaseURL   string
 	PeopleBaseURL    string
 	ServiceSubjectID string
-	TenantID         string
 	Issuer           string
 	PolicyPaths      []string
 	Timeout          time.Duration
@@ -47,7 +46,6 @@ type ProjectAssignmentEvaluator struct {
 	projectBaseURL   string
 	peopleBaseURL    string
 	serviceSubjectID string
-	tenantID         string
 	issuer           string
 	policies         map[string]projectAssignmentPolicy
 	signer           identity.Signer
@@ -101,7 +99,7 @@ func NewProjectAssignmentEvaluator(config Config, signer identity.Signer) (*Proj
 	if err != nil {
 		return nil, fmt.Errorf("people policy endpoint: %w", err)
 	}
-	if !uuidPattern.MatchString(config.ServiceSubjectID) || !uuidPattern.MatchString(config.TenantID) || strings.TrimSpace(config.Issuer) == "" {
+	if !uuidPattern.MatchString(config.ServiceSubjectID) || strings.TrimSpace(config.Issuer) == "" {
 		return nil, fmt.Errorf("policy service identity is invalid")
 	}
 	if config.Timeout <= 0 || config.Timeout > 30*time.Second {
@@ -113,15 +111,15 @@ func NewProjectAssignmentEvaluator(config Config, signer identity.Signer) (*Proj
 	}
 	return &ProjectAssignmentEvaluator{
 		projectBaseURL: projectURL, peopleBaseURL: peopleURL,
-		serviceSubjectID: config.ServiceSubjectID, tenantID: config.TenantID,
-		issuer: strings.TrimRight(config.Issuer, "/"), policies: values, signer: signer,
+		serviceSubjectID: config.ServiceSubjectID,
+		issuer:           strings.TrimRight(config.Issuer, "/"), policies: values, signer: signer,
 		client: &http.Client{Timeout: config.Timeout}, now: func() time.Time { return time.Now().UTC() },
 	}, nil
 }
 
 func (e *ProjectAssignmentEvaluator) Evaluate(ctx context.Context, principal identity.Principal, audience string, scope identity.Scope, reference identity.BusinessFactReference) (identity.PolicyDecision, error) {
 	selectedPolicy, found := e.policies[audience]
-	if principal.TenantID != e.tenantID || !found || reference.Kind != "project_assignment" || reference.Source != "project-workspace" || !uuidPattern.MatchString(reference.ID) || reference.Revision < 1 {
+	if !uuidPattern.MatchString(principal.TenantID) || !found || reference.Kind != "project_assignment" || reference.Source != "project-workspace" || !uuidPattern.MatchString(reference.ID) || reference.Revision < 1 {
 		return identity.PolicyDecision{}, &identity.AuthorizationError{}
 	}
 	if scope.Kind != "resources" || len(scope.Resources) != 1 || scope.Resources[0].Type != "project" || !uuidPattern.MatchString(scope.Resources[0].ID) {
@@ -129,18 +127,18 @@ func (e *ProjectAssignmentEvaluator) Evaluate(ctx context.Context, principal ide
 	}
 	projectID := scope.Resources[0].ID
 	var assignment assignmentFact
-	if err := e.get(ctx, "project-workspace", "project-workspace.policy-fact.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "project", ID: projectID}}}, e.projectBaseURL+"/api/v1/policy-facts/projects/"+url.PathEscape(projectID)+"/assignments/"+url.PathEscape(reference.ID), &assignment); err != nil {
+	if err := e.get(ctx, principal.TenantID, "project-workspace", "project-workspace.policy-fact.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "project", ID: projectID}}}, e.projectBaseURL+"/api/v1/policy-facts/projects/"+url.PathEscape(projectID)+"/assignments/"+url.PathEscape(reference.ID), &assignment); err != nil {
 		return identity.PolicyDecision{}, err
 	}
 	now := e.now()
-	if assignment.ID != reference.ID || assignment.ProjectID != projectID || assignment.TenantID != e.tenantID || assignment.ResourceType != "project-assignment" || assignment.SubjectKind != "person" || assignment.Status != "active" || assignment.Revision != reference.Revision || assignment.SourceRevision < 1 || !uuidPattern.MatchString(assignment.SubjectID) || (assignment.EffectiveFrom != nil && assignment.EffectiveFrom.After(now)) || assignment.EndedAt != nil {
+	if assignment.ID != reference.ID || assignment.ProjectID != projectID || assignment.TenantID != principal.TenantID || assignment.ResourceType != "project-assignment" || assignment.SubjectKind != "person" || assignment.Status != "active" || assignment.Revision != reference.Revision || assignment.SourceRevision < 1 || !uuidPattern.MatchString(assignment.SubjectID) || (assignment.EffectiveFrom != nil && assignment.EffectiveFrom.After(now)) || assignment.EndedAt != nil {
 		return identity.PolicyDecision{}, &identity.AuthorizationError{}
 	}
 	var person personFact
-	if err := e.get(ctx, "people-groups", "people-groups.policy-fact.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "person", ID: assignment.SubjectID}}}, e.peopleBaseURL+"/api/v1/policy-facts/persons/"+url.PathEscape(assignment.SubjectID), &person); err != nil {
+	if err := e.get(ctx, principal.TenantID, "people-groups", "people-groups.policy-fact.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "person", ID: assignment.SubjectID}}}, e.peopleBaseURL+"/api/v1/policy-facts/persons/"+url.PathEscape(assignment.SubjectID), &person); err != nil {
 		return identity.PolicyDecision{}, err
 	}
-	if person.SchemaVersion != "1" || person.SourceApplication != "people-groups" || person.FactKind != "person-iam-subject-link" || person.ID != assignment.SubjectID || person.TenantID != e.tenantID || person.Status != "active" || person.Revision != assignment.SourceRevision || person.IAMSubjectID != principal.SubjectID {
+	if person.SchemaVersion != "1" || person.SourceApplication != "people-groups" || person.FactKind != "person-iam-subject-link" || person.ID != assignment.SubjectID || person.TenantID != principal.TenantID || person.Status != "active" || person.Revision != assignment.SourceRevision || person.IAMSubjectID != principal.SubjectID {
 		return identity.PolicyDecision{}, &identity.AuthorizationError{}
 	}
 	actions := append([]string(nil), selectedPolicy.Roles[assignment.RoleKey]...)
@@ -159,8 +157,8 @@ func (e *ProjectAssignmentEvaluator) Evaluate(ctx context.Context, principal ide
 	}, nil
 }
 
-func (e *ProjectAssignmentEvaluator) get(ctx context.Context, audience, action string, scope identity.Scope, endpoint string, destination any) error {
-	token, err := e.serviceCredential(audience, action, scope)
+func (e *ProjectAssignmentEvaluator) get(ctx context.Context, tenantID, audience, action string, scope identity.Scope, endpoint string, destination any) error {
+	token, err := e.serviceCredential(tenantID, audience, action, scope)
 	if err != nil {
 		return err
 	}
@@ -193,14 +191,14 @@ func (e *ProjectAssignmentEvaluator) get(ctx context.Context, audience, action s
 	return nil
 }
 
-func (e *ProjectAssignmentEvaluator) serviceCredential(audience, action string, scope identity.Scope) (string, error) {
+func (e *ProjectAssignmentEvaluator) serviceCredential(tenantID, audience, action string, scope identity.Scope) (string, error) {
 	now := e.now()
 	id, err := randomUUID()
 	if err != nil {
 		return "", err
 	}
 	claims := identity.CapabilityClaims{
-		Version: "1", Issuer: e.issuer, Subject: e.serviceSubjectID, Tenant: e.tenantID,
+		Version: "1", Issuer: e.issuer, Subject: e.serviceSubjectID, Tenant: tenantID,
 		Audience: audience, Name: "IAM Policy Provider", Actions: []string{action}, Scope: scope,
 		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix(), AuthTime: now.Unix(), ID: id,
 	}

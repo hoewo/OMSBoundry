@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "application_id": "open-api",
+  "application_version": "0.1.0",
+  "audience": "open-api",
+  "capabilities": [
+    { "id": "open-api.invoice-reimbursement.use", "description": "创建 API Key 并通过开放 API 提交和查询本人的发票报销", "risk": "write", "resource_types": ["api_key", "finance_request"] },
+    { "id": "open-api.key.manage", "description": "查看、创建、轮换和撤销本人 API Key", "risk": "write", "resource_types": ["api_key"] },
+    { "id": "open-api.self-audit.read", "description": "查看本人 API Key 的脱敏调用记录", "risk": "read", "resource_types": ["api_call"] },
+    { "id": "open-api.tenant-audit.read", "description": "独立授权查看本租户开放 API 脱敏调用记录", "risk": "privileged", "resource_types": ["api_call"] }
+  ]
+}

@@ -313,7 +313,7 @@ services:
       TENANT_NAME: ${TENANT_NAME:-OMSBizFoundry}
       PUBLIC_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       SIGNING_KEY_FILE: /data/iam/signing-keys.json
-      CAPABILITY_MANIFEST_PATHS: /config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
+      CAPABILITY_MANIFEST_PATHS: /config/identity-access-capabilities.json,/config/internal-finance-requests-capabilities.json,/config/payroll-capabilities.json,/config/open-api-capabilities.json,/config/feedback-capabilities.json,/config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
       SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
       BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-系统管理员}
@@ -329,6 +329,11 @@ services:
       postgres-provision: {condition: service_completed_successfully}
     volumes:
       - iam-keys:/data/iam
+      - ../../contracts/access/v1/examples/identity-access-capabilities.json:/config/identity-access-capabilities.json:ro
+      - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
+      - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
+      - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
+      - ../../contracts/access/v1/examples/feedback-capabilities.json:/config/feedback-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro
@@ -362,6 +367,11 @@ services:
       retries: 30
     volumes:
       - iam-keys:/data/iam
+      - ../../contracts/access/v1/examples/identity-access-capabilities.json:/config/identity-access-capabilities.json:ro
+      - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
+      - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
+      - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
+      - ../../contracts/access/v1/examples/feedback-capabilities.json:/config/feedback-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro
@@ -522,6 +532,33 @@ services:
     networks: [app, data]
     restart: unless-stopped
 
+  people-workload-key-permissions:
+    profiles: [people]
+    image: omsbizfoundry/people-groups:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - people-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  people-workload-keys:
+    profiles: [people]
+    image: omsbizfoundry/people-groups:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: people-groups
+      WORKLOAD_SUBJECT_ID: ${PEOPLE_WORKLOAD_SUBJECT_ID:-dddddddd-dddd-4ddd-8ddd-dddddddddddd}
+      WORKLOAD_KEY_FILE: /workload-private/people-groups.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/people-groups.json
+    depends_on:
+      people-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - people-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
   people-migrate:
     profiles: [people]
     build:
@@ -537,12 +574,21 @@ services:
       IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
       IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      IAM_BASE_URL: http://identity-access:8080
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: people-groups
+      WORKLOAD_SUBJECT_ID: ${PEOPLE_WORKLOAD_SUBJECT_ID:-dddddddd-dddd-4ddd-8ddd-dddddddddddd}
+      WORKLOAD_KEY_FILE: /workload-private/people-groups.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      REFERENCE_TIMEOUT: ${REFERENCE_TIMEOUT:-3s}
       PUBLIC_BASE_PATH: /people
       SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       postgres-provision: {condition: service_completed_successfully}
+      people-workload-keys: {condition: service_completed_successfully}
     volumes:
       - iam-public-keys:/public:ro
+      - people-workload-private:/workload-private:ro
     networks: [data]
     restart: "no"
 
@@ -555,6 +601,7 @@ services:
     depends_on:
       people-migrate: {condition: service_completed_successfully}
       public-keys: {condition: service_completed_successfully}
+      identity-access: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8084/health/ready >/dev/null"]
       interval: 2s
@@ -562,6 +609,7 @@ services:
       retries: 30
     volumes:
       - iam-public-keys:/public:ro
+      - people-workload-private:/workload-private:ro
       - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
     networks: [app, data]
     restart: unless-stopped
@@ -1159,5 +1207,6 @@ volumes:
   bonus-distribution-workload-private:
   contract-workload-private:
   money-workload-private:
+  people-workload-private:
   contract-evidence:
   evidence-data:

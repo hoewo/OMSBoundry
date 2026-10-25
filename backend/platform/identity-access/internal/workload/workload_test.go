@@ -44,7 +44,7 @@ func TestAuthenticatorVerifiesBindingPermissionAndReplay(t *testing.T) {
 	policyPath := filepath.Join(directory, "policy.json")
 	writeJSON(t, publicPath, publicBundle{Version: "1", WorkloadID: "project-workspace", SubjectID: testSubject, Keys: []publicKey{{KTY: "OKP", CRV: "Ed25519", Use: "sig", ALG: "EdDSA", KeyID: testKeyID, X: base64.RawURLEncoding.EncodeToString(publicValue), Status: "active", CreatedAt: now.Format(time.RFC3339Nano)}}})
 	writeJSON(t, policyPath, policyFile{SchemaVersion: "1", Identities: []Identity{{ID: "project-workspace", SubjectID: testSubject, DisplayName: "Project Workspace", PublicKeysPath: publicPath, Permissions: []Permission{{Audience: "people-groups", Action: "people-groups.view", ResourceTypes: []string{"person"}}}}}})
-	authenticator, err := Load(policyPath, testTenant, &memoryNonces{used: map[string]bool{}})
+	authenticator, err := Load(policyPath, &memoryNonces{used: map[string]bool{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +55,9 @@ func TestAuthenticatorVerifiesBindingPermissionAndReplay(t *testing.T) {
 	value, err := authenticator.Authenticate(t.Context(), assertion, hash)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if value.TenantID != testTenant {
+		t.Fatalf("tenant = %q, want %q", value.TenantID, testTenant)
 	}
 	if err := authenticator.Authorize(value, "people-groups", "people-groups.view", scope); err != nil {
 		t.Fatal(err)
@@ -68,6 +71,16 @@ func TestAuthenticatorVerifiesBindingPermissionAndReplay(t *testing.T) {
 	wrongHash, _ := RequestHash("people-groups", "people-groups.view", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "person", ID: "55555555-5555-4555-8555-555555555555"}}})
 	if _, err := authenticator.Authenticate(t.Context(), assertion, wrongHash); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("request binding error=%v", err)
+	}
+	otherTenant := "55555555-5555-4555-8555-555555555555"
+	otherAssertion := signAssertion(t, privateKey, Claims{Version: "1", Issuer: "project-workspace", Subject: testSubject, Tenant: otherTenant, Audience: "identity-access", Purpose: "capability-exchange", RequestSHA256: hash, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix(), ID: "66666666-6666-4666-8666-666666666666"})
+	otherValue, err := authenticator.Authenticate(t.Context(), otherAssertion, hash)
+	if err != nil || otherValue.TenantID != otherTenant {
+		t.Fatalf("second tenant assertion = %#v, %v", otherValue, err)
+	}
+	invalidTenantAssertion := signAssertion(t, privateKey, Claims{Version: "1", Issuer: "project-workspace", Subject: testSubject, Tenant: "client-supplied", Audience: "identity-access", Purpose: "capability-exchange", RequestSHA256: hash, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix(), ID: "77777777-7777-4777-8777-777777777777"})
+	if _, err := authenticator.Authenticate(t.Context(), invalidTenantAssertion, hash); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("invalid tenant assertion error=%v", err)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"omsbizfoundry/identity-access/internal/capabilityauth"
 	"omsbizfoundry/identity-access/internal/identity"
 	"omsbizfoundry/identity-access/internal/signing"
 	"omsbizfoundry/identity-access/internal/workload"
@@ -37,6 +38,7 @@ type Server struct {
 	identities   *identity.Service
 	keys         *signing.Store
 	workloads    *workload.Authenticator
+	capabilities *capabilityauth.Verifier
 	secureCookie bool
 	handler      http.Handler
 }
@@ -45,7 +47,11 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	if pool == nil || identities == nil || keys == nil {
 		return nil, fmt.Errorf("database, identity service and signing keys are required")
 	}
-	server := &Server{pool: pool, identities: identities, keys: keys, workloads: options.Workloads, secureCookie: options.SessionCookieSecure}
+	capabilities, err := capabilityauth.New(identities.Issuer(), keys)
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{pool: pool, identities: identities, keys: keys, workloads: options.Workloads, capabilities: capabilities, secureCookie: options.SessionCookieSecure}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.home)
 	mux.HandleFunc("GET /health/live", server.live)
@@ -54,6 +60,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.HandleFunc("GET /api/v1/.well-known/jwks.json", server.jwks)
 	mux.HandleFunc("POST /api/v1/login", server.requireCSRF(server.login))
 	mux.HandleFunc("POST /api/v1/service-credentials", server.issueServiceCredential)
+	mux.HandleFunc("GET /api/v1/references/subjects/{subjectID}", server.subjectReference)
 	mux.HandleFunc("POST /api/v1/activate", server.requireCSRF(server.activate))
 	mux.HandleFunc("POST /api/v1/password-reset/complete", server.requireCSRF(server.completePasswordReset))
 	mux.Handle("GET /api/v1/session", server.authenticate(http.HandlerFunc(server.currentSession)))
@@ -67,6 +74,21 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.Handle("POST /api/v1/admin/status", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.changeStatus)))))
 	server.handler = securityHeaders(server.requestID(mux))
 	return server, nil
+}
+
+func (s *Server) subjectReference(w http.ResponseWriter, r *http.Request) {
+	subjectID := strings.ToLower(strings.TrimSpace(r.PathValue("subjectID")))
+	claims, err := s.capabilities.Authenticate(r, "identity-access", "identity-access.subject.reference.read", "iam_subject", subjectID)
+	if err != nil {
+		writeProblem(w, http.StatusUnauthorized, "unauthenticated", "capability credential is invalid")
+		return
+	}
+	value, err := s.identities.SubjectReference(r.Context(), claims.Tenant, subjectID)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, value)
 }
 
 func (s *Server) issueServiceCredential(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +123,7 @@ func (s *Server) issueServiceCredential(w http.ResponseWriter, r *http.Request) 
 		writeProblem(w, http.StatusForbidden, "service_capability_denied", "service identity cannot request this capability")
 		return
 	}
-	result, err := s.identities.IssueWorkloadCredential(r.Context(), identity.ServiceIdentity{
+	result, err := s.identities.IssueWorkloadCredential(r.Context(), authenticated.TenantID, identity.ServiceIdentity{
 		ID: authenticated.Identity.ID, SubjectID: authenticated.Identity.SubjectID, DisplayName: authenticated.Identity.DisplayName,
 		KeyID: authenticated.KeyID, AssertionID: authenticated.AssertionID, AuthTime: authenticated.IssuedAt,
 	}, input.Audience, input.Action, input.Scope)

@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"omsbizfoundry/project-workspace/internal/projects"
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 const maxResponseBytes = 1 << 20
@@ -88,7 +89,7 @@ func (v *HTTPValidator) ValidatePeople(ctx context.Context, tenantID, kind, id s
 	if kind == "group" {
 		path = "/api/v1/groups/" + url.PathEscape(id)
 	}
-	body, err := v.get(ctx, v.people, path, kind, id)
+	body, err := v.get(ctx, tenantID, v.people, path, kind, id)
 	if err != nil {
 		return projects.ReferenceSnapshot{}, err
 	}
@@ -137,7 +138,7 @@ func (v *HTTPValidator) ValidateParty(ctx context.Context, tenantID, id string, 
 	if !ok || endpoint.BaseURL == "" {
 		return projects.PartySnapshot{}, projects.ErrReferenceUnavailable
 	}
-	body, err := v.get(ctx, endpoint, "/api/v1/references/parties/"+url.PathEscape(id), "party", id)
+	body, err := v.get(ctx, tenantID, endpoint, "/api/v1/references/parties/"+url.PathEscape(id), "party", id)
 	if err != nil {
 		return projects.PartySnapshot{}, err
 	}
@@ -176,7 +177,7 @@ func (v *HTTPValidator) ResolveCompletionResults(ctx context.Context, tenantID, 
 	if !ok || endpoint.BaseURL == "" {
 		return nil, projects.ErrReferenceUnavailable
 	}
-	body, err := v.get(ctx, endpoint, "/api/v1/references/projects/"+url.PathEscape(projectID)+"/approval-audit-results", "project", projectID)
+	body, err := v.get(ctx, tenantID, endpoint, "/api/v1/references/projects/"+url.PathEscape(projectID)+"/approval-audit-results", "project", projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +233,7 @@ func (v *HTTPValidator) ResolveResource(ctx context.Context, tenantID, service, 
 	if service == "evidence-service" && resourceType == "evidence-file" {
 		authorizationResourceType = "file"
 	}
-	body, err := v.get(ctx, endpoint, path, authorizationResourceType, id)
+	body, err := v.get(ctx, tenantID, endpoint, path, authorizationResourceType, id)
 	if err != nil {
 		return projects.ResourceReference{}, err
 	}
@@ -436,19 +437,19 @@ func referencePath(service, resourceType, id string) (string, bool) {
 
 var productionMaterialRelationPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}\.[a-z][a-z0-9-]{0,63}$`)
 
-func (v *HTTPValidator) get(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
+func (v *HTTPValidator) get(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
 	token := endpoint.AccessToken
 	if endpoint.Credentials != nil {
 		var err error
-		token, err = endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		token, err = workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if err != nil {
 			return nil, projects.ErrReferenceUnavailable
 		}
 	}
-	return v.getWithToken(ctx, endpoint, path, resourceType, resourceID, token, true)
+	return v.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, token, true)
 }
 
-func (v *HTTPValidator) getWithToken(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
+func (v *HTTPValidator) getWithToken(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.BaseURL+path, nil)
 	if err != nil {
 		return nil, projects.ErrReferenceUnavailable
@@ -462,12 +463,12 @@ func (v *HTTPValidator) getWithToken(ctx context.Context, endpoint Endpoint, pat
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		endpoint.Credentials.Invalidate(endpoint.Audience, endpoint.Action, resourceType, resourceID)
-		fresh, credentialErr := endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		workloadidentity.InvalidateForTenant(endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if credentialErr != nil {
 			return nil, projects.ErrReferenceUnavailable
 		}
-		return v.getWithToken(ctx, endpoint, path, resourceType, resourceID, fresh, false)
+		return v.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, fresh, false)
 	}
 	switch {
 	case response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity:

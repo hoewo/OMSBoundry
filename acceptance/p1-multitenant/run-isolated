@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec go test -tags integration -count=1 -timeout=12m -v "$script_dir"

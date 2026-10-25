@@ -60,7 +60,7 @@ func (r *HTTPResolver) ResolveProfessionalParticipant(ctx context.Context, tenan
 	if r.professional.BaseURL == "" {
 		return rb.Participant{}, core.ErrReferenceUnavailable
 	}
-	body, err := r.get(ctx, r.professional, professionalPath(p.ID)+"/"+url.PathEscape(a.ID), "project", p.ID)
+	body, err := r.get(ctx, tenant, r.professional, professionalPath(p.ID)+"/"+url.PathEscape(a.ID), "project", p.ID)
 	if err != nil {
 		return rb.Participant{}, err
 	}
@@ -71,7 +71,7 @@ func (r *HTTPResolver) ResolveProfessionalParticipant(ctx context.Context, tenan
 	if !v.valid(tenant, p, person, a) {
 		return rb.Participant{}, core.ErrReferenceInvalid
 	}
-	personBody, err := r.get(ctx, r.people, "/api/v1/references/persons/"+url.PathEscape(person.ID), "person", person.ID)
+	personBody, err := r.get(ctx, tenant, r.people, "/api/v1/references/persons/"+url.PathEscape(person.ID), "person", person.ID)
 	if err != nil {
 		return rb.Participant{}, err
 	}
@@ -105,7 +105,7 @@ func (r *HTTPResolver) ListProfessionalCandidates(ctx context.Context, tenant st
 	if r.professional.BaseURL == "" {
 		return nil, core.ErrReferenceUnavailable
 	}
-	body, err := r.get(ctx, r.professional, professionalPath(ref.ID), "project", ref.ID)
+	body, err := r.get(ctx, tenant, r.professional, professionalPath(ref.ID), "project", ref.ID)
 	if err != nil {
 		return nil, err
 	}

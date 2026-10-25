@@ -148,6 +148,48 @@ func TestTokenSourceSeparatesExactProjectAndFileCredentials(t *testing.T) {
 	}
 }
 
+func TestTokenSourceSeparatesCredentialsByTenant(t *testing.T) {
+	directory := t.TempDir()
+	privatePath, publicPath := filepath.Join(directory, "private.json"), filepath.Join(directory, "public.json")
+	now := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
+	if err := Initialize(privatePath, publicPath, "people-groups", testSubject, now); err != nil {
+		t.Fatal(err)
+	}
+	otherTenant := "33333333-3333-4333-8333-333333333333"
+	seenTenants := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var input exchangeRequest
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			t.Fatal(err)
+		}
+		parts := splitCompact(t, input.Assertion)
+		var claims AssertionClaims
+		decodeJSONPart(t, parts[1], &claims)
+		seenTenants = append(seenTenants, claims.Tenant)
+		_ = json.NewEncoder(w).Encode(map[string]any{"token": "credential-for-" + claims.Tenant, "expires_at": now.Add(time.Minute)})
+	}))
+	defer server.Close()
+	source, err := NewTokenSource(server.URL, testTenant, "people-groups", testSubject, privatePath, time.Second, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.now = func() time.Time { return now }
+	first, err := source.CredentialForTenant(t.Context(), testTenant, "identity-access", "identity-access.subject.reference.read", "iam_subject", testSubject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := source.CredentialForTenant(t.Context(), otherTenant, "identity-access", "identity-access.subject.reference.read", "iam_subject", testSubject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || len(seenTenants) != 2 || seenTenants[0] != testTenant || seenTenants[1] != otherTenant {
+		t.Fatalf("first=%q second=%q tenants=%v", first, second, seenTenants)
+	}
+	if _, err := source.CredentialForTenant(t.Context(), "not-a-tenant", "identity-access", "identity-access.subject.reference.read", "iam_subject", testSubject); err == nil {
+		t.Fatal("malformed tenant accepted")
+	}
+}
+
 func splitCompact(t *testing.T, raw string) []string {
 	t.Helper()
 	parts := []string{}

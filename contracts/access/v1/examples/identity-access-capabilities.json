@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "application_id": "identity-access",
+  "application_version": "0.1.0",
+  "audience": "identity-access",
+  "capabilities": [
+    {
+      "id": "identity-access.subject.reference.read",
+      "description": "供受信业务应用读取当前租户内精确 IAM Subject 的稳定引用",
+      "risk": "privileged",
+      "resource_types": ["iam_subject"]
+    }
+  ]
+}

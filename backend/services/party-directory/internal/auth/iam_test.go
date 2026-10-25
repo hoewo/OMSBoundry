@@ -55,8 +55,14 @@ func TestIAMProviderAcceptsExactPartyAndRejectsWrongAudience(t *testing.T) {
 	claims.Scope.Resources[0].Type = "party"
 	claims.Tenant = "99999999-9999-4999-8999-999999999999"
 	request.Header.Set("Authorization", "Bearer "+signTestToken(t, keyID, claims, private))
+	otherTenantPrincipal, err := provider.Authenticate(request)
+	if err != nil || otherTenantPrincipal.TenantID != claims.Tenant {
+		t.Fatalf("other tenant principal=%#v err=%v", otherTenantPrincipal, err)
+	}
+	claims.Tenant = "not-a-tenant"
+	request.Header.Set("Authorization", "Bearer "+signTestToken(t, keyID, claims, private))
 	if _, err = provider.Authenticate(request); err != ErrUnauthenticated {
-		t.Fatalf("wrong tenant must fail: %v", err)
+		t.Fatalf("malformed tenant must fail: %v", err)
 	}
 }
 

@@ -55,8 +55,8 @@ type iamClaims struct {
 }
 
 type IAMProvider struct {
-	issuer, tenant, keyPath string
-	now                     func() time.Time
+	issuer, keyPath string
+	now             func() time.Time
 }
 
 func NewIAMProvider(issuer, tenant, keyPath string) (*IAMProvider, error) {
@@ -64,7 +64,7 @@ func NewIAMProvider(issuer, tenant, keyPath string) (*IAMProvider, error) {
 	if err != nil || parsedIssuer.Scheme != "https" || parsedIssuer.Host == "" || parsedIssuer.RawQuery != "" || parsedIssuer.Fragment != "" || !uuidPattern.MatchString(tenant) || strings.TrimSpace(keyPath) == "" {
 		return nil, fmt.Errorf("IAM provider configuration is invalid")
 	}
-	p := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), tenant: tenant, keyPath: keyPath, now: func() time.Time { return time.Now().UTC() }}
+	p := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), keyPath: keyPath, now: func() time.Time { return time.Now().UTC() }}
 	if _, err := p.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 		return iamClaims{}, err
 	}
 	now := p.now().Unix()
-	if claims.Version != "1" || claims.Issuer != p.issuer || claims.Tenant != p.tenant || claims.Audience != "evidence-service" || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) || strings.TrimSpace(claims.Name) == "" || len([]rune(claims.Name)) > 100 {
+	if claims.Version != "1" || claims.Issuer != p.issuer || !uuidPattern.MatchString(claims.Tenant) || claims.Audience != "evidence-service" || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) || strings.TrimSpace(claims.Name) == "" || len([]rune(claims.Name)) > 100 {
 		return iamClaims{}, fmt.Errorf("invalid identity")
 	}
 	if claims.IssuedAt <= 0 || claims.IssuedAt > now+30 || claims.NotBefore < claims.IssuedAt-30 || claims.NotBefore > claims.IssuedAt+30 || claims.NotBefore > now+30 || claims.ExpiresAt <= now-30 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > 300 || claims.AuthTime <= 0 || claims.AuthTime > claims.IssuedAt {

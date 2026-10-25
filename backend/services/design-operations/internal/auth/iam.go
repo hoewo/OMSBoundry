@@ -54,9 +54,9 @@ type iamClaims struct {
 	ID        string   `json:"jti"`
 }
 type IAMProvider struct {
-	issuer, tenant, keyPath, audience string
-	actions, resourceTypes            []string
-	now                               func() time.Time
+	issuer, keyPath, audience string
+	actions, resourceTypes    []string
+	now                       func() time.Time
 }
 
 func NewIAMProvider(issuer, tenant, keyPath string) (*IAMProvider, error) {
@@ -72,7 +72,7 @@ func newIAMProvider(issuer, tenant, keyPath, audience string, actions, resourceT
 	if parseErr != nil || parsedIssuer.Scheme != "https" || parsedIssuer.Host == "" || !uuidPattern.MatchString(tenant) || strings.TrimSpace(keyPath) == "" || strings.TrimSpace(audience) == "" || len(actions) == 0 || len(resourceTypes) == 0 {
 		return nil, fmt.Errorf("IAM provider configuration is invalid")
 	}
-	p := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), tenant: tenant, keyPath: keyPath, audience: audience, actions: append([]string(nil), actions...), resourceTypes: append([]string(nil), resourceTypes...), now: func() time.Time { return time.Now().UTC() }}
+	p := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), keyPath: keyPath, audience: audience, actions: append([]string(nil), actions...), resourceTypes: append([]string(nil), resourceTypes...), now: func() time.Time { return time.Now().UTC() }}
 	if _, err := p.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 		return iamClaims{}, err
 	}
 	now := p.now().Unix()
-	if c.Version != "1" || c.Issuer != p.issuer || c.Tenant != p.tenant || c.Audience != p.audience || !uuidPattern.MatchString(c.Subject) || !uuidPattern.MatchString(c.ID) || strings.TrimSpace(c.Name) == "" {
+	if c.Version != "1" || c.Issuer != p.issuer || !uuidPattern.MatchString(c.Tenant) || c.Audience != p.audience || !uuidPattern.MatchString(c.Subject) || !uuidPattern.MatchString(c.ID) || strings.TrimSpace(c.Name) == "" {
 		return iamClaims{}, fmt.Errorf("invalid identity")
 	}
 	if c.IssuedAt > now+30 || c.NotBefore > now+30 || c.ExpiresAt <= now-30 || c.ExpiresAt <= c.IssuedAt || c.ExpiresAt-c.IssuedAt > 300 || c.AuthTime <= 0 || c.AuthTime > c.IssuedAt {

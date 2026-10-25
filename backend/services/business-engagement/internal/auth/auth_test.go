@@ -67,8 +67,14 @@ func TestIAMAcceptsOnlyNativeActionsAndBoundScope(t *testing.T) {
 	claims.Audience = "business-engagement"
 	claims.Tenant = authOtherTenant
 	request.Header.Set("Authorization", "Bearer "+signedToken(t, privateKey, claims))
+	otherTenantPrincipal, err := provider.Authenticate(request)
+	if err != nil || otherTenantPrincipal.TenantID != authOtherTenant {
+		t.Fatalf("other tenant principal=%#v err=%v", otherTenantPrincipal, err)
+	}
+	claims.Tenant = "not-a-tenant"
+	request.Header.Set("Authorization", "Bearer "+signedToken(t, privateKey, claims))
 	if _, err := provider.Authenticate(request); err != ErrUnauthenticated {
-		t.Fatalf("cross-tenant credential accepted: %v", err)
+		t.Fatalf("malformed tenant accepted: %v", err)
 	}
 }
 

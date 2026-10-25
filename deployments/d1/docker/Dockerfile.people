@@ -5,17 +5,19 @@ FROM ${GO_IMAGE} AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src/backend/services/people-groups
+COPY packages/workload-identity /src/packages/workload-identity
 COPY backend/services/people-groups/go.mod backend/services/people-groups/go.sum ./
 RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked go mod download
 COPY backend/services/people-groups/ ./
 RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=oms-go-build,target=/root/.cache/go-build,sharing=locked \
     GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/server ./cmd/server \
-    && GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/ops ./cmd/ops
+	&& GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/ops ./cmd/ops \
+	&& GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/workload-keyctl ./cmd/workload-keyctl
 
 FROM ${RUNTIME_IMAGE}
 RUN mkdir -p /app /public /backups && chown -R postgres:postgres /app /backups
-COPY --from=build /out/server /out/ops /app/
+COPY --from=build /out/server /out/ops /out/workload-keyctl /app/
 USER postgres
 ENTRYPOINT []
 CMD ["/app/server"]

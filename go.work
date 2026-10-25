@@ -11,6 +11,7 @@ use (
 	./acceptance/design-operations-demo
 	./acceptance/evidence-service-demo
 	./acceptance/money-flow-demo
+	./acceptance/p1-multitenant
 	./acceptance/people-groups-demo
 	./acceptance/project-workspace-demo
 	./acceptance/reference-oa-demo

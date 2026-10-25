@@ -16,12 +16,28 @@ func TestLoadCatalogAndRejectUnknownOrDuplicateAudience(t *testing.T) {
 	resultsPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "approval-audit-results-capabilities.json")
 	costPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "cost-outsourcing-capabilities.json")
 	bonusPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "bonus-distribution-capabilities.json")
-	catalog, err := Load([]string{path, projectPath, moneyPath, peoplePath, engagementPath, productionPath, resultsPath, costPath, bonusPath})
+	identityPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "identity-access-capabilities.json")
+	financePath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "internal-finance-requests-capabilities.json")
+	payrollPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "payroll-capabilities.json")
+	openAPIPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "open-api-capabilities.json")
+	feedbackPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "feedback-capabilities.json")
+	catalog, err := Load([]string{path, projectPath, moneyPath, peoplePath, engagementPath, productionPath, resultsPath, costPath, bonusPath, identityPath, financePath, payrollPath, openAPIPath, feedbackPath})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !catalog.Contains("contract-ledger", "contract-ledger.view") {
 		t.Fatal("published capability missing")
+	}
+	for audience, action := range map[string]string{
+		"identity-access":           "identity-access.subject.reference.read",
+		"internal-finance-requests": "internal-finance-requests.payment.confirm",
+		"payroll":                   "payroll.payment.confirm",
+		"open-api":                  "open-api.invoice-reimbursement.use",
+		"feedback":                  "feedback.use",
+	} {
+		if !catalog.Contains(audience, action) {
+			t.Fatalf("P1 capability missing: %s/%s", audience, action)
+		}
 	}
 	for _, action := range []string{"bonus-manual-allocation.read", "bonus-manual-allocation.amount.read", "bonus-manual-allocation.record", "bonus-manual-allocation.withdraw", "bonus-manual-allocation.history.read"} {
 		if !catalog.Contains("bonus-distribution", action) || !catalog.AllowsResource("bonus-distribution", action, "business_bonus_project") || !catalog.AllowsResource("bonus-distribution", action, "production_bonus_project") || catalog.AllowsResource("bonus-distribution", action, "project") || catalog.AllowsResource("bonus-distribution", action, "bonus_pool") {

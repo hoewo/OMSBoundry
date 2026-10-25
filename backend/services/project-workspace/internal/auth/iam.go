@@ -54,15 +54,15 @@ type iamClaims struct {
 }
 
 type IAMProvider struct {
-	issuer, tenant, keyPath string
-	now                     func() time.Time
+	issuer, keyPath string
+	now             func() time.Time
 }
 
 func NewIAMProvider(issuer, tenant, keyPath string) (*IAMProvider, error) {
 	if strings.TrimSpace(issuer) == "" || !uuidPattern.MatchString(tenant) || strings.TrimSpace(keyPath) == "" {
 		return nil, fmt.Errorf("IAM provider configuration is invalid")
 	}
-	provider := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), tenant: tenant, keyPath: keyPath, now: func() time.Time { return time.Now().UTC() }}
+	provider := &IAMProvider{issuer: strings.TrimRight(issuer, "/"), keyPath: keyPath, now: func() time.Time { return time.Now().UTC() }}
 	if _, err := provider.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (p *IAMProvider) verify(token string) (iamClaims, error) {
 		return iamClaims{}, err
 	}
 	now := p.now().Unix()
-	if claims.Version != "1" || claims.Issuer != p.issuer || claims.Tenant != p.tenant || claims.Audience != "project-workspace" || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) || strings.TrimSpace(claims.Name) == "" {
+	if claims.Version != "1" || claims.Issuer != p.issuer || !uuidPattern.MatchString(claims.Tenant) || claims.Audience != "project-workspace" || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) || strings.TrimSpace(claims.Name) == "" {
 		return iamClaims{}, fmt.Errorf("invalid identity")
 	}
 	if claims.IssuedAt > now+30 || claims.NotBefore > now+30 || claims.ExpiresAt <= now-30 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > 300 || claims.AuthTime <= 0 || claims.AuthTime > claims.IssuedAt {

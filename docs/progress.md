@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-25 P1 本地完成，进入 P2。新增可重复验收实际启动 IAM 与 People 两个进程及 PostgreSQL 18.6，在同一服务实例内建立 Tenant A／B，完成独立登录、能力签发、Subject↔Person、列表、跨租户 ID／Subject 拒绝、撤权和停用；随后将 IAM／People 分库备份恢复到两个新空库，确认 Tenant、稳定 ID、revision、Subject 状态快照不变并继续写入。12 个现有受保护 Owner 普通测试和代表性 PostgreSQL 租户隔离／搜索／分页／导出／附件路径通过，秘密模式扫描无命中。该结论仅是本地 P1，不是 P2、D1 或公网发布完成。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)
+
 2026-10-13 BF-150：OMS 一期当前六项接入目标已闭合。`v0.1.0-test.oms-v1.2` 公网真实链使用同一幂等 run key 两次通过 Party→Project→上下游 Contract→双向 Billing→Money 回款／支付→六份 Evidence 上传、业务引用、短期下载和字节校验；金额分别为 800／268／320／96／220／120 万。Contract／Money Party runtime 已切到 Party Directory；完整分页 helper、真实筛选集合、本地筛选 CSV 导出和六 Owner 静态依赖边界均有自动证据。D1 check 与 17/17 health 通过。这里的“接上”精确指 Party、Project、Contract、Billing、Money、Evidence；People、BE、Production、Approval、Cost、Bonus、Design 属于完整 Suite 的其他独立应用，未被 OMS 一期调用且不应为了数量强接。详见[公网写入报告](./reports/oms-phase1-public-write-validation-20261013.md)。
 
 2026-10-12 BF-149：OMS 一期 `v0.1.0-test.oms-v1.1` 已发布到 `https://oatest.antuinfo.cn/oms-v1/`。升级前备份、镜像摘要、17 服务健康、D1 schema 检查、正式资质单位 Party 建立与配置、IAM 登录、Gateway 五 Owner 授权和真实只读复读均通过；旧 `/oms/` 入口保持。下一开发项转为 Money 实际收付款、施工方应付与 Evidence 附件，不能把当前公网可访问误报为一期全部闭环。

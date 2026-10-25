@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-25 P1 实现基线：同一 OMS1 服务域允许多个组织共享 IAM 和各 Owner 进程，Tenant 由登录账号／已验证凭证唯一确定，首版无租户切换。平台运维创建 Tenant 与首管理员；租户管理员管理本租户账号和能力。IAM Subject 与 People Person 是两个独立稳定身份，通过租户内唯一、带状态与 revision 的版本化引用关联；账号停用不删除 Person，人员状态也不改写 IAM 账号。业务服务和工作负载调用必须使用请求 Tenant，不得使用浏览器参数或部署默认 Tenant 扩权。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)
+
 2026-10-25 Feedback 自动诊断上下文基线（BF-237，需求确认／尚未实施）：反馈只自动附带 release／build、模块、无业务标识路由模板、粗粒度客户端类型、语言、时间和 request ID。显式排除身份、租户、资源、表单、金额、文件地址、完整 UA、凭证、Header／Cookie、堆栈、业务正文和自动截图；实现逐字段 allowlist 映射，不透传全局状态。该决定关闭本轮需求待确认清单并触发 P0／P1 实施。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)
 
 2026-10-25 Feedback V2 通知基线（BF-236，需求确认／尚未实施）：项目 115 首阶段启用 V2 通知，“产品反馈”入口显示当前账号未读数且 0 隐藏。读计数不改状态，打开单条只标记该反馈已读，不清空其他通知；Tenant＋Subject 派生身份保证账号／租户隔离。通知、实时连接或角标失败只降级反馈体验，不阻塞 OMS 主业务。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)

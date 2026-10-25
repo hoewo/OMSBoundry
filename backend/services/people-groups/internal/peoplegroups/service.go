@@ -18,9 +18,10 @@ import (
 )
 
 type Service struct {
-	pool  *pgxpool.Pool
-	now   func() time.Time
-	newID func() (string, error)
+	pool           *pgxpool.Pool
+	iamSubjectRefs IAMSubjectReferencePort
+	now            func() time.Time
+	newID          func() (string, error)
 }
 
 type queryer interface {
@@ -35,11 +36,18 @@ type commandReceipt struct {
 	Revision    int64
 }
 
-func NewService(pool *pgxpool.Pool) (*Service, error) {
+func NewService(pool *pgxpool.Pool, subjectReferences ...IAMSubjectReferencePort) (*Service, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("database pool is required")
 	}
-	return &Service{pool: pool, now: func() time.Time { return time.Now().UTC() }, newID: randomUUID}, nil
+	if len(subjectReferences) > 1 {
+		return nil, fmt.Errorf("at most one IAM subject reference port is allowed")
+	}
+	service := &Service{pool: pool, now: func() time.Time { return time.Now().UTC() }, newID: randomUUID}
+	if len(subjectReferences) == 1 && subjectReferences[0] != nil {
+		service.iamSubjectRefs = subjectReferences[0]
+	}
+	return service, nil
 }
 
 func (s *Service) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
@@ -61,7 +69,14 @@ func (s *Service) CreatePerson(ctx context.Context, actor Actor, input CreatePer
 	if err != nil {
 		return Person{}, err
 	}
-	fingerprint := fingerprintOf(struct{ ReferenceCode, DisplayName, IAMSubjectID string }{referenceCode, displayName, iamSubjectID})
+	iamSubjectStatus, iamSubjectRevision, err := s.validateIAMSubject(ctx, actor.TenantID, iamSubjectID)
+	if err != nil {
+		return Person{}, err
+	}
+	fingerprint := fingerprintOf(struct {
+		ReferenceCode, DisplayName, IAMSubjectID, IAMSubjectStatus string
+		IAMSubjectRevision                                         int64
+	}{referenceCode, displayName, iamSubjectID, iamSubjectStatus, iamSubjectRevision})
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return Person{}, err
@@ -77,11 +92,11 @@ func (s *Service) CreatePerson(ctx context.Context, actor Actor, input CreatePer
 		return Person{}, err
 	}
 	now := s.now()
-	_, err = tx.Exec(ctx, `INSERT INTO persons(id,tenant_id,reference_code,display_name,status,iam_subject_id,revision,created_at,updated_at) VALUES($1,$2,NULLIF($3,''),$4,'active',NULLIF($5,'')::uuid,1,$6,$6)`, id, actor.TenantID, referenceCode, displayName, iamSubjectID, now)
+	_, err = tx.Exec(ctx, `INSERT INTO persons(id,tenant_id,reference_code,display_name,status,iam_subject_id,iam_subject_status,iam_subject_revision,revision,created_at,updated_at) VALUES($1,$2,NULLIF($3,''),$4,'active',NULLIF($5,'')::uuid,NULLIF($6,''),NULLIF($7,0),1,$8,$8)`, id, actor.TenantID, referenceCode, displayName, iamSubjectID, iamSubjectStatus, iamSubjectRevision, now)
 	if err != nil {
 		return Person{}, translateWriteError(err)
 	}
-	if err := insertPersonRevision(ctx, tx, actor, Person{ID: id, TenantID: actor.TenantID, ReferenceCode: referenceCode, DisplayName: displayName, Status: "active", IAMSubjectID: iamSubjectID, Revision: 1, CreatedAt: now, UpdatedAt: now}, "created", now); err != nil {
+	if err := insertPersonRevision(ctx, tx, actor, Person{ID: id, TenantID: actor.TenantID, ReferenceCode: referenceCode, DisplayName: displayName, Status: "active", IAMSubjectID: iamSubjectID, IAMSubjectStatus: iamSubjectStatus, IAMSubjectRevision: iamSubjectRevision, Revision: 1, CreatedAt: now, UpdatedAt: now}, "created", now); err != nil {
 		return Person{}, err
 	}
 	if err := insertAudit(ctx, tx, actor, "person.created", "person", id, map[string]any{"revision": 1}); err != nil {
@@ -129,17 +144,39 @@ func (s *Service) SetPersonStatus(ctx context.Context, actor Actor, personID str
 }
 
 func (s *Service) SetPersonIAMSubject(ctx context.Context, actor Actor, personID string, input SetIAMSubjectInput) (Person, error) {
+	value, err := cleanUUID("iam_subject_id", input.IAMSubjectID, true)
+	if err != nil {
+		return Person{}, err
+	}
+	status, revision, err := s.validateIAMSubject(ctx, actor.TenantID, value)
+	if err != nil {
+		return Person{}, err
+	}
 	return s.updatePerson(ctx, actor, personID, "person.iam-subject", input.CommandID, input.ExpectedRevision, "iam_subject_changed", func(current Person) (Person, []byte, error) {
-		value, err := cleanUUID("iam_subject_id", input.IAMSubjectID, true)
-		if err != nil {
-			return Person{}, nil, err
-		}
-		current.IAMSubjectID = value
+		current.IAMSubjectID, current.IAMSubjectStatus, current.IAMSubjectRevision = value, status, revision
 		return current, fingerprintOf(struct {
-			Expected     int64
-			IAMSubjectID string
-		}{input.ExpectedRevision, value}), nil
+			Expected                       int64
+			IAMSubjectID, IAMSubjectStatus string
+			IAMSubjectRevision             int64
+		}{input.ExpectedRevision, value, status, revision}), nil
 	})
+}
+
+func (s *Service) validateIAMSubject(ctx context.Context, tenantID, subjectID string) (string, int64, error) {
+	if subjectID == "" {
+		return "", 0, nil
+	}
+	if s.iamSubjectRefs == nil {
+		return "", 0, ErrSubjectReferenceInvalid
+	}
+	reference, err := s.iamSubjectRefs.ValidateIAMSubject(ctx, tenantID, subjectID)
+	if err != nil {
+		return "", 0, err
+	}
+	if reference.SchemaVersion != "1" || reference.SourceApplication != "identity-access" || reference.ID != subjectID || reference.TenantID != tenantID || reference.Revision < 1 || (reference.Status != "pending" && reference.Status != "active" && reference.Status != "disabled") {
+		return "", 0, ErrSubjectReferenceInvalid
+	}
+	return reference.Status, reference.Revision, nil
 }
 
 func (s *Service) updatePerson(ctx context.Context, actor Actor, personID, operation, commandIDRaw string, expected int64, eventKind string, mutate func(Person) (Person, []byte, error)) (Person, error) {
@@ -172,7 +209,7 @@ func (s *Service) updatePerson(ctx context.Context, actor Actor, personID, opera
 	} else if found {
 		return s.getPerson(ctx, tx, actor.TenantID, receipt.ResultID)
 	}
-	if next.ReferenceCode == current.ReferenceCode && next.DisplayName == current.DisplayName && next.Status == current.Status && next.IAMSubjectID == current.IAMSubjectID {
+	if next.ReferenceCode == current.ReferenceCode && next.DisplayName == current.DisplayName && next.Status == current.Status && next.IAMSubjectID == current.IAMSubjectID && next.IAMSubjectStatus == current.IAMSubjectStatus && next.IAMSubjectRevision == current.IAMSubjectRevision {
 		return Person{}, ErrConflict
 	}
 	if current.Revision != expected {
@@ -181,7 +218,7 @@ func (s *Service) updatePerson(ctx context.Context, actor Actor, personID, opera
 	now := s.now()
 	next.Revision = current.Revision + 1
 	next.UpdatedAt = now
-	_, err = tx.Exec(ctx, `UPDATE persons SET reference_code=NULLIF($1,''),display_name=$2,status=$3,iam_subject_id=NULLIF($4,'')::uuid,revision=$5,updated_at=$6 WHERE tenant_id=$7 AND id=$8 AND revision=$9`, next.ReferenceCode, next.DisplayName, next.Status, next.IAMSubjectID, next.Revision, now, actor.TenantID, personID, expected)
+	_, err = tx.Exec(ctx, `UPDATE persons SET reference_code=NULLIF($1,''),display_name=$2,status=$3,iam_subject_id=NULLIF($4,'')::uuid,iam_subject_status=NULLIF($5,''),iam_subject_revision=NULLIF($6,0),revision=$7,updated_at=$8 WHERE tenant_id=$9 AND id=$10 AND revision=$11`, next.ReferenceCode, next.DisplayName, next.Status, next.IAMSubjectID, next.IAMSubjectStatus, next.IAMSubjectRevision, next.Revision, now, actor.TenantID, personID, expected)
 	if err != nil {
 		return Person{}, translateWriteError(err)
 	}
@@ -1099,7 +1136,7 @@ func (s *Service) GetSnapshot(ctx context.Context, tenantID, groupID string, rev
 	return scanSnapshot(s.pool.QueryRow(ctx, `SELECT id::text,tenant_id::text,group_id::text,group_revision,payload,sha256,created_at FROM roster_snapshots WHERE tenant_id=$1 AND group_id=$2 AND group_revision=$3`, tenantID, groupID, revision))
 }
 
-const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,status,COALESCE(iam_subject_id::text,''),revision,created_at,updated_at FROM persons`
+const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,status,COALESCE(iam_subject_id::text,''),COALESCE(iam_subject_status,''),COALESCE(iam_subject_revision,0),revision,created_at,updated_at FROM persons`
 const definitionSelect = `SELECT kind,key,display_name,description,status,revision,created_at,updated_at FROM definitions`
 const groupSelect = `SELECT id::text,tenant_id::text,group_type_key,name,purpose,status,revision,created_at,updated_at FROM groups`
 
@@ -1111,7 +1148,7 @@ func (s *Service) lockPerson(ctx context.Context, tx pgx.Tx, tenantID, id string
 }
 func scanPerson(row pgx.Row) (Person, error) {
 	var p Person
-	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Status, &p.IAMSubjectID, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Status, &p.IAMSubjectID, &p.IAMSubjectStatus, &p.IAMSubjectRevision, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return Person{}, translateReadError(err)
 	}
 	return p, nil
@@ -1181,11 +1218,11 @@ func (s *Service) lockMembership(ctx context.Context, tx pgx.Tx, tenant, group, 
 	return scanMembership(rows)
 }
 
-const membershipSelect = `SELECT m.id::text,m.tenant_id::text,m.group_id::text,m.person_id::text,m.role_key,to_char(m.start_date,'YYYY-MM-DD'),COALESCE(to_char(m.end_date,'YYYY-MM-DD'),''),m.status,m.revision,g.revision,m.created_at,m.updated_at,p.id::text,p.tenant_id::text,COALESCE(p.reference_code,''),p.display_name,p.status,COALESCE(p.iam_subject_id::text,''),p.revision,p.created_at,p.updated_at FROM memberships m JOIN persons p ON p.tenant_id=m.tenant_id AND p.id=m.person_id JOIN groups g ON g.tenant_id=m.tenant_id AND g.id=m.group_id`
+const membershipSelect = `SELECT m.id::text,m.tenant_id::text,m.group_id::text,m.person_id::text,m.role_key,to_char(m.start_date,'YYYY-MM-DD'),COALESCE(to_char(m.end_date,'YYYY-MM-DD'),''),m.status,m.revision,g.revision,m.created_at,m.updated_at,p.id::text,p.tenant_id::text,COALESCE(p.reference_code,''),p.display_name,p.status,COALESCE(p.iam_subject_id::text,''),COALESCE(p.iam_subject_status,''),COALESCE(p.iam_subject_revision,0),p.revision,p.created_at,p.updated_at FROM memberships m JOIN persons p ON p.tenant_id=m.tenant_id AND p.id=m.person_id JOIN groups g ON g.tenant_id=m.tenant_id AND g.id=m.group_id`
 
 func scanMembership(row pgx.Row) (Membership, error) {
 	var m Membership
-	if err := row.Scan(&m.ID, &m.TenantID, &m.GroupID, &m.PersonID, &m.RoleKey, &m.StartDate, &m.EndDate, &m.Status, &m.Revision, &m.GroupRevision, &m.CreatedAt, &m.UpdatedAt, &m.Person.ID, &m.Person.TenantID, &m.Person.ReferenceCode, &m.Person.DisplayName, &m.Person.Status, &m.Person.IAMSubjectID, &m.Person.Revision, &m.Person.CreatedAt, &m.Person.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.TenantID, &m.GroupID, &m.PersonID, &m.RoleKey, &m.StartDate, &m.EndDate, &m.Status, &m.Revision, &m.GroupRevision, &m.CreatedAt, &m.UpdatedAt, &m.Person.ID, &m.Person.TenantID, &m.Person.ReferenceCode, &m.Person.DisplayName, &m.Person.Status, &m.Person.IAMSubjectID, &m.Person.IAMSubjectStatus, &m.Person.IAMSubjectRevision, &m.Person.Revision, &m.Person.CreatedAt, &m.Person.UpdatedAt); err != nil {
 		return Membership{}, translateReadError(err)
 	}
 	return m, nil
@@ -1270,7 +1307,7 @@ func requireActiveDefinition(ctx context.Context, q queryer, tenant string, kind
 	return nil
 }
 func insertPersonRevision(ctx context.Context, tx pgx.Tx, actor Actor, p Person, event string, at time.Time) error {
-	_, err := tx.Exec(ctx, `INSERT INTO person_revisions(tenant_id,person_id,revision,event_kind,reference_code,display_name,status,iam_subject_id,occurred_at,actor_kind,actor_id,actor_display_name) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,NULLIF($8,'')::uuid,$9,$10,$11,$12)`, actor.TenantID, p.ID, p.Revision, event, p.ReferenceCode, p.DisplayName, p.Status, p.IAMSubjectID, at, actor.Kind, actor.ID, actor.DisplayName)
+	_, err := tx.Exec(ctx, `INSERT INTO person_revisions(tenant_id,person_id,revision,event_kind,reference_code,display_name,status,iam_subject_id,iam_subject_status,iam_subject_revision,occurred_at,actor_kind,actor_id,actor_display_name) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,NULLIF($8,'')::uuid,NULLIF($9,''),NULLIF($10,0),$11,$12,$13,$14)`, actor.TenantID, p.ID, p.Revision, event, p.ReferenceCode, p.DisplayName, p.Status, p.IAMSubjectID, p.IAMSubjectStatus, p.IAMSubjectRevision, at, actor.Kind, actor.ID, actor.DisplayName)
 	return err
 }
 func insertDefinitionRevision(ctx context.Context, tx pgx.Tx, actor Actor, d Definition, event string, at time.Time) error {

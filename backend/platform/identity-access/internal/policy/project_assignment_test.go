@@ -136,7 +136,7 @@ func TestProjectAssignmentPolicySelectsTargetApplicationPolicy(t *testing.T) {
 	}
 	evaluator, err := NewProjectAssignmentEvaluator(Config{
 		ProjectBaseURL: project.URL, PeopleBaseURL: people.URL, ServiceSubjectID: testService,
-		TenantID: testTenant, Issuer: "https://oms.example.test/auth",
+		Issuer:      "https://oms.example.test/auth",
 		PolicyPaths: []string{projectPolicy, engagementPolicy}, Timeout: time.Second,
 	}, staticSigner{})
 	if err != nil {
@@ -158,7 +158,7 @@ func newTestEvaluator(t *testing.T, projectURL, peopleURL string) *ProjectAssign
 	if err := os.WriteFile(policyPath, []byte(`{"schema_version":"1","policy_id":"project-assignment-access","policy_version":"1.0.0","audience":"project-workspace","roles":{"business_owner":["project-workspace.read","project-workspace.update"]}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	evaluator, err := NewProjectAssignmentEvaluator(Config{ProjectBaseURL: projectURL, PeopleBaseURL: peopleURL, ServiceSubjectID: testService, TenantID: testTenant, Issuer: "https://oms.example.test/auth", PolicyPaths: []string{policyPath}, Timeout: time.Second}, staticSigner{})
+	evaluator, err := NewProjectAssignmentEvaluator(Config{ProjectBaseURL: projectURL, PeopleBaseURL: peopleURL, ServiceSubjectID: testService, Issuer: "https://oms.example.test/auth", PolicyPaths: []string{policyPath}, Timeout: time.Second}, staticSigner{})
 	if err != nil {
 		t.Fatal(err)
 	}

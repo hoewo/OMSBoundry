@@ -44,6 +44,7 @@ type Subject struct {
 	DisplayName         string    `json:"display_name"`
 	Status              Status    `json:"status"`
 	Administrator       bool      `json:"administrator"`
+	Revision            int64     `json:"revision"`
 	SessionGeneration   int64     `json:"-"`
 	FailedLoginAttempts int       `json:"-"`
 	LockedUntil         time.Time `json:"-"`
@@ -110,7 +111,9 @@ type Grant struct {
 type Repository interface {
 	HasSubjects(context.Context) (bool, error)
 	Bootstrap(context.Context, string, string, Subject, string, AuditEntry) (bool, error)
-	FindCredential(context.Context, string, string) (Credential, bool, error)
+	TenantExists(context.Context, string) (bool, error)
+	FindSubject(context.Context, string, string) (Subject, bool, error)
+	FindCredential(context.Context, string) (Credential, bool, error)
 	RecordLoginFailure(context.Context, string, time.Time, int, time.Duration) error
 	ResetLoginFailures(context.Context, string, time.Time) error
 	CreateSession(context.Context, []byte, string, int64, time.Time, time.Time) error
@@ -118,10 +121,10 @@ type Repository interface {
 	RevokeSession(context.Context, []byte, time.Time) error
 	Invite(context.Context, Subject, ActivationToken, AuditEntry) error
 	Activate(context.Context, []byte, TokenKind, string, time.Time, AuditEntry) (Subject, error)
-	CreateActivationToken(context.Context, ActivationToken, AuditEntry) error
-	Grant(context.Context, Grant, AuditEntry) error
-	RevokeGrant(context.Context, Grant, AuditEntry) error
-	ListGrants(context.Context, string, string) ([]Grant, error)
+	CreateActivationToken(context.Context, string, ActivationToken, AuditEntry) error
+	Grant(context.Context, string, Grant, AuditEntry) error
+	RevokeGrant(context.Context, string, Grant, AuditEntry) error
+	ListGrants(context.Context, string, string, string) ([]Grant, error)
 	RecordAudit(context.Context, AuditEntry) error
 	ListSubjects(context.Context, string) ([]Subject, error)
 	ChangeStatus(context.Context, string, string, Status, AuditEntry) error
@@ -236,6 +239,17 @@ type IssuedCredential struct {
 	Decision  *PolicyDecision  `json:"policy_decision,omitempty"`
 }
 
+type SubjectReference struct {
+	SchemaVersion     string `json:"schema_version"`
+	SourceApplication string `json:"source_application"`
+	ID                string `json:"id"`
+	TenantID          string `json:"tenant_id"`
+	Username          string `json:"username"`
+	DisplayName       string `json:"display_name"`
+	Status            Status `json:"status"`
+	Revision          int64  `json:"revision"`
+}
+
 type ValidationError struct{ Field, Message string }
 
 func (e *ValidationError) Error() string { return e.Message }
@@ -309,8 +323,36 @@ func (s *Service) SetWorkloadCredentialTTL(value time.Duration) error {
 	return nil
 }
 
-func (s *Service) IssueWorkloadCredential(ctx context.Context, workload ServiceIdentity, audience, action string, scope Scope) (IssuedCredential, error) {
-	if !identifierPattern.MatchString(workload.ID) || !uuidPattern.MatchString(workload.SubjectID) || strings.TrimSpace(workload.DisplayName) == "" || !uuidPattern.MatchString(workload.KeyID) || !uuidPattern.MatchString(workload.AssertionID) || workload.AuthTime.IsZero() {
+func (s *Service) Issuer() string { return s.issuer }
+
+func (s *Service) SubjectReference(ctx context.Context, tenantID, subjectID string) (SubjectReference, error) {
+	tenantID = strings.ToLower(strings.TrimSpace(tenantID))
+	subjectID = strings.ToLower(strings.TrimSpace(subjectID))
+	if !uuidPattern.MatchString(tenantID) || !uuidPattern.MatchString(subjectID) {
+		return SubjectReference{}, &ValidationError{Field: "subject_id", Message: "账号引用无效"}
+	}
+	subject, found, err := s.repository.FindSubject(ctx, tenantID, subjectID)
+	if err != nil {
+		return SubjectReference{}, err
+	}
+	if !found {
+		return SubjectReference{}, &NotFoundError{Message: "账号不存在"}
+	}
+	return SubjectReference{
+		SchemaVersion: "1", SourceApplication: "identity-access", ID: subject.ID, TenantID: subject.TenantID,
+		Username: subject.Username, DisplayName: subject.DisplayName, Status: subject.Status, Revision: subject.Revision,
+	}, nil
+}
+
+func (s *Service) IssueWorkloadCredential(ctx context.Context, tenantID string, workload ServiceIdentity, audience, action string, scope Scope) (IssuedCredential, error) {
+	if !uuidPattern.MatchString(tenantID) || !identifierPattern.MatchString(workload.ID) || !uuidPattern.MatchString(workload.SubjectID) || strings.TrimSpace(workload.DisplayName) == "" || !uuidPattern.MatchString(workload.KeyID) || !uuidPattern.MatchString(workload.AssertionID) || workload.AuthTime.IsZero() {
+		return IssuedCredential{}, &AuthenticationError{}
+	}
+	found, err := s.repository.TenantExists(ctx, tenantID)
+	if err != nil {
+		return IssuedCredential{}, fmt.Errorf("verify workload tenant: %w", err)
+	}
+	if !found {
 		return IssuedCredential{}, &AuthenticationError{}
 	}
 	if !s.capabilities.Contains(audience, action) {
@@ -335,7 +377,7 @@ func (s *Service) IssueWorkloadCredential(ctx context.Context, workload ServiceI
 		return IssuedCredential{}, err
 	}
 	expiresAt := now.Add(ttl)
-	claims := CapabilityClaims{Version: "1", Issuer: s.issuer, Subject: workload.SubjectID, Tenant: s.tenantID, Audience: audience, Name: workload.DisplayName, Actions: []string{action}, Scope: normalizedScope, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(), AuthTime: workload.AuthTime.Unix(), ID: jti}
+	claims := CapabilityClaims{Version: "1", Issuer: s.issuer, Subject: workload.SubjectID, Tenant: tenantID, Audience: audience, Name: workload.DisplayName, Actions: []string{action}, Scope: normalizedScope, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(), AuthTime: workload.AuthTime.Unix(), ID: jti}
 	token, err := s.signer.Sign(claims)
 	if err != nil {
 		return IssuedCredential{}, fmt.Errorf("sign workload capability credential: %w", err)
@@ -345,7 +387,7 @@ func (s *Service) IssueWorkloadCredential(ctx context.Context, workload ServiceI
 		return IssuedCredential{}, err
 	}
 	actor := AuditActor{Kind: "service_identity", ID: workload.SubjectID, DisplayName: workload.DisplayName}
-	if err := s.repository.RecordAudit(ctx, s.audit(auditID, "iam_service_credential_issued", "capability_credential", jti, actor, now, map[string]any{
+	if err := s.repository.RecordAudit(ctx, s.audit(tenantID, auditID, "iam_service_credential_issued", "capability_credential", jti, actor, now, map[string]any{
 		"workload_id": workload.ID, "workload_key_id": workload.KeyID, "assertion_id": workload.AssertionID,
 		"audience": audience, "actions": []string{action}, "scope": normalizedScope,
 	})); err != nil {
@@ -386,7 +428,7 @@ func (s *Service) EnsureBootstrap(ctx context.Context, input BootstrapInput) (bo
 		return false, err
 	}
 	now := s.now()
-	subject := Subject{ID: subjectID, TenantID: s.tenantID, Username: username, DisplayName: displayName, Status: StatusActive, Administrator: true, SessionGeneration: 1, PasswordChangedAt: now, CreatedAt: now, UpdatedAt: now}
+	subject := Subject{ID: subjectID, TenantID: s.tenantID, Username: username, DisplayName: displayName, Status: StatusActive, Administrator: true, Revision: 1, SessionGeneration: 1, PasswordChangedAt: now, CreatedAt: now, UpdatedAt: now}
 	return s.repository.Bootstrap(ctx, s.tenantID, s.tenantName, subject, passwordHash, AuditEntry{
 		ID: auditID, TenantID: s.tenantID, Action: "iam_subject_bootstrapped", ObjectType: "iam_subject", ObjectID: subjectID,
 		Actor: AuditActor{Kind: "bootstrap_configuration", ID: subjectID, DisplayName: displayName}, OccurredAt: now,
@@ -396,7 +438,7 @@ func (s *Service) EnsureBootstrap(ctx context.Context, input BootstrapInput) (bo
 
 func (s *Service) Login(ctx context.Context, username, password string) (LoginResult, error) {
 	normalized, normalizeErr := normalizeUsername(username)
-	credential, found, err := s.repository.FindCredential(ctx, s.tenantID, normalized)
+	credential, found, err := s.repository.FindCredential(ctx, normalized)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("find IAM credential: %w", err)
 	}
@@ -438,9 +480,6 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (Principal, 
 	if err != nil {
 		return Principal{}, false, fmt.Errorf("resolve IAM session: %w", err)
 	}
-	if found && principal.TenantID != s.tenantID {
-		return Principal{}, false, fmt.Errorf("session tenant mismatch")
-	}
 	return principal, found, nil
 }
 
@@ -453,7 +492,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 }
 
 func (s *Service) Invite(ctx context.Context, actor Principal, username, displayName string) (TokenResult, error) {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return TokenResult{}, err
 	}
 	normalized, err := normalizeUsername(username)
@@ -481,10 +520,10 @@ func (s *Service) Invite(ctx context.Context, actor Principal, username, display
 	if err != nil {
 		return TokenResult{}, err
 	}
-	subject := Subject{ID: subjectID, TenantID: s.tenantID, Username: normalized, DisplayName: displayName, Status: StatusPending, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
+	subject := Subject{ID: subjectID, TenantID: actor.TenantID, Username: normalized, DisplayName: displayName, Status: StatusPending, Revision: 1, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
 	expiresAt := now.Add(24 * time.Hour)
 	activation := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
-	err = s.repository.Invite(ctx, subject, activation, s.audit(auditID, "iam_subject_invited", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"username": normalized}))
+	err = s.repository.Invite(ctx, subject, activation, s.audit(actor.TenantID, auditID, "iam_subject_invited", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"username": normalized}))
 	if err != nil {
 		return TokenResult{}, err
 	}
@@ -496,7 +535,7 @@ func (s *Service) Activate(ctx context.Context, rawToken, password string) (Subj
 }
 
 func (s *Service) CreatePasswordReset(ctx context.Context, actor Principal, subjectID string) (TokenResult, error) {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return TokenResult{}, err
 	}
 	if !uuidPattern.MatchString(subjectID) {
@@ -517,7 +556,7 @@ func (s *Service) CreatePasswordReset(ctx context.Context, actor Principal, subj
 	}
 	expiresAt := now.Add(time.Hour)
 	token := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenPasswordReset, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
-	if err := s.repository.CreateActivationToken(ctx, token, s.audit(auditID, "iam_password_reset_issued", "iam_subject", subjectID, actor.Actor(), now, nil)); err != nil {
+	if err := s.repository.CreateActivationToken(ctx, actor.TenantID, token, s.audit(actor.TenantID, auditID, "iam_password_reset_issued", "iam_subject", subjectID, actor.Actor(), now, nil)); err != nil {
 		return TokenResult{}, err
 	}
 	return TokenResult{Subject: Subject{ID: subjectID}, Token: raw, ExpiresAt: expiresAt}, nil
@@ -541,12 +580,12 @@ func (s *Service) consumeToken(ctx context.Context, rawToken, password string, k
 		return Subject{}, err
 	}
 	now := s.now()
-	entry := s.audit(auditID, action, "iam_subject", "pending-token-subject", AuditActor{Kind: "activation_token", ID: auditID, DisplayName: "一次性激活凭据"}, now, nil)
+	entry := s.audit("", auditID, action, "iam_subject", "pending-token-subject", AuditActor{Kind: "activation_token", ID: auditID, DisplayName: "一次性激活凭据"}, now, nil)
 	return s.repository.Activate(ctx, hash, kind, passwordHash, now, entry)
 }
 
 func (s *Service) Grant(ctx context.Context, actor Principal, subjectID, audience, action string, scope Scope) error {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return err
 	}
 	if !uuidPattern.MatchString(subjectID) {
@@ -575,11 +614,11 @@ func (s *Service) Grant(ctx context.Context, actor Principal, subjectID, audienc
 		return err
 	}
 	grant := Grant{SubjectID: subjectID, Audience: audience, Action: action, Scope: normalizedScope, GrantedBy: actor.SubjectID, GrantedAt: now}
-	return s.repository.Grant(ctx, grant, s.audit(auditID, "iam_capability_granted", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"audience": audience, "action": action, "scope": normalizedScope}))
+	return s.repository.Grant(ctx, actor.TenantID, grant, s.audit(actor.TenantID, auditID, "iam_capability_granted", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"audience": audience, "action": action, "scope": normalizedScope}))
 }
 
 func (s *Service) RevokeGrant(ctx context.Context, actor Principal, subjectID, audience, action string, scope Scope) error {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return err
 	}
 	if !uuidPattern.MatchString(subjectID) {
@@ -608,7 +647,7 @@ func (s *Service) RevokeGrant(ctx context.Context, actor Principal, subjectID, a
 		return err
 	}
 	grant := Grant{SubjectID: subjectID, Audience: audience, Action: action, Scope: normalizedScope, GrantedBy: actor.SubjectID, GrantedAt: now}
-	return s.repository.RevokeGrant(ctx, grant, s.audit(auditID, "iam_capability_revoked", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"audience": audience, "action": action, "scope": normalizedScope}))
+	return s.repository.RevokeGrant(ctx, actor.TenantID, grant, s.audit(actor.TenantID, auditID, "iam_capability_revoked", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"audience": audience, "action": action, "scope": normalizedScope}))
 }
 
 func (s *Service) IssueCredential(ctx context.Context, principal Principal, audience string, scope Scope) (IssuedCredential, error) {
@@ -616,7 +655,7 @@ func (s *Service) IssueCredential(ctx context.Context, principal Principal, audi
 }
 
 func (s *Service) IssueCredentialWithFact(ctx context.Context, principal Principal, audience string, scope Scope, fact *BusinessFactReference) (IssuedCredential, error) {
-	if principal.TenantID != s.tenantID || !uuidPattern.MatchString(principal.SubjectID) {
+	if !uuidPattern.MatchString(principal.TenantID) || !uuidPattern.MatchString(principal.SubjectID) {
 		return IssuedCredential{}, &AuthorizationError{}
 	}
 	audience = strings.TrimSpace(audience)
@@ -627,7 +666,7 @@ func (s *Service) IssueCredentialWithFact(ctx context.Context, principal Princip
 	if err != nil {
 		return IssuedCredential{}, err
 	}
-	grants, err := s.repository.ListGrants(ctx, principal.SubjectID, audience)
+	grants, err := s.repository.ListGrants(ctx, principal.TenantID, principal.SubjectID, audience)
 	if err != nil {
 		return IssuedCredential{}, err
 	}
@@ -675,7 +714,7 @@ func (s *Service) IssueCredentialWithFact(ctx context.Context, principal Princip
 	}
 	now := s.now()
 	expiresAt := now.Add(s.credentialTTL)
-	claims := CapabilityClaims{Version: "1", Issuer: s.issuer, Subject: principal.SubjectID, Tenant: s.tenantID, Audience: audience, Name: principal.DisplayName, Actions: actions, Scope: normalizedScope, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(), AuthTime: principal.AuthTime.Unix(), ID: jti}
+	claims := CapabilityClaims{Version: "1", Issuer: s.issuer, Subject: principal.SubjectID, Tenant: principal.TenantID, Audience: audience, Name: principal.DisplayName, Actions: actions, Scope: normalizedScope, IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(), AuthTime: principal.AuthTime.Unix(), ID: jti}
 	token, err := s.signer.Sign(claims)
 	if err != nil {
 		return IssuedCredential{}, fmt.Errorf("sign capability credential: %w", err)
@@ -685,7 +724,7 @@ func (s *Service) IssueCredentialWithFact(ctx context.Context, principal Princip
 		if err != nil {
 			return IssuedCredential{}, err
 		}
-		if err := s.repository.RecordAudit(ctx, s.audit(auditID, "iam_policy_credential_issued", "capability_credential", jti, principal.Actor(), now, map[string]any{
+		if err := s.repository.RecordAudit(ctx, s.audit(principal.TenantID, auditID, "iam_policy_credential_issued", "capability_credential", jti, principal.Actor(), now, map[string]any{
 			"audience": audience, "actions": actions, "scope": normalizedScope, "policy_decision": decision,
 		})); err != nil {
 			return IssuedCredential{}, err
@@ -790,14 +829,14 @@ func authorizedActions(catalog CapabilityCatalog, audience string, scope Scope, 
 }
 
 func (s *Service) ListSubjects(ctx context.Context, actor Principal) ([]Subject, error) {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return nil, err
 	}
-	return s.repository.ListSubjects(ctx, s.tenantID)
+	return s.repository.ListSubjects(ctx, actor.TenantID)
 }
 
 func (s *Service) ChangeStatus(ctx context.Context, actor Principal, subjectID string, status Status) error {
-	if err := requireAdministrator(actor, s.tenantID); err != nil {
+	if err := requireAdministrator(actor); err != nil {
 		return err
 	}
 	if subjectID == actor.SubjectID && status == StatusDisabled {
@@ -811,14 +850,14 @@ func (s *Service) ChangeStatus(ctx context.Context, actor Principal, subjectID s
 	if err != nil {
 		return err
 	}
-	return s.repository.ChangeStatus(ctx, s.tenantID, subjectID, status, s.audit(auditID, "iam_subject_status_changed", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"status": status}))
+	return s.repository.ChangeStatus(ctx, actor.TenantID, subjectID, status, s.audit(actor.TenantID, auditID, "iam_subject_status_changed", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"status": status}))
 }
 
-func (s *Service) audit(id, action, objectType, objectID string, actor AuditActor, at time.Time, details map[string]any) AuditEntry {
+func (s *Service) audit(tenantID, id, action, objectType, objectID string, actor AuditActor, at time.Time, details map[string]any) AuditEntry {
 	if details == nil {
 		details = map[string]any{}
 	}
-	return AuditEntry{ID: id, TenantID: s.tenantID, Action: action, ObjectType: objectType, ObjectID: objectID, Actor: actor, OccurredAt: at, Details: details}
+	return AuditEntry{ID: id, TenantID: tenantID, Action: action, ObjectType: objectType, ObjectID: objectID, Actor: actor, OccurredAt: at, Details: details}
 }
 
 func (s *Service) hashPassword(password string) (string, error) {
@@ -849,8 +888,8 @@ func normalizeDisplayName(raw, fallback string) (string, error) {
 	}
 	return value, nil
 }
-func requireAdministrator(actor Principal, tenantID string) error {
-	if actor.TenantID != tenantID || !actor.Administrator {
+func requireAdministrator(actor Principal) error {
+	if !uuidPattern.MatchString(actor.TenantID) || !uuidPattern.MatchString(actor.SubjectID) || !actor.Administrator {
 		return &AuthorizationError{}
 	}
 	return nil

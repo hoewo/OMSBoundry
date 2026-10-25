@@ -50,13 +50,20 @@ func TestIAMAcceptsOnlyBillingNativeActionsAndScope(t *testing.T) {
 	if err != nil || !principal.Can(ActionAmountRead) || principal.Can(ActionCorrect) || !principal.CanRegistration(authInvoice, []string{authProject}) {
 		t.Fatalf("principal=%#v err=%v", principal, err)
 	}
+	otherTenantClaims := claims
+	otherTenantClaims.Tenant = "77777777-7777-4777-8777-777777777777"
+	request.Header.Set("Authorization", "Bearer "+signToken(t, privateKey, otherTenantClaims))
+	otherTenantPrincipal, err := provider.Authenticate(request)
+	if err != nil || otherTenantPrincipal.TenantID != otherTenantClaims.Tenant {
+		t.Fatalf("other tenant principal=%#v err=%v", otherTenantPrincipal, err)
+	}
 
 	tests := []struct {
 		name   string
 		mutate func(*iamClaims)
 	}{
 		{"wrong audience", func(value *iamClaims) { value.Audience = "gateway" }},
-		{"wrong tenant", func(value *iamClaims) { value.Tenant = "77777777-7777-4777-8777-777777777777" }},
+		{"malformed tenant", func(value *iamClaims) { value.Tenant = "not-a-tenant" }},
 		{"expired", func(value *iamClaims) { value.ExpiresAt = now.Add(-time.Minute).Unix() }},
 		{"broad legacy action", func(value *iamClaims) { value.Actions = []string{"finance.manage"} }},
 		{"duplicate action", func(value *iamClaims) { value.Actions = []string{ActionRead, ActionRead} }},

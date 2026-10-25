@@ -14,6 +14,8 @@ import (
 	"omsbizfoundry/people-groups/internal/database"
 	"omsbizfoundry/people-groups/internal/httpserver"
 	"omsbizfoundry/people-groups/internal/peoplegroups"
+	"omsbizfoundry/people-groups/internal/subjectreference"
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 func main() {
@@ -40,7 +42,20 @@ func main() {
 		logger.Error("prepare database", "error", err)
 		os.Exit(1)
 	}
-	service, err := peoplegroups.NewService(pool)
+	var subjectReferences peoplegroups.IAMSubjectReferencePort
+	if cfg.IdentityProvider == config.IdentityIAM {
+		credentials, credentialErr := workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
+		if credentialErr != nil {
+			logger.Error("create workload credential source", "error", credentialErr)
+			os.Exit(1)
+		}
+		subjectReferences, err = subjectreference.NewHTTPValidator(cfg.IAMBaseURL, credentials, cfg.ReferenceTimeout)
+		if err != nil {
+			logger.Error("create IAM subject reference validator", "error", err)
+			os.Exit(1)
+		}
+	}
+	service, err := peoplegroups.NewService(pool, subjectReferences)
 	if err != nil {
 		logger.Error("create service", "error", err)
 		os.Exit(1)

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "application_id": "payroll",
+  "application_version": "0.1.0",
+  "audience": "payroll",
+  "capabilities": [
+    { "id": "payroll.self.read", "description": "查看本人已发放工资和脱敏薪酬支付档案", "risk": "read", "resource_types": ["payroll_line", "compensation_profile", "payment_profile"] },
+    { "id": "payroll.tenant.read", "description": "读取本租户工资批次、工资明细和薪酬档案的非敏感投影", "risk": "privileged", "resource_types": ["payroll_run", "payroll_line", "compensation_profile", "payment_profile"] },
+    { "id": "payroll.compensation-profile.manage", "description": "维护按生效月版本化的成员固定工资与缴费基数", "risk": "privileged", "resource_types": ["compensation_profile"] },
+    { "id": "payroll.payment-profile.manage", "description": "维护成员版本化工资收款账户", "risk": "privileged", "resource_types": ["payment_profile"] },
+    { "id": "payroll.sensitive-account.read", "description": "显式读取单个成员完整工资收款账户", "risk": "privileged", "resource_types": ["payment_profile"] },
+    { "id": "payroll.sensitive-account.export", "description": "独立授权导出完整工资收款账户", "risk": "privileged", "resource_types": ["payment_profile"] },
+    { "id": "payroll.contribution-scheme.manage", "description": "维护按地区和生效月版本化的社保与公积金比例方案", "risk": "privileged", "resource_types": ["contribution_scheme"] },
+    { "id": "payroll.run.manage", "description": "新建工资批次、同步成员并编辑未发放工资明细", "risk": "write", "resource_types": ["payroll_run", "payroll_line"] },
+    { "id": "payroll.payment.confirm", "description": "逐条确认工资发放并登记 Money 稳定引用", "risk": "privileged", "resource_types": ["payroll_line"] },
+    { "id": "payroll.payment.batch-confirm", "description": "批量确认工资发放，逐项返回成功或失败", "risk": "privileged", "resource_types": ["payroll_run", "payroll_line"] },
+    { "id": "payroll.export", "description": "导出本租户工资与薪酬普通字段", "risk": "privileged", "resource_types": ["payroll_run", "payroll_line", "compensation_profile"] },
+    { "id": "payroll.reference.read", "description": "供受信工作负载读取精确工资或薪酬档案稳定引用", "risk": "privileged", "resource_types": ["payroll_run", "payroll_line", "compensation_profile"] }
+  ]
+}

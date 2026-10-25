@@ -62,7 +62,7 @@ func TestProductionOperationsPolicyAllowsOnlyCurrentProductionResponsibility(t *
 			policyPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "production-operations-project-assignment-policy.json")
 			evaluator, err := NewProjectAssignmentEvaluator(Config{
 				ProjectBaseURL: project.URL, PeopleBaseURL: people.URL, ServiceSubjectID: testService,
-				TenantID: testTenant, Issuer: "https://oms.example.test/auth", PolicyPaths: []string{policyPath}, Timeout: time.Second,
+				Issuer: "https://oms.example.test/auth", PolicyPaths: []string{policyPath}, Timeout: time.Second,
 			}, staticSigner{})
 			if err != nil {
 				t.Fatal(err)

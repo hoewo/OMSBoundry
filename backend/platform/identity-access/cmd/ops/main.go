@@ -68,7 +68,7 @@ func validateContracts(cfg config.Config) error {
 		}
 	}
 	if cfg.WorkloadIdentityPolicyPath != "" {
-		if err := workload.Validate(cfg.WorkloadIdentityPolicyPath, cfg.TenantID); err != nil {
+		if err := workload.Validate(cfg.WorkloadIdentityPolicyPath); err != nil {
 			return err
 		}
 	}

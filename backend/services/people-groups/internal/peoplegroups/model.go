@@ -1,6 +1,7 @@
 package peoplegroups
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -17,10 +18,12 @@ const (
 )
 
 var (
-	keyPattern  = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,62}[a-z0-9]$`)
-	uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	ErrNotFound = errors.New("resource not found")
-	ErrConflict = errors.New("resource state conflict")
+	keyPattern                     = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,62}[a-z0-9]$`)
+	uuidPattern                    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	ErrNotFound                    = errors.New("resource not found")
+	ErrConflict                    = errors.New("resource state conflict")
+	ErrSubjectReferenceInvalid     = errors.New("IAM subject reference is invalid")
+	ErrSubjectReferenceUnavailable = errors.New("IAM subject reference is unavailable")
 )
 
 type ValidationError struct {
@@ -38,15 +41,32 @@ type Actor struct {
 }
 
 type Person struct {
-	ID            string    `json:"id"`
-	TenantID      string    `json:"tenant_id"`
-	ReferenceCode string    `json:"reference_code,omitempty"`
-	DisplayName   string    `json:"display_name"`
-	Status        string    `json:"status"`
-	IAMSubjectID  string    `json:"iam_subject_id,omitempty"`
-	Revision      int64     `json:"revision"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	TenantID           string    `json:"tenant_id"`
+	ReferenceCode      string    `json:"reference_code,omitempty"`
+	DisplayName        string    `json:"display_name"`
+	Status             string    `json:"status"`
+	IAMSubjectID       string    `json:"iam_subject_id,omitempty"`
+	IAMSubjectStatus   string    `json:"iam_subject_status,omitempty"`
+	IAMSubjectRevision int64     `json:"iam_subject_revision,omitempty"`
+	Revision           int64     `json:"revision"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type IAMSubjectReference struct {
+	SchemaVersion     string `json:"schema_version"`
+	SourceApplication string `json:"source_application"`
+	ID                string `json:"id"`
+	TenantID          string `json:"tenant_id"`
+	Username          string `json:"username"`
+	DisplayName       string `json:"display_name"`
+	Status            string `json:"status"`
+	Revision          int64  `json:"revision"`
+}
+
+type IAMSubjectReferencePort interface {
+	ValidateIAMSubject(context.Context, string, string) (IAMSubjectReference, error)
 }
 
 type Definition struct {

@@ -92,7 +92,7 @@ func TestIAMAndTemplateProvidersProduceEquivalentCapabilityContext(t *testing.T)
 	}
 }
 
-func TestIAMProviderRejectsWrongAudienceTenantAndExpiredCredential(t *testing.T) {
+func TestIAMProviderAcceptsSignedTenantAndRejectsInvalidCredential(t *testing.T) {
 	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
 	keySet := iamKeySet{Keys: []iamJWK{{KTY: "OKP", CRV: "Ed25519", Use: "sig", ALG: "EdDSA", KeyID: authKey, X: base64.RawURLEncoding.EncodeToString(publicKey), Status: "active"}}}
 	raw, _ := json.Marshal(keySet)
@@ -102,12 +102,20 @@ func TestIAMProviderRejectsWrongAudienceTenantAndExpiredCredential(t *testing.T)
 	now := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
 	provider.now = func() time.Time { return now }
 	valid := iamClaims{Version: "1", Issuer: "https://iam.example.test", Subject: authSubject, Tenant: authTenant, Audience: "project-workspace", Name: "管理员", Actions: []string{ActionRead}, Scope: iamScope{Kind: "tenant"}, IssuedAt: now.Add(-time.Minute).Unix(), NotBefore: now.Add(-time.Minute).Unix(), ExpiresAt: now.Add(time.Minute).Unix(), AuthTime: now.Add(-time.Minute).Unix(), ID: authTokenID}
+	otherTenant := valid
+	otherTenant.Tenant = "66666666-6666-4666-8666-666666666666"
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Header.Set("Authorization", "Bearer "+signedToken(t, privateKey, otherTenant))
+	principal, err := provider.Authenticate(request)
+	if err != nil || principal.TenantID != otherTenant.Tenant {
+		t.Fatalf("other tenant principal=%#v err=%v", principal, err)
+	}
 	for _, test := range []struct {
 		name   string
 		mutate func(*iamClaims)
 	}{
 		{"wrong audience", func(value *iamClaims) { value.Audience = "wrong" }},
-		{"wrong tenant", func(value *iamClaims) { value.Tenant = "66666666-6666-4666-8666-666666666666" }},
+		{"malformed tenant", func(value *iamClaims) { value.Tenant = "not-a-tenant" }},
 		{"expired", func(value *iamClaims) { value.ExpiresAt = now.Add(-time.Minute).Unix() }},
 	} {
 		t.Run(test.name, func(t *testing.T) {

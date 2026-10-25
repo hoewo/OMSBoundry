@@ -12,11 +12,12 @@ RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=oms-go-build,target=/root/.cache/go-build,sharing=locked \
     GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/server ./cmd/server \
     && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/ops ./cmd/ops \
-    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/keyctl ./cmd/keyctl
+    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/keyctl ./cmd/keyctl \
+    && GOMAXPROCS="$BUILD_GOMAXPROCS" GOWORK=off CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -ldflags='-s -w' -o /out/tenantctl ./cmd/tenantctl
 
 FROM ${RUNTIME_IMAGE}
 RUN mkdir -p /app /data/iam /public /config /backups && chown -R postgres:postgres /app /data/iam /public /backups
-COPY --from=build /out/server /out/ops /out/keyctl /app/
+COPY --from=build /out/server /out/ops /out/keyctl /out/tenantctl /app/
 USER postgres
 ENTRYPOINT []
 CMD ["/app/server"]

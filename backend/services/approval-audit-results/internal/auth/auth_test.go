@@ -34,10 +34,16 @@ func TestIAMProviderAcceptsNativeAudienceCapabilityAndExactScope(t *testing.T) {
 	}
 }
 
-func TestIAMProviderRejectsWrongAudienceTenantAndResourceType(t *testing.T) {
+func TestIAMProviderAcceptsAnySignedTenantAndRejectsMalformedTenant(t *testing.T) {
 	provider, privateKey := testProvider(t)
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken(t, privateKey, "approval-audit-results", authSubject, []string{ActionRead}, "project", authProject))
+	principal, err := provider.Authenticate(request)
+	if err != nil || principal.TenantID != authSubject {
+		t.Fatalf("other tenant principal=%#v err=%v", principal, err)
+	}
 	for _, test := range []struct{ name, audience, tenant, resourceType string }{
-		{"audience", "billing-invoice", authTenant, "project"}, {"tenant", "approval-audit-results", authSubject, "project"}, {"resource", "approval-audit-results", authTenant, "contract"},
+		{"audience", "billing-invoice", authTenant, "project"}, {"malformed tenant", "approval-audit-results", "not-a-tenant", "project"}, {"resource", "approval-audit-results", authTenant, "contract"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest("GET", "/", nil)

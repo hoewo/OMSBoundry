@@ -75,7 +75,7 @@ func validateEndpoint(endpoint Endpoint) error {
 }
 
 func (r *HTTPResolver) ResolveParty(ctx context.Context, tenantID string, reference invoice.PartyRef) (invoice.PartyReference, error) {
-	body, err := r.get(ctx, r.party, "/api/v1/references/parties/"+url.PathEscape(reference.ID), "party", reference.ID)
+	body, err := r.get(ctx, tenantID, r.party, "/api/v1/references/parties/"+url.PathEscape(reference.ID), "party", reference.ID)
 	if err != nil {
 		return invoice.PartyReference{}, err
 	}
@@ -115,7 +115,7 @@ func (r *HTTPResolver) ResolveSource(ctx context.Context, tenantID string, refer
 	if !ok {
 		return invoice.SourceReference{}, invoice.ErrReferenceInvalid
 	}
-	body, err := r.get(ctx, endpoint, path, resourceType, *reference.ResourceID)
+	body, err := r.get(ctx, tenantID, endpoint, path, resourceType, *reference.ResourceID)
 	if err != nil {
 		return invoice.SourceReference{}, err
 	}
@@ -142,7 +142,7 @@ func (r *HTTPResolver) ResolveSource(ctx context.Context, tenantID string, refer
 
 func (r *HTTPResolver) ResolveEvidence(ctx context.Context, tenantID string, reference invoice.EvidenceRef) (invoice.EvidenceReference, error) {
 	path := fmt.Sprintf("/v1/references/files/%s/versions/%d", url.PathEscape(reference.FileID), reference.Version)
-	body, err := r.get(ctx, r.evidence, path, "file", reference.FileID)
+	body, err := r.get(ctx, tenantID, r.evidence, path, "file", reference.FileID)
 	if err != nil {
 		return invoice.EvidenceReference{}, err
 	}
@@ -200,19 +200,19 @@ func sourceStatusAvailable(kind, status string) bool {
 	}
 }
 
-func (r *HTTPResolver) get(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
+func (r *HTTPResolver) get(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
 	token := endpoint.AccessToken
 	if endpoint.Credentials != nil {
 		var err error
-		token, err = endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		token, err = workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if err != nil || strings.TrimSpace(token) == "" {
 			return nil, invoice.ErrReferenceUnavailable
 		}
 	}
-	return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, token, true)
+	return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, token, true)
 }
 
-func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
+func (r *HTTPResolver) getWithToken(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(endpoint.BaseURL, "/")+path, nil)
 	if err != nil {
 		return nil, invoice.ErrReferenceUnavailable
@@ -226,12 +226,12 @@ func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		endpoint.Credentials.Invalidate(endpoint.Audience, endpoint.Action, resourceType, resourceID)
-		fresh, credentialErr := endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		workloadidentity.InvalidateForTenant(endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if credentialErr != nil || strings.TrimSpace(fresh) == "" {
 			return nil, invoice.ErrReferenceUnavailable
 		}
-		return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, fresh, false)
+		return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, fresh, false)
 	}
 	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity {
 		return nil, invoice.ErrReferenceInvalid

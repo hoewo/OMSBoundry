@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 const maxPartyResponseBytes = 1 << 20
@@ -53,7 +55,7 @@ func (v *HTTPPartyValidator) VerifyParty(ctx context.Context, tenantID, partyID 
 	token := strings.TrimSpace(v.endpoint.AccessToken)
 	if v.endpoint.Credentials != nil {
 		var err error
-		token, err = v.endpoint.Credentials.Credential(ctx, v.endpoint.Audience, v.endpoint.Action, "party", partyID)
+		token, err = workloadidentity.CredentialForTenant(ctx, v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "party", partyID)
 		if err != nil {
 			return TargetSnapshot{}, ErrTargetUnavailable
 		}
@@ -75,8 +77,8 @@ func (v *HTTPPartyValidator) verifyWithToken(ctx context.Context, tenantID, part
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && v.endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxPartyResponseBytes))
-		v.endpoint.Credentials.Invalidate(v.endpoint.Audience, v.endpoint.Action, "party", partyID)
-		fresh, credentialErr := v.endpoint.Credentials.Credential(ctx, v.endpoint.Audience, v.endpoint.Action, "party", partyID)
+		workloadidentity.InvalidateForTenant(v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "party", partyID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "party", partyID)
 		if credentialErr != nil {
 			return TargetSnapshot{}, ErrTargetUnavailable
 		}

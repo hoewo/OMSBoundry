@@ -65,11 +65,20 @@ func TestIAMProviderAcceptsOnlyExactContractReferenceCredential(t *testing.T) {
 	if err != nil || !found || !principal.Can(PermissionReferenceRead) || !principal.CanReference("contract", "55555555-5555-4555-8555-555555555555") || principal.CanReference("contract", "66666666-6666-4666-8666-666666666666") {
 		t.Fatalf("principal=%#v found=%v err=%v", principal, found, err)
 	}
+	otherTenantClaims := make(map[string]any, len(claims))
+	for key, value := range claims {
+		otherTenantClaims[key] = value
+	}
+	otherTenantClaims["tid"] = "66666666-6666-4666-8666-666666666666"
+	otherTenantPrincipal, found, err := provider.ResolveSession(context.Background(), signIAMToken(t, keyID, privateKey, otherTenantClaims))
+	if err != nil || !found || otherTenantPrincipal.TenantID != otherTenantClaims["tid"] {
+		t.Fatalf("other tenant principal=%#v found=%v err=%v", otherTenantPrincipal, found, err)
+	}
 	for _, test := range []struct {
 		name   string
 		mutate func(map[string]any)
 	}{
-		{"cross tenant", func(value map[string]any) { value["tid"] = "66666666-6666-4666-8666-666666666666" }},
+		{"malformed tenant", func(value map[string]any) { value["tid"] = "not-a-tenant" }},
 		{"privileged action outside native workspace", func(value map[string]any) { value["actions"] = []string{"contract-ledger.restore"} }},
 		{"mixed reference and business actions", func(value map[string]any) {
 			value["actions"] = []string{"contract-ledger.reference.read", "contract-ledger.view"}

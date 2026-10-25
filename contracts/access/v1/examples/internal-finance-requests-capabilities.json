@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "application_id": "internal-finance-requests",
+  "application_version": "0.1.0",
+  "audience": "internal-finance-requests",
+  "capabilities": [
+    { "id": "internal-finance-requests.self.read", "description": "查看本人提交的报销与付款申请及其当前状态", "risk": "read", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.self.manage", "description": "建立、修改、提交和在允许状态下撤回本人的财务申请", "risk": "write", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.tenant.read", "description": "读取本租户全部财务申请的非敏感投影", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.payment.confirm", "description": "逐笔确认财务申请的实际付款并登记 Money 稳定引用", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.payment.batch-confirm", "description": "批量确认财务申请付款，逐项返回成功或失败", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.sensitive-account.read", "description": "显式读取单笔申请的完整收款账户信息", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.export", "description": "导出本租户财务申请的普通字段", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.sensitive-account.export", "description": "独立授权导出包含完整收款账户的敏感数据", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.category.manage", "description": "维护租户财务申请类别及启停 revision", "risk": "privileged", "resource_types": ["finance_category"] },
+    { "id": "internal-finance-requests.reference.read", "description": "供受信工作负载读取精确财务申请稳定引用", "risk": "privileged", "resource_types": ["finance_request"] }
+  ]
+}

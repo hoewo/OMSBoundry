@@ -1,5 +1,15 @@
 # OMSBizFoundry 验证入口
 
+## 2026-10-25 OMS1 迭代 P0／P1
+
+P0 需求和命名基线已冻结，记录见 [`oms-v1-iteration-p0-baseline-validation-20261025.md`](./reports/oms-v1-iteration-p0-baseline-validation-20261025.md)。P1 验证见 [`oms-v1-iteration-p1-multitenant-validation-20261025.md`](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)，可重复入口为：
+
+```sh
+./acceptance/p1-multitenant/run-isolated
+```
+
+该入口创建随机命名的一次性 PostgreSQL 18.6 容器和临时目录，构建并启动真实 IAM／People 二进制，完成双租户、工作负载换票、Subject↔Person、跨租户负例、撤权／停用、分库备份、空目标恢复和恢复后续写；不会使用或停止 `oms-v1-integration-*`、D1 或开发数据库。P1 同时复验全部受影响 Go modules、Capability Manifest、Compose 和镜像构建，以及 12 个现有受保护 Owner 的代表性 PostgreSQL 租户隔离、搜索／分页／导出／附件路径。此结论不表示 P2、新 D1 组合或公网已发布。
+
 2026-10-24 BF-183 已发布并验证：新增 Go 静态回归断言工具栏普通说明与 `.oms-v1__select` 分流，禁止通用 `span` 规则推开或隐藏统一选择器；Workbench Go test／vet、脚本语法、内部管理模型与公网页面 8/8 定向 Node 回归、`git diff --check` 和本地视觉复核通过。公网 Workbench v1.32 镜像为 `sha256:5f3e3a25396c7b7b0ec803646bc1ff85301ba3b8e2f38c42d6767549f70ca291`，备份 `20261024T034034Z` 校验通过；只替换 Workbench，其他 16 个容器 ID 不变，D1 `check` 与 17/17 healthy 通过。正式 IAM 登录、五次 Gateway 授权和 Owner 只读返回 Party 5、Project 1、Billing 2、Money 2、Contract workspace 6；版本化 CSS `20261024.1` 返回 immutable 且包含新规则，业务写入为 0。[报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)
 
 2026-10-23 BF-182 本地交互验证并于 2026-10-24 发布：252 项 Node 回归全部通过，新增静态断言覆盖工资／财务批量条的全选和取消全选标记、工资只纳入未发放行、财务只纳入待支付申请；`node --check`、Workbench Go test／vet 和 `git diff --check` 通过。本地浏览器在工资管理页确认初始显示“已选择 0 条”，取消全选、批量录入绩效和确认已发放均禁用；点击全选后只勾选 2 条未发放工资，1 条已发放工资保持禁用，选择数变为 2，批量动作启用；点击取消全选后复原为 0。财务页现有 2 条均为已支付，因此全选和批量确认保持禁用。该交互随 Workbench v1.32 发布，公网边界和运行证据见 [BF-183 报告](./reports/oms-finance-filter-toolbar-publication-20261024.md)。

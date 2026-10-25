@@ -1,5 +1,9 @@
 # OMSBizFoundry 开发计划
 
+2026-10-25 P1 已完成本地门禁：IAM 支持同一进程多 Tenant 登录／会话／授权和平台侧 Tenant＋首管理员创建；People 保存同租户 Subject 稳定快照；所有受保护 Owner 与工作负载适配器均从可信凭证透传请求 Tenant。真实 IAM＋People 进程、PostgreSQL 18 双租户、跨租户稳定 ID／Subject 拒绝、撤权、停用、双库空目标恢复和恢复后续写通过；12 个既有 Owner 的代表性租户隔离、搜索／分页／导出／附件路径也以当前代码复验。当前进入 P2，尚未部署 D1／公网。[P1 报告](./reports/oms-v1-iteration-p1-multitenant-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
+
+2026-10-25 P0 已完成：需求基线提交为 `abe170f`，BF-184～BF-237 已映射到 P0～P9、Owner、migration、API、页面和验收证据，并冻结新应用 ID、数据库、端口、路由和 Capability 命名；秘密扫描无命中。[P0 记录](./reports/oms-v1-iteration-p0-baseline-validation-20261025.md)、[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
+
 2026-10-25 BF-237 已确认 Feedback 自动诊断上下文使用严格非敏感 allowlist，不携带身份、业务数据、凭证、完整 UA 或自动截图；本轮 BF-184～BF-237 产品需求已经闭合，开始按 P0～P9 实施，当前先完成 P0 可追溯基线并进入 P1 IAM 双租户审计／实现。[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)
 
 2026-10-25 已把 BF-184～BF-236 映射为 P0～P9 工程实施分期，覆盖 IAM 双租户、两个新 Owner、成员／薪酬、工资、财务申请、开放 API、发票报销闭环、Feedback V2 和 D1 恢复验收；该准备步骤随后由 BF-237 关闭最后待确认项并进入实施。[实施拆解](./specs/assembly/oms-v1-iteration-implementation-plan-20261025.md)

@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "application_id": "feedback",
+  "application_version": "0.1.0",
+  "audience": "feedback",
+  "capabilities": [
+    { "id": "feedback.use", "description": "在 OMS1 中打开产品反馈、提交反馈并查看本人的反馈状态", "risk": "write", "resource_types": ["feedback_session"] }
+  ]
+}

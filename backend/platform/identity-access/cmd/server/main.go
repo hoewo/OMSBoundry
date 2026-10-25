@@ -68,7 +68,7 @@ func run(logger *slog.Logger) error {
 	}
 	var workloads *workload.Authenticator
 	if cfg.WorkloadIdentityPolicyPath != "" {
-		workloads, err = workload.Load(cfg.WorkloadIdentityPolicyPath, cfg.TenantID, workload.NewPostgresNonceStore(pool))
+		workloads, err = workload.Load(cfg.WorkloadIdentityPolicyPath, workload.NewPostgresNonceStore(pool))
 		if err != nil {
 			return err
 		}
@@ -76,8 +76,8 @@ func run(logger *slog.Logger) error {
 	if cfg.PolicyEnabled() {
 		evaluator, err := policy.NewProjectAssignmentEvaluator(policy.Config{
 			ProjectBaseURL: cfg.ProjectPolicyBaseURL, PeopleBaseURL: cfg.PeoplePolicyBaseURL,
-			ServiceSubjectID: cfg.PolicyServiceSubjectID, TenantID: cfg.TenantID,
-			Issuer: cfg.PublicIssuer, PolicyPaths: cfg.ProjectAssignmentPolicyPaths, Timeout: cfg.PolicyTimeout,
+			ServiceSubjectID: cfg.PolicyServiceSubjectID,
+			Issuer:           cfg.PublicIssuer, PolicyPaths: cfg.ProjectAssignmentPolicyPaths, Timeout: cfg.PolicyTimeout,
 		}, keys)
 		if err != nil {
 			return err

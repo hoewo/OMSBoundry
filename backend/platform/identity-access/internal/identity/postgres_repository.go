@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const subjectColumns = `id::text, tenant_id::text, username, display_name, status, administrator, session_generation, failed_login_attempts, locked_until, password_changed_at, created_at, updated_at`
+const subjectColumns = `id::text, tenant_id::text, username, display_name, status, administrator, revision, session_generation, failed_login_attempts, locked_until, password_changed_at, created_at, updated_at`
 
 type PostgresRepository struct{ pool *pgxpool.Pool }
 
@@ -59,11 +59,54 @@ func (r *PostgresRepository) Bootstrap(ctx context.Context, tenantID, tenantName
 	return true, nil
 }
 
-func (r *PostgresRepository) FindCredential(ctx context.Context, tenantID, username string) (Credential, bool, error) {
-	row := r.pool.QueryRow(ctx, `SELECT `+subjectColumns+`, password_hash FROM subjects WHERE tenant_id=$1 AND username=$2`, tenantID, username)
+func (r *PostgresRepository) ProvisionTenant(ctx context.Context, tenantID, tenantName string, subject Subject, passwordHash string, entry AuditEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('omsbizfoundry:identity-access:tenant-provisioning'))`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO tenants(id,name,created_at) VALUES($1,$2,$3)`, tenantID, tenantName, subject.CreatedAt); err != nil {
+		if isUnique(err) {
+			return &ConflictError{Message: "租户已存在"}
+		}
+		return fmt.Errorf("insert tenant: %w", err)
+	}
+	if err := insertSubject(ctx, tx, subject, &passwordHash); err != nil {
+		return err
+	}
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PostgresRepository) TenantExists(ctx context.Context, tenantID string) (bool, error) {
+	var exists bool
+	if err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE id=$1)`, tenantID).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func (r *PostgresRepository) FindSubject(ctx context.Context, tenantID, subjectID string) (Subject, bool, error) {
+	value, err := scanSubject(r.pool.QueryRow(ctx, `SELECT `+subjectColumns+` FROM subjects WHERE tenant_id=$1 AND id=$2`, tenantID, subjectID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Subject{}, false, nil
+	}
+	if err != nil {
+		return Subject{}, false, err
+	}
+	return value, true, nil
+}
+
+func (r *PostgresRepository) FindCredential(ctx context.Context, username string) (Credential, bool, error) {
+	row := r.pool.QueryRow(ctx, `SELECT `+subjectColumns+`, password_hash FROM subjects WHERE username=$1`, username)
 	var value Credential
 	var lockedUntil, passwordChangedAt *time.Time
-	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SessionGeneration, &value.FailedLoginAttempts, &lockedUntil, &passwordChangedAt, &value.CreatedAt, &value.UpdatedAt, &value.PasswordHash)
+	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &lockedUntil, &passwordChangedAt, &value.CreatedAt, &value.UpdatedAt, &value.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Credential{}, false, nil
 	}
@@ -141,8 +184,8 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 		return Subject{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	var tokenID, subjectID string
-	err = tx.QueryRow(ctx, `SELECT id::text,subject_id::text FROM activation_tokens WHERE token_hash=$1 AND kind=$2 AND used_at IS NULL AND expires_at>$3 FOR UPDATE`, tokenHash, kind, now).Scan(&tokenID, &subjectID)
+	var tokenID, subjectID, tenantID string
+	err = tx.QueryRow(ctx, `SELECT t.id::text,t.subject_id::text,s.tenant_id::text FROM activation_tokens t JOIN subjects s ON s.id=t.subject_id WHERE t.token_hash=$1 AND t.kind=$2 AND t.used_at IS NULL AND t.expires_at>$3 FOR UPDATE OF t,s`, tokenHash, kind, now).Scan(&tokenID, &subjectID, &tenantID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Subject{}, &AuthenticationError{}
 	}
@@ -151,7 +194,7 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 	}
 	var result pgconn.CommandTag
 	if kind == TokenInvitation {
-		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,status='active',password_changed_at=$3,updated_at=$3 WHERE id=$1 AND status='pending'`, subjectID, passwordHash, now)
+		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,status='active',revision=revision+1,password_changed_at=$3,updated_at=$3 WHERE id=$1 AND status='pending'`, subjectID, passwordHash, now)
 	} else {
 		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,session_generation=session_generation+1,failed_login_attempts=0,locked_until=NULL,password_changed_at=$3,updated_at=$3 WHERE id=$1 AND status='active'`, subjectID, passwordHash, now)
 	}
@@ -165,6 +208,7 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 		return Subject{}, err
 	}
 	entry.ObjectID = subjectID
+	entry.TenantID = tenantID
 	entry.Actor.ID = tokenID
 	if err := insertAudit(ctx, tx, entry); err != nil {
 		return Subject{}, err
@@ -179,14 +223,14 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 	return subject, nil
 }
 
-func (r *PostgresRepository) CreateActivationToken(ctx context.Context, token ActivationToken, entry AuditEntry) error {
+func (r *PostgresRepository) CreateActivationToken(ctx context.Context, tenantID string, token ActivationToken, entry AuditEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	var active bool
-	if err := tx.QueryRow(ctx, `SELECT status='active' FROM subjects WHERE id=$1 FOR UPDATE`, token.SubjectID).Scan(&active); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT status='active' FROM subjects WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, tenantID, token.SubjectID).Scan(&active); errors.Is(err, pgx.ErrNoRows) {
 		return &NotFoundError{Message: "用户不存在"}
 	} else if err != nil {
 		return err
@@ -206,7 +250,7 @@ func (r *PostgresRepository) CreateActivationToken(ctx context.Context, token Ac
 	return tx.Commit(ctx)
 }
 
-func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry AuditEntry) error {
+func (r *PostgresRepository) Grant(ctx context.Context, tenantID string, grant Grant, entry AuditEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -214,7 +258,7 @@ func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry Audit
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	var inserted bool
 	if grant.Scope.Kind == "tenant" {
-		result, err := tx.Exec(ctx, `INSERT INTO capability_grants(subject_id,audience,action,scope_kind,granted_by,granted_at,revoked_at,revoked_by) SELECT id,$2,$3,'tenant',$4,$5,NULL,NULL FROM subjects WHERE id=$1 AND status='active' ON CONFLICT (subject_id,audience,action) DO UPDATE SET granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_grants.revoked_at IS NOT NULL`, grant.SubjectID, grant.Audience, grant.Action, grant.GrantedBy, grant.GrantedAt)
+		result, err := tx.Exec(ctx, `INSERT INTO capability_grants(subject_id,audience,action,scope_kind,granted_by,granted_at,revoked_at,revoked_by) SELECT target.id,$3,$4,'tenant',actor.id,$6,NULL,NULL FROM subjects target JOIN subjects actor ON actor.id=$5 AND actor.tenant_id=$1 WHERE target.tenant_id=$1 AND target.id=$2 AND target.status='active' ON CONFLICT (subject_id,audience,action) DO UPDATE SET granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_grants.revoked_at IS NOT NULL`, tenantID, grant.SubjectID, grant.Audience, grant.Action, grant.GrantedBy, grant.GrantedAt)
 		if err != nil {
 			if isUnique(err) {
 				return &ConflictError{Message: "Capability 已授予"}
@@ -223,7 +267,7 @@ func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry Audit
 		}
 		inserted = result.RowsAffected() == 1
 		if !inserted {
-			active, err := activeSubjectExists(ctx, tx, grant.SubjectID)
+			active, err := activeSubjectExists(ctx, tx, tenantID, grant.SubjectID)
 			if err != nil {
 				return err
 			}
@@ -233,7 +277,7 @@ func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry Audit
 		}
 	} else {
 		for _, resource := range grant.Scope.Resources {
-			result, err := tx.Exec(ctx, `INSERT INTO capability_resource_grants(subject_id,audience,action,resource_type,resource_id,granted_by,granted_at,revoked_at,revoked_by) SELECT id,$2,$3,$4,$5,$6,$7,NULL,NULL FROM subjects WHERE id=$1 AND status='active' ON CONFLICT (subject_id,audience,action,resource_type,resource_id) DO UPDATE SET granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_resource_grants.revoked_at IS NOT NULL`, grant.SubjectID, grant.Audience, grant.Action, resource.Type, resource.ID, grant.GrantedBy, grant.GrantedAt)
+			result, err := tx.Exec(ctx, `INSERT INTO capability_resource_grants(subject_id,audience,action,resource_type,resource_id,granted_by,granted_at,revoked_at,revoked_by) SELECT target.id,$3,$4,$5,$6,actor.id,$8,NULL,NULL FROM subjects target JOIN subjects actor ON actor.id=$7 AND actor.tenant_id=$1 WHERE target.tenant_id=$1 AND target.id=$2 AND target.status='active' ON CONFLICT (subject_id,audience,action,resource_type,resource_id) DO UPDATE SET granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_resource_grants.revoked_at IS NOT NULL`, tenantID, grant.SubjectID, grant.Audience, grant.Action, resource.Type, resource.ID, grant.GrantedBy, grant.GrantedAt)
 			if err != nil {
 				if isUnique(err) {
 					return &ConflictError{Message: "Resource Capability 已授予"}
@@ -241,7 +285,7 @@ func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry Audit
 				return err
 			}
 			if result.RowsAffected() != 1 {
-				active, err := activeSubjectExists(ctx, tx, grant.SubjectID)
+				active, err := activeSubjectExists(ctx, tx, tenantID, grant.SubjectID)
 				if err != nil {
 					return err
 				}
@@ -262,22 +306,22 @@ func (r *PostgresRepository) Grant(ctx context.Context, grant Grant, entry Audit
 	return tx.Commit(ctx)
 }
 
-func activeSubjectExists(ctx context.Context, tx pgx.Tx, subjectID string) (bool, error) {
+func activeSubjectExists(ctx context.Context, tx pgx.Tx, tenantID, subjectID string) (bool, error) {
 	var active bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM subjects WHERE id=$1 AND status='active')`, subjectID).Scan(&active); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM subjects WHERE tenant_id=$1 AND id=$2 AND status='active')`, tenantID, subjectID).Scan(&active); err != nil {
 		return false, err
 	}
 	return active, nil
 }
 
-func (r *PostgresRepository) RevokeGrant(ctx context.Context, grant Grant, entry AuditEntry) error {
+func (r *PostgresRepository) RevokeGrant(ctx context.Context, tenantID string, grant Grant, entry AuditEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	if grant.Scope.Kind == "tenant" {
-		result, err := tx.Exec(ctx, `UPDATE capability_grants SET revoked_at=$4,revoked_by=$5 WHERE subject_id=$1 AND audience=$2 AND action=$3 AND revoked_at IS NULL`, grant.SubjectID, grant.Audience, grant.Action, entry.OccurredAt, entry.Actor.ID)
+		result, err := tx.Exec(ctx, `UPDATE capability_grants g SET revoked_at=$5,revoked_by=$6 FROM subjects s WHERE s.id=g.subject_id AND s.tenant_id=$1 AND g.subject_id=$2 AND g.audience=$3 AND g.action=$4 AND g.revoked_at IS NULL`, tenantID, grant.SubjectID, grant.Audience, grant.Action, entry.OccurredAt, entry.Actor.ID)
 		if err != nil {
 			return err
 		}
@@ -286,7 +330,7 @@ func (r *PostgresRepository) RevokeGrant(ctx context.Context, grant Grant, entry
 		}
 	} else {
 		for _, resource := range grant.Scope.Resources {
-			result, err := tx.Exec(ctx, `UPDATE capability_resource_grants SET revoked_at=$6,revoked_by=$7 WHERE subject_id=$1 AND audience=$2 AND action=$3 AND resource_type=$4 AND resource_id=$5 AND revoked_at IS NULL`, grant.SubjectID, grant.Audience, grant.Action, resource.Type, resource.ID, entry.OccurredAt, entry.Actor.ID)
+			result, err := tx.Exec(ctx, `UPDATE capability_resource_grants g SET revoked_at=$7,revoked_by=$8 FROM subjects s WHERE s.id=g.subject_id AND s.tenant_id=$1 AND g.subject_id=$2 AND g.audience=$3 AND g.action=$4 AND g.resource_type=$5 AND g.resource_id=$6 AND g.revoked_at IS NULL`, tenantID, grant.SubjectID, grant.Audience, grant.Action, resource.Type, resource.ID, entry.OccurredAt, entry.Actor.ID)
 			if err != nil {
 				return err
 			}
@@ -301,14 +345,14 @@ func (r *PostgresRepository) RevokeGrant(ctx context.Context, grant Grant, entry
 	return tx.Commit(ctx)
 }
 
-func (r *PostgresRepository) ListGrants(ctx context.Context, subjectID, audience string) ([]Grant, error) {
+func (r *PostgresRepository) ListGrants(ctx context.Context, tenantID, subjectID, audience string) ([]Grant, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT subject_id::text,audience,action,'tenant' AS scope_kind,'' AS resource_type,'' AS resource_id,granted_by::text,granted_at
-FROM capability_grants WHERE subject_id=$1 AND audience=$2 AND revoked_at IS NULL
+FROM capability_grants g WHERE g.subject_id=$2 AND g.audience=$3 AND g.revoked_at IS NULL AND EXISTS (SELECT 1 FROM subjects s WHERE s.tenant_id=$1 AND s.id=g.subject_id)
 UNION ALL
 SELECT subject_id::text,audience,action,'resources' AS scope_kind,resource_type,resource_id,granted_by::text,granted_at
-FROM capability_resource_grants WHERE subject_id=$1 AND audience=$2 AND revoked_at IS NULL
-ORDER BY action,scope_kind,resource_type,resource_id`, subjectID, audience)
+FROM capability_resource_grants g WHERE g.subject_id=$2 AND g.audience=$3 AND g.revoked_at IS NULL AND EXISTS (SELECT 1 FROM subjects s WHERE s.tenant_id=$1 AND s.id=g.subject_id)
+ORDER BY action,scope_kind,resource_type,resource_id`, tenantID, subjectID, audience)
 	if err != nil {
 		return nil, err
 	}
@@ -383,8 +427,12 @@ func (r *PostgresRepository) ChangeStatus(ctx context.Context, tenantID, subject
 			return &ConflictError{Message: "必须保留至少一名有效管理员"}
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE subjects SET status=$2,session_generation=CASE WHEN $2='disabled' THEN session_generation+1 ELSE session_generation END,updated_at=$3 WHERE id=$1`, subjectID, status, entry.OccurredAt); err != nil {
+	result, err := tx.Exec(ctx, `UPDATE subjects SET status=$3,revision=revision+1,session_generation=CASE WHEN $3='disabled' THEN session_generation+1 ELSE session_generation END,updated_at=$4 WHERE tenant_id=$1 AND id=$2`, tenantID, subjectID, status, entry.OccurredAt)
+	if err != nil {
 		return err
+	}
+	if result.RowsAffected() != 1 {
+		return &NotFoundError{Message: "用户不存在"}
 	}
 	if err := insertAudit(ctx, tx, entry); err != nil {
 		return err
@@ -397,7 +445,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanSubject(row rowScanner) (Subject, error) {
 	var value Subject
 	var locked, passwordChanged *time.Time
-	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SessionGeneration, &value.FailedLoginAttempts, &locked, &passwordChanged, &value.CreatedAt, &value.UpdatedAt)
+	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &locked, &passwordChanged, &value.CreatedAt, &value.UpdatedAt)
 	if locked != nil {
 		value.LockedUntil = *locked
 	}
@@ -408,7 +456,7 @@ func scanSubject(row rowScanner) (Subject, error) {
 }
 
 func insertSubject(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash *string) error {
-	_, err := tx.Exec(ctx, `INSERT INTO subjects(id,tenant_id,username,display_name,password_hash,status,administrator,session_generation,failed_login_attempts,locked_until,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,NULL,$9,$10,$11)`, subject.ID, subject.TenantID, subject.Username, subject.DisplayName, passwordHash, subject.Status, subject.Administrator, subject.SessionGeneration, nullableTime(subject.PasswordChangedAt), subject.CreatedAt, subject.UpdatedAt)
+	_, err := tx.Exec(ctx, `INSERT INTO subjects(id,tenant_id,username,display_name,password_hash,status,administrator,revision,session_generation,failed_login_attempts,locked_until,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,0,NULL,$10,$11,$12)`, subject.ID, subject.TenantID, subject.Username, subject.DisplayName, passwordHash, subject.Status, subject.Administrator, subject.Revision, subject.SessionGeneration, nullableTime(subject.PasswordChangedAt), subject.CreatedAt, subject.UpdatedAt)
 	if err != nil {
 		if isUnique(err) {
 			return &ConflictError{Message: "用户名已存在"}

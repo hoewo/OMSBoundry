@@ -41,6 +41,34 @@ type cachedCredential struct {
 	expiresAt time.Time
 }
 
+// CredentialSource is the compatibility surface used by existing service
+// adapters. Tenant-aware sources additionally implement
+// TenantCredentialSource; static test doubles may remain tenant-neutral.
+type CredentialSource interface {
+	Credential(context.Context, string, string, string, string) (string, error)
+	Invalidate(string, string, string, string)
+}
+
+type TenantCredentialSource interface {
+	CredentialForTenant(context.Context, string, string, string, string, string) (string, error)
+	InvalidateForTenant(string, string, string, string, string)
+}
+
+func CredentialForTenant(ctx context.Context, source CredentialSource, tenantID, audience, action, resourceType, resourceID string) (string, error) {
+	if tenantSource, ok := source.(TenantCredentialSource); ok {
+		return tenantSource.CredentialForTenant(ctx, tenantID, audience, action, resourceType, resourceID)
+	}
+	return source.Credential(ctx, audience, action, resourceType, resourceID)
+}
+
+func InvalidateForTenant(source CredentialSource, tenantID, audience, action, resourceType, resourceID string) {
+	if tenantSource, ok := source.(TenantCredentialSource); ok {
+		tenantSource.InvalidateForTenant(tenantID, audience, action, resourceType, resourceID)
+		return
+	}
+	source.Invalidate(audience, action, resourceType, resourceID)
+}
+
 type TokenSource struct {
 	client        *http.Client
 	endpoint      string
@@ -57,6 +85,10 @@ func NewTokenSource(endpoint, tenantID, workloadID, subjectID, keyFile string, t
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, fmt.Errorf("IAM service credential endpoint is invalid")
 	}
+	tenantID = strings.ToLower(strings.TrimSpace(tenantID))
+	if !uuidPattern.MatchString(tenantID) {
+		return nil, fmt.Errorf("workload tenant configuration is invalid")
+	}
 	if timeout <= 0 || timeout > 30*time.Second || refreshBefore <= 0 || refreshBefore > time.Minute {
 		return nil, fmt.Errorf("service credential timing configuration is invalid")
 	}
@@ -68,8 +100,20 @@ func NewTokenSource(endpoint, tenantID, workloadID, subjectID, keyFile string, t
 }
 
 func (s *TokenSource) Credential(ctx context.Context, audience, action, resourceType, resourceID string) (string, error) {
+	return s.CredentialForTenant(ctx, s.tenantID, audience, action, resourceType, resourceID)
+}
+
+// CredentialForTenant exchanges a request-bound credential for the trusted
+// tenant carried by the current caller. It lets one service process serve
+// multiple tenants without using its bootstrap tenant as an authorization
+// boundary.
+func (s *TokenSource) CredentialForTenant(ctx context.Context, tenantID, audience, action, resourceType, resourceID string) (string, error) {
+	tenantID = strings.ToLower(strings.TrimSpace(tenantID))
+	if !uuidPattern.MatchString(tenantID) {
+		return "", fmt.Errorf("workload tenant is invalid")
+	}
 	target := exchangeTarget{Audience: audience, Action: action, Scope: Scope{Kind: "resources", Resources: []ResourceRef{{Type: resourceType, ID: resourceID}}}}
-	key := audience + "\x00" + action + "\x00" + resourceType + "\x00" + resourceID
+	key := tenantID + "\x00" + audience + "\x00" + action + "\x00" + resourceType + "\x00" + resourceID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -81,7 +125,7 @@ func (s *TokenSource) Credential(ctx context.Context, audience, action, resource
 		return "", err
 	}
 	hash := sha256.Sum256(targetJSON)
-	assertion, _, err := s.store.SignAssertion(s.tenantID, hex.EncodeToString(hash[:]), now)
+	assertion, _, err := s.store.SignAssertion(tenantID, hex.EncodeToString(hash[:]), now)
 	if err != nil {
 		return "", fmt.Errorf("sign workload assertion: %w", err)
 	}
@@ -117,7 +161,11 @@ func (s *TokenSource) Credential(ctx context.Context, audience, action, resource
 }
 
 func (s *TokenSource) Invalidate(audience, action, resourceType, resourceID string) {
-	key := audience + "\x00" + action + "\x00" + resourceType + "\x00" + resourceID
+	s.InvalidateForTenant(s.tenantID, audience, action, resourceType, resourceID)
+}
+
+func (s *TokenSource) InvalidateForTenant(tenantID, audience, action, resourceType, resourceID string) {
+	key := strings.ToLower(strings.TrimSpace(tenantID)) + "\x00" + audience + "\x00" + action + "\x00" + resourceType + "\x00" + resourceID
 	s.mu.Lock()
 	delete(s.cache, key)
 	s.mu.Unlock()

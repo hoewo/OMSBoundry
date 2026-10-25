@@ -292,6 +292,19 @@
           "resource_types": ["payable_suggestion"]
         }
       ]
+    },
+    {
+      "id": "people-groups",
+      "subject_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "display_name": "People & Groups",
+      "public_keys_path": "/workload-public/people-groups.json",
+      "permissions": [
+        {
+          "audience": "identity-access",
+          "action": "identity-access.subject.reference.read",
+          "resource_types": ["iam_subject"]
+        }
+      ]
     }
   ]
 }

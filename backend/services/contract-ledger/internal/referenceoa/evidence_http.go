@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 type CredentialSource interface {
@@ -36,7 +38,7 @@ func (v *HTTPFileValidator) ValidateFile(ctx context.Context, tenant, id string,
 		token := v.token
 		if v.credentials != nil {
 			var e error
-			token, e = v.credentials.Credential(ctx, "evidence-service", "evidence-service.metadata.read", "file", id)
+			token, e = workloadidentity.CredentialForTenant(ctx, v.credentials, tenant, "evidence-service", "evidence-service.metadata.read", "file", id)
 			if e != nil || strings.TrimSpace(token) == "" {
 				return FileReference{}, ErrEvidenceUnavailable
 			}
@@ -57,7 +59,7 @@ func (v *HTTPFileValidator) ValidateFile(ctx context.Context, tenant, id string,
 			return FileReference{}, ErrEvidenceUnavailable
 		}
 		if response.StatusCode == 401 && v.credentials != nil && attempt == 0 {
-			v.credentials.Invalidate("evidence-service", "evidence-service.metadata.read", "file", id)
+			workloadidentity.InvalidateForTenant(v.credentials, tenant, "evidence-service", "evidence-service.metadata.read", "file", id)
 			continue
 		}
 		if response.StatusCode == 403 || response.StatusCode == 404 || response.StatusCode == 422 {

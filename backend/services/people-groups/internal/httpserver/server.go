@@ -876,6 +876,10 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeProblem(w, 404, "not_found", "资源不存在")
 	case errors.Is(err, peoplegroups.ErrConflict):
 		writeProblem(w, 409, "conflict", "资源状态、业务键、Command ID 或期望 revision 冲突")
+	case errors.Is(err, peoplegroups.ErrSubjectReferenceInvalid):
+		writeProblem(w, 422, "iam_subject_invalid", "IAM 账号不存在或不属于当前租户")
+	case errors.Is(err, peoplegroups.ErrSubjectReferenceUnavailable):
+		writeProblem(w, 503, "iam_subject_unavailable", "IAM 账号校验暂时不可用")
 	default:
 		writeProblem(w, 500, "internal_error", "服务暂时无法完成请求")
 	}

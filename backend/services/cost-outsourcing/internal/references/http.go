@@ -96,7 +96,7 @@ func (r *HTTPResolver) ResolveProject(ctx context.Context, tenantID string, refe
 }
 
 func (r *HTTPResolver) projectReference(ctx context.Context, tenantID string, reference costoutsourcing.ProjectRef) (projectReference, error) {
-	body, err := r.get(ctx, r.project, "/api/v1/references/projects/"+url.PathEscape(reference.ID), "project", reference.ID)
+	body, err := r.get(ctx, tenantID, r.project, "/api/v1/references/projects/"+url.PathEscape(reference.ID), "project", reference.ID)
 	if err != nil {
 		return projectReference{}, err
 	}
@@ -111,7 +111,7 @@ func (r *HTTPResolver) projectReference(ctx context.Context, tenantID string, re
 }
 
 func (r *HTTPResolver) ResolveParty(ctx context.Context, tenantID string, reference costoutsourcing.PartyRef) (costoutsourcing.PartyReference, error) {
-	body, err := r.get(ctx, r.party, "/api/v1/references/parties/"+url.PathEscape(reference.ID), "party", reference.ID)
+	body, err := r.get(ctx, tenantID, r.party, "/api/v1/references/parties/"+url.PathEscape(reference.ID), "party", reference.ID)
 	if err != nil {
 		return costoutsourcing.PartyReference{}, err
 	}
@@ -146,7 +146,7 @@ func (r *HTTPResolver) ResolveContract(ctx context.Context, tenantID string, pro
 	if reference.Application != "contract-ledger" || (reference.ResourceType != "contract" && reference.ResourceType != "settlement") {
 		return costoutsourcing.ContractReference{}, costoutsourcing.ErrReferenceInvalid
 	}
-	body, err := r.get(ctx, r.contract, "/api/v1/references/"+plural+"/"+url.PathEscape(reference.ResourceID), reference.ResourceType, reference.ResourceID)
+	body, err := r.get(ctx, tenantID, r.contract, "/api/v1/references/"+plural+"/"+url.PathEscape(reference.ResourceID), reference.ResourceType, reference.ResourceID)
 	if err != nil {
 		return costoutsourcing.ContractReference{}, err
 	}
@@ -195,7 +195,7 @@ func eligibleContractState(resourceType, state string) bool {
 
 func (r *HTTPResolver) ResolveEvidence(ctx context.Context, tenantID string, reference costoutsourcing.EvidenceRef) (costoutsourcing.EvidenceReference, error) {
 	path := fmt.Sprintf("/v1/references/files/%s/versions/%d", url.PathEscape(reference.FileID), reference.Version)
-	body, err := r.get(ctx, r.evidence, path, "file", reference.FileID)
+	body, err := r.get(ctx, tenantID, r.evidence, path, "file", reference.FileID)
 	if err != nil {
 		return costoutsourcing.EvidenceReference{}, err
 	}
@@ -219,19 +219,19 @@ func (r *HTTPResolver) ResolveEvidence(ctx context.Context, tenantID string, ref
 	return costoutsourcing.EvidenceReference{EvidenceSnapshot: costoutsourcing.EvidenceSnapshot{EvidenceRef: reference, Digest: "sha256:" + strings.ToLower(value.SHA256), DisplayName: value.DisplayName}, TenantID: value.TenantID, Status: value.Status}, nil
 }
 
-func (r *HTTPResolver) get(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
+func (r *HTTPResolver) get(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID string) ([]byte, error) {
 	token := endpoint.AccessToken
 	if endpoint.Credentials != nil {
 		var err error
-		token, err = endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		token, err = workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if err != nil || strings.TrimSpace(token) == "" {
 			return nil, costoutsourcing.ErrReferenceUnavailable
 		}
 	}
-	return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, token, true)
+	return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, token, true)
 }
 
-func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
+func (r *HTTPResolver) getWithToken(ctx context.Context, tenantID string, endpoint Endpoint, path, resourceType, resourceID, token string, retry bool) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(endpoint.BaseURL, "/")+path, nil)
 	if err != nil {
 		return nil, costoutsourcing.ErrReferenceUnavailable
@@ -245,12 +245,12 @@ func (r *HTTPResolver) getWithToken(ctx context.Context, endpoint Endpoint, path
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		endpoint.Credentials.Invalidate(endpoint.Audience, endpoint.Action, resourceType, resourceID)
-		fresh, credentialErr := endpoint.Credentials.Credential(ctx, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		workloadidentity.InvalidateForTenant(endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, endpoint.Credentials, tenantID, endpoint.Audience, endpoint.Action, resourceType, resourceID)
 		if credentialErr != nil || strings.TrimSpace(fresh) == "" {
 			return nil, costoutsourcing.ErrReferenceUnavailable
 		}
-		return r.getWithToken(ctx, endpoint, path, resourceType, resourceID, fresh, false)
+		return r.getWithToken(ctx, tenantID, endpoint, path, resourceType, resourceID, fresh, false)
 	}
 	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity {
 		return nil, costoutsourcing.ErrReferenceInvalid

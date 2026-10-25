@@ -103,7 +103,7 @@ func (c *Client) do(ctx context.Context, method, path, action, tenantID, suggest
 	}
 	token := c.endpoint.AccessToken
 	if c.endpoint.Credentials != nil {
-		token, err = c.endpoint.Credentials.Credential(ctx, "money-flow-ledger", action, "payable_suggestion", suggestionID)
+		token, err = workloadidentity.CredentialForTenant(ctx, c.endpoint.Credentials, tenantID, "money-flow-ledger", action, "payable_suggestion", suggestionID)
 		if err != nil {
 			return costoutsourcing.ErrTargetUnavailable
 		}
@@ -128,8 +128,8 @@ func (c *Client) doWithToken(ctx context.Context, method, path, action, tenantID
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && c.endpoint.Credentials != nil && retry {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		c.endpoint.Credentials.Invalidate("money-flow-ledger", action, "payable_suggestion", suggestionID)
-		fresh, credentialErr := c.endpoint.Credentials.Credential(ctx, "money-flow-ledger", action, "payable_suggestion", suggestionID)
+		workloadidentity.InvalidateForTenant(c.endpoint.Credentials, tenantID, "money-flow-ledger", action, "payable_suggestion", suggestionID)
+		fresh, credentialErr := workloadidentity.CredentialForTenant(ctx, c.endpoint.Credentials, tenantID, "money-flow-ledger", action, "payable_suggestion", suggestionID)
 		if credentialErr != nil {
 			return costoutsourcing.ErrTargetUnavailable
 		}

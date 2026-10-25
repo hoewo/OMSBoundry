@@ -123,37 +123,37 @@ func (s *PostgresNonceStore) Use(ctx context.Context, workloadID, assertionID st
 
 type Authenticated struct {
 	Identity    Identity
+	TenantID    string
 	KeyID       string
 	AssertionID string
 	IssuedAt    time.Time
 }
 
 type Authenticator struct {
-	tenantID   string
 	identities map[string]Identity
 	nonces     NonceStore
 	now        func() time.Time
 }
 
-func Load(policyPath, tenantID string, nonces NonceStore) (*Authenticator, error) {
+func Load(policyPath string, nonces NonceStore) (*Authenticator, error) {
 	if nonces == nil {
 		return nil, fmt.Errorf("workload identity policy is invalid")
 	}
-	identities, err := loadIdentities(policyPath, tenantID)
+	identities, err := loadIdentities(policyPath)
 	if err != nil {
 		return nil, err
 	}
-	return &Authenticator{tenantID: tenantID, identities: identities, nonces: nonces, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Authenticator{identities: identities, nonces: nonces, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 // Validate checks the workload policy document without requiring a database
 // backed nonce store. Runtime authentication still requires Load.
-func Validate(policyPath, tenantID string) error {
-	_, err := loadIdentities(policyPath, tenantID)
+func Validate(policyPath string) error {
+	_, err := loadIdentities(policyPath)
 	return err
 }
 
-func loadIdentities(policyPath, tenantID string) (map[string]Identity, error) {
+func loadIdentities(policyPath string) (map[string]Identity, error) {
 	data, err := os.ReadFile(strings.TrimSpace(policyPath))
 	if err != nil {
 		return nil, fmt.Errorf("read workload identity policy: %w", err)
@@ -168,7 +168,7 @@ func loadIdentities(policyPath, tenantID string) (map[string]Identity, error) {
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return nil, fmt.Errorf("workload identity policy contains trailing JSON")
 	}
-	if value.SchemaVersion != "1" || !uuidPattern.MatchString(tenantID) || len(value.Identities) == 0 {
+	if value.SchemaVersion != "1" || len(value.Identities) == 0 {
 		return nil, fmt.Errorf("workload identity policy is invalid")
 	}
 	identities := make(map[string]Identity, len(value.Identities))
@@ -203,7 +203,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, assertion, requestHash
 		return Authenticated{}, ErrUnauthenticated
 	}
 	identityValue, ok := a.identities[claims.Issuer]
-	if !ok || claims.Subject != identityValue.SubjectID || claims.Tenant != a.tenantID || claims.Version != "1" || claims.Audience != "identity-access" || claims.Purpose != "capability-exchange" || claims.RequestSHA256 != requestHash || !uuidPattern.MatchString(claims.ID) {
+	if !ok || claims.Subject != identityValue.SubjectID || !uuidPattern.MatchString(claims.Tenant) || claims.Version != "1" || claims.Audience != "identity-access" || claims.Purpose != "capability-exchange" || claims.RequestSHA256 != requestHash || !uuidPattern.MatchString(claims.ID) {
 		return Authenticated{}, ErrUnauthenticated
 	}
 	now := a.now()
@@ -221,7 +221,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, assertion, requestHash
 	if err := a.nonces.Use(ctx, identityValue.ID, claims.ID, time.Unix(claims.ExpiresAt, 0).UTC(), now); err != nil {
 		return Authenticated{}, err
 	}
-	return Authenticated{Identity: identityValue, KeyID: tokenHeader.KeyID, AssertionID: claims.ID, IssuedAt: time.Unix(claims.IssuedAt, 0).UTC()}, nil
+	return Authenticated{Identity: identityValue, TenantID: claims.Tenant, KeyID: tokenHeader.KeyID, AssertionID: claims.ID, IssuedAt: time.Unix(claims.IssuedAt, 0).UTC()}, nil
 }
 
 func (a *Authenticator) Authorize(value Authenticated, audience, action string, scope identity.Scope) error {

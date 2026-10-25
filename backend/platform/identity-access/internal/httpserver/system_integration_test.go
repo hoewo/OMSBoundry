@@ -32,6 +32,7 @@ import (
 )
 
 const testTenantID = "22222222-2222-4222-8222-222222222222"
+const otherTenantID = "33333333-3333-4333-8333-333333333333"
 const testProjectID = "55555555-5555-4555-8555-555555555555"
 const otherProjectID = "66666666-6666-4666-8666-666666666666"
 
@@ -43,14 +44,14 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000005_explicit_capability_namespaces.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000006_multi_tenant_runtime.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
+	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/identity-access-capabilities.json", "../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,6 +67,17 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err != nil || created {
 		t.Fatalf("repeat bootstrap = %v, %v", created, err)
 	}
+	provisioner, err := identity.NewTenantProvisioner(identity.NewPostgresRepository(pool))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherAdministrator, err := provisioner.Provision(context.Background(), identity.TenantProvisionInput{
+		TenantID: otherTenantID, TenantName: "第二测试企业", AdminUsername: "admin-b", AdminDisplayName: "第二企业管理员",
+		AdminPassword: "second correct horse battery staple", OperatorID: "integration-test", OperatorDisplayName: "集成测试平台操作员",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler, err := httpserver.New(pool, service, keys, httpserver.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -78,11 +90,62 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	login(t, admin, server.URL, adminCSRF, "admin", "correct horse battery staple", http.StatusOK)
 	adminPrincipal := currentSession(t, admin, server.URL, http.StatusOK)
 	adminID := stringField(t, adminPrincipal, "subject_id")
+	if stringField(t, adminPrincipal, "tenant_id") != testTenantID {
+		t.Fatalf("bootstrap administrator tenant = %#v", adminPrincipal)
+	}
+
+	otherAdmin := newClient(t)
+	otherAdminCSRF := fetchCSRF(t, otherAdmin, server.URL)
+	login(t, otherAdmin, server.URL, otherAdminCSRF, "admin-b", "second correct horse battery staple", http.StatusOK)
+	otherAdminPrincipal := currentSession(t, otherAdmin, server.URL, http.StatusOK)
+	if stringField(t, otherAdminPrincipal, "tenant_id") != otherTenantID || stringField(t, otherAdminPrincipal, "subject_id") != otherAdministrator.ID {
+		t.Fatalf("second administrator principal = %#v", otherAdminPrincipal)
+	}
 
 	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"username": "operator", "display_name": "业务操作员"}, http.StatusCreated)
 	inviteToken := stringField(t, inviteResponse, "token")
 	operatorObject := objectField(t, inviteResponse, "subject")
 	operatorID := stringField(t, operatorObject, "id")
+
+	otherInvite := postJSON(t, otherAdmin, server.URL+"/api/v1/admin/invitations", otherAdminCSRF, map[string]any{"username": "operator-b", "display_name": "第二企业操作员"}, http.StatusCreated)
+	otherOperatorID := stringField(t, objectField(t, otherInvite, "subject"), "id")
+	otherOperator := newClient(t)
+	otherOperatorCSRF := fetchCSRF(t, otherOperator, server.URL)
+	postJSON(t, otherOperator, server.URL+"/api/v1/activate", otherOperatorCSRF, map[string]any{"token": stringField(t, otherInvite, "token"), "password": "second operator password 123"}, http.StatusOK)
+	login(t, otherOperator, server.URL, otherOperatorCSRF, "operator-b", "second operator password 123", http.StatusOK)
+	postJSON(t, otherAdmin, server.URL+"/api/v1/admin/grants", otherAdminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
+	otherCredential := postJSON(t, otherOperator, server.URL+"/api/v1/credentials", otherOperatorCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusOK)
+	otherClaims := verifyCredential(t, stringField(t, otherCredential, "token"), keys)
+	if otherClaims.Subject != otherOperatorID || otherClaims.Tenant != otherTenantID {
+		t.Fatalf("second tenant credential claims: %#v", otherClaims)
+	}
+
+	subjectCredential, err := service.IssueWorkloadCredential(context.Background(), otherTenantID, identity.ServiceIdentity{
+		ID: "people-groups", SubjectID: otherOperatorID, DisplayName: "People & Groups",
+		KeyID: testProjectID, AssertionID: otherProjectID, AuthTime: time.Now().UTC(),
+	}, "identity-access", "identity-access.subject.reference.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "iam_subject", ID: otherOperatorID}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjectReference := getBearerJSON(t, server.URL+"/api/v1/references/subjects/"+otherOperatorID, subjectCredential.Token, http.StatusOK)
+	if stringField(t, subjectReference, "tenant_id") != otherTenantID || stringField(t, subjectReference, "id") != otherOperatorID || subjectReference["status"] != "active" || subjectReference["revision"] != float64(2) {
+		t.Fatalf("subject reference = %#v", subjectReference)
+	}
+	wrongTenantCredential, err := service.IssueWorkloadCredential(context.Background(), testTenantID, identity.ServiceIdentity{
+		ID: "people-groups", SubjectID: operatorID, DisplayName: "People & Groups",
+		KeyID: testProjectID, AssertionID: otherProjectID, AuthTime: time.Now().UTC(),
+	}, "identity-access", "identity-access.subject.reference.read", identity.Scope{Kind: "resources", Resources: []identity.ResourceRef{{Type: "iam_subject", ID: otherOperatorID}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	getBearerJSON(t, server.URL+"/api/v1/references/subjects/"+otherOperatorID, wrongTenantCredential.Token, http.StatusNotFound)
+
+	// A tenant administrator cannot operate on a stable Subject ID from B.
+	postJSON(t, admin, server.URL+"/api/v1/admin/password-resets", adminCSRF, map[string]any{"subject_id": otherOperatorID}, http.StatusNotFound)
+	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNotFound)
+	postJSON(t, admin, server.URL+"/api/v1/admin/status", adminCSRF, map[string]any{"subject_id": otherOperatorID, "status": "disabled"}, http.StatusNotFound)
+	assertSubjectList(t, getJSON(t, admin, server.URL+"/api/v1/admin/subjects", http.StatusOK), testTenantID, 2)
+	assertSubjectList(t, getJSON(t, otherAdmin, server.URL+"/api/v1/admin/subjects", http.StatusOK), otherTenantID, 2)
 
 	operator := newClient(t)
 	operatorCSRF := fetchCSRF(t, operator, server.URL)
@@ -228,6 +291,70 @@ func currentSession(t *testing.T, client *http.Client, baseURL string, status in
 		t.Fatal(err)
 	}
 	return objectField(t, value, "principal")
+}
+
+func getJSON(t *testing.T, client *http.Client, endpoint string, status int) map[string]any {
+	t.Helper()
+	response, err := client.Get(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != status {
+		t.Fatalf("GET %s status = %d, want %d: %s", endpoint, response.StatusCode, status, data)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(data, &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func getBearerJSON(t *testing.T, endpoint, token string, status int) map[string]any {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != status {
+		t.Fatalf("GET %s status = %d, want %d: %s", endpoint, response.StatusCode, status, data)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return map[string]any{}
+	}
+	var value map[string]any
+	if err := json.Unmarshal(data, &value); err != nil {
+		t.Fatalf("decode response: %v: %s", err, data)
+	}
+	return value
+}
+
+func assertSubjectList(t *testing.T, response map[string]any, tenantID string, count int) {
+	t.Helper()
+	values, ok := response["subjects"].([]any)
+	if !ok || len(values) != count {
+		t.Fatalf("subjects = %#v, want %d", response["subjects"], count)
+	}
+	for _, raw := range values {
+		value, ok := raw.(map[string]any)
+		if !ok || value["tenant_id"] != tenantID {
+			t.Fatalf("cross-tenant subject in response: %#v", raw)
+		}
+	}
 }
 
 func postJSON(t *testing.T, client *http.Client, endpoint, csrf string, body any, status int) map[string]any {

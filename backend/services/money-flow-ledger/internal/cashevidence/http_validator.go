@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	workloadidentity "omsbizfoundry/workload-identity"
 )
 
 type CredentialSource interface {
@@ -51,7 +53,7 @@ func (v *HTTPValidator) Resolve(ctx context.Context, tenantID string, ref Ref) (
 	token := strings.TrimSpace(v.endpoint.AccessToken)
 	if v.endpoint.Credentials != nil {
 		var err error
-		token, err = v.endpoint.Credentials.Credential(ctx, v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
+		token, err = workloadidentity.CredentialForTenant(ctx, v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
 		if err != nil || strings.TrimSpace(token) == "" {
 			return FileReference{}, ErrEvidenceUnavailable
 		}
@@ -74,8 +76,8 @@ func (v *HTTPValidator) resolve(ctx context.Context, tenantID string, ref Ref, t
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized && v.endpoint.Credentials != nil && retry {
 		io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
-		v.endpoint.Credentials.Invalidate(v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
-		fresh, e := v.endpoint.Credentials.Credential(ctx, v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
+		workloadidentity.InvalidateForTenant(v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
+		fresh, e := workloadidentity.CredentialForTenant(ctx, v.endpoint.Credentials, tenantID, v.endpoint.Audience, v.endpoint.Action, "file", ref.FileID)
 		if e != nil {
 			return FileReference{}, ErrEvidenceUnavailable
 		}
