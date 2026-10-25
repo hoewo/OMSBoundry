@@ -76,7 +76,68 @@ validate_port() {
   }
 }
 
+validate_feedback_url() {
+  name=$1
+  raw=$2
+  case "$raw" in
+    https://?*) ;;
+    http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*|http://localhost|http://localhost:*|http://localhost/*) ;;
+    *) echo "$name must use HTTPS or loopback HTTP" >&2; exit 2 ;;
+  esac
+  case "$raw" in *[[:space:]]*) echo "$name must not contain whitespace" >&2; exit 2;; esac
+}
+
+validate_feedback_api_key() {
+  raw=$1
+  [ "${#raw}" -ge 24 ] || { echo "Feedback API Keys must contain at least 24 characters" >&2; exit 2; }
+  case "$raw" in *[[:space:],]*) echo "Feedback API Keys must not contain whitespace or commas" >&2; exit 2;; esac
+}
+
+validate_feedback_config() {
+  feedback_sdk_url=$(env_value FEEDBACK_SDK_URL)
+  feedback_auth_mode=$(env_value FEEDBACK_AUTH_MODE)
+  feedback_gateway_url=$(env_value FEEDBACK_GATEWAY_URL)
+  feedback_project_id=$(env_value FEEDBACK_PROJECT_ID)
+  feedback_api_key=$(env_value FEEDBACK_API_KEY)
+  feedback_api_keys=$(env_value FEEDBACK_API_KEYS)
+  feedback_identity_hmac_key=$(env_value FEEDBACK_IDENTITY_HMAC_KEY)
+  feedback_identity_version=$(env_value FEEDBACK_IDENTITY_VERSION v1)
+  feedback_notifications_enabled=$(env_value FEEDBACK_NOTIFICATIONS_ENABLED false)
+
+  feedback_configured=false
+  for value in "$feedback_sdk_url" "$feedback_auth_mode" "$feedback_gateway_url" "$feedback_project_id" "$feedback_api_key" "$feedback_api_keys" "$feedback_identity_hmac_key"; do
+    [ -z "$value" ] || feedback_configured=true
+  done
+  [ "$feedback_notifications_enabled" = false ] || feedback_configured=true
+  [ "$feedback_configured" = true ] || return 0
+
+  [ "$feedback_auth_mode" = apiKey ] || { echo "FEEDBACK_AUTH_MODE must be apiKey for the first release" >&2; exit 2; }
+  validate_feedback_url FEEDBACK_SDK_URL "$feedback_sdk_url"
+  validate_feedback_url FEEDBACK_GATEWAY_URL "$feedback_gateway_url"
+  [ "$feedback_project_id" = 115 ] || { echo "FEEDBACK_PROJECT_ID must be 115 for this OMS1 release" >&2; exit 2; }
+  [ "$feedback_identity_version" = v1 ] || { echo "FEEDBACK_IDENTITY_VERSION must be v1" >&2; exit 2; }
+  case "$feedback_notifications_enabled" in true|false) ;; *) echo "FEEDBACK_NOTIFICATIONS_ENABLED must be true or false" >&2; exit 2;; esac
+  [ "${#feedback_identity_hmac_key}" -ge 32 ] || { echo "FEEDBACK_IDENTITY_HMAC_KEY must contain at least 32 characters" >&2; exit 2; }
+  if [ -n "$feedback_api_key" ] && [ -n "$feedback_api_keys" ]; then
+    echo "configure only one of FEEDBACK_API_KEY or FEEDBACK_API_KEYS" >&2
+    exit 2
+  fi
+  if [ -n "$feedback_api_key" ]; then
+    validate_feedback_api_key "$feedback_api_key"
+    return 0
+  fi
+  [ -n "$feedback_api_keys" ] || { echo "Feedback API Key configuration is required" >&2; exit 2; }
+  case "$feedback_api_keys" in ,*|*,|*,,*) echo "FEEDBACK_API_KEYS must contain one current key and at most one previous key" >&2; exit 2;; esac
+  previous_ifs=$IFS
+  IFS=,
+  set -- $feedback_api_keys
+  IFS=$previous_ifs
+  [ "$#" -ge 1 ] && [ "$#" -le 2 ] || { echo "FEEDBACK_API_KEYS must contain one current key and at most one previous key" >&2; exit 2; }
+  for key in "$@"; do validate_feedback_api_key "$key"; done
+}
+
 validate_env() {
+  validate_feedback_config
   case "$reference_oa_bonus_profile" in ''|reference-oa-bonus-v2|reference-oa-bonus-v3) ;; *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_personnel_profile" in ''|reference-oa-production-personnel-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE" >&2; exit 2 ;; esac
   case "$reference_oa_stage_profile" in ''|reference-oa-stage-materials-v1) ;; *) echo "unsupported REFERENCE_OA_PRODUCTION_STAGE_PROFILE" >&2; exit 2 ;; esac

@@ -21,6 +21,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - D1 为 Finance 注入 Money／Evidence／IAM 端点、私钥只读 volume 与健康依赖；Payroll 补上 Money 端点和 People／Money 健康依赖。
 - Suite 选择在任何镜像构建、停服务或数据动作前强制 Finance→Money＋Evidence、Payroll→People＋Money。
 - build／pull、停用清理、示例环境、workload policy、Makefile tidy 与静态组合门禁同步更新。
+- BF-245 运行前复核又修正 `FEEDBACK_SDK_URL` 错注入 Bonus、Workbench 缺失的问题，并把项目 115、首发 `apiKey`、URL、HMAC、通知及单／双 Key 轮换改为 D1 状态变化前的成组失败关闭。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -40,7 +41,7 @@ deployments/d1/ops/test-release-bundle
 git diff --check
 ```
 
-`test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；该项只证明运维编排，不是数据库恢复证据。
+`test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景，并验证 Feedback 单 Key、双 Key 轮换正例及部分配置、错误项目、不安全 URL、歧义 Key、过量轮换 Key、短 HMAC、Session 模式负例。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；该项只证明运维编排，不是数据库恢复证据。
 
 ## 4. P9 尚未完成
 

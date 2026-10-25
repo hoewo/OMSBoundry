@@ -19,6 +19,7 @@
 - 失败的 SDK 预加载、配置、角标或 iframe 不阻塞 OMS 页面；显式操作失败只显示局部提示。透明区域不由宿主关闭弹层，关闭只接受 SDK 的已校验消息。
 - 自动诊断逐字段构建，只包含 release、build、模块、枚举路由键、粗粒度浏览器／系统、语言、时间和随机 request ID；不发送 URL、资源 ID、表单、金额、文件、完整 User-Agent、凭证、Cookie 或堆栈。
 - D1 Compose 和示例环境增加 SDK URL、Feedback Gateway、项目 ID、认证模式、通知开关、Key 与独立 HMAC Key 的显式配置；示例只含空占位。Grant bootstrap 登记正式 Feedback Capability Manifest。
+- 2026-10-26 BF-245 复核纠正：此前 `FEEDBACK_SDK_URL` 在 Compose 中误入 Bonus 环境、未注入 Workbench，且部分配置只会在容器启动后失败。现已把 SDK URL 归还 Workbench，并由 D1 在任何状态变化前成组校验首发 `apiKey`、项目 115、HTTPS／回环 URL、HMAC、通知值及单／双 Key 轮换。该纠正说明此前“D1 配置边界通过”只覆盖变量存在而未覆盖正确消费方；P8 运行结论仍保持未完成。
 
 ## 3. Arckit SDK 兼容修改
 
