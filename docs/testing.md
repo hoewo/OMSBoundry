@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C9 联合备份／空目标恢复门禁（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/verify-c9-recovery` 先复验同一 C0～C8 链，只在显式设置 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` 后调用 D1 联合备份和原 Compose project 清卷恢复。它在删除卷前再次核对完整备份闭集、checksum、停写声明、十四应用全选和十五库指纹；D1 恢复后执行健康检查，下载并按 C6 摘要核对两份发票字节，重放 C7／C8 稳定命令并要求业务事实不变，最后从 IAM usage 列表确认两个 Tenant 均产生恢复后的 Open API 审计写入。固定 C9 证据包含恢复事件、摘要和 post-C7／post-C8 子证据，不复制备份本体、签名密钥、密码、API Key 或短期 URL。
+
+`make p9-recovery-driver-test` 已实际通过：离线完整 fixture 通过独立 C9 verifier；篡改摘要、重算摘要后的报销 ID 错位、删掉一个 Tenant 的续写事件均失败，未设置破坏性确认值时运行驱动也在调用 D1 前失败。该测试没有启动容器或执行真实恢复，不能替代 P9 的真实十五库／Evidence 恢复证据。
+
 ## P9 C0～C8 可恢复连续执行器（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/run-c0-c8` 使用绝对 `P9_RUN_EVIDENCE_ROOT` 依次执行 C0～C8。阶段目录存在时先运行对应独立 verifier 并复用，不存在时才执行该阶段；最后逐阶段核对同一 Compose project、公共 Origin 和对全部前序 checksum 的绑定。C5 Secret 目录必须位于证据根外，执行器本身不启动或停止服务。

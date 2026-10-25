@@ -1,0 +1,63 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); runtime=$(mktemp -d "$tmp_root/oms-p9-c9-test.XXXXXX")
+trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+P9_C8_TEST_ARTIFACT_DIR="$runtime/fixture" "$script_dir/test-c8-payroll-payments" >/dev/null
+mkdir "$runtime/c9"; cp -R "$runtime/fixture/c7" "$runtime/c9/post-c7"; cp -R "$runtime/fixture/c8" "$runtime/c9/post-c8"
+
+events="$runtime/c9/recovery-events.tsv"
+cat >"$events" <<'EOF'
+event	result	detail
+pre-restore-chain	pass	c0-c8
+joint-backup	pass	20261026T000000Z
+empty-target-restore	pass	20261026T000000Z
+database-fingerprint-match	pass	cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+d1-health	pass	full-composition
+primary-evidence-bytes	pass	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+secondary-evidence-bytes	pass	bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+c7-stable-replay	pass	stable-business-facts
+c8-stable-replay	pass	stable-business-facts
+primary-continuation-write	pass	open-api-usage-audit
+secondary-continuation-write	pass	open-api-usage-audit
+EOF
+
+phase=0
+while [ "$phase" -le 8 ]; do eval c${phase}_sha=$(openssl dgst -sha256 -r "$runtime/fixture/c$phase/checksums.sha256"|awk '{print $1}'); phase=$((phase+1)); done
+post7_sha=$(openssl dgst -sha256 -r "$runtime/c9/post-c7/checksums.sha256"|awk '{print $1}'); post8_sha=$(openssl dgst -sha256 -r "$runtime/c9/post-c8/checksums.sha256"|awk '{print $1}')
+jq -n --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" --arg c5 "$c5_sha" --arg c6 "$c6_sha" --arg c7 "$c7_sha" --arg c8 "$c8_sha" --arg post7 "$post7_sha" --arg post8 "$post8_sha" --slurpfile c6state "$runtime/fixture/c6/state-after-c6.json" --slurpfile c7state "$runtime/c9/post-c7/state-after-c7.json" --slurpfile c8state "$runtime/c9/post-c8/state-after-c8.json" '
+ {schema_version:1,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C9",result:"pass",captured_at:"2026-10-26T00:01:00Z",
+  deployment:{profile:"D1",compose_project:"p9-test",public_url:"http://127.0.0.1:19090",c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4,c5_checksums_sha256:$c5,c6_checksums_sha256:$c6,c7_checksums_sha256:$c7,c8_checksums_sha256:$c8,post_c7_checksums_sha256:$post7,post_c8_checksums_sha256:$post8},
+  backup:{id:"20261026T000000Z",checksums_sha256:("a"*64),database_fingerprints_sha256:("c"*64),consistency_mode:"public-ingress-quiesced-v1",database_count:15},
+  recovery:{empty_target_restore:"pass",database_fingerprint_match:"pass",d1_health:"pass",evidence_bytes:"pass",stable_command_replay:"pass",continuation_write:"open_api_usage_audit"},
+  tenants:[$c6state[0].tenants[] as $base | ($c7state[0].tenants[]|select(.tenant_id==$base.id)) as $paid | ($c8state[0].tenants[]|select(.tenant_id==$base.id)) as $payroll | {tenant_id:$base.id,evidence:($base.evidence+{bytes_match:true}),reimbursement:{id:$paid.reimbursement.id,status:$paid.reimbursement.status},payroll:{run_id:$payroll.payroll.run_id,line_id:$payroll.payroll.line_id,status:$payroll.payroll.status}}],
+  checks:{pre_restore_chain_verified:"pass",post_restore_business_equivalence:"pass",backup_material_embedded:false,direct_database_write:false,secrets_recorded:false}}
+' >"$runtime/c9/state-after-c9.json"
+cat >"$runtime/c9/result.md" <<'EOF'
+# P9 C9 recovery result
+
+- Result: pass
+- Backup archives and secrets recorded in evidence: no
+EOF
+: >"$runtime/c9/checksums.sha256"
+for artifact in post-c7/checksums.sha256 post-c8/checksums.sha256 recovery-events.tsv result.md state-after-c9.json; do printf '%s  %s\n' "$(openssl dgst -sha256 -r "$runtime/c9/$artifact"|awk '{print $1}')" "$artifact" >>"$runtime/c9/checksums.sha256"; done
+find "$runtime/c9" -type f -exec chmod 600 {} +
+"$script_dir/verify-c9-evidence" "$runtime/c9" >/dev/null
+
+tampered="$runtime/tampered"; cp -R "$runtime/c9" "$tampered"; printf 'tamper\n' >>"$tampered/result.md"
+if "$script_dir/verify-c9-evidence" "$tampered" >/dev/null 2>&1; then echo 'P9 C9 accepted digest drift' >&2; exit 1; fi
+
+broken="$runtime/broken"; cp -R "$runtime/c9" "$broken"; jq '.tenants[0].reimbursement.id="99999999-9999-4999-8999-999999999999"' "$broken/state-after-c9.json" >"$broken/state.tmp"; mv "$broken/state.tmp" "$broken/state-after-c9.json"
+state_sha=$(openssl dgst -sha256 -r "$broken/state-after-c9.json"|awk '{print $1}'); awk -v sha="$state_sha" '$2=="state-after-c9.json"{$1=sha}{print $1"  "$2}' "$broken/checksums.sha256" >"$broken/checksums.tmp"; mv "$broken/checksums.tmp" "$broken/checksums.sha256"
+if "$script_dir/verify-c9-evidence" "$broken" >/dev/null 2>&1; then echo 'P9 C9 accepted broken restored business continuity' >&2; exit 1; fi
+
+missing="$runtime/missing"; cp -R "$runtime/c9" "$missing"; awk -F '\t' '$1!="secondary-continuation-write"' "$missing/recovery-events.tsv" >"$missing/events.tmp"; mv "$missing/events.tmp" "$missing/recovery-events.tsv"
+events_sha=$(openssl dgst -sha256 -r "$missing/recovery-events.tsv"|awk '{print $1}'); awk -v sha="$events_sha" '$2=="recovery-events.tsv"{$1=sha}{print $1"  "$2}' "$missing/checksums.sha256" >"$missing/checksums.tmp"; mv "$missing/checksums.tmp" "$missing/checksums.sha256"
+if "$script_dir/verify-c9-evidence" "$missing" >/dev/null 2>&1; then echo 'P9 C9 accepted an incomplete recovery event matrix' >&2; exit 1; fi
+
+if env P9_C0_EVIDENCE_DIR="$runtime/fixture/c0" P9_C1_EVIDENCE_DIR="$runtime/fixture/c1" P9_C2_EVIDENCE_DIR="$runtime/fixture/c2" P9_C3_EVIDENCE_DIR="$runtime/fixture/c3" P9_C4_EVIDENCE_DIR="$runtime/fixture/c4" P9_C5_EVIDENCE_DIR="$runtime/fixture/c5" P9_C6_EVIDENCE_DIR="$runtime/fixture/c6" P9_C7_EVIDENCE_DIR="$runtime/fixture/c7" P9_C8_EVIDENCE_DIR="$runtime/fixture/c8" P9_C9_EVIDENCE_DIR="$runtime/guard" P9_C5_SECRET_DIR="$runtime/fixture/secrets" P9_PRIMARY_ADMIN_USERNAME=primary P9_PRIMARY_ADMIN_PASSWORD_FILE="$runtime/fixture/primary.password" P9_SECONDARY_ADMIN_USERNAME=secondary P9_SECONDARY_ADMIN_PASSWORD_FILE="$runtime/fixture/secondary.password" D1_ENV_FILE=/dev/null "$script_dir/verify-c9-recovery" >"$runtime/guard.out" 2>&1; then
+  echo 'P9 C9 destructive driver ran without explicit confirmation' >&2; exit 1
+fi
+grep -Fq 'P9_C9_CONFIRM_IN_PLACE_RESTORE=yes' "$runtime/guard.out"
+echo 'PASS P9 C9 recovery evidence, continuity negatives and destructive guard'

@@ -112,6 +112,9 @@ if "$script_dir/verify-c8-evidence" "$incomplete" >/dev/null 2>&1; then echo 'P9
 leaked="$runtime/c8-leaked"; cp -R "$runtime/c8" "$leaked"; printf '\n6222029912345670\n' >>"$leaked/result.md"
 result_sha=$(openssl dgst -sha256 -r "$leaked/result.md"|awk '{print $1}'); awk -v sha="$result_sha" '$2=="result.md"{$1=sha}{print $1"  "$2}' "$leaked/checksums.sha256" >"$leaked/checksums.tmp"; mv "$leaked/checksums.tmp" "$leaked/checksums.sha256"
 if "$script_dir/verify-c8-evidence" "$leaked" >/dev/null 2>&1; then echo 'P9 C8 accepted a full bank account leak' >&2; exit 1; fi
+hash_like="$runtime/c8-hash-like"; cp -R "$runtime/c8" "$hash_like"; printf '\nDigest fragment: a12345678901234b\n' >>"$hash_like/result.md"
+result_sha=$(openssl dgst -sha256 -r "$hash_like/result.md"|awk '{print $1}'); awk -v sha="$result_sha" '$2=="result.md"{$1=sha}{print $1"  "$2}' "$hash_like/checksums.sha256" >"$hash_like/checksums.tmp"; mv "$hash_like/checksums.tmp" "$hash_like/checksums.sha256"
+"$script_dir/verify-c8-evidence" "$hash_like" >/dev/null || { echo 'P9 C8 rejected digits embedded in a checksum-like token as an account number' >&2; exit 1; }
 
 if [ -n "$artifact_dir" ]; then
   [ ! -e "$artifact_dir" ] || { echo "P9 C8 test artifact directory already exists: $artifact_dir" >&2; exit 2; }

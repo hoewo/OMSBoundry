@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 P9 增量（BF-264）：新增随 D1 release bundle 交付的 C9 联合恢复门禁。它只接受同一 C0～C8 证据链与显式 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`，独立核对完整备份闭集、停写声明、十四应用选择和十五库指纹，再对原 Compose project 执行清卷恢复；恢复后必须通过 D1 检查、两份 C6 发票逐字节摘要、C7／C8 稳定命令重放与业务事实等价，以及两 Tenant 新增 Open API usage audit。备份本体、签名密钥、凭证和短期 URL 不进入 C9 证据。离线 verifier 正反例通过；真实 D1 C9 尚未执行，下一段进入真实 Feedback V2 旅程和最终有界运行。
+
 2026-10-26 P9 增量（BF-263）：新增随 D1 release bundle 交付的 `run-c0-c8`，把九个已有阶段收敛为可恢复的单一连续入口；既有阶段先独立复验再复用，最终逐边核对 project、Origin 和全部前序 checksum 绑定。离线完整链与 checksum-valid 断链负例通过。下一步不再扩展业务阶段，转入同一链完成后的联合备份／原项目空目标恢复、恢复后关键读取／续写及 Feedback 真实旅程；真实 D1 尚未执行。
 
 2026-10-26 P9 增量（BF-262）：C8 工资实际发放驱动和固定证据 verifier 已进入源码及 D1 release bundle。它绑定 C0～C7，为两个 Tenant 的既有 C3 工资行分别建立 Payment Profile、显式同步支付快照、完成工资核对并经 Payroll→Money 发放精确净应发金额；验证完整核销、零超额、本人工资单和跨 Tenant 404。完整银行卡号不落证据，成功支付命令可安全重放；该阶段不直写数据库且明确沿用 Money 本地兼容 Party，不宣称 Party Directory 已统一。下一阶段进入同一连续链的联合备份／空目标恢复、恢复后读取／续写和 Feedback 真实旅程；真实 D1 C8 尚未执行。

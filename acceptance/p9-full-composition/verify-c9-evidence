@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-c9-evidence EVIDENCE_DIR' >&2; exit 2; }
+evidence_dir=$1
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+[ -d "$evidence_dir" ] || { echo "P9 C9 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+[ -z "$(find "$evidence_dir" -type l -print -quit)" ] || { echo 'P9 C9 evidence must not contain symbolic links' >&2; exit 1; }
+
+expected='checksums.sha256
+post-c7
+post-c8
+recovery-events.tsv
+result.md
+state-after-c9.json'
+[ "$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort)" = "$expected" ] || { echo 'P9 C9 evidence has an invalid artifact set' >&2; exit 1; }
+files='post-c7/checksums.sha256
+post-c8/checksums.sha256
+recovery-events.tsv
+result.md
+state-after-c9.json'
+actual=$(awk 'NF!=2||$1!~/^[0-9a-f]{64}$/{exit 1}{print $2}' "$evidence_dir/checksums.sha256") || { echo 'P9 C9 checksum manifest is malformed' >&2; exit 1; }
+[ "$actual" = "$files" ] || { echo 'P9 C9 checksum manifest has an invalid file set' >&2; exit 1; }
+while read -r digest artifact; do [ "$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}')" = "$digest" ] || { echo "P9 C9 checksum mismatch for $artifact" >&2; exit 1; }; done <"$evidence_dir/checksums.sha256"
+
+"$script_dir/verify-c7-evidence" "$evidence_dir/post-c7" >/dev/null
+"$script_dir/verify-c8-evidence" "$evidence_dir/post-c8" >/dev/null
+state="$evidence_dir/state-after-c9.json"
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+jq -e --arg uuid "$uuid" '
+  .schema_version==1 and .scenario_id=="oms-v1-p9-full-composition-v1" and .phase=="C9" and .result=="pass" and
+  .deployment.profile=="D1" and
+  ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c2_checksums_sha256,.deployment.c3_checksums_sha256,.deployment.c4_checksums_sha256,.deployment.c5_checksums_sha256,.deployment.c6_checksums_sha256,.deployment.c7_checksums_sha256,.deployment.c8_checksums_sha256,.deployment.post_c7_checksums_sha256,.deployment.post_c8_checksums_sha256]|all(test("^[0-9a-f]{64}$"))) and
+  (.backup.id|test("^[0-9]{8}T[0-9]{6}Z$")) and (.backup.checksums_sha256|test("^[0-9a-f]{64}$")) and
+  (.backup.database_fingerprints_sha256|test("^[0-9a-f]{64}$")) and .backup.consistency_mode=="public-ingress-quiesced-v1" and .backup.database_count==15 and
+  .recovery.empty_target_restore=="pass" and .recovery.database_fingerprint_match=="pass" and .recovery.d1_health=="pass" and
+  .recovery.evidence_bytes=="pass" and .recovery.stable_command_replay=="pass" and .recovery.continuation_write=="open_api_usage_audit" and
+  (.tenants|length)==2 and .tenants[0].tenant_id!=.tenants[1].tenant_id and
+  all(.tenants[];(.tenant_id|test($uuid)) and (.evidence.file_id|test($uuid)) and .evidence.version>=1 and (.evidence.sha256|test("^[0-9a-f]{64}$")) and .evidence.bytes_match==true and
+    (.reimbursement.id|test($uuid)) and .reimbursement.status=="paid" and (.payroll.run_id|test($uuid)) and (.payroll.line_id|test($uuid)) and .payroll.status=="paid") and
+  .checks.pre_restore_chain_verified=="pass" and .checks.post_restore_business_equivalence=="pass" and .checks.backup_material_embedded==false and .checks.direct_database_write==false and .checks.secrets_recorded==false
+' "$state" >/dev/null || { echo 'P9 C9 state has an invalid schema or failed check' >&2; exit 1; }
+
+post7="$evidence_dir/post-c7/state-after-c7.json"; post8="$evidence_dir/post-c8/state-after-c8.json"
+[ "$(jq -er '.deployment.post_c7_checksums_sha256' "$state")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c7/checksums.sha256" | awk '{print $1}')" ] || { echo 'P9 C9 does not bind post-restore C7 evidence' >&2; exit 1; }
+[ "$(jq -er '.deployment.post_c8_checksums_sha256' "$state")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c8/checksums.sha256" | awk '{print $1}')" ] || { echo 'P9 C9 does not bind post-restore C8 evidence' >&2; exit 1; }
+[ "$(jq -er '.deployment.c7_checksums_sha256' "$post8")" = "$(openssl dgst -sha256 -r "$evidence_dir/post-c7/checksums.sha256" | awk '{print $1}')" ] || { echo 'post-restore C8 does not bind post-restore C7' >&2; exit 1; }
+phase=0
+while [ "$phase" -le 6 ]; do
+  original=$(jq -er ".deployment.c${phase}_checksums_sha256" "$state")
+  [ "$(jq -er ".deployment.c${phase}_checksums_sha256" "$post7")" = "$original" ] || { echo "post-restore C7 does not bind original C$phase" >&2; exit 1; }
+  [ "$(jq -er ".deployment.c${phase}_checksums_sha256" "$post8")" = "$original" ] || { echo "post-restore C8 does not bind original C$phase" >&2; exit 1; }
+  phase=$((phase+1))
+done
+for index in 0 1; do
+  tenant=$(jq -er ".tenants[$index].tenant_id" "$state")
+  [ "$(jq -er ".tenants[$index].reimbursement.id" "$state")" = "$(jq -er --arg tenant "$tenant" '.tenants[]|select(.tenant_id==$tenant)|.reimbursement.id' "$post7")" ] || { echo 'P9 C9 reimbursement continuity failed' >&2; exit 1; }
+  [ "$(jq -er ".tenants[$index].reimbursement.status" "$state")" = "$(jq -er --arg tenant "$tenant" '.tenants[]|select(.tenant_id==$tenant)|.reimbursement.status' "$post7")" ] || { echo 'P9 C9 reimbursement status continuity failed' >&2; exit 1; }
+done
+for index in 0 1; do
+  tenant=$(jq -er ".tenants[$index].tenant_id" "$state")
+  [ "$(jq -er ".tenants[$index].payroll.run_id" "$state")" = "$(jq -er --arg tenant "$tenant" '.tenants[]|select(.tenant_id==$tenant)|.payroll.run_id' "$post8")" ] || { echo 'P9 C9 Payroll run continuity failed' >&2; exit 1; }
+  [ "$(jq -er ".tenants[$index].payroll.line_id" "$state")" = "$(jq -er --arg tenant "$tenant" '.tenants[]|select(.tenant_id==$tenant)|.payroll.line_id' "$post8")" ] || { echo 'P9 C9 Payroll line continuity failed' >&2; exit 1; }
+done
+
+awk -F '\t' '
+  NR==1{if($0!="event\tresult\tdetail")exit 1;next} NF!=3||$2!="pass"{exit 1}
+  $1=="pre-restore-chain"{pre++} $1=="joint-backup"{backup++} $1=="empty-target-restore"{restore++}
+  $1=="database-fingerprint-match"{fingerprint++} $1=="d1-health"{health++}
+  $1=="primary-evidence-bytes"{pa++} $1=="secondary-evidence-bytes"{pb++}
+  $1=="c7-stable-replay"{c7++} $1=="c8-stable-replay"{c8++}
+  $1=="primary-continuation-write"{ca++} $1=="secondary-continuation-write"{cb++}
+  END{if(pre!=1||backup!=1||restore!=1||fingerprint!=1||health!=1||pa!=1||pb!=1||c7!=1||c8!=1||ca!=1||cb!=1)exit 1}
+' "$evidence_dir/recovery-events.tsv" || { echo 'P9 C9 recovery event matrix is incomplete' >&2; exit 1; }
+if grep -REq 'Authorization:|bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}|account_number|password|signing-keys|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' "$evidence_dir"; then echo 'P9 C9 evidence contains protected or backup material' >&2; exit 1; fi
+echo 'PASS P9 C9 joint backup, empty-target restore and continuation evidence'

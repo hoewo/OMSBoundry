@@ -172,3 +172,28 @@ acceptance/p9-full-composition/verify-c8-payroll-payments
 C8 re-verifies and binds C0 through C7. For each Tenant it creates an independently owned Payroll payment profile, explicitly synchronizes that snapshot into the existing C3 line, reviews the run, and confirms the exact net amount through Payroll's versioned Money connector. The same C1 employee must then read the settled line from `/payroll/v1/me/payslips`, while a cross-Tenant payment guess returns 404. Full bank account numbers are transient protected inputs and are excluded from evidence. The gate reuses C7's audited Money local-compatibility Party mapping, performs no direct database write, and explicitly does not claim Party Directory unification. A successful payment command must replay without a second Money write if evidence capture is interrupted. Validate a handed-off artifact with `verify-c8-evidence EVIDENCE_DIR`.
 
 After the continuous fixture has been created, `d1 backup` must produce both `backup-consistency.env` and `database-fingerprints.tsv`. The latter contains only database names, table/row counts and SHA-256 values; raw rows and sequence values never enter the artifact. Its schema/fact digests cover public sequence definitions and `last_value`/`is_called` as well as tables. Before deleting target volumes, `d1 restore` validates its fixed format and exact database selection; it then recomputes the same fingerprints before starting business services and fails closed on any mismatch. A passing fingerprint comparison proves database checkpoint equality only; the P9 runtime window must still verify Evidence bytes and repeat key reads and one bounded continuation write after restore.
+
+Run that final recovery gate only after C0 through C8 have passed and their protected credentials remain available:
+
+```sh
+D1_ENV_FILE=/absolute/path/to/d1.env \
+P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
+P9_C1_EVIDENCE_DIR=/absolute/path/to/evidence/c1 \
+P9_C2_EVIDENCE_DIR=/absolute/path/to/evidence/c2 \
+P9_C3_EVIDENCE_DIR=/absolute/path/to/evidence/c3 \
+P9_C4_EVIDENCE_DIR=/absolute/path/to/evidence/c4 \
+P9_C5_EVIDENCE_DIR=/absolute/path/to/evidence/c5 \
+P9_C6_EVIDENCE_DIR=/absolute/path/to/evidence/c6 \
+P9_C7_EVIDENCE_DIR=/absolute/path/to/evidence/c7 \
+P9_C8_EVIDENCE_DIR=/absolute/path/to/evidence/c8 \
+P9_C9_EVIDENCE_DIR=/absolute/path/to/evidence/c9 \
+P9_C5_SECRET_DIR=/restricted/p9-c5-api-keys \
+P9_PRIMARY_ADMIN_USERNAME=admin-a \
+P9_PRIMARY_ADMIN_PASSWORD_FILE=/restricted/admin-a.password \
+P9_SECONDARY_ADMIN_USERNAME=admin-b \
+P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
+P9_C9_CONFIRM_IN_PLACE_RESTORE=yes \
+acceptance/p9-full-composition/verify-c9-recovery
+```
+
+C9 is intentionally destructive to the exact Compose project recorded by C0: D1 removes its containers and volumes, restores the just-created backup into empty volumes, verifies all fifteen database fingerprints before starting business services, and runs the full D1 check. It then re-downloads both C6 invoices through new short-lived Evidence grants and compares their bytes, replays C7 and C8 stable commands without changing business facts, and confirms each employee's restored Open API calls created a new usage audit. Backup archives, dumps and signing keys stay in the configured protected D1 backup directory and are represented in C9 only by digests. Validate a handed-off C9 artifact with `verify-c9-evidence EVIDENCE_DIR`.

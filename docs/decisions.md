@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-264（已接受／P9 C9 联合恢复运行门禁，真实 D1 待执行）：C9 只能绑定同一 C0～C8 连续证据并要求额外的 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`；不得把普通测试命令隐式升级为清卷恢复。门禁在破坏目标前独立验证完整 P9 备份闭集、checksum 文件集、`public-ingress-quiesced-v1`、十四应用全选和 IAM＋十四 Owner 指纹；随后由 D1 在原 Compose project 执行带卷删除的空目标恢复及恢复前后指纹比较。服务恢复后还必须逐字核对两 Tenant 的 C6 Evidence SHA-256，以原稳定命令重放 C7／C8 且业务事实不变，并用恢复后的员工 Open API 读取形成新的 usage audit 证明有界续写。C9 固定证据只保留摘要、事件和重放结果，不嵌入 dump、ZIP、签名密钥、密码、API Key、银行卡号或短期访问 URL。离线证据 verifier、语义错位、缺事件、摘要漂移和未确认恢复负例已通过；未运行真实 D1 时不得声称恢复完成。
+
 2026-10-26 BF-263（已接受／P9 C0～C8 可恢复连续执行入口，真实 D1 待执行）：真实窗口不得依赖操作者手工拼接九个阶段。`run-c0-c8` 必须按 C0→C8 顺序使用同一绝对证据根和根外 C5 Secret 目录；阶段目录不存在时执行，已存在时先用该阶段独立 verifier 校验后复用，从首个缺失阶段恢复。全部阶段结束后，执行器必须再次核对 Compose project、公共 Origin 及每个后续阶段对所有前序 `checksums.sha256` 的绑定，不能把“各目录单独 checksum 正确”误当成连续旅程。执行器不拥有服务生命周期，不启动、停止或部署 D1。离线完整恢复和重算 checksum 后断链负例已通过并进入 release bundle；真实 D1、联合恢复和 Feedback 仍待执行。
 
 2026-10-26 BF-262（已接受／P9 C8 工资实际发放运行入口，真实 D1 待执行）：C8 必须重新校验并绑定同一 C0～C7 证据，复用 C3 两个 Tenant 的既有工资表和 C1 Person，不得另造工资或绕过 Payroll。每个 Tenant 的授权工资管理员先经 Payroll 建立独立 Payment Profile，再通过显式预览／确认把其 revision 快照同步到 `review_pending` 工资行；核对后只能由 Payroll 的版本化 Money connector 按净应发整数金额登记实际发放。Payroll 返回 `paid`、实付等于核销且无超额，且同一员工必须从 `/payroll/v1/me/payslips` 看到本人工资单；跨 Tenant 发放猜测返回 404。完整银行卡号只允许存在于受保护临时请求，不得进入证据。相同稳定支付命令在 Money 成功但证据写入中断后必须安全重放且不得二次发薪。当前复用 C7 Money 本地兼容 Party 映射，明确 `party_directory_unified=false`，不直写数据库。离线双租户发放、成功后重跑、证据 verifier、摘要漂移、HTTP 矩阵缺失和完整卡号注入负例已通过并进入 release bundle；真实 D1、联合恢复和 Feedback 仍未执行，不能据此标记 P9 完成。

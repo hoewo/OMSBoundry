@@ -50,8 +50,12 @@ second gate uses the already-running stack and same public origin; it does not
 start or stop services. Continue with `verify-c2-member-payroll` against the
 exact C0/C1 evidence to establish isolated Compensation Profiles for both
 Tenant Persons. C2 intentionally does not assert statutory rates or execute a
-payroll period. See the adjacent README for exact inputs and secret-free
-evidence contracts.
+payroll period. After C0 through C8 complete, `verify-c9-recovery` is the only
+P9 recovery entry: it requires `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`, backs up
+and replaces the exact C0 Compose project's volumes, verifies the fifteen
+database fingerprints, both invoice byte digests, C7/C8 stable replay and a
+fresh Open API usage write. See the adjacent README for exact inputs and
+secret-free evidence contracts.
 
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and
