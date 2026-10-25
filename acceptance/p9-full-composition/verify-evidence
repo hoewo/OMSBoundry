@@ -19,6 +19,7 @@ expected_entries='checksums.sha256
 compose-topology.json
 images.json
 readiness.json
+release-metadata.txt
 schema-and-contract-check.log
 services-and-health.json
 state-after-c0.json
@@ -31,6 +32,7 @@ actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} 
 expected_files='compose-topology.json
 images.json
 readiness.json
+release-metadata.txt
 schema-and-contract-check.log
 services-and-health.json
 state-after-c0.json
@@ -82,6 +84,11 @@ jq -e 'length == 19 and all(.[]; .state == "running" and .health == "healthy")' 
   echo 'P9 C0 evidence does not contain 19/19 healthy services' >&2
   exit 1
 }
+jq -e 'all(.[]; .configured_image | test("@sha256:[0-9a-f]{64}$"))' \
+  "$evidence_dir/services-and-health.json" >/dev/null || {
+  echo 'P9 C0 evidence contains an unpinned configured image' >&2
+  exit 1
+}
 jq -e --slurpfile images "$evidence_dir/images.json" '
   ($images[0] | map({key:.configured_image,value:.image_id}) | from_entries) as $resolved |
   all(.[]; $resolved[.configured_image] == .image_id)
@@ -95,17 +102,40 @@ published=$(jq -c '[.services[] | select((.ports | length) > 0) | .service] | so
   echo 'P9 C0 evidence contains an invalid published-port topology' >&2
   exit 1
 }
+jq -e 'all(.services[]; .image | test("@sha256:[0-9a-f]{64}$"))' \
+  "$evidence_dir/compose-topology.json" >/dev/null || {
+  echo 'P9 C0 evidence contains an unpinned Compose image' >&2
+  exit 1
+}
 
-jq -e '
+release_version=$(awk -F= '$1=="version" {print substr($0,9)}' "$evidence_dir/release-metadata.txt")
+release_commit=$(awk -F= '$1=="commit" {print substr($0,8)}' "$evidence_dir/release-metadata.txt")
+release_built_at=$(awk -F= '$1=="built_at" {print substr($0,10)}' "$evidence_dir/release-metadata.txt")
+release_target=$(awk -F= '$1=="target" {print substr($0,8)}' "$evidence_dir/release-metadata.txt")
+[ "$(grep -Ec '^(version|commit|built_at|target)=' "$evidence_dir/release-metadata.txt")" -eq 4 ] \
+  && [ "$(wc -l <"$evidence_dir/release-metadata.txt" | tr -d ' ')" -eq 4 ] \
+  && printf '%s' "$release_version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' \
+  && printf '%s' "$release_commit" | grep -Eq '^[0-9a-f]{40}$' \
+  && printf '%s' "$release_built_at" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' \
+  && [ "$release_target" = linux/amd64 ] || {
+  echo 'P9 C0 release metadata is invalid' >&2
+  exit 1
+}
+
+jq -e --arg release_version "$release_version" --arg release_commit "$release_commit" \
+  --arg release_built_at "$release_built_at" --arg release_target "$release_target" '
   .schema_version == 1 and (.schema_version | type) == "number" and
   .scenario_id == "oms-v1-p9-full-composition-v1" and
   .phase == "C0" and .result == "pass" and
   .deployment.running_services == 19 and .deployment.healthy_services == 19 and
+  .deployment.image_mode == "pull" and
+  .release == {version:$release_version,commit:$release_commit,built_at:$release_built_at,target:$release_target} and
+  .checks.digest_pinned_images == "pass" and
   .checks.running_images_match_configured_references == "pass" and
   .suite.domain_application_count == 14 and
   .feedback.secrets_recorded == false and
   (.artifacts == [
-    "checksums.sha256","compose-topology.json","images.json","readiness.json",
+    "checksums.sha256","compose-topology.json","images.json","readiness.json","release-metadata.txt",
     "schema-and-contract-check.log","services-and-health.json",
     "state-after-c0.json","suite-manifest.json"
   ])

@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-253：P9 C0 已要求正式 release metadata、Suite 版本一致、pull 模式和全量 digest-pinned image，并把 metadata 纳入固定证据；C0／verifier／说明同步进入 D1 release bundle。开发 commit 与 mutable tag 负例、bundle 完整性测试通过，未构建真实 19 镜像或启动服务。
+
 2026-10-26 BF-252：P9 C0 现交叉核对 19 个运行容器的实际 Image ID 与各自配置镜像引用解析结果，避免标签更新后错报运行版本；证据 verifier 独立复核镜像、服务健康和唯一发布端口。mock 标签漂移与重算 checksum 后的语义漂移都被拒绝，未启动容器，真实 C0 未执行。
 
 2026-10-26 BF-251：P9 C0 证据已改为固定闭集并由 SHA-256 清单覆盖，新增独立 `verify-evidence`；状态 schema version 修正为数值 1。mock 正例、readiness 篡改和额外文件拒绝均通过，未启动容器。清单不是签名，真实 19 服务 C0 仍待运行窗口。

@@ -86,9 +86,9 @@ ENABLE_BONUS_DISTRIBUTION=true
 D1_IMAGE_MODE=build
 ```
 
-ECS 使用 `D1_IMAGE_MODE=pull`，并把发布方生成的十七个 D1 运行镜像 `name@sha256:digest` 值合并进 `.env`。先执行 `d1 images` 检查引用，再执行 `d1 prepare-images` 验证 Registry 登录和拉取；任何已启用组件缺摘要都会在启动前失败。
+ECS 使用 `D1_IMAGE_MODE=pull`，并把发布方生成的十九个 D1 运行镜像 `name@sha256:digest` 值合并进 `.env`。先执行 `d1 images` 检查引用，再执行 `d1 prepare-images` 验证 Registry 登录和拉取；任何已启用组件缺摘要都会在启动前失败。
 
-使用 `deployments/d1/ops/build-release` 生成的发布包时，包内 `.env.example` 已包含十七个摘要引用并固定为 pull 模式；`.release-bundle` 门禁会拒绝改为 build。发布包不包含真实 `.env`、证书、私钥、Registry 密码、数据库数据或备份。
+使用 `deployments/d1/ops/build-release` 生成的发布包时，包内 `.env.example` 已包含十九个摘要引用并固定为 pull 模式；`.release-bundle` 门禁会拒绝改为 build。发布包不包含真实 `.env`、证书、私钥、Registry 密码、数据库数据或备份。P9 全组合验收使用包内 `acceptance/p9-full-composition/verify-c0`：它要求运行 `SUITE_VERSION` 与四行 `RELEASE-METADATA` 一致，并把正式 Git commit、镜像 digest、运行 Image ID、健康与脱敏拓扑写入固定 checksum 证据集；不得从任意工作树复制脚本后把目标机 build 模式记作最终 P9 证据。
 
 ## 3. 安装与首管授权
 

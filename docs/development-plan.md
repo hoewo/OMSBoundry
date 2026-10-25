@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 BF-253 补齐 P9 发布来源链：C0／证据验证器随 D1 bundle 交付，要求正式 Git commit、匹配 Suite version、`linux/amd64`、pull mode 和全量 digest-pinned image；开发 provenance 与 mutable tag 负例通过。下一真实窗口必须从干净 HEAD 构建正式包，不能直接拿工作树或目标机 build 充当验收版本。
+
 2026-10-26 BF-252 修复 P9 C0 镜像证据歧义：运行容器实际 ID 必须匹配配置引用解析 ID，标签漂移直接失败；独立 verifier 不只验 checksum，还复核 19／19 健康、镜像对应关系和 Nginx 唯一发布端口。mock 的运行时漂移及 checksum-valid 语义漂移负例通过。
 
 2026-10-26 BF-251 为 P9 C0 增加固定闭集证据清单与独立复验：健康、镜像、readiness、Manifest、拓扑、检查日志和状态任一被修改都失败，额外文件也拒绝；mock 篡改／额外文件负例通过。该源码门禁不把 C0 记为真实通过。

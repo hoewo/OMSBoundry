@@ -29,6 +29,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-250 把 public sequence 定义与 `last_value`／`is_called` 加入 schema／事实摘要，补上“当前读取一致但下一次自增写入可能错位”的恢复缺口；PostgreSQL 18 短生命周期实测已证明序列推进改变摘要，mock 也证明仅序列漂移、表事实不变时 Restore 失败关闭。
 - BF-251 将 C0 证据收敛为固定闭集并用 SHA-256 清单覆盖健康、镜像、readiness、Manifest、脱敏拓扑、检查日志和数值版本状态；独立验证器与篡改／额外文件负例通过。清单用于发现意外损坏，不冒充发布者签名。
 - BF-252 要求运行容器实际 Image ID 与配置引用当前解析 ID 相等，并由证据 verifier 再次交叉核对；mock 标签漂移和“篡改镜像证据后重算 checksum”两类负例均失败关闭。
+- BF-253 要求真实 C0 来自正式 D1 release bundle：release metadata、Suite version、pull mode、十九个 digest-pinned image 与运行 Image ID 形成追溯链；P9 C0／verifier／说明也随 release bundle 交付。开发 commit 与 mutable tag 负例失败。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 

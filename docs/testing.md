@@ -32,6 +32,8 @@ BF-251 扩展 `p9-full-composition-preflight-test`：C0 正例生成固定八文
 
 BF-252 在同一自测加入两类镜像负例：配置引用解析为不同 Image ID 时，C0 在形成通过状态前失败；另修改 `images.json` 并重算正确 checksum，独立 verifier 仍因运行容器 ID 与解析 ID 不一致而拒绝。正例还独立复核精确 19 服务、19／19 healthy 和仅 Nginx 发布端口。
 
+BF-253 又要求 C0 使用 release bundle 的四行 `RELEASE-METADATA`、正式 40 位 Git commit、匹配 `SUITE_VERSION`、`linux/amd64`、pull mode 和 digest-pinned Compose／容器镜像；开发态 commit 和 mutable tag 负例失败。`d1-release-bundle-test` 验证 P9 README、C0 与证据 verifier 都进入归档并受 `RELEASE-CHECKSUMS.sha256` 覆盖。此处仍是 mock／制品门禁，尚未生成或运行正式 P9 镜像集合。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

@@ -100,6 +100,7 @@ mkdir -p \
   "$root/acceptance/d1-full-oa-journey" \
   "$root/acceptance/d1-c8-money-metric" \
   "$root/acceptance/d1-c8-production-work-items" \
+  "$root/acceptance/p9-full-composition" \
   "$root/docs/operations"
 
 for file in compose.yaml compose.pull.yaml compose.https.yaml compose.evidence-oss.yaml RELEASE.md; do
@@ -127,6 +128,9 @@ for file in README.md scenario-v1.json verify-scenario verify-c0 verify-c1 verif
 done
 cp "$repo_dir/acceptance/d1-c8-money-metric/verify-running" "$root/acceptance/d1-c8-money-metric/verify-running"
 cp "$repo_dir/acceptance/d1-c8-production-work-items/verify-running" "$root/acceptance/d1-c8-production-work-items/verify-running"
+for file in README.md verify-c0 verify-evidence; do
+  cp "$repo_dir/acceptance/p9-full-composition/$file" "$root/acceptance/p9-full-composition/$file"
+done
 cp "$repo_dir/docs/operations/d1-compact.md" "$root/docs/operations/d1-compact.md"
 cp "$repo_dir/docs/operations/d1-environment-promotion.md" "$root/docs/operations/d1-environment-promotion.md"
 cp "$repo_dir/docs/operations/d1-evidence-oss-profile.md" "$root/docs/operations/d1-evidence-oss-profile.md"
@@ -157,7 +161,9 @@ chmod 0755 "$root/deployments/d1/ops/"* "$root/deployments/d1/postgres/01-create
   "$root/acceptance/d1-full-oa-journey/verify-c6" "$root/acceptance/d1-full-oa-journey/verify-c7" \
   "$root/acceptance/d1-full-oa-journey/verify-c8" \
   "$root/acceptance/d1-c8-money-metric/verify-running" \
-  "$root/acceptance/d1-c8-production-work-items/verify-running"
+  "$root/acceptance/d1-c8-production-work-items/verify-running" \
+  "$root/acceptance/p9-full-composition/verify-c0" \
+  "$root/acceptance/p9-full-composition/verify-evidence"
 chmod 0644 "$root/contracts/access/v1/examples/"*-capabilities.json
 chmod 0644 "$root/contracts/access/v1/examples/"*-policy.json
 chmod 0600 "$root/deployments/d1/.env.example" "$root/RELEASE-METADATA" "$root/deployments/d1/.release-bundle"

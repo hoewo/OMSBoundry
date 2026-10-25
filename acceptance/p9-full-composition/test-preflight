@@ -36,6 +36,7 @@ jq -n --arg tenant_id 22222222-2222-4222-8222-222222222222 --argjson application
 feedback_key='ak_test_0123456789abcdef0123456789abcdef0123456789abcdef'
 feedback_hmac='0123456789abcdef0123456789abcdef'
 cat >"$runtime/d1.env" <<ENV
+SUITE_VERSION=v0.1.0-test.3
 D1_IMAGE_MODE=pull
 D1_INGRESS_MODE=https
 D1_PUBLIC_HOST=oms.example.test
@@ -62,6 +63,13 @@ FEEDBACK_API_KEY=$feedback_key
 FEEDBACK_IDENTITY_HMAC_KEY=$feedback_hmac
 FEEDBACK_NOTIFICATIONS_ENABLED=true
 ENV
+cat >"$runtime/RELEASE-METADATA" <<'METADATA'
+version=v0.1.0-test.3
+commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+built_at=2026-10-26T00:00:00Z
+target=linux/amd64
+METADATA
+export D1_RELEASE_METADATA_PATH="$runtime/RELEASE-METADATA"
 
 mock_bin="$runtime/mock-bin"
 mkdir -p "$mock_bin"
@@ -71,7 +79,7 @@ set -eu
 case "${1:-}" in
   config)
     services=$(jq -Rn '[inputs | select(length > 0)]' <"$P9_TEST_SERVICES_FILE")
-    jq -n --argjson services "$services" '{services:(reduce $services[] as $service ({}; .[$service]={image:("test/"+$service+"@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),depends_on:{},networks:["test"],ports:(if $service=="nginx" then [{published:"443",target:443}] else [] end)})),volumes:{test:{}},networks:{test:{}}}'
+    jq -n --argjson services "$services" --arg unpinned "${P9_TEST_UNPINNED_IMAGE:-0}" '{services:(reduce $services[] as $service ({}; .[$service]={image:(if $unpinned=="1" then "test/"+$service+":latest" else "test/"+$service+"@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" end),depends_on:{},networks:["test"],ports:(if $service=="nginx" then [{published:"443",target:443}] else [] end)})),volumes:{test:{}},networks:{test:{}}}'
     ;;
   check) echo 'mock schemas and contracts current' ;;
   *) echo "unexpected mock d1 command: $*" >&2; exit 2 ;;
@@ -159,6 +167,31 @@ if "$script_dir/verify-evidence" "$runtime/evidence-extra" >"$runtime/extra.out"
   exit 1
 fi
 grep -Fq 'P9 evidence directory does not contain the fixed C0 artifact set' "$runtime/extra.err"
+
+cat >"$runtime/INVALID-RELEASE-METADATA" <<'METADATA'
+version=v0.1.0-test.3
+commit=unknown
+built_at=2026-10-26T00:00:00Z
+target=linux/amd64
+METADATA
+if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
+  D1_RELEASE_METADATA_PATH="$runtime/INVALID-RELEASE-METADATA" \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$runtime/evidence-invalid-release" \
+  "$script_dir/verify-c0" >"$runtime/invalid-release.out" 2>"$runtime/invalid-release.err"; then
+  echo 'P9 C0 accepted development/unknown release provenance' >&2
+  exit 1
+fi
+grep -Fq 'P9 requires an official 40-character Git commit in release metadata' "$runtime/invalid-release.err"
+
+if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" P9_TEST_UNPINNED_IMAGE=1 \
+  D1_OPS_SCRIPT="$mock_bin/d1" D1_ENV_FILE="$runtime/d1.env" D1_PROJECT_NAME=omsbizfoundry-p9-test \
+  D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$runtime/evidence-unpinned" \
+  "$script_dir/verify-c0" >"$runtime/unpinned.out" 2>"$runtime/unpinned.err"; then
+  echo 'P9 C0 accepted mutable image references' >&2
+  exit 1
+fi
+grep -Fq 'P9 requires every configured runtime image reference to be digest-pinned' "$runtime/unpinned.err"
 
 if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
   P9_TEST_RESOLVED_IMAGE_ID=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \

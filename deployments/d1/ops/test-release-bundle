@@ -68,6 +68,9 @@ for path in \
   acceptance/d1-full-oa-journey/test-c8-native-entry.py \
   acceptance/d1-c8-money-metric/verify-running \
   acceptance/d1-c8-production-work-items/verify-running \
+  acceptance/p9-full-composition/README.md \
+  acceptance/p9-full-composition/verify-c0 \
+  acceptance/p9-full-composition/verify-evidence \
   docs/operations/d1-environment-promotion.md \
   RELEASE-CHECKSUMS.sha256; do
   grep -q "/$path$" "$listing" || { echo "D1 release is missing $path" >&2; exit 1; }

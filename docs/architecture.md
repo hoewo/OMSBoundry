@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 release provenance boundary（BF-253）：最终全组合门禁只运行官方 D1 release bundle：`RELEASE-METADATA` 固定声明版本、Git commit、build time 和 target，运行环境同版本且只使用 digest-pinned pull images；C0 再把配置 digest 解析到正在运行的 Image ID。P9 验收脚本本身随 release bundle 和内部 checksum 交付，目标机不依赖源码 checkout。该链不提供签名、SBOM 或 Registry 不可变策略。
+
 2026-10-26 P9 image provenance boundary（BF-252）：C0 同时记录运行容器的不可变 Image ID 和配置镜像引用／Repo Digest，并要求引用在采集时解析到同一 Image ID。标签在容器启动后漂移时不得生成通过证据；证据交接复验会再次交叉核对，不只信任状态文件中的 `pass`。这证明采集时运行身份，不替代镜像签名、SBOM 或 Registry 保留策略。
 
 2026-10-26 P9 C0 evidence boundary（BF-251）：全组合前置证据使用固定闭集目录，服务健康、镜像身份、readiness、Suite Manifest、脱敏 Compose 拓扑、schema／contract 日志和数值版本状态均进入 SHA-256 清单；独立验证器拒绝链接、额外／缺失文件和内容漂移。该清单只证明采集后未发生意外变化，不提供发布者签名，也不把原始 Compose／inspect 或部署秘密写入证据。

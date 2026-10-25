@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-253（已接受／P9 发布来源门禁）：真实 P9 C0 只接受 D1 `pull` 模式和全部 `name@sha256:<digest>` 镜像引用，并要求发布包 `RELEASE-METADATA` 仅含与运行 `SUITE_VERSION` 一致的版本、40 位正式 Git commit、UTC build time 与 `linux/amd64` target。P9 C0／证据验证器和说明随 D1 release bundle 交付；release metadata 纳入固定证据闭集与 checksum。开发态 `commit=unknown`／`test`、mutable tag 或版本错配不能形成 P9 通过证据。该门禁建立源码提交→发布包→配置 digest→运行 Image ID 的可追溯链，但不等于镜像签名或 SBOM。
+
 2026-10-26 BF-252（已接受／P9 运行镜像身份门禁）：C0 不得把可变镜像引用当前解析到的 Image ID 当作正在运行的版本。每个容器的实际不可变 `.Image` 必须与其 `configured_image` 在采集时解析到的 ID 相等，否则失败关闭；独立证据验证器再次从 `services-and-health.json` 与 `images.json` 交叉核对。mock 已覆盖标签漂移，以及篡改镜像证据后重算 checksum 仍被语义校验拒绝；真实镜像身份仍待 19 服务窗口采集。
 
 2026-10-26 BF-251（已接受／P9 C0 证据完整性门禁）：C0 证据目录固定为七个被校验制品、状态文件和 `checksums.sha256`，不得接受符号链接、额外／缺失文件、格式错误清单或任一摘要漂移；`state-after-c0.json.schema_version` 固定为数值 `1`。独立 `verify-evidence` 可在交接后复验，mock 已覆盖 readiness 篡改和额外文件拒绝。SHA-256 清单用于发现意外损坏，不是签名或不可信存储的防篡改证明；真实 C0 仍待全组合窗口执行。
