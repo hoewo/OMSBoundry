@@ -128,7 +128,7 @@ for file in README.md scenario-v1.json verify-scenario verify-c0 verify-c1 verif
 done
 cp "$repo_dir/acceptance/d1-c8-money-metric/verify-running" "$root/acceptance/d1-c8-money-metric/verify-running"
 cp "$repo_dir/acceptance/d1-c8-production-work-items/verify-running" "$root/acceptance/d1-c8-production-work-items/verify-running"
-for file in README.md verify-c0 verify-evidence verify-c1-multitenant verify-c1-evidence verify-c2-member-payroll verify-c2-evidence verify-c3-payroll-periods verify-c3-evidence verify-c4-finance-requests verify-c4-evidence verify-c5-api-keys verify-c5-evidence verify-c6-invoice-reimbursements verify-c6-evidence verify-c7-reimbursement-payments verify-c7-evidence verify-c8-payroll-payments verify-c8-evidence; do
+for file in README.md run-c0-c8 verify-c0 verify-evidence verify-c1-multitenant verify-c1-evidence verify-c2-member-payroll verify-c2-evidence verify-c3-payroll-periods verify-c3-evidence verify-c4-finance-requests verify-c4-evidence verify-c5-api-keys verify-c5-evidence verify-c6-invoice-reimbursements verify-c6-evidence verify-c7-reimbursement-payments verify-c7-evidence verify-c8-payroll-payments verify-c8-evidence; do
   cp "$repo_dir/acceptance/p9-full-composition/$file" "$root/acceptance/p9-full-composition/$file"
 done
 cp "$repo_dir/docs/operations/d1-compact.md" "$root/docs/operations/d1-compact.md"
@@ -163,6 +163,7 @@ chmod 0755 "$root/deployments/d1/ops/"* "$root/deployments/d1/postgres/01-create
   "$root/acceptance/d1-c8-money-metric/verify-running" \
   "$root/acceptance/d1-c8-production-work-items/verify-running" \
   "$root/acceptance/p9-full-composition/verify-c0" \
+  "$root/acceptance/p9-full-composition/run-c0-c8" \
   "$root/acceptance/p9-full-composition/verify-evidence" \
   "$root/acceptance/p9-full-composition/verify-c1-multitenant" \
   "$root/acceptance/p9-full-composition/verify-c1-evidence" \

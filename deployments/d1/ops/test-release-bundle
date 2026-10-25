@@ -69,6 +69,7 @@ for path in \
   acceptance/d1-c8-money-metric/verify-running \
   acceptance/d1-c8-production-work-items/verify-running \
   acceptance/p9-full-composition/README.md \
+  acceptance/p9-full-composition/run-c0-c8 \
   acceptance/p9-full-composition/verify-c0 \
   acceptance/p9-full-composition/verify-evidence \
   acceptance/p9-full-composition/verify-c1-multitenant \

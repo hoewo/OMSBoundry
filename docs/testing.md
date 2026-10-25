@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C0～C8 可恢复连续执行器（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/run-c0-c8` 使用绝对 `P9_RUN_EVIDENCE_ROOT` 依次执行 C0～C8。阶段目录存在时先运行对应独立 verifier 并复用，不存在时才执行该阶段；最后逐阶段核对同一 Compose project、公共 Origin 和对全部前序 checksum 的绑定。C5 Secret 目录必须位于证据根外，执行器本身不启动或停止服务。
+
+`make p9-continuous-runner-test` 已实际通过：它复用完整 C0～C8 离线制品验证断点续跑，并修改 C7 对 C0 的绑定后重算 C7 checksum，确认即使单阶段 verifier 仍接受其格式，连续执行器也会因断链拒绝。该测试不启动服务、容器或数据库，不构成真实 D1、恢复或 P9 完成证据。
+
 ## P9 C8 工资实际发放连续驱动（2026-10-26，源码门禁通过／真实 D1 待执行）
 
 入口 `acceptance/p9-full-composition/verify-c8-payroll-payments` 会重新验证并绑定 C0～C7 固定证据，在同一公网 Origin 下为两个 Tenant 的 C3 工资行建立 Payment Profile，显式同步快照并核对，再由 Payroll→Money 按精确净应发金额完成发放。断言覆盖 `paid`、实付／核销相等、零超额、本人 `/payroll/v1/me/payslips`、跨 Tenant 404、本地兼容 Party 边界、无直接数据库写入和完整账号不落证据。

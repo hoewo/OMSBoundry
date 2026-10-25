@@ -2,6 +2,8 @@
 
 This target is the bounded runtime gate for the OMS1 P9 iteration. It does not start or stop services. `verify-c0` inspects an already-running D1 composition and writes a secret-free evidence bundle before any business fixture is created.
 
+For the complete C0 through C8 journey, set the same variables documented below plus an absolute `P9_RUN_EVIDENCE_ROOT` and run `run-c0-c8`. The runner creates `c0` through `c8` below that root in order. On interruption it verifies and reuses each already complete phase, then resumes at the first absent phase; after every phase it independently checks the Compose project, public origin and all preceding checksum bindings. It never starts or stops services, and `P9_C5_SECRET_DIR` must remain outside the evidence root.
+
 Required runtime state:
 
 - an official D1 release bundle whose four-field `RELEASE-METADATA` matches `SUITE_VERSION`;

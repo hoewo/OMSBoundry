@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp); runtime=$(mktemp -d "$tmp_root/oms-p9-runner-test.XXXXXX")
+trap 'rm -rf -- "$runtime"' EXIT HUP INT TERM
+P9_C8_TEST_ARTIFACT_DIR="$runtime/evidence" "$script_dir/test-c8-payroll-payments" >/dev/null
+
+# The fixture's protected Key directory is a sibling of phase evidence. Move it
+# outside the runner root to exercise the production separation invariant.
+mv "$runtime/evidence/secrets" "$runtime/secrets"
+P9_RUN_EVIDENCE_ROOT="$runtime/evidence" P9_C5_SECRET_DIR="$runtime/secrets" "$script_dir/run-c0-c8" >"$runtime/run.out"
+grep -Fq 'PASS P9 continuous C0-C8 evidence chain' "$runtime/run.out"
+
+broken="$runtime/broken"; cp -R "$runtime/evidence" "$broken"
+jq '.deployment.c0_checksums_sha256=("0"*64)' "$broken/c7/state-after-c7.json" >"$broken/c7/state.tmp"; mv "$broken/c7/state.tmp" "$broken/c7/state-after-c7.json"
+state_sha=$(openssl dgst -sha256 -r "$broken/c7/state-after-c7.json"|awk '{print $1}')
+awk -v sha="$state_sha" '$2=="state-after-c7.json"{$1=sha}{print $1"  "$2}' "$broken/c7/checksums.sha256" >"$broken/c7/checksums.tmp"; mv "$broken/c7/checksums.tmp" "$broken/c7/checksums.sha256"
+if P9_RUN_EVIDENCE_ROOT="$broken" P9_C5_SECRET_DIR="$runtime/secrets" "$script_dir/run-c0-c8" >/dev/null 2>&1; then
+  echo 'P9 runner accepted a checksum-valid broken phase chain' >&2; exit 1
+fi
+echo 'PASS P9 C0-C8 resumable runner and chain regression'

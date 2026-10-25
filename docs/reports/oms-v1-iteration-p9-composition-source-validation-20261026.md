@@ -39,6 +39,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-260 增加绑定 C0～C5 的 P9 C6 驱动和独立证据 verifier：两个 Tenant 的员工使用 C5 Key 分别上传不同的虚构 PDF 实字节，完成 Evidence `invoice-v1` 校验，以稳定 File ID／Version 建立并提交本人报销；验证正确 Person／Evidence 快照、`payable`／`not_applicable`、账号脱敏、本人列表、交叉 404 和零付款／零 Money。Key 与签名 URL 只进入受限临时 curl 配置。离线字节上传、摘要漂移、HTTP 矩阵缺失和重算 checksum 后 Secret 注入负例通过并进入 release bundle；真实 D1 尚未执行。
 - BF-261 增加绑定 C0～C6 的 P9 C7 驱动和独立证据 verifier：两个 Tenant 的授权财务管理员经 Money 公网命令登记验收专用本地兼容 Party，经 Money 自有审计 ops 设置 Tenant 账簿主体及精确 Person revision／digest 收款映射，再由 Finance 确认 C6 报销完整实际付款；验证 Money Obligation／Payment／Allocation 稳定引用、23456 分完整核销、员工 Open API `paid` 回读和交叉 404。全程无直接数据库写入，且证据明确 `party_directory_unified=false`。离线双 Tenant、摘要漂移、HTTP 矩阵缺失和重算 checksum 后 Secret 注入负例通过并进入 release bundle；真实 D1 尚未执行。
 - BF-262 增加绑定 C0～C7 的 P9 C8 驱动和独立证据 verifier：两个 Tenant 的既有 C3 工资行分别建立 Payroll Payment Profile，经显式预览／确认同步支付快照并核对，再由 Payroll→Money 按精确净应发金额完成实际发放；验证 `paid`、实付等于核销、零超额、员工本人工资单和交叉 404。完整银行卡号不进入证据；相同稳定支付命令在成功后重跑保持业务结果不变。全程无直接数据库写入，复用 C7 Money 本地兼容 Party 且明确 `party_directory_unified=false`。离线双 Tenant、摘要漂移、HTTP 矩阵缺失和重算 checksum 后完整账号注入负例通过并进入 release bundle；真实 D1 尚未执行。
+- BF-263 增加随 release bundle 交付的 C0～C8 可恢复连续执行器：首次按序调用九个阶段；中断后逐阶段通过独立 verifier 才复用并从首个缺失阶段继续；完成后再次核对同一 Compose project、公共 Origin 及每阶段对全部前序 checksum 的绑定。C5 Secret 目录强制位于证据根外，执行器不管理服务生命周期。离线完整制品复用和重算 checksum 后的断链负例通过；真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -62,6 +63,7 @@ acceptance/p9-full-composition/test-c5-api-keys
 acceptance/p9-full-composition/test-c6-invoice-reimbursements
 acceptance/p9-full-composition/test-c7-reimbursement-payments
 acceptance/p9-full-composition/test-c8-payroll-payments
+acceptance/p9-full-composition/test-run-c0-c8
 git diff --check
 ```
 

@@ -1,0 +1,61 @@
+#!/bin/sh
+set -eu
+umask 077
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+for command_name in env jq openssl; do command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }; done
+root=$(required_env P9_RUN_EVIDENCE_ROOT); secret_dir=$(required_env P9_C5_SECRET_DIR)
+case "$root" in /*) ;; *) echo 'P9_RUN_EVIDENCE_ROOT must be absolute' >&2; exit 2;; esac
+case "$secret_dir" in /*) ;; *) echo 'P9_C5_SECRET_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir/" in "$root/"*|"$root/") echo 'P9 C5 secrets must remain outside the evidence root' >&2; exit 2;; esac
+case "$root/" in "$secret_dir/"*|"$secret_dir/") echo 'P9 evidence must remain outside the C5 secret directory' >&2; exit 2;; esac
+mkdir -p "$root"; chmod 0700 "$root"
+
+verify_phase() {
+  phase=$1; dir="$root/c$phase"
+  if [ "$phase" -eq 0 ]; then "$script_dir/verify-evidence" "$dir" >/dev/null
+  else "$script_dir/verify-c${phase}-evidence" "$dir" >/dev/null
+  fi
+}
+run_or_verify() {
+  phase=$1; shift; dir="$root/c$phase"
+  if [ -e "$dir" ]; then
+    [ -d "$dir" ] || { echo "P9 C$phase evidence path is not a directory: $dir" >&2; exit 2; }
+    verify_phase "$phase"
+    printf 'verified existing C%s evidence\n' "$phase"
+  else
+    "$@"
+    verify_phase "$phase"
+    printf 'created and verified C%s evidence\n' "$phase"
+  fi
+}
+
+run_or_verify 0 env P9_EVIDENCE_DIR="$root/c0" "$script_dir/verify-c0"
+run_or_verify 1 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" "$script_dir/verify-c1-multitenant"
+run_or_verify 2 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" "$script_dir/verify-c2-member-payroll"
+run_or_verify 3 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" "$script_dir/verify-c3-payroll-periods"
+run_or_verify 4 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" P9_C4_EVIDENCE_DIR="$root/c4" "$script_dir/verify-c4-finance-requests"
+run_or_verify 5 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" P9_C4_EVIDENCE_DIR="$root/c4" P9_C5_EVIDENCE_DIR="$root/c5" P9_C5_SECRET_DIR="$secret_dir" "$script_dir/verify-c5-api-keys"
+run_or_verify 6 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" P9_C4_EVIDENCE_DIR="$root/c4" P9_C5_EVIDENCE_DIR="$root/c5" P9_C5_SECRET_DIR="$secret_dir" P9_C6_EVIDENCE_DIR="$root/c6" "$script_dir/verify-c6-invoice-reimbursements"
+run_or_verify 7 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" P9_C4_EVIDENCE_DIR="$root/c4" P9_C5_EVIDENCE_DIR="$root/c5" P9_C5_SECRET_DIR="$secret_dir" P9_C6_EVIDENCE_DIR="$root/c6" P9_C7_EVIDENCE_DIR="$root/c7" "$script_dir/verify-c7-reimbursement-payments"
+run_or_verify 8 env P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" P9_C4_EVIDENCE_DIR="$root/c4" P9_C5_EVIDENCE_DIR="$root/c5" P9_C6_EVIDENCE_DIR="$root/c6" P9_C7_EVIDENCE_DIR="$root/c7" P9_C8_EVIDENCE_DIR="$root/c8" "$script_dir/verify-c8-payroll-payments"
+
+compose_project=$(jq -er '.deployment.compose_project' "$root/c0/state-after-c0.json")
+public_url=$(jq -er '.deployment.public_url|sub("/+$";"")' "$root/c0/state-after-c0.json")
+phase=1
+while [ "$phase" -le 8 ]; do
+  state="$root/c$phase/state-after-c$phase.json"
+  [ "$(jq -er '.deployment.compose_project' "$state")" = "$compose_project" ] || { echo "C$phase Compose project continuity failed" >&2; exit 1; }
+  [ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$state")" = "$public_url" ] || { echo "C$phase public origin continuity failed" >&2; exit 1; }
+  prior=0
+  while [ "$prior" -lt "$phase" ]; do
+    actual=$(openssl dgst -sha256 -r "$root/c$prior/checksums.sha256"|awk '{print $1}')
+    bound=$(jq -er ".deployment.c${prior}_checksums_sha256" "$state")
+    [ "$bound" = "$actual" ] || { echo "C$phase does not bind the supplied C$prior evidence" >&2; exit 1; }
+    prior=$((prior+1))
+  done
+  phase=$((phase+1))
+done
+
+echo "PASS P9 continuous C0-C8 evidence chain for Compose project $compose_project"
