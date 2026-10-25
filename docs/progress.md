@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26：完成 BF-266 的 P9 C0～C10 可恢复总入口和独立全链 verifier。总入口复用已有阶段，缺失 C9 时仍要求显式清卷确认，C10 等开发者回复时保留 `PENDING`；最终核对十一套固定制品、单一 project／Origin 和跨 C0～C10 checksum 绑定。离线完整复用、重算 checksum 后的 C9 断链与未确认恢复负例通过，脚本进入 D1 release bundle。未启动 Docker 或 OMS 常驻服务；真实 D1、真实浏览器 Console／点击与回滚记录仍待执行，P9 未完成，且未擅自增加未确认的 soak 时长。
+
 2026-10-26：完成 BF-261 的 P9 C7 报销实际付款运行入口和低资源离线回归。C7 串联 C0～C6 checksum，分别为两个 Tenant 走 Money 受保护命令和审计 ops 建立本地兼容账簿主体／员工收款主体及精确 Person 映射，再由 Finance 确认 23456 分实际付款，验证 Money Obligation／Payment／Allocation 稳定引用、完整核销、员工 Open API `paid` 回读和跨 Tenant 404。脚本没有直接数据库写入，也明确不宣称 Party Directory 已统一；摘要漂移、缺失 HTTP 断言及重算 checksum 后注入 Key 的负例均被 verifier 拒绝，并已纳入 D1 release bundle。未启动真实全组合，工资实际发放与恢复仍待后续，P9 未完成。
 
 2026-10-26：完成 BF-260 的 P9 C6 员工发票报销运行入口和低资源离线回归。C6 串联 C0～C5 checksum，使用两把既有员工 Key 各自上传一份不同的虚构 PDF 实字节，完成 Evidence 发票校验并冻结 File ID／Version，随后创建／提交本人报销，验证 `payable`／无需审批、账号脱敏、本人列表隔离、跨 Tenant 404 和零实际付款／零 Money。Key 与签名 URL 不进入命令参数或固定证据；摘要漂移、缺失 HTTP 断言及重算 checksum 后注入 Key 的负例均被独立 verifier 拒绝，脚本已纳入 D1 release bundle。未启动真实全组合，P9 仍未完成。

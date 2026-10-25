@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 P9 全程执行基线（BF-266）：C0～C10 使用一个可恢复入口；C9 缺失时必须再次显式授权原项目清卷恢复，C10 等待真实开发者回复时保持 `PENDING`，不能生成成功证据。最终独立 verifier 复验十一阶段闭集、单一 Compose project／Origin 及完整 checksum 绑定。执行器不负责部署或服务生命周期，且当前未定义最小 soak 时长；真实浏览器 Console／点击和回滚记录仍是独立运行证据，不能由离线总入口代替。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+
 2026-10-26 P9 连续执行基线（BF-263）：C0～C8 必须由同一执行入口按序运行；中断后只复用通过独立 verifier 的既有阶段，并从首个缺失阶段恢复。最终还要核对同一 Compose project、公共 Origin 及每阶段对全部前序 checksum 的绑定，避免各阶段分别通过但并非同一条连续旅程。执行器不启动或停止服务，C5 Secret 必须位于证据根外；当前只有离线回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
 2026-10-26 P9 C8 连续运行门禁（BF-262）：两个 Tenant 的 C3 工资表必须分别建立 Payroll 自有支付档案，经显式同步和核对后，由 Payroll→Money 正式连接器按净应发金额完成实际发放；员工只从本人工资单看到已结算结果，跨 Tenant 发放猜测必须 404。完整银行卡号不得进入证据，相同支付命令必须支持成功后的安全重放。当前复用 C7 Money 本地兼容 Party 映射，不直写数据库，也不冒充 Party Directory 已统一；当前只有离线驱动／证据回归，真实 D1 尚未执行。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)

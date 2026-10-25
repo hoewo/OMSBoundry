@@ -1,0 +1,51 @@
+#!/bin/sh
+set -eu
+umask 077
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+required_env() { value=$(printenv "$1" 2>/dev/null || true); [ -n "$value" ] || { echo "set $1" >&2; exit 2; }; printf '%s' "$value"; }
+root=$(required_env P9_RUN_EVIDENCE_ROOT)
+secret_dir=$(required_env P9_C5_SECRET_DIR)
+case "$root" in /*) ;; *) echo 'P9_RUN_EVIDENCE_ROOT must be absolute' >&2; exit 2;; esac
+case "$secret_dir" in /*) ;; *) echo 'P9_C5_SECRET_DIR must be absolute' >&2; exit 2;; esac
+case "$secret_dir/" in "$root/"*|"$root/") echo 'P9 C5 secrets must remain outside the evidence root' >&2; exit 2;; esac
+case "$root/" in "$secret_dir/"*|"$secret_dir/") echo 'P9 evidence must remain outside the C5 secret directory' >&2; exit 2;; esac
+mkdir -p "$root"; chmod 0700 "$root"
+
+P9_RUN_EVIDENCE_ROOT="$root" P9_C5_SECRET_DIR="$secret_dir" "$script_dir/run-c0-c8"
+
+if [ -e "$root/c9" ]; then
+  [ -d "$root/c9" ] || { echo "P9 C9 evidence path is not a directory: $root/c9" >&2; exit 2; }
+  "$script_dir/verify-c9-evidence" "$root/c9" >/dev/null
+  echo 'verified existing C9 evidence'
+else
+  [ "$(printenv P9_C9_CONFIRM_IN_PLACE_RESTORE 2>/dev/null || true)" = yes ] || {
+    echo 'set P9_C9_CONFIRM_IN_PLACE_RESTORE=yes to authorize the C9 in-place empty-target restore' >&2
+    exit 2
+  }
+  env \
+    P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" \
+    P9_C2_EVIDENCE_DIR="$root/c2" P9_C3_EVIDENCE_DIR="$root/c3" \
+    P9_C4_EVIDENCE_DIR="$root/c4" P9_C5_EVIDENCE_DIR="$root/c5" \
+    P9_C6_EVIDENCE_DIR="$root/c6" P9_C7_EVIDENCE_DIR="$root/c7" \
+    P9_C8_EVIDENCE_DIR="$root/c8" P9_C9_EVIDENCE_DIR="$root/c9" \
+    P9_C5_SECRET_DIR="$secret_dir" P9_C9_CONFIRM_IN_PLACE_RESTORE=yes \
+    "$script_dir/verify-c9-recovery"
+  "$script_dir/verify-c9-evidence" "$root/c9" >/dev/null
+  echo 'created and verified C9 evidence'
+fi
+
+if [ -e "$root/c10" ]; then
+  [ -d "$root/c10" ] || { echo "P9 C10 evidence path is not a directory: $root/c10" >&2; exit 2; }
+  "$script_dir/verify-c10-evidence" "$root/c10" >/dev/null
+  echo 'verified existing C10 evidence'
+else
+  env \
+    P9_C0_EVIDENCE_DIR="$root/c0" P9_C1_EVIDENCE_DIR="$root/c1" \
+    P9_C9_EVIDENCE_DIR="$root/c9" P9_C10_EVIDENCE_DIR="$root/c10" \
+    node "$script_dir/verify-c10-feedback.mjs"
+  "$script_dir/verify-c10-evidence" "$root/c10" >/dev/null
+  echo 'created and verified C10 evidence'
+fi
+
+"$script_dir/verify-run-c0-c10" "$root"

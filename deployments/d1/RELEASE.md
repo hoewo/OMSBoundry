@@ -61,6 +61,15 @@ developer replies in Feedback Console; rerunning the exact command completes
 notification and per-conversation read checks. See the adjacent README for
 exact inputs and secret-free evidence contracts.
 
+For the bounded end-to-end window, prefer `run-c0-c10` instead of manually
+joining those commands. It resumes verified phase directories, refuses to
+start a missing C9 without the same explicit restore confirmation, preserves
+C10's `PENDING` exit while developer replies are outstanding, and finishes by
+running `verify-run-c0-c10` over the whole checksum graph. It does not start,
+stop or deploy the D1 stack. No minimum soak duration is currently part of the
+accepted gate; real-browser Console/click and rollback records remain separate
+required evidence.
+
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and
 `docs/operations/d1-environment-promotion.md` for the complete operator flow.

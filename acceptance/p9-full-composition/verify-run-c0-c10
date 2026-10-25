@@ -1,0 +1,64 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo 'usage: verify-run-c0-c10 EVIDENCE_ROOT' >&2; exit 2; }
+root=$1
+[ -d "$root" ] || { echo "P9 run evidence root not found: $root" >&2; exit 2; }
+for command_name in jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+[ -z "$(find "$root" -type l -print -quit)" ] || { echo 'P9 run evidence must not contain symbolic links' >&2; exit 1; }
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+phase=0
+while [ "$phase" -le 10 ]; do
+  dir="$root/c$phase"
+  [ -d "$dir" ] || { echo "P9 C$phase evidence is missing" >&2; exit 1; }
+  if [ "$phase" -eq 0 ]; then
+    "$script_dir/verify-evidence" "$dir" >/dev/null
+  else
+    "$script_dir/verify-c${phase}-evidence" "$dir" >/dev/null
+  fi
+  phase=$((phase + 1))
+done
+
+digest() { openssl dgst -sha256 -r "$1" | awk '{print $1}'; }
+compose_project=$(jq -er '.deployment.compose_project' "$root/c0/state-after-c0.json")
+public_url=$(jq -er '.deployment.public_url|sub("/+$";"")' "$root/c0/state-after-c0.json")
+
+phase=1
+while [ "$phase" -le 8 ]; do
+  state="$root/c$phase/state-after-c$phase.json"
+  [ "$(jq -er '.deployment.compose_project' "$state")" = "$compose_project" ] || { echo "C$phase Compose project continuity failed" >&2; exit 1; }
+  [ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$state")" = "$public_url" ] || { echo "C$phase public origin continuity failed" >&2; exit 1; }
+  prior=0
+  while [ "$prior" -lt "$phase" ]; do
+    expected=$(digest "$root/c$prior/checksums.sha256")
+    actual=$(jq -er ".deployment.c${prior}_checksums_sha256" "$state")
+    [ "$actual" = "$expected" ] || { echo "C$phase does not bind the supplied C$prior evidence" >&2; exit 1; }
+    prior=$((prior + 1))
+  done
+  phase=$((phase + 1))
+done
+
+c9_state="$root/c9/state-after-c9.json"
+[ "$(jq -er '.deployment.compose_project' "$c9_state")" = "$compose_project" ] || { echo 'C9 Compose project continuity failed' >&2; exit 1; }
+[ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$c9_state")" = "$public_url" ] || { echo 'C9 public origin continuity failed' >&2; exit 1; }
+phase=0
+while [ "$phase" -le 8 ]; do
+  expected=$(digest "$root/c$phase/checksums.sha256")
+  actual=$(jq -er ".deployment.c${phase}_checksums_sha256" "$c9_state")
+  [ "$actual" = "$expected" ] || { echo "C9 does not bind the supplied C$phase evidence" >&2; exit 1; }
+  phase=$((phase + 1))
+done
+
+c10_state="$root/c10/state-after-c10.json"
+[ "$(jq -er '.deployment.compose_project' "$c10_state")" = "$compose_project" ] || { echo 'C10 Compose project continuity failed' >&2; exit 1; }
+[ "$(jq -er '.deployment.public_url|sub("/+$";"")' "$c10_state")" = "$public_url" ] || { echo 'C10 public origin continuity failed' >&2; exit 1; }
+for phase in 0 1 9; do
+  expected=$(digest "$root/c$phase/checksums.sha256")
+  actual=$(jq -er ".deployment.c${phase}_checksums_sha256" "$c10_state")
+  [ "$actual" = "$expected" ] || { echo "C10 does not bind the supplied C$phase evidence" >&2; exit 1; }
+done
+
+echo "PASS P9 continuous C0-C10 evidence chain for Compose project $compose_project"

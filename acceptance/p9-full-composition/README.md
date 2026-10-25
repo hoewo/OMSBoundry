@@ -2,7 +2,9 @@
 
 This target is the bounded runtime gate for the OMS1 P9 iteration. It does not start or stop services. `verify-c0` inspects an already-running D1 composition and writes a secret-free evidence bundle before any business fixture is created.
 
-For the complete C0 through C8 journey, set the same variables documented below plus an absolute `P9_RUN_EVIDENCE_ROOT` and run `run-c0-c8`. The runner creates `c0` through `c8` below that root in order. On interruption it verifies and reuses each already complete phase, then resumes at the first absent phase; after every phase it independently checks the Compose project, public origin and all preceding checksum bindings. It never starts or stops services, and `P9_C5_SECRET_DIR` must remain outside the evidence root.
+For the complete C0 through C8 business journey, set the same variables documented below plus an absolute `P9_RUN_EVIDENCE_ROOT` and run `run-c0-c8`. The runner creates `c0` through `c8` below that root in order. On interruption it verifies and reuses each already complete phase, then resumes at the first absent phase; after every phase it independently checks the Compose project, public origin and all preceding checksum bindings. It never starts or stops services, and `P9_C5_SECRET_DIR` must remain outside the evidence root.
+
+For the whole C0 through C10 runtime gate, use `run-c0-c10` with those same inputs. It first invokes the resumable C0-C8 runner, then performs or reuses C9 recovery and C10 Feedback. A missing C9 is never started unless `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` is present. A C10 run waiting for real developer replies exits `3` without evidence; after the replies, rerun the exact command and it resumes at C10. Finally, `verify-run-c0-c10` independently checks all eleven fixed artifact sets, one Compose project, one public origin, the complete C0-C8 checksum DAG, the C9 bindings and the C10 bindings. Neither command owns service startup, shutdown or deployment.
 
 Required runtime state:
 
@@ -213,3 +215,11 @@ acceptance/p9-full-composition/verify-c10-feedback.mjs
 ```
 
 C10 obtains Feedback configuration only through each authenticated OMS Gateway session and requires project `115`, notifications and distinct HMAC-derived identities. It creates or reuses two deterministic conversations per Tenant and replays one customer message with an HTTPS URL attachment by `client_message_id`. If a Feedback developer has not replied to all four conversations, the command exits `3`, prints only the non-secret Feedback IDs/short IDs and leaves no C10 evidence; reply to those items in Feedback Console and rerun the exact command. Completion requires real developer messages, unread notifications for both conversations, marking the first conversation read without clearing the second, and finally clearing the second. API Keys, short-lived session tokens, IAM credentials, Cookies and pseudonymous user IDs never enter C10 evidence. Validate a handed-off artifact with `verify-c10-evidence EVIDENCE_DIR`.
+
+Once the full chain has completed, verify it again without performing any business or recovery action:
+
+```sh
+acceptance/p9-full-composition/verify-run-c0-c10 /absolute/path/to/evidence
+```
+
+Passing this command proves the fixed C0-C10 artifacts belong to one continuous runtime chain. It does not replace the still-separate real-browser Console/click record, rollback record or a duration requirement. No minimum soak duration is currently specified; a future duration must be recorded as a separate accepted requirement rather than inferred by this runner.

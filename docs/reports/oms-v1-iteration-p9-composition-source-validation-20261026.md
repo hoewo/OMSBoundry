@@ -40,6 +40,9 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-261 增加绑定 C0～C6 的 P9 C7 驱动和独立证据 verifier：两个 Tenant 的授权财务管理员经 Money 公网命令登记验收专用本地兼容 Party，经 Money 自有审计 ops 设置 Tenant 账簿主体及精确 Person revision／digest 收款映射，再由 Finance 确认 C6 报销完整实际付款；验证 Money Obligation／Payment／Allocation 稳定引用、23456 分完整核销、员工 Open API `paid` 回读和交叉 404。全程无直接数据库写入，且证据明确 `party_directory_unified=false`。离线双 Tenant、摘要漂移、HTTP 矩阵缺失和重算 checksum 后 Secret 注入负例通过并进入 release bundle；真实 D1 尚未执行。
 - BF-262 增加绑定 C0～C7 的 P9 C8 驱动和独立证据 verifier：两个 Tenant 的既有 C3 工资行分别建立 Payroll Payment Profile，经显式预览／确认同步支付快照并核对，再由 Payroll→Money 按精确净应发金额完成实际发放；验证 `paid`、实付等于核销、零超额、员工本人工资单和交叉 404。完整银行卡号不进入证据；相同稳定支付命令在成功后重跑保持业务结果不变。全程无直接数据库写入，复用 C7 Money 本地兼容 Party 且明确 `party_directory_unified=false`。离线双 Tenant、摘要漂移、HTTP 矩阵缺失和重算 checksum 后完整账号注入负例通过并进入 release bundle；真实 D1 尚未执行。
 - BF-263 增加随 release bundle 交付的 C0～C8 可恢复连续执行器：首次按序调用九个阶段；中断后逐阶段通过独立 verifier 才复用并从首个缺失阶段继续；完成后再次核对同一 Compose project、公共 Origin 及每阶段对全部前序 checksum 的绑定。C5 Secret 目录强制位于证据根外，执行器不管理服务生命周期。离线完整制品复用和重算 checksum 后的断链负例通过；真实 D1 尚未执行。
+- BF-264 增加显式确认后才可执行的 C9 原项目联合备份／清卷恢复门禁，并在恢复后核对十五库指纹、Evidence 字节、C7／C8 稳定重放和 Open API 审计续写；离线正反例通过，真实 D1 尚未执行。
+- BF-265 增加 C10 Feedback V2 真实旅程门禁：绑定 C0／C1／C9，两个 Tenant 各两条会话，没有开发者回复时保持 `PENDING`，回复后核对逐会话未读／已读隔离；离线 pending／resume 与证据负例通过，真实 project 115 尚未执行。
+- BF-266 增加随 release bundle 交付的 `run-c0-c10` 与 `verify-run-c0-c10`：总入口复用已有 C0～C8，再执行或复用 C9／C10；C9 仍需显式破坏性确认，C10 仍可在人工回复点安全暂停。最终 verifier 独立核对十一套固定制品、单一 Compose project／Origin、C0～C8 checksum DAG、C9 对 C0～C8 及 C10 对 C0／C1／C9 的绑定。离线完整复用、checksum-valid 断链和未确认 C9 负例通过；执行器不管理服务生命周期，也没有擅自引入未确认的 soak 时长。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 
@@ -64,6 +67,9 @@ acceptance/p9-full-composition/test-c6-invoice-reimbursements
 acceptance/p9-full-composition/test-c7-reimbursement-payments
 acceptance/p9-full-composition/test-c8-payroll-payments
 acceptance/p9-full-composition/test-run-c0-c8
+acceptance/p9-full-composition/test-c9-recovery
+node acceptance/p9-full-composition/test-c10-feedback.mjs
+acceptance/p9-full-composition/test-run-c0-c10
 git diff --check
 ```
 
@@ -76,12 +82,12 @@ git diff --check
 仍需在一次有界运行窗口内完成并在退出后清理：
 
 1. 使用非占位部署秘密和当前镜像启动全组合，记录镜像 digest 与全部容器健康；
-2. 使用 C0～C8 驱动连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、报销付款和工资实际发放，再完成 Feedback 旅程；
+2. 使用 `run-c0-c10` 连续执行 Tenant、账号／Person、薪酬、工资、财务申请、员工 API Key、发票上传／报销、报销付款、工资实际发放、恢复和 Feedback 旅程；
 3. 创建带 `public-ingress-quiesced-v1` 声明和十五库无秘密事实指纹的联合备份，恢复到空目标并通过自动指纹比对，再次执行 Evidence 字节、关键读取与续写；
 4. 对比恢复前后 Tenant、稳定 ID、revision、精确金额、File Version、Money 引用、Key 非秘密元数据、反馈身份映射与审计；
 5. 记录真实浏览器 Console、跨租户／撤权负例及回滚点。
 
-P8 仍缺项目 115 服务端通知、有效 Feedback 运行凭证、双账号／双租户和真实跨域浏览器证据；该外部运行门禁未关闭前，也不能把“连续 Feedback”记为通过。
+P8 仍缺项目 115 服务端通知、有效 Feedback 运行凭证、双账号／双租户和真实跨域浏览器证据；P9 还缺真实浏览器 Console／点击与回滚记录。该外部运行门禁未关闭前，也不能把“连续 Feedback”或整轮 P9 记为通过。当前需求没有规定最小 soak 时长，因此源码门禁不凭空增加时间条件。
 
 ## 5. 资源状态
 

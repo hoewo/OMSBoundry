@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## P9 C0～C10 可恢复总入口（2026-10-26，源码门禁通过／真实 D1 待执行）
+
+入口 `acceptance/p9-full-composition/run-c0-c10` 先运行或复用 C0～C8，再运行或复用 C9、C10；缺失 C9 时必须显式设置 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes`，C10 缺真实开发者回复时保持 exit 3／`PENDING`，复跑从 C10 恢复。只读入口 `verify-run-c0-c10` 会独立复验十一套固定制品、同一 Compose project／公共 Origin、C0～C8 checksum DAG、C9 对 C0～C8 及 C10 对 C0／C1／C9 的精确绑定。
+
+`make p9-full-runner-test` 已实际通过：测试由 C10 离线 fixture 生成完整 C0～C10 制品并复用总入口；把 C10 的 C9 摘要改错后重算 checksum 仍被拒绝，删除 C9／C10 且不给破坏性确认时也在任何恢复命令前拒绝。短生命周期回环 server 在测试结束后关闭，未启动 Docker、数据库或 OMS 常驻服务。该测试不替代真实 D1、project 115、真人浏览器 Console／点击或回滚记录；当前也没有经过接受的最小 soak 时长。
+
 ## P9 C10 Feedback V2 真实旅程门禁（2026-10-26，源码门禁通过／真实 project 115 待执行）
 
 入口 `acceptance/p9-full-composition/verify-c10-feedback.mjs` 绑定同一 C0、C1 与 C9，使用两个 Tenant 的真实管理员会话取得 `feedback.use` 后从 Gateway 获取外部运行配置。每侧建立或复用两条 project 115 会话并幂等追加带 HTTPS URL 附件的客户消息；缺少开发者回复时明确返回 `PENDING` 且不生成证据。平台回复后复跑，要求两条会话均有开发者消息和未读通知，标记第一条已读不影响第二条，再单独清除第二条。证据不包含 API Key、Session token、密码、Cookie 或 HMAC 派生用户身份。

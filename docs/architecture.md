@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 全程执行器边界（BF-266）：`run-c0-c10` 只编排已有 C0～C10 验收入口，不是部署器、服务管理器、业务应用或事实 Owner。它不能自动授权破坏性恢复，C9 仍要求显式确认；不能把外部人工依赖伪装为成功，C10 缺开发者回复仍返回 `PENDING`。最终 verifier 只证明固定证据闭集和 checksum 有向链连续，不是发布者签名，也不替代真实浏览器、回滚或尚未接受的时间稳定性要求。
+
 2026-10-26 P9 连续执行器边界（BF-263）：`run-c0-c8` 只是验收编排，不是业务应用、部署器或事实 Owner。它只调用已有阶段入口，复验不可变证据并核对 Compose project／public Origin／checksum 有向链；不得启动、停止、恢复或修改 D1 服务，也不得保存密码、Key、Cookie 或 Capability。C5 Secret 目录与证据根强制互不包含。断点续跑只接受整个阶段证据闭集通过，不允许跳过失败阶段或就地修补制品。
 
 2026-10-26 P9 C8 工资发放边界（BF-262）：People 继续拥有 Person 当前档案，Payroll 独占 Payment Profile、工资行快照、复核状态、发放编排和 Money 结果引用，Money 独占账簿主体、Person→收款主体映射、义务、实际支付与核销；员工工资单是 Payroll 的本人只读投影。支付档案须先以 revision 快照显式同步到工资行，核对不会自动付款，付款只能经 Payroll 的版本化 Money connector 完成。完整银行卡号只用于受保护请求和内部交付，不得进入固定证据。相同支付 Command 在 Money 已成功后由 Payroll 本地交付记录优先重放，不能按当前 revision 再次创建资金事实。当前 C8 复用 C7 的 Money `local_compatibility` Party 映射且明确 `party_directory_unified=false`，禁止跨库或直接 SQL；真实 D1 仍待执行。

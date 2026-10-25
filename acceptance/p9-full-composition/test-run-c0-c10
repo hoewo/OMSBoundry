@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+umask 077
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-p9-c0-c10-test.XXXXXX")
+trap 'rm -rf "$runtime"' EXIT HUP INT TERM
+fixture="$runtime/fixture"
+secret_dir="$runtime/secrets"
+mkdir -m 0700 "$secret_dir"
+
+P9_C10_TEST_ARTIFACT_DIR="$fixture" node "$script_dir/test-c10-feedback.mjs" >/dev/null
+output=$(P9_RUN_EVIDENCE_ROOT="$fixture" P9_C5_SECRET_DIR="$secret_dir" "$script_dir/run-c0-c10")
+printf '%s\n' "$output" | grep -F 'PASS P9 continuous C0-C10 evidence chain' >/dev/null || { echo 'P9 C0-C10 runner did not verify the complete existing chain' >&2; exit 1; }
+
+broken="$runtime/broken"
+cp -R "$fixture" "$broken"
+jq '.deployment.c9_checksums_sha256=("0"*64)' "$broken/c10/state-after-c10.json" >"$runtime/state.json"
+mv "$runtime/state.json" "$broken/c10/state-after-c10.json"
+state_sha=$(openssl dgst -sha256 -r "$broken/c10/state-after-c10.json" | awk '{print $1}')
+awk -v sha="$state_sha" '$2=="state-after-c10.json"{$1=sha} {print $1"  "$2}' "$broken/c10/checksums.sha256" >"$runtime/checksums.sha256"
+mv "$runtime/checksums.sha256" "$broken/c10/checksums.sha256"
+if P9_RUN_EVIDENCE_ROOT="$broken" P9_C5_SECRET_DIR="$secret_dir" "$script_dir/run-c0-c10" >/dev/null 2>&1; then
+  echo 'P9 C0-C10 runner accepted a checksum-valid broken C9 binding' >&2
+  exit 1
+fi
+
+missing_c9="$runtime/missing-c9"
+cp -R "$fixture" "$missing_c9"
+rm -rf "$missing_c9/c9" "$missing_c9/c10"
+if P9_RUN_EVIDENCE_ROOT="$missing_c9" P9_C5_SECRET_DIR="$secret_dir" "$script_dir/run-c0-c10" >/dev/null 2>&1; then
+  echo 'P9 C0-C10 runner started destructive C9 without explicit confirmation' >&2
+  exit 1
+fi
+
+echo 'PASS P9 C0-C10 resumable runner, chain binding and destructive confirmation negatives'
