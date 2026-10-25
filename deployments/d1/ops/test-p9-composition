@@ -38,7 +38,7 @@ BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
 ENABLE_CONTRACT=false
 ENABLE_MONEY=true
 ENABLE_PEOPLE=true
-ENABLE_PARTY=true
+ENABLE_PARTY=false
 ENABLE_PROJECT=false
 ENABLE_EVIDENCE=true
 ENABLE_BUSINESS_ENGAGEMENT=false
@@ -59,22 +59,26 @@ ENV
 
 env_file="$test_dir/d1.env"
 write_env "$env_file"
-D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" config >"$test_dir/rendered.yaml"
+D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" config --format json >"$test_dir/rendered.json"
 
-for expected in \
-  'internal-finance-requests-workload-keys:' \
-  'internal-finance-requests-workload-key-permissions:' \
-  'internal-finance-requests-workload-private:' \
-  'WORKLOAD_ID: internal-finance-requests' \
-  'WORKLOAD_SUBJECT_ID: ffffffff-ffff-4fff-bfff-ffffffffffff' \
-  'MONEY_BASE_URL: http://money-flow-ledger:8083' \
-  'EVIDENCE_BASE_URL: http://evidence-service:8085' \
-  'WORKLOAD_ID: payroll'; do
-  grep -Fq "$expected" "$test_dir/rendered.yaml" || {
-    echo "P9 rendered composition is missing: $expected" >&2
-    exit 1
-  }
-done
+jq -e '
+  .services["internal-finance-requests-workload-key-permissions"] != null and
+  .services["internal-finance-requests-workload-keys"].environment.WORKLOAD_ID == "internal-finance-requests" and
+  .services["internal-finance-requests-workload-keys"].environment.WORKLOAD_SUBJECT_ID == "ffffffff-ffff-4fff-bfff-ffffffffffff" and
+  .services["internal-finance-requests"].environment.MONEY_BASE_URL == "http://money-flow-ledger:8083" and
+  .services["internal-finance-requests"].environment.EVIDENCE_BASE_URL == "http://evidence-service:8085" and
+  .services["internal-finance-requests"].depends_on["internal-finance-requests-workload-keys"].condition == "service_completed_successfully" and
+  .services["internal-finance-requests"].depends_on["money-flow-ledger"].condition == "service_healthy" and
+  .services["internal-finance-requests"].depends_on["evidence-service"].condition == "service_healthy" and
+  .services.payroll.environment.WORKLOAD_ID == "payroll" and
+  .services.payroll.environment.MONEY_BASE_URL == "http://money-flow-ledger:8083" and
+  .services.payroll.depends_on["people-groups"].condition == "service_healthy" and
+  .services.payroll.depends_on["money-flow-ledger"].condition == "service_healthy" and
+  .volumes["internal-finance-requests-workload-private"] != null
+' "$test_dir/rendered.json" >/dev/null || {
+  echo 'P9 rendered composition has an incomplete Finance/Payroll dependency graph' >&2
+  exit 1
+}
 
 assert_invalid_selection() {
   name=$1
@@ -96,5 +100,47 @@ assert_invalid_selection finance-without-money 'ENABLE_MONEY=false' 'ENABLE_INTE
 assert_invalid_selection finance-without-evidence 'ENABLE_EVIDENCE=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
 assert_invalid_selection payroll-without-people 'ENABLE_PEOPLE=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
 assert_invalid_selection payroll-without-money 'ENABLE_MONEY=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+
+# Exercise the selected backup and empty-target restore command graph without
+# starting Docker. This proves the two new Owners participate in the same D1
+# orchestration and checksum manifest; it deliberately does not claim a real
+# PostgreSQL restore.
+mock_bin="$test_dir/mock-bin"
+mock_log="$test_dir/docker.log"
+mkdir -p "$mock_bin"
+cat >"$mock_bin/docker" <<'MOCK'
+#!/bin/sh
+set -eu
+printf '%s\n' "$*" >>"$D1_DOCKER_MOCK_LOG"
+backup_id=''
+for argument in "$@"; do
+  case "$argument" in BACKUP_ID=*) backup_id=${argument#BACKUP_ID=};; esac
+done
+if [ -n "$backup_id" ]; then
+  target="$D1_TEST_BACKUP_DIR/$backup_id"
+  mkdir -p "$target"
+  for artifact in identity-access.dump signing-keys.json money-flow-ledger.zip people-groups.dump evidence-service.zip internal-finance-requests.dump payroll.dump; do
+    : >"$target/$artifact"
+  done
+fi
+MOCK
+chmod +x "$mock_bin/docker"
+: >"$mock_log"
+PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
+  D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static "$d1" backup >"$test_dir/backup.out"
+backup=$(find "$test_dir/backups" -mindepth 1 -maxdepth 1 -type d -print -quit)
+[ -n "$backup" ] && [ -f "$backup/checksums.sha256" ] && [ -f "$backup/suite-selection.env" ]
+grep -qx 'ENABLE_INTERNAL_FINANCE_REQUESTS=true' "$backup/suite-selection.env"
+grep -qx 'ENABLE_PAYROLL=true' "$backup/suite-selection.env"
+grep -q 'internal-finance-requests.dump' "$backup/checksums.sha256"
+grep -q 'payroll.dump' "$backup/checksums.sha256"
+backup_id=$(basename "$backup")
+PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_dir/backups" \
+  D1_CONFIRM_EMPTY_RESTORE=yes D1_ENV_FILE="$env_file" D1_PROJECT_NAME=omsbizfoundry-p9-static \
+  "$d1" restore "$backup_id" >"$test_dir/restore.out"
+grep -q 'internal-finance-requests sh -eu -c .*pg_dump' "$mock_log"
+grep -q 'payroll sh -eu -c .*pg_dump' "$mock_log"
+grep -q 'run --rm --no-deps .*internal-finance-requests sh -eu -c .*pg_restore' "$mock_log"
+grep -q 'run --rm --no-deps .*payroll sh -eu -c .*pg_restore' "$mock_log"
 
 echo 'PASS D1 P9 composition test'

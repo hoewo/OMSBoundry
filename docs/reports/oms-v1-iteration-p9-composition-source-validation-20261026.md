@@ -40,7 +40,7 @@ deployments/d1/ops/test-release-bundle
 git diff --check
 ```
 
-`test-p9-composition` 使用实际 `docker compose config`，但不 build、不 pull、不启动容器；它验证完整依赖选择可渲染，并覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景。
+`test-p9-composition` 使用实际 `docker compose config --format json`，但不 build、不 pull、不启动容器；它结构化验证 Workload、端点、volume 和健康依赖，覆盖 Finance 缺 Money、Finance 缺 Evidence、Payroll 缺 People、Payroll 缺 Money 四个失败关闭场景。测试还用无状态 Docker mock 走过一次同选装的 D1 联合备份与空目标恢复命令图，核对 Finance／Payroll dump、选择声明、校验清单和 restore 命令均被纳入；该项只证明运维编排，不是数据库恢复证据。
 
 ## 4. P9 尚未完成
 
