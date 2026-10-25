@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发进度
 
+2026-10-26 BF-254：P9 审计发现 IAM／Owner 可处理多个 Tenant，但 Gateway 仍以 Suite Manifest 单一 Tenant 拒绝第二租户，会让“同域名双租户”在入口层失败。现已移除该错误白名单语义，Workbench 使用可信会话 Tenant；Gateway 登录和直接 IAM 登录成功后都清除旧 Capability Cookie。Gateway／Workbench 全模块测试通过，未启动容器。真实双租户 D1、跨 Owner／附件／导出负例和恢复仍待 P9，完成度不提高为整轮通过。
+
 2026-10-26 BF-253：P9 C0 已要求正式 release metadata、Suite 版本一致、pull 模式和全量 digest-pinned image，并把 metadata 纳入固定证据；C0／verifier／说明同步进入 D1 release bundle。开发 commit 与 mutable tag 负例、bundle 完整性测试通过，未构建真实 19 镜像或启动服务。
 
 2026-10-26 BF-252：P9 C0 现交叉核对 19 个运行容器的实际 Image ID 与各自配置镜像引用解析结果，避免标签更新后错报运行版本；证据 verifier 独立复核镜像、服务健康和唯一发布端口。mock 标签漂移与重算 checksum 后的语义漂移都被拒绝，未启动容器，真实 C0 未执行。

@@ -20,12 +20,17 @@ func TestVerifierAcceptsValidCredentialAndFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
-	verifier := New(path, "https://oms.example.test/auth", "22222222-2222-4222-8222-222222222222")
+	verifier := New(path, "https://oms.example.test/auth")
 	verifier.now = func() time.Time { return now }
 	base := map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": "11111111-1111-4111-8111-111111111111", "tid": "22222222-2222-4222-8222-222222222222", "aud": "contract-ledger", "name": "User", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "tenant", "resources": []any{}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "44444444-4444-4444-8444-444444444444"}
 	valid := sign(t, keyID, privateKey, base)
 	if _, err := verifier.Verify(valid, "contract-ledger", "contract-ledger.view"); err != nil {
 		t.Fatal(err)
+	}
+	otherTenant := clone(t, base)
+	otherTenant["tid"] = "55555555-5555-4555-8555-555555555555"
+	if claims, err := verifier.Verify(sign(t, keyID, privateKey, otherTenant), "contract-ledger", "contract-ledger.view"); err != nil || claims.Tenant != otherTenant["tid"] {
+		t.Fatalf("valid credential from a second IAM tenant was rejected: claims=%#v err=%v", claims, err)
 	}
 	claims, err := verifier.Verify(valid, "contract-ledger", "contract-ledger.export", "contract-ledger.view")
 	if err != nil || len(claims.Actions) != 1 || claims.Actions[0] != "contract-ledger.view" {
@@ -44,7 +49,7 @@ func TestVerifierAcceptsValidCredentialAndFailsClosed(t *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(map[string]any)
-	}{{"wrong issuer", func(v map[string]any) { v["iss"] = "https://attacker.test" }}, {"wrong tenant", func(v map[string]any) { v["tid"] = "55555555-5555-4555-8555-555555555555" }}, {"wrong audience", func(v map[string]any) { v["aud"] = "money-flow-ledger" }}, {"missing entry action", func(v map[string]any) { v["actions"] = []string{"contract-ledger.export"} }}, {"expired", func(v map[string]any) { v["exp"] = now.Add(-time.Minute).Unix() }}, {"long ttl", func(v map[string]any) { v["exp"] = now.Add(6 * time.Minute).Unix() }}, {"empty resource scope", func(v map[string]any) {
+	}{{"wrong issuer", func(v map[string]any) { v["iss"] = "https://attacker.test" }}, {"invalid tenant", func(v map[string]any) { v["tid"] = "browser-selected-tenant" }}, {"wrong audience", func(v map[string]any) { v["aud"] = "money-flow-ledger" }}, {"missing entry action", func(v map[string]any) { v["actions"] = []string{"contract-ledger.export"} }}, {"expired", func(v map[string]any) { v["exp"] = now.Add(-time.Minute).Unix() }}, {"long ttl", func(v map[string]any) { v["exp"] = now.Add(6 * time.Minute).Unix() }}, {"empty resource scope", func(v map[string]any) {
 		v["scope"] = map[string]any{"kind": "resources", "resources": []any{}}
 	}}, {"tenant scope with resource", func(v map[string]any) {
 		v["scope"] = map[string]any{"kind": "tenant", "resources": []map[string]string{{"type": "contract", "id": "one"}}}

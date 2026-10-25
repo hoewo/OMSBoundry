@@ -26,6 +26,7 @@ const testSubject = "11111111-1111-4111-8111-111111111111"
 const testKeyID = "33333333-3333-4333-8333-333333333333"
 
 func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
+	sessionTenant := "55555555-5555-4555-8555-555555555555"
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +59,7 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 				writeProblem(w, 401, "auth", "bad")
 				return
 			}
-			writeJSON(w, 200, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": testTenant, "username": "admin", "display_name": "系统管理员", "administrator": true, "auth_time": time.Now().UTC()}})
+			writeJSON(w, 200, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": sessionTenant, "username": "admin", "display_name": "系统管理员", "administrator": true, "auth_time": time.Now().UTC()}})
 		case "/api/v1/credentials":
 			cookie, err := r.Cookie(sessionCookieName)
 			if err != nil || cookie.Value != "session-good" {
@@ -83,10 +84,10 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	}))
 	defer iam.Close()
 	now := time.Now().UTC()
-	issuedToken = signToken(t, privateKey, map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": testTenant, "aud": "contract-ledger", "name": "系统管理员", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "tenant", "resources": []any{}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "44444444-4444-4444-8444-444444444444"})
+	issuedToken = signToken(t, privateKey, map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": sessionTenant, "aud": "contract-ledger", "name": "系统管理员", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "tenant", "resources": []any{}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "44444444-4444-4444-8444-444444444444"})
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, ReadinessPath: "/health/ready", Audience: "identity-access"}, {ID: "unified-workbench", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, ReadinessPath: "/health/ready", Audience: "unified-workbench"}, {ID: "contract-ledger", Version: "0.1.0", Enabled: true, RoutePrefix: "/contract", Upstream: contract.URL, ReadinessPath: "/health/ready", Audience: "contract-ledger", EntryAction: "contract-ledger.view"}, {ID: "money-flow-ledger", Version: "0.1.0", Enabled: false, RoutePrefix: "/money", Upstream: "http://127.0.0.1:1", ReadinessPath: "/health/ready", Audience: "money-flow-ledger", EntryAction: "money-flow-ledger.view"}}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), logger, Options{RequestsPerMinute: 100})
+	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), logger, Options{RequestsPerMinute: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +111,8 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	if anonymous["csrf"] != csrf {
 		t.Fatal("workbench did not receive gateway-derived CSRF value")
 	}
-	form := url.Values{"username": {"admin"}, "password": {"correct horse battery staple"}, "csrf_token": {csrf}, "return_to": {"/workbench/"}}
-	response = postForm(t, client, gateway.URL+"/gateway/login", form, http.StatusSeeOther)
+	reloginForm := url.Values{"username": {"admin"}, "password": {"correct horse battery staple"}, "csrf_token": {csrf}, "return_to": {"/workbench/"}}
+	response = postForm(t, client, gateway.URL+"/gateway/login", reloginForm, http.StatusSeeOther)
 	_ = response.Body.Close()
 	if cookieValue(t, client, gateway.URL, sessionCookieName) != "session-good" {
 		t.Fatal("IAM session cookie was not propagated")
@@ -119,10 +120,10 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	response = get(t, client, gateway.URL+"/workbench/", 200)
 	authenticated := decodeMap(t, response.Body)
 	_ = response.Body.Close()
-	if authenticated["subject"] != testSubject || authenticated["tenant"] != testTenant {
+	if authenticated["subject"] != testSubject || authenticated["tenant"] != sessionTenant {
 		t.Fatalf("validated session context missing: %#v", authenticated)
 	}
-	form = url.Values{"csrf_token": {csrf}}
+	form := url.Values{"csrf_token": {csrf}}
 	response = postForm(t, client, gateway.URL+"/gateway/authorize/contract-ledger", form, http.StatusSeeOther)
 	_ = response.Body.Close()
 	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) == "" {
@@ -137,7 +138,23 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	if upstream["authorization"] != "Bearer "+issuedToken || upstream["forged"] != "" || upstream["path"] != "/contracts" {
 		t.Fatalf("unexpected protected upstream request: %#v", upstream)
 	}
-	issuedToken = signToken(t, privateKey, map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": testTenant, "aud": "contract-ledger", "name": "系统管理员", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "resources", "resources": []map[string]string{{"type": "contract", "id": "55555555-5555-4555-8555-555555555555"}}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "55555555-5555-4555-8555-555555555555"})
+	response = postForm(t, client, gateway.URL+"/gateway/login", reloginForm, http.StatusSeeOther)
+	_ = response.Body.Close()
+	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) != "" {
+		t.Fatal("successful suite login retained the previous account capability")
+	}
+	form = url.Values{"csrf_token": {csrf}}
+	response = postForm(t, client, gateway.URL+"/gateway/authorize/contract-ledger", form, http.StatusSeeOther)
+	_ = response.Body.Close()
+	directLogin, _ := http.NewRequest(http.MethodPost, gateway.URL+"/auth/api/v1/login", strings.NewReader(`{"username":"admin","password":"correct horse battery staple"}`))
+	directLogin.Header.Set("Content-Type", "application/json")
+	directLogin.Header.Set("X-CSRF-Token", csrf)
+	response = do(t, client, directLogin, http.StatusOK)
+	_ = response.Body.Close()
+	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) != "" {
+		t.Fatal("successful direct IAM login retained the previous account capability")
+	}
+	issuedToken = signToken(t, privateKey, map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": sessionTenant, "aud": "contract-ledger", "name": "系统管理员", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "resources", "resources": []map[string]string{{"type": "contract", "id": "55555555-5555-4555-8555-555555555555"}}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "55555555-5555-4555-8555-555555555555"})
 	form = url.Values{"csrf_token": {csrf}, "resource_type": {"contract"}, "resource_id": {"55555555-5555-4555-8555-555555555555"}}
 	response = postForm(t, client, gateway.URL+"/gateway/authorize/contract-ledger", form, http.StatusSeeOther)
 	_ = response.Body.Close()
@@ -195,7 +212,7 @@ func TestGatewayRejectsWrongAudienceAndRateLimits(t *testing.T) {
 	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}, {ID: "contract-ledger", Enabled: true, RoutePrefix: "/contract", Upstream: app.URL, Audience: "contract-ledger", EntryAction: "contract-ledger.view"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 10})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +260,7 @@ func TestGatewayRateLimitSeparatesClientsBehindTrustedEdge(t *testing.T) {
 	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{TrustProxyClientIP: true, RequestsPerMinute: 10})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{TrustProxyClientIP: true, RequestsPerMinute: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +296,7 @@ func TestOMSReferenceEntryRedirectsThroughWorkbenchPreview(t *testing.T) {
 	}))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +323,7 @@ func TestOMSPhase1EntryRedirectsToProtectedWorkbench(t *testing.T) {
 	}))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +352,7 @@ func TestPrimaryAndRetiredEntriesResolveToCurrentOMS(t *testing.T) {
 	}))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +402,7 @@ func TestWorkbenchAssetsDoNotConsumeBusinessRequestBudget(t *testing.T) {
 	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}}}
-	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 10})
+	handler, err := New(suite, credential.New(path, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +442,7 @@ func TestSignedEvidenceDataPlaneDoesNotRequireBrowserCapabilityCookie(t *testing
 		{ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"},
 		{ID: "evidence-service", Enabled: true, RoutePrefix: "/evidence", Upstream: evidence.URL, Audience: "evidence-service", EntryAction: "evidence-service.view"},
 	}}
-	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, OpenAPIUploadConcurrency: 1})
+	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, OpenAPIUploadConcurrency: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

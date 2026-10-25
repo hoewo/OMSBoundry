@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 同域名多租户入口边界（BF-254）：D1 的 Suite Manifest 仍携带默认／迁移锚点 Tenant，但 Gateway 的信任边界是 IAM issuer、公钥、签名、规范 Tenant／Subject、Audience、Capability、Scope 和短 TTL，不是该单一默认 Tenant。经 IAM 会话解析出的 Tenant 随可信内部 Header 进入 Workbench；业务 Capability 可属于同一 issuer 下的其他 Tenant，Owner 再用凭证 Tenant 约束自身读写。成功登录会清除所有旧 Capability Cookie，阻止同一浏览器的新账号沿用旧账号／旧租户能力。该设计保持一个账号只属于一个 Tenant、首版无租户选择／切换，也不允许客户端自报 Tenant；多租户真实 D1 隔离与恢复仍须 P9 证明。
+
 2026-10-26 P9 release provenance boundary（BF-253）：最终全组合门禁只运行官方 D1 release bundle：`RELEASE-METADATA` 固定声明版本、Git commit、build time 和 target，运行环境同版本且只使用 digest-pinned pull images；C0 再把配置 digest 解析到正在运行的 Image ID。P9 验收脚本本身随 release bundle 和内部 checksum 交付，目标机不依赖源码 checkout。该链不提供签名、SBOM 或 Registry 不可变策略。
 
 2026-10-26 P9 image provenance boundary（BF-252）：C0 同时记录运行容器的不可变 Image ID 和配置镜像引用／Repo Digest，并要求引用在采集时解析到同一 Image ID。标签在容器启动后漂移时不得生成通过证据；证据交接复验会再次交叉核对，不只信任状态文件中的 `pass`。这证明采集时运行身份，不替代镜像签名、SBOM 或 Registry 保留策略。

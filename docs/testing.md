@@ -1,5 +1,14 @@
 # OMSBizFoundry 验证入口
 
+## 2026-10-26 同域名多租户 Gateway／Workbench 回归
+
+```sh
+(cd backend/platform/gateway && GOWORK=off go test ./...)
+(cd frontend/oms-workbench && GOWORK=off go test ./...)
+```
+
+BF-254 的单元回归使用“Manifest Tenant A、IAM 会话与 Capability Tenant B”证明 Gateway 不再把部署默认 Tenant 当访问白名单，并证明 Workbench 页面使用可信会话 Tenant；同时覆盖 Gateway 表单登录和直接 `/auth/api/v1/login` 成功后清除旧应用 Capability Cookie。该测试没有启动 D1，不能替代两个真实 Tenant 的 Owner 读写、跨租户资源猜测、搜索／分页／导出／附件、Feedback 和联合恢复矩阵。
+
 ## 2026-10-26 OMS1 迭代 P8 Feedback 本地真实浏览器门禁
 
 不启动 Docker，用两个随机回环端口形成真实跨 origin Workbench／SDK，并让真实 Chromium 直接加载生产宿主脚本：

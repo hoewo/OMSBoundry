@@ -31,7 +31,7 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	verifier := credential.New(cfg.PublicKeysPath, cfg.Issuer, suite.TenantID)
+	verifier := credential.New(cfg.PublicKeysPath, cfg.Issuer)
 	if err := verifier.Ready(); err != nil {
 		return err
 	}

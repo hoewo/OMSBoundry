@@ -442,7 +442,13 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 			returnTo = "/workbench/?view=oms-v1"
 		}
 	}
-	data := pageData{SuiteID: s.suite.SuiteID, Authenticated: subject != "", DemoPreview: demoPreview, OMSPhase1: omsPhase1, LegacyWorkspace: legacyWorkspace, DisplayName: displayName, Administrator: administrator, CSRFToken: r.Header.Get("X-OMS-CSRF-Token"), ReturnTo: returnTo, Applications: apps, BusinessApplications: businessApps, SubjectID: subject, WorkSources: sources, MetricSources: metricSources, TenantID: s.suite.TenantID, IAMRoutePrefix: iamRoute}
+	tenantID := s.suite.TenantID
+	if subject != "" {
+		if sessionTenantID := strings.TrimSpace(r.Header.Get("X-OMS-Tenant-ID")); canonicalUUIDPattern.MatchString(sessionTenantID) {
+			tenantID = sessionTenantID
+		}
+	}
+	data := pageData{SuiteID: s.suite.SuiteID, Authenticated: subject != "", DemoPreview: demoPreview, OMSPhase1: omsPhase1, LegacyWorkspace: legacyWorkspace, DisplayName: displayName, Administrator: administrator, CSRFToken: r.Header.Get("X-OMS-CSRF-Token"), ReturnTo: returnTo, Applications: apps, BusinessApplications: businessApps, SubjectID: subject, WorkSources: sources, MetricSources: metricSources, TenantID: tenantID, IAMRoutePrefix: iamRoute}
 	if !demoPreview {
 		data.ProductionPersonnelProfile = s.profiles.ProductionPersonnel
 		data.BonusProfile = s.profiles.Bonus

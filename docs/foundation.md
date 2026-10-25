@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 BF-254 修正单一 Manifest Tenant 对同域名多租户的错误限制：当前登录账号的可信 Tenant 来自 IAM 会话和签名 Capability；Manifest `tenant_id` 仅保留为部署默认／迁移锚点。Gateway 与 Workbench 已允许同一 issuer 下的第二 Tenant，并在任意成功登录后清除旧能力 Cookie；Owner 仍拥有最终租户隔离。源码回归不替代 P9 的双租户 D1、附件、导出与恢复实测。
+
 2026-10-26 P9 发布来源基线（BF-253）：真实 C0 必须来自带正式 40 位 Git commit 的 D1 release bundle，运行 Suite version 与 metadata 一致，模式为 pull 且 19 个镜像全部 digest pinned；P9 C0 工具随包交付。开发 provenance 或 mutable tag 不能作为最终证据。
 
 2026-10-26 P9 镜像证据基线（BF-252）：C0 必须证明每个运行容器的实际不可变 Image ID 与配置引用当前解析结果相等，标签漂移失败关闭；独立证据验证器重复该语义核对。该门禁不等于镜像签名或供应链证明。

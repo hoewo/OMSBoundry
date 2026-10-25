@@ -101,7 +101,7 @@ func TestFeedbackConfigRequiresCapabilityAndReturnsOnlyPseudonymousScope(t *test
 	defer iam.Close()
 
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "feedback-test", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, ReadinessPath: "/health/ready", Audience: "identity-access"}}}
-	server, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, Feedback: FeedbackOptions{AuthMode: "apiKey", GatewayURL: "https://api.feitianchengzi.com", ProjectID: 115, APIKeys: []string{"ak_0123456789abcdef"}, IdentityHMACKey: []byte("0123456789abcdef0123456789abcdef"), IdentityVersion: "v1", NotificationsEnabled: true}})
+	server, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, Feedback: FeedbackOptions{AuthMode: "apiKey", GatewayURL: "https://api.feitianchengzi.com", ProjectID: 115, APIKeys: []string{"ak_0123456789abcdef"}, IdentityHMACKey: []byte("0123456789abcdef0123456789abcdef"), IdentityVersion: "v1", NotificationsEnabled: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,8 @@ import (
 
 const sessionCookieName = "oms_suite_session"
 const csrfCookieName = "oms_iam_csrf"
+
+var identityUUIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type Options struct {
 	CookieSecure                   bool
@@ -288,6 +291,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		copyProblem(w, response)
 		return
 	}
+	s.clearAllCapabilities(w)
 	_, _ = io.Copy(io.Discard, response.Body)
 	http.Redirect(w, r, safeReturnPath(r.PostForm.Get("return_to")), http.StatusSeeOther)
 }
@@ -305,11 +309,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			_ = response.Body.Close()
 		}
 	}
-	for _, app := range s.suite.Applications {
-		if len(app.EntryCapabilities()) != 0 {
-			s.clearCapability(w, app)
-		}
-	}
+	s.clearAllCapabilities(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 func (s *Server) validLogoutCSRF(r *http.Request) bool {
@@ -422,7 +422,10 @@ func (s *Server) resolveSession(ctx context.Context, original *http.Request) (se
 		return sessionResponse{}, false
 	}
 	var value sessionResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&value); err != nil || value.Principal.TenantID != s.suite.TenantID || value.Principal.SubjectID == "" {
+	// Tenant identity comes from the trusted IAM session. suite.TenantID is the
+	// deployment's bootstrap/default tenant and must not turn a shared Gateway
+	// into a single-tenant allowlist.
+	if err := json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&value); err != nil || !identityUUIDPattern.MatchString(value.Principal.TenantID) || !identityUUIDPattern.MatchString(value.Principal.SubjectID) {
 		return sessionResponse{}, false
 	}
 	return value, true
@@ -466,6 +469,13 @@ func (s *Server) proxyFor(app manifest.Application) (*httputil.ReverseProxy, err
 		r.Host = target.Host
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
+		if app.ID == "identity-access" && response.StatusCode >= 200 && response.StatusCode < 300 && response.Request.Method == http.MethodPost && (response.Request.URL.Path == "/api/v1/login" || response.Request.URL.Path == "/api/v1/logout") {
+			for _, protectedApp := range s.suite.Applications {
+				if len(protectedApp.EntryCapabilities()) != 0 {
+					response.Header.Add("Set-Cookie", expiredCapabilityCookie(protectedApp, s.cookieSecure).String())
+				}
+			}
+		}
 		location := response.Header.Get("Location")
 		if strings.HasPrefix(location, "/") && !strings.HasPrefix(location, app.RoutePrefix+"/") {
 			response.Header.Set("Location", app.RoutePrefix+location)
@@ -510,7 +520,17 @@ func (s *Server) validCSRF(r *http.Request) bool {
 	return token != "" && subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(token)) == 1
 }
 func (s *Server) clearCapability(w http.ResponseWriter, app manifest.Application) {
-	http.SetCookie(w, &http.Cookie{Name: capabilityCookieName(app.ID), Value: "", Path: app.RoutePrefix, Secure: s.cookieSecure, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
+	http.SetCookie(w, expiredCapabilityCookie(app, s.cookieSecure))
+}
+func (s *Server) clearAllCapabilities(w http.ResponseWriter) {
+	for _, app := range s.suite.Applications {
+		if len(app.EntryCapabilities()) != 0 {
+			s.clearCapability(w, app)
+		}
+	}
+}
+func expiredCapabilityCookie(app manifest.Application, secure bool) *http.Cookie {
+	return &http.Cookie{Name: capabilityCookieName(app.ID), Value: "", Path: app.RoutePrefix, Secure: secure, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)}
 }
 func capabilityCookieName(appID string) string {
 	return "oms_cap_" + strings.ReplaceAll(appID, "-", "_")

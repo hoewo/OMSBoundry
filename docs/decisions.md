@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-254（已接受／同域名多租户入口修复，真实 D1 交叉矩阵待执行）：Suite Manifest 的 `tenant_id` 只表示部署时创建／迁移的默认 Tenant 和 C0 锚点，不是同一 OMS1 服务允许访问的 Tenant 白名单。Gateway 必须接受同一受信 IAM issuer 签发、Tenant／Subject 均为规范 UUID 的任意租户会话与短期 Capability，并把会话 Tenant 传给 Workbench；不得用 Manifest 默认 Tenant 覆盖当前账号上下文。每次成功登录（包括直接 IAM 登录路由）必须清除全部路径限定 Capability Cookie，避免账号／租户切换后复用前一身份能力。目标 Owner 继续按签名 Tenant、Actor、资源与数据库事实作最终隔离，浏览器参数或自报 Header 仍不可信。Gateway／Workbench 单元回归已覆盖“Manifest Tenant A、会话 Tenant B”和登录清票；双租户 D1 Owner／附件／导出／恢复矩阵仍待 P9 真实窗口，不能据此标记 P1/P9 整体完成。
+
 2026-10-26 BF-253（已接受／P9 发布来源门禁）：真实 P9 C0 只接受 D1 `pull` 模式和全部 `name@sha256:<digest>` 镜像引用，并要求发布包 `RELEASE-METADATA` 仅含与运行 `SUITE_VERSION` 一致的版本、40 位正式 Git commit、UTC build time 与 `linux/amd64` target。P9 C0／证据验证器和说明随 D1 release bundle 交付；release metadata 纳入固定证据闭集与 checksum。开发态 `commit=unknown`／`test`、mutable tag 或版本错配不能形成 P9 通过证据。该门禁建立源码提交→发布包→配置 digest→运行 Image ID 的可追溯链，但不等于镜像签名或 SBOM。
 
 2026-10-26 BF-252（已接受／P9 运行镜像身份门禁）：C0 不得把可变镜像引用当前解析到的 Image ID 当作正在运行的版本。每个容器的实际不可变 `.Image` 必须与其 `configured_image` 在采集时解析到的 ID 相等，否则失败关闭；独立证据验证器再次从 `services-and-health.json` 与 `images.json` 交叉核对。mock 已覆盖标签漂移，以及篡改镜像证据后重算 checksum 仍被语义校验拒绝；真实镜像身份仍待 19 服务窗口采集。

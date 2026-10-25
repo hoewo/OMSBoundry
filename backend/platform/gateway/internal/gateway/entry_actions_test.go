@@ -24,7 +24,7 @@ func TestEvidenceAnyAdmissionDoesNotGrantTargetActionsOrScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := credential.New(writeKeys(t, public), "https://oms.example.test/auth", testTenant)
+	verifier := credential.New(writeKeys(t, public), "https://oms.example.test/auth")
 	file := "55555555-5555-4555-8555-555555555555"
 	issue := func(actions []string, id, tenant string) string {
 		now := time.Now().UTC()
@@ -94,7 +94,7 @@ func TestEvidenceAnyAdmissionDoesNotGrantTargetActionsOrScope(t *testing.T) {
 		{"download only", []string{"evidence-service.download"}, file, testTenant, 403, 200},
 		{"metadata and download without view", []string{"evidence-service.metadata.read", "evidence-service.download"}, file, testTenant, 200, 200},
 		{"neighbor file", []string{"evidence-service.metadata.read", "evidence-service.download"}, "66666666-6666-4666-8666-666666666666", testTenant, 403, 403},
-		{"wrong tenant", []string{"evidence-service.download"}, file, "77777777-7777-4777-8777-777777777777", 303, 303},
+		{"second tenant credential", []string{"evidence-service.download"}, file, "77777777-7777-4777-8777-777777777777", 403, 200},
 		{"unmatched action", []string{"evidence-service.reference.read"}, file, testTenant, 303, 303},
 	}
 	for _, test := range cases {

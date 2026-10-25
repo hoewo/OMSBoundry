@@ -75,7 +75,7 @@ func TestOpenAPIBoundaryAuthenticationRateLimitAndAudit(t *testing.T) {
 		{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"},
 		{ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"},
 	}}
-	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, TrustProxyClientIP: true, OpenAPIKeyRequestsPerMinute: 1, OpenAPITenantRequestsPerMinute: 2, OpenAPIRequireHTTPS: true})
+	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, TrustProxyClientIP: true, OpenAPIKeyRequestsPerMinute: 1, OpenAPITenantRequestsPerMinute: 2, OpenAPIRequireHTTPS: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestOpenAPIForwardsOnlyShortLivedOwnerCredential(t *testing.T) {
 	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	defer workbench.Close()
 	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "open-api-owner-test", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, Audience: "identity-access"}, {ID: "unified-workbench", Enabled: true, Required: true, RoutePrefix: "/workbench", Upstream: workbench.URL, Audience: "unified-workbench"}, {ID: "internal-finance-requests", Enabled: true, RoutePrefix: "/internal-finance/v1", Upstream: financeOwner.URL, Audience: "internal-finance-requests"}}}
-	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth", testTenant), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, TrustProxyClientIP: true, OpenAPIKeyRequestsPerMinute: 60, OpenAPITenantRequestsPerMinute: 600, OpenAPIRequireHTTPS: true})
+	handler, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, TrustProxyClientIP: true, OpenAPIKeyRequestsPerMinute: 60, OpenAPITenantRequestsPerMinute: 600, OpenAPIRequireHTTPS: true})
 	if err != nil {
 		t.Fatal(err)
 	}

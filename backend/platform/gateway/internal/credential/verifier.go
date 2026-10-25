@@ -66,12 +66,12 @@ type Claims struct {
 	} `json:"person,omitempty"`
 }
 type Verifier struct {
-	path, issuer, tenant string
-	now                  func() time.Time
+	path, issuer string
+	now          func() time.Time
 }
 
-func New(path, issuer, tenant string) *Verifier {
-	return &Verifier{path: path, issuer: strings.TrimRight(issuer, "/"), tenant: tenant, now: func() time.Time { return time.Now().UTC() }}
+func New(path, issuer string) *Verifier {
+	return &Verifier{path: path, issuer: strings.TrimRight(issuer, "/"), now: func() time.Time { return time.Now().UTC() }}
 }
 func (v *Verifier) Ready() error { _, err := v.loadKeys(); return err }
 func (v *Verifier) Verify(token, audience string, entryActions ...string) (Claims, error) {
@@ -103,7 +103,10 @@ func (v *Verifier) Verify(token, audience string, entryActions ...string) (Claim
 		return Claims{}, fmt.Errorf("decode claims: %w", err)
 	}
 	now := v.now().Unix()
-	if claims.Version != "1" || claims.Issuer != v.issuer || claims.Tenant != v.tenant || claims.Audience != audience || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) {
+	// The Suite Manifest tenant is a deployment default, not an admission
+	// allowlist. A trusted IAM signature binds each credential to its tenant;
+	// the target Owner still enforces that tenant against the requested facts.
+	if claims.Version != "1" || claims.Issuer != v.issuer || !uuidPattern.MatchString(claims.Tenant) || claims.Audience != audience || !uuidPattern.MatchString(claims.Subject) || !uuidPattern.MatchString(claims.ID) {
 		return Claims{}, fmt.Errorf("credential identity is invalid")
 	}
 	if claims.IssuedAt > now+30 || claims.NotBefore > now+30 || claims.ExpiresAt <= now-30 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > 300 || claims.AuthTime <= 0 || claims.AuthTime > claims.IssuedAt {

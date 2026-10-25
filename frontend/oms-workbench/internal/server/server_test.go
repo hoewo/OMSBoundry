@@ -517,6 +517,7 @@ func TestOMSQualificationUnitDemoIsReadOnlyAndSelfContained(t *testing.T) {
 
 func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	operatingPartyID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	sessionTenantID := "66666666-6666-4666-8666-666666666666"
 	manifest := suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: "77777777-7777-4777-8777-777777777777", Applications: []application{
 		{ID: "identity-access", Version: "0.1.0", Enabled: true, RoutePrefix: "/configured-iam"},
 		{ID: "project-workspace", Version: "0.1.0", Enabled: true, RoutePrefix: "/project", EntryAction: "project-workspace.read"},
@@ -538,6 +539,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodGet, "/?view=oms-v1", nil)
 	request.Header.Set("X-OMS-Subject-ID", "88888888-8888-4888-8888-888888888888")
+	request.Header.Set("X-OMS-Tenant-ID", sessionTenantID)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	body := response.Body.String()
@@ -550,6 +552,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-page-hydrated="true"`,
 		`data-page-template="oms-v1"`,
 		`data-oms-v1`,
+		`data-tenant-id="` + sessionTenantID + `"`,
 		`data-identity-route-prefix="/configured-iam"`,
 		`data-operating-party-id="` + operatingPartyID + `"`,
 		`data-feedback-sdk-url="https://feedback.example.test/sdk-v2/index.html?embed=web"`,
