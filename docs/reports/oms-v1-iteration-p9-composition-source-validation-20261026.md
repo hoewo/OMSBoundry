@@ -27,6 +27,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-248 在同一停写窗口为 IAM 与实际选装 Owner 生成 `database-fingerprints.tsv`：表集合、行数、列／约束／索引／触发器和逐行事实都进入 SHA-256，但原始值不出 PostgreSQL；空目标恢复在业务服务启动前重算并严格比较。IAM Session 数据按原 dump 契约排除，旧备份无该文件时继续兼容。
 - BF-249 将新指纹的格式、摘要、唯一数据库集合和 Suite 选择一致性校验前移到 `down --volumes` 之前，避免 checksum 正确但语义畸形的备份先破坏目标环境。
 - BF-250 把 public sequence 定义与 `last_value`／`is_called` 加入 schema／事实摘要，补上“当前读取一致但下一次自增写入可能错位”的恢复缺口；PostgreSQL 18 短生命周期实测已证明序列推进改变摘要，mock 也证明仅序列漂移、表事实不变时 Restore 失败关闭。
+- BF-251 将 C0 证据收敛为固定闭集并用 SHA-256 清单覆盖健康、镜像、readiness、Manifest、脱敏拓扑、检查日志和数值版本状态；独立验证器与篡改／额外文件负例通过。清单用于发现意外损坏，不冒充发布者签名。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 

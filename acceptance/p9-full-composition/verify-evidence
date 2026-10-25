@@ -1,0 +1,73 @@
+#!/bin/sh
+set -eu
+
+evidence_dir=${1:-}
+[ -n "$evidence_dir" ] || { echo 'usage: verify-evidence EVIDENCE_DIR' >&2; exit 2; }
+[ -d "$evidence_dir" ] || { echo "P9 evidence directory not found: $evidence_dir" >&2; exit 2; }
+for command_name in jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+
+if [ -n "$(find "$evidence_dir" -type l -print -quit)" ]; then
+  echo 'P9 evidence must not contain symbolic links' >&2
+  exit 1
+fi
+
+checksum_file="$evidence_dir/checksums.sha256"
+[ -f "$checksum_file" ] || { echo 'P9 evidence checksum manifest is missing' >&2; exit 1; }
+expected_entries='checksums.sha256
+compose-topology.json
+images.json
+readiness.json
+schema-and-contract-check.log
+services-and-health.json
+state-after-c0.json
+suite-manifest.json'
+actual_entries=$(find "$evidence_dir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort)
+[ "$actual_entries" = "$expected_entries" ] || {
+  echo 'P9 evidence directory does not contain the fixed C0 artifact set' >&2
+  exit 1
+}
+expected_files='compose-topology.json
+images.json
+readiness.json
+schema-and-contract-check.log
+services-and-health.json
+state-after-c0.json
+suite-manifest.json'
+actual_files=$(awk '
+  NF!=2 || $1!~/^[0-9a-f]{64}$/ { exit 1 }
+  { print $2 }
+' "$checksum_file") || { echo 'P9 evidence checksum manifest is malformed' >&2; exit 1; }
+[ "$actual_files" = "$expected_files" ] || {
+  echo 'P9 evidence checksum manifest does not contain the fixed C0 artifact set' >&2
+  exit 1
+}
+
+while read -r expected_sha256 artifact; do
+  [ -f "$evidence_dir/$artifact" ] || { echo "P9 evidence artifact is missing: $artifact" >&2; exit 1; }
+  actual_sha256=$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}')
+  [ "$actual_sha256" = "$expected_sha256" ] || {
+    echo "P9 evidence checksum mismatch for $artifact" >&2
+    exit 1
+  }
+done <"$checksum_file"
+
+jq -e '
+  .schema_version == 1 and (.schema_version | type) == "number" and
+  .scenario_id == "oms-v1-p9-full-composition-v1" and
+  .phase == "C0" and .result == "pass" and
+  .deployment.running_services == 19 and .deployment.healthy_services == 19 and
+  .suite.domain_application_count == 14 and
+  .feedback.secrets_recorded == false and
+  (.artifacts == [
+    "checksums.sha256","compose-topology.json","images.json","readiness.json",
+    "schema-and-contract-check.log","services-and-health.json",
+    "state-after-c0.json","suite-manifest.json"
+  ])
+' "$evidence_dir/state-after-c0.json" >/dev/null || {
+  echo 'P9 C0 state has an invalid schema or artifact declaration' >&2
+  exit 1
+}
+
+echo "PASS P9 C0 evidence integrity: $evidence_dir"

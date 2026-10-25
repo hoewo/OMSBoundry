@@ -28,6 +28,8 @@ BF-249 又覆盖恢复前破坏性边界：mock 篡改 Payroll 表数为 0、重
 
 BF-250 将 public sequence 的定义以及 `last_value`／`is_called` 加入同一 schema／事实摘要。使用无发布端口、tmpfs 数据目录的 PostgreSQL 18.6 临时容器建立 `bigserial` 表，实际运行生产同形 SQL；调用 `nextval` 前后均输出单条 64 位摘要且两者不同，测试值没有离开数据库，退出 trap 删除容器。P9 mock 另以表事实不变、仅 sequence 状态变化证明 Restore 拒绝。该结果证明 SQL 和漂移检测有效，不替代真实十五库恢复后的有界续写。
 
+BF-251 扩展 `p9-full-composition-preflight-test`：C0 正例生成固定八文件目录及覆盖七个非清单文件的 SHA-256 清单，独立验证器复验通过；修改 `readiness.json` 或增加未跟踪文件均失败。验证器同时拒绝符号链接、错误／重复／缺失清单项，并校验状态 schema、19／19 和十四领域应用声明。摘要清单不是签名，不抵抗能同时重写制品与清单的恶意主体。
+
 P9 真实运行窗口先执行只读 C0：
 
 ```sh

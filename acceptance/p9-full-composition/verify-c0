@@ -143,13 +143,24 @@ manifest_sha256=$(openssl dgst -sha256 -r "$evidence_dir/suite-manifest.json" | 
 topology_sha256=$(openssl dgst -sha256 -r "$evidence_dir/compose-topology.json" | awk '{print $1}')
 check_sha256=$(openssl dgst -sha256 -r "$evidence_dir/schema-and-contract-check.log" | awk '{print $1}')
 jq -n \
-  --arg schema_version 1 --arg scenario_id oms-v1-p9-full-composition-v1 --arg phase C0 \
+  --argjson schema_version 1 --arg scenario_id oms-v1-p9-full-composition-v1 --arg phase C0 \
   --arg captured_at "$captured_at" --arg tenant_id "$tenant_id" --arg project "$project" --arg base_url "$base_url" \
   --arg image_mode "$image_mode" --arg manifest_sha256 "$manifest_sha256" --arg topology_sha256 "$topology_sha256" --arg check_sha256 "$check_sha256" \
   --argjson enabled_applications "$enabled_applications" --argjson feedback_key_count "$feedback_key_count" \
-  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,deployment:{profile:"D1",compose_project:$project,public_url:$base_url,image_mode:$image_mode,running_services:19,healthy_services:19},suite:{enabled_applications:$enabled_applications,domain_application_count:14},feedback:{auth_mode:"apiKey",project_id:115,notifications_enabled:true,configured_key_count:$feedback_key_count,secrets_recorded:false},checks:{exact_service_set:"pass",nginx_only_host_port:"pass",schemas_current_and_contracts_valid:"pass",public_readiness:"pass",suite_manifest_sha256:$manifest_sha256,compose_topology_sha256:$topology_sha256,schema_and_contract_log_sha256:$check_sha256},artifacts:["suite-manifest.json","compose-topology.json","services-and-health.json","images.json","schema-and-contract-check.log","readiness.json"]}' \
+  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,tenant_id:$tenant_id,deployment:{profile:"D1",compose_project:$project,public_url:$base_url,image_mode:$image_mode,running_services:19,healthy_services:19},suite:{enabled_applications:$enabled_applications,domain_application_count:14},feedback:{auth_mode:"apiKey",project_id:115,notifications_enabled:true,configured_key_count:$feedback_key_count,secrets_recorded:false},checks:{exact_service_set:"pass",nginx_only_host_port:"pass",schemas_current_and_contracts_valid:"pass",public_readiness:"pass",suite_manifest_sha256:$manifest_sha256,compose_topology_sha256:$topology_sha256,schema_and_contract_log_sha256:$check_sha256},artifacts:["checksums.sha256","compose-topology.json","images.json","readiness.json","schema-and-contract-check.log","services-and-health.json","state-after-c0.json","suite-manifest.json"]}' \
   >"$evidence_dir/state-after-c0.json"
 chmod 600 "$evidence_dir/state-after-c0.json"
+
+: >"$evidence_dir/checksums.sha256"
+for artifact in \
+  compose-topology.json images.json readiness.json schema-and-contract-check.log \
+  services-and-health.json state-after-c0.json suite-manifest.json
+do
+  artifact_sha256=$(openssl dgst -sha256 -r "$evidence_dir/$artifact" | awk '{print $1}')
+  printf '%s  %s\n' "$artifact_sha256" "$artifact" >>"$evidence_dir/checksums.sha256"
+done
+chmod 600 "$evidence_dir/checksums.sha256"
+"$script_dir/verify-evidence" "$evidence_dir" >/dev/null
 
 echo "PASS P9 C0 full composition preflight: $running_count/$healthy_count services healthy"
 echo "evidence: $evidence_dir/state-after-c0.json"

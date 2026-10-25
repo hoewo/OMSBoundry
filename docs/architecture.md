@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C0 evidence boundary（BF-251）：全组合前置证据使用固定闭集目录，服务健康、镜像身份、readiness、Suite Manifest、脱敏 Compose 拓扑、schema／contract 日志和数值版本状态均进入 SHA-256 清单；独立验证器拒绝链接、额外／缺失文件和内容漂移。该清单只证明采集后未发生意外变化，不提供发布者签名，也不把原始 Compose／inspect 或部署秘密写入证据。
+
 2026-10-26 P9 D1 sequence checkpoint boundary（BF-250）：数据库 checkpoint 不只包含表中当前行，也包含决定下一次自增写入的 public sequence 定义和运行状态。D1 指纹把 sequence 的数据类型、起止／步长／循环／缓存配置纳入 schema 摘要，把 `last_value`／`is_called` 的 PostgreSQL 内 SHA-256 纳入事实摘要；恢复前后任一漂移均在业务服务开放前失败关闭。该门禁只增强恢复一致性，不改变 Owner 数据所有权或以指纹替代恢复后的业务续写验证。
 
 2026-10-26 P9 D1 pre-destructive restore gate（BF-249）：新格式数据库指纹不是被动报告。Restore 在删除目标卷前先校验格式、摘要、唯一数据库集合及与恢复 Suite 选择一致性，只有通过后才可进入空目标重建；外层 checksum 被重新计算也不能放过语义畸形。旧备份没有指纹时保持兼容，但仍受原 selection、artifact 和 checksum 门禁。该顺序降低错误备份破坏目标环境的风险，不把恢复变成自动生产切换。

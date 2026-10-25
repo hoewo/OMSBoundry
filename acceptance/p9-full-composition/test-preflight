@@ -125,9 +125,10 @@ PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
   D1_PUBLIC_URL=https://oms.example.test D1_SUITE_MANIFEST_PATH="$runtime/suite-manifest.json" P9_EVIDENCE_DIR="$evidence" \
   "$script_dir/verify-c0" >"$runtime/pass.out"
 
-jq -e '.result=="pass" and .deployment.running_services==19 and .feedback.project_id==115 and .feedback.secrets_recorded==false' "$evidence/state-after-c0.json" >/dev/null
+jq -e '.schema_version==1 and (.schema_version|type)=="number" and .result=="pass" and .deployment.running_services==19 and .feedback.project_id==115 and .feedback.secrets_recorded==false' "$evidence/state-after-c0.json" >/dev/null
 [ "$(jq 'length' "$evidence/services-and-health.json")" -eq 19 ]
 [ "$(jq 'length' "$evidence/images.json")" -eq 19 ]
+"$script_dir/verify-evidence" "$evidence" >/dev/null
 if grep -R -F -e "$feedback_key" -e "$feedback_hmac" "$evidence" >/dev/null 2>&1; then
   echo 'P9 C0 evidence leaked a Feedback secret' >&2
   exit 1
@@ -140,6 +141,22 @@ if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$services_file" \
   exit 1
 fi
 grep -Fq 'P9 evidence directory must be empty' "$runtime/reuse.err"
+
+cp -R "$evidence" "$runtime/evidence-tampered"
+printf '%s\n' '{"status":"tampered"}' >"$runtime/evidence-tampered/readiness.json"
+if "$script_dir/verify-evidence" "$runtime/evidence-tampered" >"$runtime/tampered.out" 2>"$runtime/tampered.err"; then
+  echo 'P9 C0 evidence verifier accepted a modified artifact' >&2
+  exit 1
+fi
+grep -Fq 'P9 evidence checksum mismatch for readiness.json' "$runtime/tampered.err"
+
+cp -R "$evidence" "$runtime/evidence-extra"
+printf '%s\n' unexpected >"$runtime/evidence-extra/untracked.txt"
+if "$script_dir/verify-evidence" "$runtime/evidence-extra" >"$runtime/extra.out" 2>"$runtime/extra.err"; then
+  echo 'P9 C0 evidence verifier accepted an untracked artifact' >&2
+  exit 1
+fi
+grep -Fq 'P9 evidence directory does not contain the fixed C0 artifact set' "$runtime/extra.err"
 
 grep -v '^payroll$' "$services_file" >"$runtime/services-missing.txt"
 if PATH="$mock_bin:$PATH" P9_TEST_SERVICES_FILE="$runtime/services-missing.txt" \
