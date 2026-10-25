@@ -31,6 +31,7 @@ P2 已把 `Internal Finance Requests` 与 Payroll 放入 D1 profile、数据库�
 - BF-252 要求运行容器实际 Image ID 与配置引用当前解析 ID 相等，并由证据 verifier 再次交叉核对；mock 标签漂移和“篡改镜像证据后重算 checksum”两类负例均失败关闭。
 - BF-253 要求真实 C0 来自正式 D1 release bundle：release metadata、Suite version、pull mode、十九个 digest-pinned image 与运行 Image ID 形成追溯链；P9 C0／verifier／说明也随 release bundle 交付。开发 commit 与 mutable tag 负例失败。
 - BF-254 发现并修复同域名双租户入口缺口：Gateway 原先把会话和 Capability Tenant 强制等同于 Manifest 默认 Tenant，现改为信任同一 IAM issuer 的签名 Tenant，并让 Workbench 使用当前会话 Tenant；成功登录同步清除旧应用能力 Cookie。源码回归已过，真实 D1 双租户仍待执行。
+- BF-255 增加绑定 C0 的 P9 C1 驱动和独立证据 verifier：同一公网 Origin 下安全创建／复用第二 Tenant，分别验证 IAM 登录、People 能力、Person 稳定重放、列表隔离、交叉 ID 404 与 Workbench 会话 Tenant；密码只经 `0600` 文件、stdin 和临时文件传递。离线 Docker／curl 回归及证据篡改负例通过并进入 release bundle，但真实 D1 尚未执行。
 
 数据所有权没有改变：Finance 只保存 Evidence／Money 稳定引用，Payroll 只保存 People／Money 快照与引用；没有共享表、跨库写或 Workbench 业务事实。
 

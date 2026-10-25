@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-10-26 BF-255 为 P9 增加 C1 双租户连续验收入口：它绑定已校验 C0 和同一公网 Origin，安全创建／复用第二 Tenant，分别完成登录、People 授权、Person 稳定重放、列表隔离、跨租户 404 与 Workbench Tenant 投影；秘密不进入 argv 或证据。当前只完成离线驱动／证据回归，真实 D1 尚未运行。
+
 2026-10-26 BF-254 修正单一 Manifest Tenant 对同域名多租户的错误限制：当前登录账号的可信 Tenant 来自 IAM 会话和签名 Capability；Manifest `tenant_id` 仅保留为部署默认／迁移锚点。Gateway 与 Workbench 已允许同一 issuer 下的第二 Tenant，并在任意成功登录后清除旧能力 Cookie；Owner 仍拥有最终租户隔离。源码回归不替代 P9 的双租户 D1、附件、导出与恢复实测。
 
 2026-10-26 P9 发布来源基线（BF-253）：真实 C0 必须来自带正式 40 位 Git commit 的 D1 release bundle，运行 Suite version 与 metadata 一致，模式为 pull 且 19 个镜像全部 digest pinned；P9 C0 工具随包交付。开发 provenance 或 mutable tag 不能作为最终证据。

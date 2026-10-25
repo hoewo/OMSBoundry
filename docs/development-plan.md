@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 BF-255 完成 P9 C1 双租户运行驱动、独立证据 verifier、离线首次创建／秘密不落证据回归和 release bundle 装配。下一真实窗口必须先通过 C0，再用正式密码文件执行 C1；后续仍需把 Payroll、Finance、开放 API 报销、Feedback、联合备份恢复和恢复后续写串到这两个 Tenant，不能把 C1 工具存在等同于运行通过。
+
 2026-10-26 BF-254 修复 P9 前置的同域名多租户入口缺口：Gateway 不再把签名会话／Capability 的 Tenant 强制等于 Manifest 默认 Tenant，Workbench 改用可信会话 Tenant，成功登录统一清除旧能力 Cookie。Gateway／Workbench 回归通过；下一步必须在 P9 正式 D1 运行窗口创建第二 Tenant，连续验证两个账号的 Owner 读写、跨租户拒绝、Feedback 与联合恢复，当前仍不能宣称 D1 多租户完成。
 
 2026-10-26 BF-253 补齐 P9 发布来源链：C0／证据验证器随 D1 bundle 交付，要求正式 Git commit、匹配 Suite version、`linux/amd64`、pull mode 和全量 digest-pinned image；开发 provenance 与 mutable tag 负例通过。下一真实窗口必须从干净 HEAD 构建正式包，不能直接拿工作树或目标机 build 充当验收版本。

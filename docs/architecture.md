@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 P9 C1 运行边界（BF-255）：双租户验证从通过完整性校验的 C0 制品绑定到同一 D1 Compose project 和公网 Origin；只允许经 IAM 会话→Gateway Capability→People Owner 的正式入口创建和读取 Person。第二 Tenant 的平台级建立仍由 IAM `tenantctl` 承担，不把 Tenant 事实交给 Workbench 或 People；业务数据隔离最终由 People 按签名 Tenant 执行。验收驱动可发现运行中 IAM 容器，但不拥有服务生命周期，也不把管理员秘密、Session 或 Capability 写入证据。
+
 2026-10-26 同域名多租户入口边界（BF-254）：D1 的 Suite Manifest 仍携带默认／迁移锚点 Tenant，但 Gateway 的信任边界是 IAM issuer、公钥、签名、规范 Tenant／Subject、Audience、Capability、Scope 和短 TTL，不是该单一默认 Tenant。经 IAM 会话解析出的 Tenant 随可信内部 Header 进入 Workbench；业务 Capability 可属于同一 issuer 下的其他 Tenant，Owner 再用凭证 Tenant 约束自身读写。成功登录会清除所有旧 Capability Cookie，阻止同一浏览器的新账号沿用旧账号／旧租户能力。该设计保持一个账号只属于一个 Tenant、首版无租户选择／切换，也不允许客户端自报 Tenant；多租户真实 D1 隔离与恢复仍须 P9 证明。
 
 2026-10-26 P9 release provenance boundary（BF-253）：最终全组合门禁只运行官方 D1 release bundle：`RELEASE-METADATA` 固定声明版本、Git commit、build time 和 target，运行环境同版本且只使用 digest-pinned pull images；C0 再把配置 digest 解析到正在运行的 Image ID。P9 验收脚本本身随 release bundle 和内部 checksum 交付，目标机不依赖源码 checkout。该链不提供签名、SBOM 或 Registry 不可变策略。

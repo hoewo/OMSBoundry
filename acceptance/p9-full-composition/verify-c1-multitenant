@@ -1,0 +1,284 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+required_env() {
+  value=$(printenv "$1" 2>/dev/null || true)
+  [ -n "$value" ] || { echo "set $1" >&2; exit 2; }
+  printf '%s' "$value"
+}
+
+c0_dir=$(required_env P9_C0_EVIDENCE_DIR)
+evidence_dir=$(required_env P9_C1_EVIDENCE_DIR)
+primary_username=$(required_env P9_PRIMARY_ADMIN_USERNAME)
+primary_password_file=$(required_env P9_PRIMARY_ADMIN_PASSWORD_FILE)
+secondary_tenant_id=$(required_env P9_SECONDARY_TENANT_ID)
+secondary_tenant_name=$(required_env P9_SECONDARY_TENANT_NAME)
+secondary_username=$(required_env P9_SECONDARY_ADMIN_USERNAME)
+secondary_display_name=$(required_env P9_SECONDARY_ADMIN_DISPLAY_NAME)
+secondary_password_file=$(required_env P9_SECONDARY_ADMIN_PASSWORD_FILE)
+ca_bundle=$(printenv P9_CURL_CA_BUNDLE 2>/dev/null || true)
+
+for command_name in curl docker jq openssl; do
+  command -v "$command_name" >/dev/null 2>&1 || { echo "$command_name is required" >&2; exit 2; }
+done
+"$script_dir/verify-evidence" "$c0_dir" >/dev/null
+[ ! -e "$evidence_dir" ] || {
+  [ -d "$evidence_dir" ] && [ -z "$(find "$evidence_dir" -mindepth 1 -print -quit)" ] || {
+    echo "P9 C1 evidence directory must be absent or empty: $evidence_dir" >&2
+    exit 2
+  }
+}
+
+canonical_uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+printf '%s' "$secondary_tenant_id" | grep -Eq "$canonical_uuid" || { echo 'P9_SECONDARY_TENANT_ID must be a canonical lowercase UUID' >&2; exit 2; }
+if printf '%s%s%s%s' "$secondary_tenant_name" "$secondary_username" "$secondary_display_name" "$primary_username" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+  echo 'P9 C1 identity labels must be single-line values' >&2
+  exit 2
+fi
+
+file_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+for secret_file in "$primary_password_file" "$secondary_password_file"; do
+  [ -f "$secret_file" ] || { echo "administrator password file not found: $secret_file" >&2; exit 2; }
+  [ "$(file_mode "$secret_file")" = 600 ] || { echo "administrator password file must have mode 0600: $secret_file" >&2; exit 2; }
+  [ -s "$secret_file" ] || { echo "administrator password file is empty: $secret_file" >&2; exit 2; }
+done
+if [ -n "$ca_bundle" ]; then
+  [ -f "$ca_bundle" ] || { echo "P9_CURL_CA_BUNDLE not found: $ca_bundle" >&2; exit 2; }
+fi
+
+c0_state="$c0_dir/state-after-c0.json"
+primary_tenant_id=$(jq -er '.tenant_id' "$c0_state")
+compose_project=$(jq -er '.deployment.compose_project' "$c0_state")
+base_url=$(jq -er '.deployment.public_url | sub("/+$";"")' "$c0_state")
+[ "$primary_tenant_id" != "$secondary_tenant_id" ] || { echo 'the primary and secondary Tenant IDs must differ' >&2; exit 2; }
+project_override=$(printenv D1_PROJECT_NAME 2>/dev/null || true)
+if [ -n "$project_override" ] && [ "$project_override" != "$compose_project" ]; then
+  echo 'D1_PROJECT_NAME does not match the passing C0 evidence' >&2
+  exit 2
+fi
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) echo 'C0 public URL is not an allowed HTTPS or loopback origin' >&2; exit 1;; esac
+
+identity_container=$(docker ps --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=identity-access' --filter status=running --format '{{.ID}}')
+[ "$(printf '%s\n' "$identity_container" | awk 'NF{count++} END{print count+0}')" -eq 1 ] || {
+  echo "P9 C1 requires exactly one running identity-access container for $compose_project" >&2
+  exit 1
+}
+
+tmp_root=$(printenv TMPDIR 2>/dev/null || printf /tmp)
+workspace=$(mktemp -d "$tmp_root/oms-p9-c1.XXXXXX")
+evidence_stage=
+trap 'rm -rf -- "$workspace"; if [ -n "$evidence_stage" ]; then rm -rf -- "$evidence_stage"; fi' EXIT HUP INT TERM
+chmod 700 "$workspace"
+http_evidence="$workspace/http-evidence.tsv"
+printf 'request\texpected_status\tactual_status\ttime_seconds\n' >"$http_evidence"
+
+curl_result() {
+  output_file=$1
+  shift
+  set -- --silent --show-error --connect-timeout 10 --max-time 30 --output "$output_file" --write-out '%{http_code} %{time_total}' "$@"
+  if [ -n "$ca_bundle" ]; then set -- --cacert "$ca_bundle" "$@"; fi
+  curl "$@"
+}
+
+record_http() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$http_evidence"
+}
+
+expect_status() {
+  expected=$1
+  actual=$2
+  label=$3
+  case "$expected:$actual" in
+    200/401:200|200/401:401|204/409:204|204/409:409) return 0
+    ;;
+  esac
+  [ "$actual" = "$expected" ] || { echo "$label returned HTTP $actual, expected $expected" >&2; exit 1; }
+}
+
+request() {
+  method=$1
+  path=$2
+  cookie_file=$3
+  csrf_token=$4
+  payload_file=$5
+  output_file=$6
+  expected=$7
+  label=$8
+  set -- --request "$method" --cookie "$cookie_file" --cookie-jar "$cookie_file"
+  if [ -n "$csrf_token" ]; then set -- "$@" -H "X-CSRF-Token: $csrf_token"; fi
+  if [ -n "$payload_file" ]; then set -- "$@" -H 'Content-Type: application/json' --data-binary "@$payload_file"; fi
+  result=$(curl_result "$output_file" "$@" "$base_url$path")
+  actual=$(printf '%s' "$result" | awk '{print $1}')
+  duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http "$label" "$expected" "$actual" "$duration"
+  expect_status "$expected" "$actual" "$label"
+  printf '%s' "$actual"
+}
+
+fetch_csrf() {
+  cookie_file=$1
+  output_file=$2
+  result=$(curl_result "$output_file" --cookie-jar "$cookie_file" "$base_url/auth/api/v1/csrf")
+  actual=$(printf '%s' "$result" | awk '{print $1}')
+  duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http 'GET /auth/api/v1/csrf' 200 "$actual" "$duration"
+  expect_status 200 "$actual" 'fetch CSRF'
+  chmod 600 "$cookie_file"
+  jq -er '.csrf_token' "$output_file"
+}
+
+login() {
+  cookie_file=$1
+  csrf_token=$2
+  username=$3
+  password_file=$4
+  output_file=$5
+  expected=$6
+  payload_file="$workspace/login-$(openssl rand -hex 6).json"
+  jq -Rs --arg username "$username" '{username:$username,password:(rtrimstr("\n")|rtrimstr("\r"))}' "$password_file" >"$payload_file"
+  chmod 600 "$payload_file"
+  status=$(request POST /auth/api/v1/login "$cookie_file" "$csrf_token" "$payload_file" "$output_file" "$expected" 'POST /auth/api/v1/login')
+  rm -f -- "$payload_file"
+  printf '%s' "$status"
+}
+
+session() {
+  request GET /auth/api/v1/session "$1" '' '' "$2" 200 'GET /auth/api/v1/session' >/dev/null
+}
+
+grant_people() {
+  cookie_file=$1
+  csrf_token=$2
+  subject_id=$3
+  suffix=$4
+  for action in people-groups.view people-groups.person.manage; do
+    action_suffix=$(printf '%s' "$action" | awk -F. '{print $NF}')
+    payload_file="$workspace/grant-$suffix-$action_suffix.json"
+    response_file="$workspace/grant-$suffix-$action_suffix.out"
+    jq -n --arg subject "$subject_id" --arg action "$action" '{subject_id:$subject,audience:"people-groups",action:$action}' >"$payload_file"
+    grant_status=$(request POST /auth/api/v1/admin/grants "$cookie_file" "$csrf_token" "$payload_file" "$response_file" 204/409 'POST People grant')
+    if [ "$grant_status" = 409 ]; then
+      jq -e '.error.code=="conflict"' "$response_file" >/dev/null || { echo 'existing People grant did not return the expected conflict shape' >&2; exit 1; }
+    fi
+  done
+}
+
+authorize_people() {
+  cookie_file=$1
+  csrf_token=$2
+  output_file=$3
+  result=$(curl_result "$output_file" --request POST --cookie "$cookie_file" --cookie-jar "$cookie_file" --data-urlencode "csrf_token=$csrf_token" "$base_url/gateway/authorize/people-groups")
+  actual=$(printf '%s' "$result" | awk '{print $1}')
+  duration=$(printf '%s' "$result" | awk '{print $2}')
+  record_http 'POST /gateway/authorize/people-groups' 303 "$actual" "$duration"
+  expect_status 303 "$actual" 'authorize People & Groups'
+}
+
+stable_uuid() {
+  digest=$(printf '%s' "$1" | openssl dgst -sha256 -r | awk '{print $1}')
+  printf '%s-%s-4%s-8%s-%s' "$(printf '%s' "$digest" | cut -c1-8)" "$(printf '%s' "$digest" | cut -c9-12)" "$(printf '%s' "$digest" | cut -c14-16)" "$(printf '%s' "$digest" | cut -c18-20)" "$(printf '%s' "$digest" | cut -c21-32)"
+}
+
+primary_cookies="$workspace/primary.cookies"
+primary_csrf=$(fetch_csrf "$primary_cookies" "$workspace/primary-csrf.json")
+login "$primary_cookies" "$primary_csrf" "$primary_username" "$primary_password_file" "$workspace/primary-login.json" 200 >/dev/null
+session "$primary_cookies" "$workspace/primary-session.json"
+primary_subject_id=$(jq -er --arg tenant "$primary_tenant_id" '.principal | select(.tenant_id==$tenant) | .subject_id' "$workspace/primary-session.json")
+
+secondary_cookies="$workspace/secondary.cookies"
+secondary_csrf=$(fetch_csrf "$secondary_cookies" "$workspace/secondary-csrf.json")
+secondary_login_status=$(login "$secondary_cookies" "$secondary_csrf" "$secondary_username" "$secondary_password_file" "$workspace/secondary-preflight-login.json" 200/401)
+tenant_provisioning=existing
+if [ "$secondary_login_status" = 401 ]; then
+  tenant_provisioning=created
+  cat "$secondary_password_file" | docker exec -i "$identity_container" sh -eu -c '
+    umask 077
+    password_file=$(mktemp /tmp/p9-tenant-password.XXXXXX)
+    trap '\''rm -f -- "$password_file"'\'' EXIT HUP INT TERM
+    cat >"$password_file"
+    /app/tenantctl create --tenant-id "$1" --tenant-name "$2" --admin-username "$3" --admin-display-name "$4" --admin-password-file "$password_file" --operator-id p9-full-composition --operator-name "P9 full composition acceptance"
+  ' sh "$secondary_tenant_id" "$secondary_tenant_name" "$secondary_username" "$secondary_display_name" >"$workspace/tenant-create.json"
+  jq -e --arg tenant "$secondary_tenant_id" --arg username "$secondary_username" '.status=="created" and .tenant_id==$tenant and .administrator_username==$username' "$workspace/tenant-create.json" >/dev/null || {
+    echo 'tenantctl returned an invalid provisioning result' >&2
+    exit 1
+  }
+  login "$secondary_cookies" "$secondary_csrf" "$secondary_username" "$secondary_password_file" "$workspace/secondary-login.json" 200 >/dev/null
+fi
+session "$secondary_cookies" "$workspace/secondary-session.json"
+secondary_subject_id=$(jq -er --arg tenant "$secondary_tenant_id" '.principal | select(.tenant_id==$tenant) | .subject_id' "$workspace/secondary-session.json")
+
+grant_people "$primary_cookies" "$primary_csrf" "$primary_subject_id" primary
+grant_people "$secondary_cookies" "$secondary_csrf" "$secondary_subject_id" secondary
+authorize_people "$primary_cookies" "$primary_csrf" "$workspace/primary-authorize.out"
+authorize_people "$secondary_cookies" "$secondary_csrf" "$workspace/secondary-authorize.out"
+
+primary_command_id=$(stable_uuid "oms-v1-p9-c1-primary-person:$primary_tenant_id")
+secondary_command_id=$(stable_uuid "oms-v1-p9-c1-secondary-person:$secondary_tenant_id")
+jq -n --arg command "$primary_command_id" --arg subject "$primary_subject_id" '{command_id:$command,reference_code:"P9-C1-A",display_name:"P9 主租户成员",iam_subject_id:$subject}' >"$workspace/primary-person-request.json"
+jq -n --arg command "$secondary_command_id" --arg subject "$secondary_subject_id" '{command_id:$command,reference_code:"P9-C1-B",display_name:"P9 次租户成员",iam_subject_id:$subject}' >"$workspace/secondary-person-request.json"
+request POST /people/api/v1/persons "$primary_cookies" "$primary_csrf" "$workspace/primary-person-request.json" "$workspace/primary-person.json" 201 'POST primary Person' >/dev/null
+request POST /people/api/v1/persons "$secondary_cookies" "$secondary_csrf" "$workspace/secondary-person-request.json" "$workspace/secondary-person.json" 201 'POST secondary Person' >/dev/null
+primary_person_id=$(jq -er --arg tenant "$primary_tenant_id" '. | select(.tenant_id==$tenant and .revision>=1) | .id' "$workspace/primary-person.json")
+secondary_person_id=$(jq -er --arg tenant "$secondary_tenant_id" '. | select(.tenant_id==$tenant and .revision>=1) | .id' "$workspace/secondary-person.json")
+primary_person_revision=$(jq -er '.revision' "$workspace/primary-person.json")
+secondary_person_revision=$(jq -er '.revision' "$workspace/secondary-person.json")
+
+request GET /people/api/v1/persons "$primary_cookies" '' '' "$workspace/primary-people.json" 200 'GET primary Person list' >/dev/null
+request GET /people/api/v1/persons "$secondary_cookies" '' '' "$workspace/secondary-people.json" 200 'GET secondary Person list' >/dev/null
+jq -e --arg tenant "$primary_tenant_id" --arg own "$primary_person_id" --arg other "$secondary_person_id" 'all(.[];.tenant_id==$tenant) and any(.[];.id==$own) and all(.[];.id!=$other)' "$workspace/primary-people.json" >/dev/null || { echo 'primary Person list failed tenant isolation' >&2; exit 1; }
+jq -e --arg tenant "$secondary_tenant_id" --arg own "$secondary_person_id" --arg other "$primary_person_id" 'all(.[];.tenant_id==$tenant) and any(.[];.id==$own) and all(.[];.id!=$other)' "$workspace/secondary-people.json" >/dev/null || { echo 'secondary Person list failed tenant isolation' >&2; exit 1; }
+request GET "/people/api/v1/persons/$secondary_person_id" "$primary_cookies" '' '' "$workspace/primary-cross-read.json" 404 'GET primary cross-tenant Person' >/dev/null
+request GET "/people/api/v1/persons/$primary_person_id" "$secondary_cookies" '' '' "$workspace/secondary-cross-read.json" 404 'GET secondary cross-tenant Person' >/dev/null
+
+request GET '/workbench/?view=oms-v1' "$primary_cookies" '' '' "$workspace/primary-workbench.html" 200 'GET primary Workbench' >/dev/null
+request GET '/workbench/?view=oms-v1' "$secondary_cookies" '' '' "$workspace/secondary-workbench.html" 200 'GET secondary Workbench' >/dev/null
+grep -Fq "data-tenant-id=\"$primary_tenant_id\"" "$workspace/primary-workbench.html" || { echo 'primary Workbench does not expose the authenticated Tenant' >&2; exit 1; }
+grep -Fq "data-tenant-id=\"$secondary_tenant_id\"" "$workspace/secondary-workbench.html" || { echo 'secondary Workbench does not expose the authenticated Tenant' >&2; exit 1; }
+
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+c0_checksums_sha256=$(openssl dgst -sha256 -r "$c0_dir/checksums.sha256" | awk '{print $1}')
+jq -n \
+  --argjson schema_version 1 --arg scenario_id oms-v1-p9-full-composition-v1 --arg phase C1 --arg captured_at "$captured_at" \
+  --arg project "$compose_project" --arg public_url "$base_url" --arg c0_checksums_sha256 "$c0_checksums_sha256" \
+  --arg primary_tenant "$primary_tenant_id" --arg secondary_tenant "$secondary_tenant_id" --arg provisioning "$tenant_provisioning" \
+  --arg primary_subject "$primary_subject_id" --arg secondary_subject "$secondary_subject_id" \
+  --arg primary_person "$primary_person_id" --arg secondary_person "$secondary_person_id" \
+  --argjson primary_revision "$primary_person_revision" --argjson secondary_revision "$secondary_person_revision" \
+  '{schema_version:$schema_version,scenario_id:$scenario_id,phase:$phase,result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0_checksums_sha256},tenant_provisioning:$provisioning,tenants:[{id:$primary_tenant,administrator_subject_id:$primary_subject,person:{id:$primary_person,revision:$primary_revision,reference_code:"P9-C1-A"}},{id:$secondary_tenant,administrator_subject_id:$secondary_subject,person:{id:$secondary_person,revision:$secondary_revision,reference_code:"P9-C1-B"}}],checks:{same_public_origin:"pass",session_tenant_context:"pass",people_capability_per_tenant:"pass",person_list_isolation:"pass",cross_tenant_person_not_found:"pass",workbench_session_tenant:"pass",secrets_recorded:false}}' >"$workspace/state-after-c1.json"
+
+cat >"$workspace/result.md" <<EOF
+# P9 C1 multi-tenant entry result
+
+- Result: pass
+- Captured at: $captured_at
+- Compose project: $compose_project
+- Public origin: $base_url
+- Secondary Tenant provisioning: $tenant_provisioning
+- Checks: two authenticated Tenant contexts, per-Tenant People capability, isolated Person lists, cross-Tenant 404 and Workbench session Tenant.
+- Secrets recorded: no
+EOF
+
+evidence_parent=$(dirname -- "$evidence_dir")
+mkdir -p "$evidence_parent"
+evidence_stage=$(mktemp -d "$evidence_parent/.p9-c1-evidence.XXXXXX")
+chmod 700 "$evidence_stage"
+cp "$http_evidence" "$evidence_stage/http-evidence.tsv"
+cp "$workspace/result.md" "$evidence_stage/result.md"
+cp "$workspace/state-after-c1.json" "$evidence_stage/state-after-c1.json"
+chmod 600 "$evidence_stage/http-evidence.tsv" "$evidence_stage/result.md" "$evidence_stage/state-after-c1.json"
+: >"$evidence_stage/checksums.sha256"
+for artifact in http-evidence.tsv result.md state-after-c1.json; do
+  printf '%s  %s\n' "$(openssl dgst -sha256 -r "$evidence_stage/$artifact" | awk '{print $1}')" "$artifact" >>"$evidence_stage/checksums.sha256"
+done
+chmod 600 "$evidence_stage/checksums.sha256"
+"$script_dir/verify-c1-evidence" "$evidence_stage" >/dev/null
+if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi
+mv "$evidence_stage" "$evidence_dir"
+evidence_stage=
+
+echo 'PASS P9 C1 shared-origin multi-tenant entry and People isolation'
+echo "evidence: $evidence_dir/state-after-c1.json"

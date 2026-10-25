@@ -43,6 +43,13 @@ not replace an actual isolated joint-restore rehearsal for each release closure.
    succeeds may `upgrade` create the pre-mutation backup and run migrations;
    `upgrade` repeats this preflight automatically.
 
+For the OMS1 P9 release gate, run `acceptance/p9-full-composition/verify-c0`
+before creating business fixtures, then run
+`verify-c1-multitenant` with two protected administrator password files. The
+second gate uses the already-running stack and same public origin; it does not
+start or stop services. See its adjacent README for the exact inputs and
+secret-free evidence contract.
+
 The bundle contains no `.env`, certificate, private key, Registry password,
 AccessKey, database data or backup. See `docs/operations/d1-compact.md` and
 `docs/operations/d1-environment-promotion.md` for the complete operator flow.

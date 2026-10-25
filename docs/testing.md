@@ -9,6 +9,14 @@
 
 BF-254 的单元回归使用“Manifest Tenant A、IAM 会话与 Capability Tenant B”证明 Gateway 不再把部署默认 Tenant 当访问白名单，并证明 Workbench 页面使用可信会话 Tenant；同时覆盖 Gateway 表单登录和直接 `/auth/api/v1/login` 成功后清除旧应用 Capability Cookie。该测试没有启动 D1，不能替代两个真实 Tenant 的 Owner 读写、跨租户资源猜测、搜索／分页／导出／附件、Feedback 和联合恢复矩阵。
 
+BF-255 的低资源离线回归：
+
+```sh
+make p9-multitenant-driver-test
+```
+
+该入口用假的 Docker／curl 和真实 jq／checksum 构造通过 C0，验证第二 Tenant 首次创建、同 Origin 双会话、People 授权、双 Person、交叉 404、Workbench Tenant、固定 C1 制品校验和篡改拒绝，并扫描确认管理员密码未进入 Docker 参数或证据。生产 `verify-c1-multitenant` 不启动／停止服务，只能绑定通过独立 verifier 的 C0 和已经运行的 D1。离线通过不表示真实 C1 已执行；真实命令、受限密码文件与输出格式见 [P9 README](../acceptance/p9-full-composition/README.md)。
+
 ## 2026-10-26 OMS1 迭代 P8 Feedback 本地真实浏览器门禁
 
 不启动 Docker，用两个随机回环端口形成真实跨 origin Workbench／SDK，并让真实 Chromium 直接加载生产宿主脚本：

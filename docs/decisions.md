@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-255（已接受／P9 C1 双租户运行入口，真实 D1 待执行）：P9 在 C0 通过后使用同一公网 Origin 验证两个 Tenant，而不是直连 Owner 或用两个独立服务冒充隔离。C1 从受保护的 `0600` 文件读取两个管理员密码，第二 Tenant 仅在其登录返回 401 时通过运行中 IAM 容器的 `tenantctl` 创建，密码只经 stdin／临时文件传递；脚本不启动或停止服务。两个管理员分别取得 People 能力并以稳定 Command ID 创建／重放一名关联 Person，必须各自只看到本 Tenant 数据、猜测对方 Person 返回 404，Workbench 投影当前会话 Tenant。C1 证据只保存 Tenant／Subject／Person 稳定 ID、revision、HTTP 状态和摘要，不保存密码、Cookie、Capability 或响应原文；固定文件集和 checksum 由独立 verifier 复核。离线 Docker／curl 负载回归已通过，但没有真实 P9 D1 运行环境，因此 BF-255 只建立可执行入口，不标记 P1/P9 完成。
+
 2026-10-26 BF-254（已接受／同域名多租户入口修复，真实 D1 交叉矩阵待执行）：Suite Manifest 的 `tenant_id` 只表示部署时创建／迁移的默认 Tenant 和 C0 锚点，不是同一 OMS1 服务允许访问的 Tenant 白名单。Gateway 必须接受同一受信 IAM issuer 签发、Tenant／Subject 均为规范 UUID 的任意租户会话与短期 Capability，并把会话 Tenant 传给 Workbench；不得用 Manifest 默认 Tenant 覆盖当前账号上下文。每次成功登录（包括直接 IAM 登录路由）必须清除全部路径限定 Capability Cookie，避免账号／租户切换后复用前一身份能力。目标 Owner 继续按签名 Tenant、Actor、资源与数据库事实作最终隔离，浏览器参数或自报 Header 仍不可信。Gateway／Workbench 单元回归已覆盖“Manifest Tenant A、会话 Tenant B”和登录清票；双租户 D1 Owner／附件／导出／恢复矩阵仍待 P9 真实窗口，不能据此标记 P1/P9 整体完成。
 
 2026-10-26 BF-253（已接受／P9 发布来源门禁）：真实 P9 C0 只接受 D1 `pull` 模式和全部 `name@sha256:<digest>` 镜像引用，并要求发布包 `RELEASE-METADATA` 仅含与运行 `SUITE_VERSION` 一致的版本、40 位正式 Git commit、UTC build time 与 `linux/amd64` target。P9 C0／证据验证器和说明随 D1 release bundle 交付；release metadata 纳入固定证据闭集与 checksum。开发态 `commit=unknown`／`test`、mutable tag 或版本错配不能形成 P9 通过证据。该门禁建立源码提交→发布包→配置 digest→运行 Image ID 的可追溯链，但不等于镜像签名或 SBOM。
