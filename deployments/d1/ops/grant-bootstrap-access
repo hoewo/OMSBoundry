@@ -88,5 +88,7 @@ grant_manifest() {
 [ "$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/approval-audit-results-capabilities.json"
 [ "$(env_value ENABLE_COST_OUTSOURCING false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/cost-outsourcing-capabilities.json"
 [ "$(env_value ENABLE_BONUS_DISTRIBUTION false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/bonus-distribution-capabilities.json"
+[ "$(env_value ENABLE_INTERNAL_FINANCE_REQUESTS false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/internal-finance-requests-capabilities.json"
+[ "$(env_value ENABLE_PAYROLL false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/payroll-capabilities.json"
 grant_manifest "$repo_dir/contracts/access/v1/examples/open-api-capabilities.json"
 echo "bootstrap administrator capabilities are ready: $subject_id"

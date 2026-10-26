@@ -165,6 +165,14 @@ grep -Fq 'grant remained rate limited for $action after one bounded retry' "$gra
   echo 'D1 bootstrap grant script does not fail closed after one rate-limit retry' >&2
   exit 1
 }
+grep -Fq 'internal-finance-requests-capabilities.json' "$grant_script" || {
+  echo 'D1 bootstrap grant script does not include Internal Finance Requests capabilities' >&2
+  exit 1
+}
+grep -Fq 'payroll-capabilities.json' "$grant_script" || {
+  echo 'D1 bootstrap grant script does not include Payroll capabilities' >&2
+  exit 1
+}
 
 running_acceptance="$root/acceptance/d1-delivery/verify-running"
 grep -Fq "grep -Fq '/api/v1/bonus-pools'" "$running_acceptance" || {
