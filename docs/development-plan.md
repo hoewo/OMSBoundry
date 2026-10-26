@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-26 工资可用性修订（BF-273）：当前分支预置北京 2026 参考方案，扩展 Payroll 固定额／整元取整计算，并把查看、复制、调整、确认接入工资页的“设置比例”。下一步仅做本地 PostgreSQL migration／单元／前端回归和人工页面核对；未经用户要求不部署 D1／公网，不在本轮建立全国地区政策平台或自动合规判定。[验证报告](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)
+2026-10-26 工资可用性修订（BF-273）：北京 2026 参考方案、Payroll 固定额／整元取整计算，以及工资页“设置比例”的查看、复制、调整和确认已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布。发布后 schema 4、19/19 healthy、真实标准方案读取和公网资源核对通过；未在验证中复制租户方案或写业务数据。下一步由用户登录体验并按本公司实际工伤档位、公积金比例创建 Tenant 方案；全国地区政策平台和自动合规判定仍不进入本轮。[本地验证](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)、[发布记录](./reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)
 
 2026-10-26 账号开通修订（BF-272）：把 BF-269 的用户名式“邀请账号”收敛为管理员直接录入手机号／邮箱、生成 24 小时一次性激活链接、本人设置密码的真实 IAM 流程；增加待激活链接重签与旧链接失效，登录页默认展示手机号／邮箱密码登录，未接通短信／邮件时只允许复制交付。当前先完成本地 migration、IAM、Workbench、文档与回归，未部署 D1／公网；自动发送、同账号多租户和公共注册不进入本轮。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
 

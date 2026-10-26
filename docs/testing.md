@@ -1,8 +1,8 @@
 # OMSBizFoundry 验证入口
 
-## 北京五险一金参考方案（2026-10-26，本地候选／未部署）
+## 北京五险一金参考方案（2026-10-26，本地门禁及 D1 公网发布通过）
 
-BF-273 必须验证：新 PostgreSQL schema 执行全部 migration 后存在且只存在确定的北京标准方案 revision 1；任意 Tenant 可读标准方案，但只能读本 Tenant 的自定义方案。计算回归覆盖医保个人固定 300 分、公积金按整元四舍五入、整数基点与上下限。Workbench 回归覆盖参考方案可见、新建工资表可选、复制为本公司方案、revision guard、明确的工伤／公积金确认和无“请先导入”死路。完整命令与本轮实际运行状态见[验证报告](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)。
+BF-273 必须验证：新 PostgreSQL schema 执行全部 migration 后存在且只存在确定的北京标准方案 revision 1；任意 Tenant 可读标准方案，但只能读本 Tenant 的自定义方案。计算回归覆盖医保个人固定 300 分、公积金按整元四舍五入、整数基点与上下限。Workbench 回归覆盖参考方案可见、新建工资表可选、复制为本公司方案、revision guard、明确的工伤／公积金确认和无“请先导入”死路。上述本地门禁通过；D1 Suite `v0.1.0-test.oms-v1.37` 发布后又实际通过独立 `check`、Payroll schema 4、19/19 healthy、真实标准方案只读核对和公网静态资源核对。发布后验证没有复制 Tenant 方案或写业务数据。[本地验证](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)、[发布记录](./reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)
 
 BF-272 账号开通回归要求：真实 PostgreSQL migration 必须接受规范大陆手机号、规范邮箱和历史用户名；管理员新增手机号／邮箱待激活账号后可重签链接，旧 Token 必须拒绝、新 Token 可激活并用于登录；非管理员、跨 Tenant、重复标识和非 pending 重签必须拒绝。Workbench 静态与浏览器回归必须覆盖“新增账号”、三步说明、复制链接／完整通知、待激活重签、登录页默认手机号／邮箱密码入口及未接消息服务时不出现虚假已发送。通过状态只按本轮实际执行结果登记。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
 

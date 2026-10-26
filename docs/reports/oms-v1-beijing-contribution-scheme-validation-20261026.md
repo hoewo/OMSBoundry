@@ -28,4 +28,4 @@
 - Workbench 目标 Node 测试：`oms_phase1_payroll_owner.test.mjs` 5/5 通过；Workbench Go 测试与 Payroll／Workbench `go vet` 通过。
 - 使用生产 CSS 在 1440×1000 Chrome 视口完成可视检查：字段列、滚动区和固定操作栏未发现溢出或错位。
 - 全量 Workbench Node 回归为 252/261；9 个失败属于本变更前已存在的操作列计数、Feedback 断言、Finance 资源版本及参考部署环境脚本问题，因此不将全量前端回归声明为通过。
-- 本轮只完成本地实现与验证，未部署 D1 或公网。
+- 本报告记录发布前本地实现与验证；后续已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布，公网状态和恢复点见[发布记录](./oms-v1-beijing-contribution-scheme-publication-20261026.md)。

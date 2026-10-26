@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前工资可用性修订（BF-273）：北京 2026 五险一金参考方案、精确固定额／整元取整计算和工资页“设置比例”已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布到 [oatest](https://oatest.antuinfo.cn/)。发布后 D1 检查、Payroll schema 4、真实标准方案读取、19/19 healthy 和公网资源核对通过；升级前备份为 `/var/backups/omsbizfoundry/20261026T132424Z`。工伤 0.2% 与公积金 5% 只是最低可选预填值，租户仍须复制为本公司方案并确认实际适用参数。[发布记录](./docs/reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)
+
 当前 OMS1 迭代 P6：Identity & Access 已独立拥有员工 API Key、一次 secret、不可逆 verifier、期限／上限／撤销和 180 天脱敏使用审计；Gateway 已建立 `/open-api/v1/` HTTPS allowlist、当前账号／Grant／Person 复验、Key／Tenant 限流和统一错误；Workbench 已提供 Key 管理、本人调用记录与 Webhook 未开放占位。真实 PostgreSQL 18、IAM HTTP、Gateway 契约和前端静态交互门禁通过；尚未部署 D1／公网。当前进入 P7 Evidence 发票上传、本人报销 API 与 Finance→Money 闭环。[P6 验证报告](./docs/reports/oms-v1-iteration-p6-open-api-validation-20261025.md)
 
 当前财务筛选与批量选择规则（BF-182／BF-183）：财务管理的“全部类型”使用统一自定义选择器并紧邻搜索框，不再被工具栏的自动左边距推到中间；窄视口也不误隐藏选择器。工资和财务批量操作条提供明确的“全选／取消全选”，仅选择当前筛选结果中的可操作记录。两项已随公网 Workbench v1.32 发布；不改变任何 Owner 数据或正式业务边界。[发布报告](./docs/reports/oms-finance-filter-toolbar-publication-20261024.md)
