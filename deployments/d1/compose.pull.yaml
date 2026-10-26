@@ -35,6 +35,10 @@ services:
     image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
   people-groups:
     image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
+  people-workload-key-permissions:
+    image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
+  people-workload-keys:
+    image: ${D1_PEOPLE_IMAGE:-omsbizfoundry/people-groups:disabled}
 
   party-migrate:
     image: ${D1_PARTY_IMAGE:-omsbizfoundry/party-directory:disabled}

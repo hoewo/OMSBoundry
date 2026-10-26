@@ -264,9 +264,9 @@ build_app internal_finance_requests_ref internal-finance-requests deployments/d1
 build_app payroll_ref payroll deployments/d1/docker/Dockerfile.payroll \
   --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$postgres_ref"
 build_app workbench_ref unified-workbench deployments/d1/docker/Dockerfile.edge \
-  --build-arg APP=unified-workbench --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
+  --build-arg APP_PATH=frontend/oms-workbench --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
 build_app gateway_ref gateway deployments/d1/docker/Dockerfile.edge \
-  --build-arg APP=gateway --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
+  --build-arg APP_PATH=backend/platform/gateway --build-arg "GO_IMAGE=$golang_ref" --build-arg "RUNTIME_IMAGE=$alpine_ref"
 
 mkdir -p "$(dirname -- "$manifest_out")"
 umask 077

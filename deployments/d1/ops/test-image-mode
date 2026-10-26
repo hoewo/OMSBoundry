@@ -80,6 +80,18 @@ ENV
 write_env pull "$registry/contract-ledger@sha256:$digest"
 D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
   "$d1" images >"$test_dir/images"
+D1_ENV_FILE="$test_dir/d1.env" D1_PROJECT_NAME=omsbizfoundry-image-mode-test \
+  "$d1" config --format json >"$test_dir/rendered.json"
+
+jq -e --arg image "$registry/people-groups@sha256:$digest" '
+  .services["people-workload-key-permissions"].image == $image and
+  .services["people-workload-keys"].image == $image and
+  .services["people-migrate"].image == $image and
+  .services["people-groups"].image == $image
+' "$test_dir/rendered.json" >/dev/null || {
+  echo 'People helper services did not inherit the digest-pinned People image' >&2
+  exit 1
+}
 
 for image in \
   base-postgres identity-access contract-ledger money-flow-ledger people-groups party-directory project-workspace \
