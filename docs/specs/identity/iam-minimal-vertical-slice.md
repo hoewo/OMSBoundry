@@ -1,7 +1,7 @@
 # M7-002 Identity & Access 最小纵向闭环
 
 日期：2026-09-20  
-状态：implemented and verified
+状态：implemented and verified；2026-10-26 按 BF-272 扩展登录标识与账号开通交互
 
 ## 1. 最小根因
 
@@ -12,7 +12,7 @@
 `backend/platform/identity-access` 是独立 Go module、独立 HTTP 进程和独立 PostgreSQL 数据库，拥有：
 
 - 一个安装 Tenant 及其稳定 UUID；
-- Subject、用户名、BCrypt 密码摘要、账号状态、失败锁定和 Session Generation；
+- Subject、手机号／邮箱／兼容用户名登录标识、BCrypt 密码摘要、账号状态、失败锁定和 Session Generation；
 - 空库首位管理员 bootstrap，已有账号时不会覆盖；
 - 管理员邀请、一次性激活、登录、注销、管理员发起密码重置、重置完成和账号停用；
 - SHA-256 保存的 opaque Suite Session，默认绝对有效期 12 小时；
@@ -35,7 +35,7 @@ IAM 不拥有 Person／Group、Project、合同、收支、文件、客户岗位
 | `GET /api/v1/session` | Suite Session | 返回当前可信 Principal |
 | `POST /api/v1/credentials` | Suite Session＋CSRF | 为已授予的单一 Audience 签发 Credential |
 | `GET /api/v1/.well-known/jwks.json` | 无 | 只发布当前 active／retiring 公钥 |
-| `/api/v1/admin/*` | Suite Session＋IAM 管理员＋写入 CSRF | 邀请、重置、Subject 列表、状态与 Capability 授予 |
+| `/api/v1/admin/*` | Suite Session＋IAM 管理员＋写入 CSRF | 新增待激活账号、重签激活链接、重置、Subject 列表、状态与 Capability 授予 |
 
 所有 JSON 输入限制为 32 KiB、拒绝未知字段和尾随值。Session Cookie 名为 `oms_suite_session`，使用 `HttpOnly`、`SameSite=Lax`，生产必须启用 `Secure`；IAM CSRF Cookie 独立使用 `SameSite=Strict`。
 
@@ -44,7 +44,7 @@ M7-002 的 Credential 入口返回原始签名 Token 给受信调用方。M7-003
 ## 4. 数据与不可变规则
 
 - `tenants`、`subjects`、`suite_sessions`、`activation_tokens`、`capability_grants` 和 `iam_audit_entries` 只存在 IAM 数据库；
-- Subject 用户名只在 Tenant 内唯一，统一小写规范；
+- Subject 登录标识全局唯一；手机号去除受支持的展示分隔符和中国区号后规范为 11 位，邮箱与兼容用户名统一小写；
 - pending Subject 没有密码摘要；激活才原子写入摘要并转为 active；
 - 密码重置、停用账号会递增 Session Generation，旧 Session 即时失效；
 - 邀请和重置 Token 只保存 SHA-256，原文仅在建立时返回一次；

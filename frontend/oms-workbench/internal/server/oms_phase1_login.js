@@ -72,7 +72,7 @@
         })
         if (!response.ok) {
           const message = response.status === 403 ? '安全令牌已变化，请再次点击登录；输入已保留。'
-            : response.status === 401 ? '用户名或密码不正确，请检查后重试。'
+            : response.status === 401 ? '登录账号或密码不正确，请检查后重试。'
             : response.status === 429 ? '登录请求过于频繁，请稍后重试。'
             : '身份服务暂时不可用，请稍后重试；输入已保留。'
           throw new Error(message)
@@ -156,7 +156,7 @@
       await login.submit(Object.fromEntries(new FormData(form)))
     } catch (error) {
       if (errorNotice) {
-        errorNotice.textContent = error.message?.startsWith('安全令牌') || error.message?.startsWith('登录') || error.message?.startsWith('用户名') || error.message?.startsWith('身份服务')
+        errorNotice.textContent = error.message?.startsWith('安全令牌') || error.message?.startsWith('登录') || error.message?.startsWith('身份服务')
           ? error.message : '登录结果待确认，请重试或重新打开工作台；不会自动重复提交。'
         errorNotice.hidden = false
         errorNotice.focus()

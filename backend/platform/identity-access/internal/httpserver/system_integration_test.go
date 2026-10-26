@@ -51,7 +51,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000007_open_api_credentials.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000008_login_identifiers.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
@@ -123,17 +123,28 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 		t.Fatalf("second tenant = %#v", otherTenantObject)
 	}
 
-	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"username": "operator", "display_name": "业务操作员"}, http.StatusCreated)
+	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"login_identifier": "+86 138-0013-8000", "display_name": "业务操作员"}, http.StatusCreated)
 	inviteToken := stringField(t, inviteResponse, "token")
 	operatorObject := objectField(t, inviteResponse, "subject")
 	operatorID := stringField(t, operatorObject, "id")
+	if stringField(t, operatorObject, "username") != "13800138000" {
+		t.Fatalf("phone login identifier was not normalized: %#v", operatorObject)
+	}
+	reissued := postJSON(t, admin, server.URL+"/api/v1/admin/invitations/reissue", adminCSRF, map[string]any{"subject_id": operatorID}, http.StatusCreated)
+	reissuedToken := stringField(t, reissued, "token")
+	if reissuedToken == inviteToken || stringField(t, objectField(t, reissued, "subject"), "id") != operatorID {
+		t.Fatalf("reissued invitation = %#v", reissued)
+	}
 
-	otherInvite := postJSON(t, otherAdmin, server.URL+"/api/v1/admin/invitations", otherAdminCSRF, map[string]any{"username": "operator-b", "display_name": "第二企业操作员"}, http.StatusCreated)
+	otherInvite := postJSON(t, otherAdmin, server.URL+"/api/v1/admin/invitations", otherAdminCSRF, map[string]any{"login_identifier": "Operator.B@Example.COM", "display_name": "第二企业操作员"}, http.StatusCreated)
 	otherOperatorID := stringField(t, objectField(t, otherInvite, "subject"), "id")
+	if stringField(t, objectField(t, otherInvite, "subject"), "username") != "operator.b@example.com" {
+		t.Fatalf("email login identifier was not normalized: %#v", otherInvite)
+	}
 	otherOperator := newClient(t)
 	otherOperatorCSRF := fetchCSRF(t, otherOperator, server.URL)
 	postJSON(t, otherOperator, server.URL+"/api/v1/activate", otherOperatorCSRF, map[string]any{"token": stringField(t, otherInvite, "token"), "password": "second operator password 123"}, http.StatusOK)
-	login(t, otherOperator, server.URL, otherOperatorCSRF, "operator-b", "second operator password 123", http.StatusOK)
+	login(t, otherOperator, server.URL, otherOperatorCSRF, "Operator.B@Example.COM", "second operator password 123", http.StatusOK)
 	postJSON(t, otherAdmin, server.URL+"/api/v1/admin/grants", otherAdminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
 	otherCredential := postJSON(t, otherOperator, server.URL+"/api/v1/credentials", otherOperatorCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusOK)
 	otherClaims := verifyCredential(t, stringField(t, otherCredential, "token"), keys)
@@ -170,9 +181,10 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 
 	operator := newClient(t)
 	operatorCSRF := fetchCSRF(t, operator, server.URL)
-	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": inviteToken, "password": "operator password 123"}, http.StatusOK)
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": inviteToken, "password": "operator password 123"}, http.StatusUnauthorized)
-	login(t, operator, server.URL, operatorCSRF, "operator", "operator password 123", http.StatusOK)
+	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusOK)
+	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusUnauthorized)
+	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
 	getJSON(t, operator, server.URL+"/api/v1/api-keys", http.StatusForbidden)
 	for _, action := range []string{apikey.ActionUse, apikey.ActionKeyManage, apikey.ActionSelfAudit} {
 		postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "open-api", "action": action}, http.StatusNoContent)
@@ -228,8 +240,8 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	resetCSRF := fetchCSRF(t, resetClient, server.URL)
 	postJSON(t, resetClient, server.URL+"/api/v1/password-reset/complete", resetCSRF, map[string]any{"token": resetToken, "password": "replacement password 123"}, http.StatusOK)
 	currentSession(t, operator, server.URL, http.StatusUnauthorized)
-	login(t, operator, server.URL, operatorCSRF, "operator", "operator password 123", http.StatusUnauthorized)
-	login(t, operator, server.URL, operatorCSRF, "operator", "replacement password 123", http.StatusOK)
+	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusUnauthorized)
+	login(t, operator, server.URL, operatorCSRF, "13800138000", "replacement password 123", http.StatusOK)
 
 	postJSON(t, admin, server.URL+"/api/v1/admin/status", adminCSRF, map[string]any{"subject_id": adminID, "status": "disabled"}, http.StatusConflict)
 	postJSON(t, admin, server.URL+"/api/v1/admin/status", adminCSRF, map[string]any{"subject_id": operatorID, "status": "disabled"}, http.StatusNoContent)

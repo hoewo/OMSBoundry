@@ -1,5 +1,9 @@
 # OMSBizFoundry 验证入口
 
+BF-272 账号开通回归要求：真实 PostgreSQL migration 必须接受规范大陆手机号、规范邮箱和历史用户名；管理员新增手机号／邮箱待激活账号后可重签链接，旧 Token 必须拒绝、新 Token 可激活并用于登录；非管理员、跨 Tenant、重复标识和非 pending 重签必须拒绝。Workbench 静态与浏览器回归必须覆盖“新增账号”、三步说明、复制链接／完整通知、待激活重签、登录页默认手机号／邮箱密码入口及未接消息服务时不出现虚假已发送。通过状态只按本轮实际执行结果登记。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
+
+2026-10-26 BF-272 本地候选验证：Identity Access 与 Unified Workbench 的 `go test ./...`、`go vet ./...` 通过，带 `integration` build tag 的 HTTP 生命周期测试编译并在缺少 `TEST_DATABASE_URL` 时按约定跳过；两份前端脚本 `node --check`、`git diff --check` 通过。本地临时 Workbench 已实际观察“新增账号”三步页、手机号／邮箱表单以及默认账号密码登录页，进程随后关闭。当前没有可用 PostgreSQL 进程，因此 migration、旧链接失效和手机／邮箱真实激活登录尚未形成数据库运行证据；也未部署 D1／公网。
+
 ## OMS1 页面、账号与 Feedback 登录门禁（2026-10-26，本地验证中／未部署）
 
 BF-268～BF-271 的回归覆盖：报销／付款表单字段和现金／银行卡服务端约束；经营列表一列一个事实；IAM 当前 Session／Tenant 读取、管理员邀请／停用／密码重置与一次性 fragment 消费；Feedback 所有登录账号可见、无 `feedback.use` Catalog／Grant、有效 Session 可取配置、退出后 401、重新登录恢复；HTML 必须同时包含侧栏和顶部退出入口及顶部反馈入口，长侧栏导航独立滚动。报销无附件只允许保存草稿，正式提交仍必须通过 Evidence `invoice-v1`。Go、Node、真实本地 Chrome、P9 C10／C11 离线驱动和 D1 bundle 门禁已经实际通过，范围与未验证项见[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)。

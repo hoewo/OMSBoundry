@@ -31,6 +31,9 @@ const (
 
 var (
 	usernamePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,63}$`)
+	phonePattern      = regexp.MustCompile(`^1[3-9][0-9]{9}$`)
+	phoneLikePattern  = regexp.MustCompile(`^[+0-9\s()-]+$`)
+	emailPattern      = regexp.MustCompile(`^[a-z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
 	identifierPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{2,63}$`)
 	actionPattern     = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`)
 	resourcePattern   = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
@@ -523,8 +526,52 @@ func (s *Service) Invite(ctx context.Context, actor Principal, username, display
 	subject := Subject{ID: subjectID, TenantID: actor.TenantID, Username: normalized, DisplayName: displayName, Status: StatusPending, Revision: 1, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
 	expiresAt := now.Add(24 * time.Hour)
 	activation := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
-	err = s.repository.Invite(ctx, subject, activation, s.audit(actor.TenantID, auditID, "iam_subject_invited", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"username": normalized}))
+	err = s.repository.Invite(ctx, subject, activation, s.audit(actor.TenantID, auditID, "iam_subject_invited", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": normalized}))
 	if err != nil {
+		return TokenResult{}, err
+	}
+	return TokenResult{Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
+}
+
+// ReissueInvitation replaces the one-time activation credential for an
+// existing pending account.  The repository invalidates every older unused
+// invitation before persisting the replacement so the administrator can
+// safely recover a lost or expired setup link.
+func (s *Service) ReissueInvitation(ctx context.Context, actor Principal, subjectID string) (TokenResult, error) {
+	if err := requireAdministrator(actor); err != nil {
+		return TokenResult{}, err
+	}
+	subjectID = strings.ToLower(strings.TrimSpace(subjectID))
+	if !uuidPattern.MatchString(subjectID) {
+		return TokenResult{}, &ValidationError{Field: "subject_id", Message: "Subject ID 无效"}
+	}
+	subject, found, err := s.repository.FindSubject(ctx, actor.TenantID, subjectID)
+	if err != nil {
+		return TokenResult{}, err
+	}
+	if !found {
+		return TokenResult{}, &NotFoundError{Message: "用户不存在"}
+	}
+	if subject.Status != StatusPending {
+		return TokenResult{}, &ConflictError{Message: "只有待激活账号可以重新生成激活链接"}
+	}
+	now := s.now()
+	raw, hash, err := randomToken()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	tokenID, err := s.newID()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	auditID, err := s.newID()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	expiresAt := now.Add(24 * time.Hour)
+	token := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
+	entry := s.audit(actor.TenantID, auditID, "iam_invitation_reissued", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": subject.Username})
+	if err := s.repository.CreateActivationToken(ctx, actor.TenantID, token, entry); err != nil {
 		return TokenResult{}, err
 	}
 	return TokenResult{Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
@@ -873,8 +920,23 @@ func (s *Service) hashPassword(password string) (string, error) {
 
 func normalizeUsername(raw string) (string, error) {
 	value := strings.ToLower(strings.TrimSpace(raw))
-	if !usernamePattern.MatchString(value) {
-		return "", &ValidationError{Field: "username", Message: "用户名必须为 3 至 64 位小写字母、数字或 ._-"}
+	phone := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(value)
+	if strings.HasPrefix(phone, "+86") {
+		phone = strings.TrimPrefix(phone, "+86")
+	} else if strings.HasPrefix(phone, "0086") {
+		phone = strings.TrimPrefix(phone, "0086")
+	}
+	if phonePattern.MatchString(phone) {
+		return phone, nil
+	}
+	// A phone-like value must never fall through to the legacy username rule.
+	// Keep short historical numeric usernames compatible, while rejecting
+	// mistyped phone numbers that would otherwise create an unreachable account.
+	if phoneLikePattern.MatchString(value) && len(phone) >= 7 {
+		return "", &ValidationError{Field: "username", Message: "请输入有效的中国大陆手机号"}
+	}
+	if !(len(value) <= 254 && emailPattern.MatchString(value)) && !usernamePattern.MatchString(value) {
+		return "", &ValidationError{Field: "username", Message: "登录账号必须是有效手机号、邮箱或 3 至 64 位用户名"}
 	}
 	return value, nil
 }

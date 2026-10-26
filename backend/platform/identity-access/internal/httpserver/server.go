@@ -82,6 +82,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	}
 	mux.Handle("GET /api/v1/admin/subjects", server.authenticate(server.requireAdmin(http.HandlerFunc(server.listSubjects))))
 	mux.Handle("POST /api/v1/admin/invitations", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.invite)))))
+	mux.Handle("POST /api/v1/admin/invitations/reissue", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.reissueInvitation)))))
 	mux.Handle("POST /api/v1/admin/password-resets", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.createPasswordReset)))))
 	mux.Handle("POST /api/v1/admin/grants", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.grant)))))
 	mux.Handle("POST /api/v1/admin/grants/revoke", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.revokeGrant)))))
@@ -393,13 +394,33 @@ func (s *Server) listSubjects(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Username    string `json:"username"`
-		DisplayName string `json:"display_name"`
+		Username        string `json:"username,omitempty"`
+		LoginIdentifier string `json:"login_identifier,omitempty"`
+		DisplayName     string `json:"display_name"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	result, err := s.identities.Invite(r.Context(), currentPrincipal(r.Context()), input.Username, input.DisplayName)
+	identifier := input.LoginIdentifier
+	if strings.TrimSpace(identifier) == "" {
+		identifier = input.Username
+	}
+	result, err := s.identities.Invite(r.Context(), currentPrincipal(r.Context()), identifier, input.DisplayName)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, result)
+}
+func (s *Server) reissueInvitation(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		SubjectID string `json:"subject_id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := s.identities.ReissueInvitation(r.Context(), currentPrincipal(r.Context()), input.SubjectID)
 	if err != nil {
 		mapError(w, err)
 		return

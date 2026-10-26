@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-26 账号开通修订（BF-272）：把 BF-269 的用户名式“邀请账号”收敛为管理员直接录入手机号／邮箱、生成 24 小时一次性激活链接、本人设置密码的真实 IAM 流程；增加待激活链接重签与旧链接失效，登录页默认展示手机号／邮箱密码登录，未接通短信／邮件时只允许复制交付。当前先完成本地 migration、IAM、Workbench、文档与回归，未部署 D1／公网；自动发送、同账号多租户和公共注册不进入本轮。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
+
 2026-10-26 页面与接入修订（BF-268～BF-271）：本地分支把报销／付款拆为两套表单，按现金／银行卡约束收款信息，并统一经营列表列语义；账号／租户改为 IAM 实际页面；Feedback 改为所有有效登录账号可用，移除 `feedback.use` Manifest／Grant，并把 C10／C11 改为 Session 门禁。BF-271 进一步把反馈和退出接到侧栏／顶部可见入口，并让侧栏业务导航独立滚动。受影响 Go／Node、真实本地 Chrome、P9 C10／C11 离线驱动、D1 bundle 和入口模板回归已经通过。下一步是本地人工页面走查及用户确认；未部署 D1／公网，外部 project 115 与真实恢复仍待原 P9 窗口执行。[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)
 
 2026-10-26 P9 增量（BF-267，授权部分由 BF-270 取代）：C11 真实 Chromium 驱动、固定证据 verifier、`run-c0-c11` 与全链 verifier 随 D1 release bundle 交付。C11 双 Tenant 打开 Feedback submit／status并核对跨域 SDK；主 Tenant 退出后配置必须 401，重新登录后入口恢复，Feedback 不再执行 Capability 撤销／恢复。总入口先验证凭证并真实启动／关闭浏览器，再允许进入早期阶段或破坏性 C9；已有完整 C11 时只读复验全链并零执行退出。下一步只在真实 D1 使用 `run-c0-c11` 完成全组合并单独补回滚记录；不再新增业务阶段，也不自行增加未确认的 soak 时长。

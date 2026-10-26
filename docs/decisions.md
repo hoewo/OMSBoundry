@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-10-26 BF-272（已接受／账号录入与激活修订，取代 BF-269 的用户名式邀请交互）：OMS1 管理员主动作改为“新增账号”，录入姓名及一个手机号或邮箱登录标识；IAM 建立待激活 Subject 并返回 24 小时一次性 fragment 激活链接，Workbench 只提供复制链接／完整通知，不配置发送服务时不得宣称短信或邮件已发送。待激活账号可重新生成链接且旧链接立即失效，本人设置密码后才能激活并登录。历史用户名继续兼容；首版登录标识全局唯一且一个账号只属于一个 Tenant，同账号多租户与自动短信／邮件延后。账号、Token、会话、状态和审计仍只归 IAM，Workbench 不保存账号事实。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
+
 2026-10-26 BF-271（已接受／登录会话与反馈入口可见性）：OMS1 的所有已登录页面必须提供明确可见的“退出登录”和“产品反馈”入口，不能只依赖隐藏菜单、侧栏尾部可滚出区域或角色权限。桌面侧栏底部显示当前账号与文字退出按钮，顶部同时提供反馈／退出快捷入口以覆盖窄屏和长导航；侧栏业务导航独立滚动，不得把会话操作挤出视口。退出仍由 Gateway `/gateway/logout`、IAM Session 和 CSRF 契约处理，Feedback 仍按 BF-270 对全部有效登录账号开放；本条只修正入口与可达性，不新增身份、反馈或业务事实所有权。
 
 2026-10-26 BF-270（已接受／Feedback V2 登录即用，取代角色权限门禁）：产品反馈是所有有效登录账号的基础入口，不设置岗位、角色或业务 Capability。Workbench 提供独立“产品反馈”页面，Gateway 配置端点只校验 CSRF 与有效 IAM Session；D1 不再装载 Feedback Capability Manifest 或为管理员补发 `feedback.use`。C10 仅以两个 Tenant 的有效会话验证隔离，C11 改为退出后配置 401、重新登录后恢复入口，不再执行 Grant 撤销／恢复。本条取代 BF-235、BF-243、BF-265、BF-267 中 `feedback.use` 相关要求；可信 Tenant＋Subject 派生、跨域 origin／source 校验、Secret 注入、Feedback 数据所有权、外部 project 115 回复／通知和真实 D1 待验边界保持不变。

@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 账号开通边界（BF-272）：手机号、邮箱和兼容用户名都是 IAM Subject 的登录标识，不是 People Person 属性或 Workbench 事实。Workbench 只组合管理员新增、Subject 列表、一次性链接交付和激活页面；IAM 独占规范化、唯一性、待激活状态、Token 摘要、密码、Session Generation 与审计。重新签发邀请只替换 IAM 内同类未使用 Token，不改写 Subject、Tenant 或业务引用。未配置消息提供商时架构中不存在“发送邀请”步骤。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
+
 2026-10-26 页面与接入边界（BF-268～BF-270）：Internal Finance 继续拥有报销／付款申请，两类表单和支付方式只是其版本化输入与投影；报销正式提交仍经 Evidence，实际付款仍归 Money。IAM 继续独占 Tenant、Subject、Session、邀请、状态和密码重置，Workbench 的账号／租户页只组合其受保护接口，不复制账号事实。Feedback 对所有有效登录账号开放而不发布业务 Capability；Gateway 只以 CSRF＋IAM Session 派生配置，Feedback 平台仍独占反馈事实，跨域、Secret 和脱敏身份边界不变。
 
 2026-10-26 P9 浏览器验收边界（BF-267，授权部分由 BF-270 取代）：C11 是外部验收驱动，不是 Workbench、IAM、Gateway、Feedback 或业务事实 Owner。它只能用现有版本化登录／Session 和 Gateway Feedback 配置入口验证浏览器行为，不得读取服务端 Secret、绕过 Gateway、修改业务事实或把 Playwright 变成运行时依赖。退出后的配置 401 是预期拒绝，重新登录后入口恢复；只有其余 Console／Page error 为零才通过。`run-c0-c11` 不拥有部署和服务启停，但必须在可能发生 C9 清卷前启动／关闭目标浏览器以证明依赖可用；若 C11 已存在，则必须先复验完整链并且不执行任何阶段。C11 的固定证据只保存摘要、稳定 Tenant／Subject、非秘密 Origin 和计数。

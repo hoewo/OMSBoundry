@@ -229,16 +229,19 @@ func (r *PostgresRepository) CreateActivationToken(ctx context.Context, tenantID
 		return err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	var active bool
-	if err := tx.QueryRow(ctx, `SELECT status='active' FROM subjects WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, tenantID, token.SubjectID).Scan(&active); errors.Is(err, pgx.ErrNoRows) {
+	var status Status
+	if err := tx.QueryRow(ctx, `SELECT status FROM subjects WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, tenantID, token.SubjectID).Scan(&status); errors.Is(err, pgx.ErrNoRows) {
 		return &NotFoundError{Message: "用户不存在"}
 	} else if err != nil {
 		return err
 	}
-	if !active {
+	if token.Kind == TokenInvitation && status != StatusPending {
+		return &ConflictError{Message: "只有待激活账号可以重新生成激活链接"}
+	}
+	if token.Kind == TokenPasswordReset && status != StatusActive {
 		return &ConflictError{Message: "只有有效账号可以重置密码"}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE activation_tokens SET used_at=$2 WHERE subject_id=$1 AND kind='password_reset' AND used_at IS NULL`, token.SubjectID, token.CreatedAt); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE activation_tokens SET used_at=$2 WHERE subject_id=$1 AND kind=$3 AND used_at IS NULL`, token.SubjectID, token.CreatedAt, token.Kind); err != nil {
 		return err
 	}
 	if err := insertToken(ctx, tx, token); err != nil {
@@ -459,7 +462,7 @@ func insertSubject(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash
 	_, err := tx.Exec(ctx, `INSERT INTO subjects(id,tenant_id,username,display_name,password_hash,status,administrator,revision,session_generation,failed_login_attempts,locked_until,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,0,NULL,$10,$11,$12)`, subject.ID, subject.TenantID, subject.Username, subject.DisplayName, passwordHash, subject.Status, subject.Administrator, subject.Revision, subject.SessionGeneration, nullableTime(subject.PasswordChangedAt), subject.CreatedAt, subject.UpdatedAt)
 	if err != nil {
 		if isUnique(err) {
-			return &ConflictError{Message: "用户名已存在"}
+			return &ConflictError{Message: "手机号、邮箱或用户名已被使用"}
 		}
 		return err
 	}

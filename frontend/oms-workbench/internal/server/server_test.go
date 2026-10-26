@@ -380,7 +380,8 @@ func TestLoginUsesReferenceOABrandAndIAMContract(t *testing.T) {
 		"验证码登录",
 		"请输入组织内手机号获取验证码",
 		"当前验证环境尚未接入短信服务",
-		"真实登录由 IAM 处理",
+		"账号、租户和权限由 IAM 处理",
+		"手机号或邮箱",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("login page missing %q status=%d body=%q", marker, response.Code, body)
@@ -538,6 +539,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/?view=oms-v1", nil)
 	request.Header.Set("X-OMS-Subject-ID", "88888888-8888-4888-8888-888888888888")
 	request.Header.Set("X-OMS-Tenant-ID", sessionTenantID)
+	request.Header.Set("X-OMS-Administrator", "true")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	body := response.Body.String()
@@ -597,7 +599,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261026.2",
+		"assets/oms-phase1.css?v=20261026.3",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
 		"assets/oms-phase1.js?v=20261026.1",
 		`data-oms-v1-flow="receivable-total"`,
@@ -645,8 +647,11 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"assets/oms-phase1-payroll-owner.js?v=20261025.1",
 		"assets/oms-phase1-finance-owner.js?v=20261026.1",
 		"assets/oms-phase1-open-api.js?v=20261025.1",
-		"assets/oms-phase1-identity.js?v=20261026.1",
+		"assets/oms-phase1-identity.js?v=20261026.2",
 		"assets/oms-phase1-feedback.js?v=20261026.2",
+		"＋ 新增账号",
+		"账号开通流程",
+		"登录账号",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
@@ -752,12 +757,12 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	identityAsset := httptest.NewRecorder()
 	handler.ServeHTTP(identityAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-identity.js", nil))
-	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/invitations", "/api/v1/admin/password-resets", "password_reset_token"} {
+	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/invitations", "/api/v1/admin/invitations/reissue", "login_identifier", "password_reset_token"} {
 		if identityAsset.Code != http.StatusOK || !strings.Contains(identityAsset.Body.String(), marker) {
 			t.Fatalf("OMS identity asset missing %q status=%d", marker, identityAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261026.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261026.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261026.3", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261026.2", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -935,9 +940,12 @@ func TestOMSPhase1LoginDoesNotLoadRetiredOARuntime(t *testing.T) {
 	for _, marker := range []string{
 		`data-oms-login`,
 		`assets/oms-phase1-login.css?v=20261022.6`,
-		`assets/oms-phase1-login.js?v=20261026.1`,
+		`assets/oms-phase1-login.js?v=20261026.2`,
 		`data-iam-route-prefix="/configured-iam"`,
 		`action="/gateway/login"`,
+		`data-login-panel="sms" hidden`,
+		`data-login-panel="iam"><div`,
+		"手机号或邮箱",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS login page missing %q status=%d", marker, response.Code)
@@ -959,7 +967,7 @@ func TestOMSPhase1LoginDoesNotLoadRetiredOARuntime(t *testing.T) {
 		path, contentType, marker string
 	}{
 		{"/assets/oms-phase1-login.css?v=20261022.6", "text/css; charset=utf-8", ".login-page__watermark-mark--main"},
-		{"/assets/oms-phase1-login.js?v=20261026.1", "application/javascript; charset=utf-8", "OMSPhase1GatewayCSRF"},
+		{"/assets/oms-phase1-login.js?v=20261026.2", "application/javascript; charset=utf-8", "OMSPhase1GatewayCSRF"},
 	} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, asset.path, nil))
