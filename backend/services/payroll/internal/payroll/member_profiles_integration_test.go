@@ -96,6 +96,13 @@ func TestMemberProfilesRevisionMaskingSchemesAndIsolation(t *testing.T) {
 	}
 
 	components := []ContributionComponent{{Key: "pension", BaseKind: "social", IndividualRateBPS: 800, EmployerRateBPS: 1600, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}, {Key: "medical", BaseKind: "social", IndividualRateBPS: 200, EmployerRateBPS: 900, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}, {Key: "unemployment", BaseKind: "social", IndividualRateBPS: 50, EmployerRateBPS: 50, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}, {Key: "work_injury", BaseKind: "social", IndividualRateBPS: 0, EmployerRateBPS: 20, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}, {Key: "maternity", BaseKind: "social", IndividualRateBPS: 0, EmployerRateBPS: 80, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}, {Key: "housing_fund", BaseKind: "housing", IndividualRateBPS: 700, EmployerRateBPS: 700, BaseFloorMinor: 300000, BaseCapMinor: 3000000, RoundingMode: "half_up"}}
+	seeded, err := service.ListSchemes(ctx, actor.TenantID)
+	if err != nil || len(seeded) != 1 || seeded[0].ID != "20260000-0004-4000-8000-000000000001" || componentRate(seeded[0].Components, "housing_fund") != 500 {
+		t.Fatalf("seeded Beijing reference scheme: %#v %v", seeded, err)
+	}
+	if medical := contributionComponent(seeded[0].Components, "medical"); medical.IndividualFixedMinor != 300 {
+		t.Fatalf("seeded Beijing medical fixed contribution: %#v", medical)
+	}
 	standard, err := service.CreateStandardScheme(ctx, actor, CreateStandardSchemeInput{CommandID: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1", Title: "测试权威方案", RegionCode: "CN-TEST", RegionName: "测试地区", EffectiveMonth: "2026-10", AuthoritySource: "https://authority.example.test/rules/2026", AuthorityVerifiedAt: time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC), Components: components, Reason: "权威规则导入"})
 	if err != nil || standard.SchemeKind != "standard" {
 		t.Fatalf("standard scheme: %#v %v", standard, err)
@@ -130,11 +137,11 @@ func TestMemberProfilesRevisionMaskingSchemesAndIsolation(t *testing.T) {
 		t.Fatalf("custom scheme history=%d %v", schemeHistory, err)
 	}
 	schemes, err := service.ListSchemes(ctx, actor.TenantID)
-	if err != nil || len(schemes) != 2 {
+	if err != nil || len(schemes) != 3 {
 		t.Fatalf("scheme list: %#v %v", schemes, err)
 	}
 	other, err := service.ListSchemes(ctx, "55555555-5555-4555-8555-555555555555")
-	if err != nil || len(other) != 1 || other[0].SchemeKind != "standard" {
+	if err != nil || len(other) != 2 || other[0].SchemeKind != "standard" || other[1].SchemeKind != "standard" {
 		t.Fatalf("tenant scheme isolation: %#v %v", other, err)
 	}
 
@@ -150,4 +157,13 @@ func componentRate(values []ContributionComponent, key string) int64 {
 		}
 	}
 	return -1
+}
+
+func contributionComponent(values []ContributionComponent, key string) ContributionComponent {
+	for _, value := range values {
+		if value.Key == key {
+			return value
+		}
+	}
+	return ContributionComponent{}
 }

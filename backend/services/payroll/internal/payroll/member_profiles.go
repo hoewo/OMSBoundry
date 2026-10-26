@@ -98,13 +98,15 @@ type SensitiveAccountReadInput struct {
 }
 
 type ContributionComponent struct {
-	Key               string `json:"key"`
-	BaseKind          string `json:"base_kind"`
-	IndividualRateBPS int64  `json:"individual_rate_bps"`
-	EmployerRateBPS   int64  `json:"employer_rate_bps"`
-	BaseFloorMinor    int64  `json:"base_floor_minor"`
-	BaseCapMinor      int64  `json:"base_cap_minor"`
-	RoundingMode      string `json:"rounding_mode"`
+	Key                  string `json:"key"`
+	BaseKind             string `json:"base_kind"`
+	IndividualRateBPS    int64  `json:"individual_rate_bps"`
+	EmployerRateBPS      int64  `json:"employer_rate_bps"`
+	IndividualFixedMinor int64  `json:"individual_fixed_minor,omitempty"`
+	EmployerFixedMinor   int64  `json:"employer_fixed_minor,omitempty"`
+	BaseFloorMinor       int64  `json:"base_floor_minor"`
+	BaseCapMinor         int64  `json:"base_cap_minor"`
+	RoundingMode         string `json:"rounding_mode"`
 }
 
 type ContributionScheme struct {
@@ -302,7 +304,7 @@ func validateComponents(values []ContributionComponent) ([]ContributionComponent
 	for i := range values {
 		v := &values[i]
 		v.Key, v.BaseKind, v.RoundingMode = strings.ToLower(strings.TrimSpace(v.Key)), strings.ToLower(strings.TrimSpace(v.BaseKind)), strings.ToLower(strings.TrimSpace(v.RoundingMode))
-		if seen[v.Key] || want[v.Key] != v.BaseKind || v.IndividualRateBPS < 0 || v.IndividualRateBPS > 10000 || v.EmployerRateBPS < 0 || v.EmployerRateBPS > 10000 || v.BaseFloorMinor < 0 || v.BaseFloorMinor > maxPayrollMinor || v.BaseCapMinor < v.BaseFloorMinor || v.BaseCapMinor > maxPayrollMinor || (v.RoundingMode != "half_up" && v.RoundingMode != "down" && v.RoundingMode != "up") {
+		if seen[v.Key] || want[v.Key] != v.BaseKind || v.IndividualRateBPS < 0 || v.IndividualRateBPS > 10000 || v.EmployerRateBPS < 0 || v.EmployerRateBPS > 10000 || v.IndividualFixedMinor < 0 || v.IndividualFixedMinor > maxPayrollMinor || v.EmployerFixedMinor < 0 || v.EmployerFixedMinor > maxPayrollMinor || v.BaseFloorMinor < 0 || v.BaseFloorMinor > maxPayrollMinor || v.BaseCapMinor < v.BaseFloorMinor || v.BaseCapMinor > maxPayrollMinor || (v.RoundingMode != "half_up" && v.RoundingMode != "down" && v.RoundingMode != "up" && v.RoundingMode != "yuan_half_up") {
 			return nil, fmt.Errorf("invalid contribution component")
 		}
 		seen[v.Key] = true

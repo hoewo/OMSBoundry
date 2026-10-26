@@ -23,7 +23,8 @@
   const api=(path,options)=>ownerAPI.api('payroll',path,options);
   const post=(path,value)=>api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
   const put=(path,value)=>api(path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
-  const components={pension:'养老保险',medical:'医疗保险',unemployment:'失业保险',injury:'工伤保险',maternity:'生育保险',housing:'住房公积金'};
+  const components={pension:'养老保险',medical:'医疗保险（含生育）',unemployment:'失业保险',work_injury:'工伤保险',maternity:'生育保险（已并入医保）',housing_fund:'住房公积金'};
+  const componentOrder=['pension','medical','unemployment','work_injury','maternity','housing_fund'];
   const labels={review_pending:'待核对',ready_to_pay:'待发放',partially_paid:'部分发放',paid:'已发放',zero_pending:'待确认零发放',no_payment_required:'无需发放',recovery_pending:'待扣回',voided:'已作废'};
   const statusLabel=value=>labels[value]||value||'—';
   const statusTone=value=>value==='paid'||value==='no_payment_required'?'positive':value==='ready_to_pay'||value==='partially_paid'||value==='zero_pending'?'warning':value==='voided'?'muted':'';
@@ -42,7 +43,10 @@
   function payrollRows(){const rows=[];for(const run of state.runs)for(const line of run.lines||[])rows.push({run,line,department:personDepartment(line.person_id)});return rows}
   function sorted(items){const {key,direction}=state.sort;return [...items].sort((left,right)=>{let a,b;if(key==='member'){a=left.line.person_display_name;b=right.line.person_display_name}else if(key==='payable'){a=BigInt(String(left.line.net_payable_minor||0));b=BigInt(String(right.line.net_payable_minor||0))}else if(key==='status'){a=left.line.status;b=right.line.status}else if(key==='month'){a=left.run.period;b=right.run.period}else{a=left.run.planned_pay_date;b=right.run.planned_pay_date}const result=compare(a,b);return direction==='asc'?result:-result})}
   function emptyRow(title,copy){return '<tr><td colspan="11"><div class="oms-v1__empty"><strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div></td></tr>'}
-  function schemeSort(left,right){return String(right.effective_month||'').localeCompare(String(left.effective_month||''))||Number(right.revision||0)-Number(left.revision||0)}
+  function schemeSort(left,right){return Number(right.scheme_kind==='custom')-Number(left.scheme_kind==='custom')||String(right.effective_month||'').localeCompare(String(left.effective_month||''))||Number(right.revision||0)-Number(left.revision||0)}
+  function percentInput(value){return (Number(value||0)/100).toFixed(2)}
+  function percentBPS(value){const raw=String(value??'').trim();if(!/^(?:100(?:\.0{1,2})?|\d{1,2}(?:\.\d{1,2})?)$/.test(raw))throw new Error('缴费比例必须是 0 到 100 之间、最多两位小数的百分比');return Math.round(Number(raw)*100)}
+  function nonnegativeMinor(value,label){const amount=model.decimalMinor(value);if(amount===null||amount<0n)throw new Error(label+'必须是大于等于 0、最多两位小数的金额');return minorJSON(amount)}
 
   async function load(){
     state.loading=true;state.error='';render();
@@ -65,8 +69,9 @@
     const target=root.querySelector('[data-internal-scheme-state]'),button=target?.querySelector('[data-internal-benefit-scheme]');
     if(!target)return;
     target.classList.toggle('is-warning',state.schemes.length===0||Boolean(state.error));
-    target.querySelector('p').textContent=state.error?'工资服务暂不可用：'+state.error:state.schemes.length?'已有 '+state.schemes.length+' 个缴费方案；新工资表会冻结所选方案和比例。':'尚无缴费方案；请先由工资管理员导入经核验的地区标准方案。';
-    if(button)button.textContent='查看方案';
+    const custom=state.schemes.find(item=>item.scheme_kind==='custom');
+    target.querySelector('p').textContent=state.error?'工资服务暂不可用：'+state.error:custom?'当前使用本公司缴费方案；新工资表会冻结所选方案和比例。':state.schemes.length?'已提供北京官方口径参考方案；工伤档位和公积金比例请按本公司情况确认。':'缴费方案尚未初始化，请完成 Payroll 数据库迁移。';
+    if(button)button.textContent=custom?'设置方案':'确认方案';
   }
   function renderPager(total){
     const target=root.querySelector('[data-internal-pager="payroll"]'),pages=Math.max(1,Math.ceil(total/state.pageSize));
@@ -118,11 +123,32 @@
   }
 
   function schemeFacts(scheme){
-    const rows=(scheme.components||[]).map(component=>'<div><dt>'+safe(components[component.key]||component.key)+'</dt><dd>个人 '+(Number(component.individual_rate_bps||0)/100).toFixed(2)+'% · 单位 '+(Number(component.employer_rate_bps||0)/100).toFixed(2)+'%</dd></div>').join('');
-    return '<article class="oms-v1__scheme-item"><header><strong>'+safe(scheme.title)+'</strong>'+tag(scheme.scheme_kind==='standard'?'标准方案':'自定义方案')+'</header><p>'+safe(scheme.region_name||scheme.region_code||'未设置地区')+' · '+safe(scheme.effective_month)+' · revision '+safe(scheme.revision)+'</p><dl class="oms-v1__record-facts">'+rows+'</dl><small>来源：'+safe(scheme.authority_source||'租户自定义')+'</small></article>';
+    const rows=[...(scheme.components||[])].sort((left,right)=>componentOrder.indexOf(left.key)-componentOrder.indexOf(right.key)).map(component=>{const individualFixed=Number(component.individual_fixed_minor||0),employerFixed=Number(component.employer_fixed_minor||0),fixed=(individualFixed||employerFixed)?'；固定额 个人 '+model.money(individualFixed)+' / 单位 '+model.money(employerFixed):'';return '<div><dt>'+safe(components[component.key]||component.key)+'</dt><dd>个人 '+percentInput(component.individual_rate_bps)+'% · 单位 '+percentInput(component.employer_rate_bps)+'%'+fixed+'</dd></div>'}).join('');
+    const action=scheme.scheme_kind==='standard'?'以此创建本公司方案':'编辑本公司方案';
+    return '<article class="oms-v1__scheme-item"><header><div><strong>'+safe(scheme.title)+'</strong><span>'+safe(scheme.region_name||scheme.region_code||'未设置地区')+' · '+safe(scheme.effective_month)+'</span></div>'+tag(scheme.scheme_kind==='standard'?'官方参考':'本公司方案')+'</header><dl class="oms-v1__record-facts">'+rows+'</dl><footer><small>来源核验：'+safe(date(scheme.authority_verified_at))+' · revision '+safe(scheme.revision)+'</small><button type="button" data-owner-scheme-edit="'+safe(scheme.id)+'">'+action+'</button></footer></article>';
   }
   function openSchemes(){
-    show({kicker:'工资设置',title:'五险一金缴费方案',dismissOnly:true,body:state.schemes.length?'<section class="oms-v1__scheme-list">'+state.schemes.map(schemeFacts).join('')+'</section>':'<div class="oms-v1__empty"><strong>暂无可用方案</strong><span>标准比例必须包含地区、权威来源、核验时间和生效月份，请由工资管理员导入后再生成工资表。</span></div>'});
+    const body=state.schemes.length?'<div class="oms-v1__scheme-guidance"><strong>先用参考方案，再按公司实际调整</strong><span>北京参考值可直接用于体验。工伤单位费率按最低行业档 0.2%、住房公积金按最低可选比例 5% 预填；正式发薪前应由工资管理员核对。</span></div><section class="oms-v1__scheme-list">'+state.schemes.map(schemeFacts).join('')+'</section>':'<div class="oms-v1__empty"><strong>缴费方案尚未初始化</strong><span>Payroll 数据库缺少北京参考方案迁移；完成服务升级后，本页面会出现可直接确认和调整的默认方案。</span></div>';
+    show({kicker:'工资设置',title:'五险一金缴费方案',dismissOnly:true,body});
+    for(const button of root.querySelectorAll('[data-owner-scheme-edit]'))button.addEventListener('click',()=>{const scheme=state.schemes.find(item=>item.id===button.dataset.ownerSchemeEdit);if(scheme)openSchemeEditor(scheme)});
+  }
+  function schemeEditorRows(scheme){
+    const byKey=new Map((scheme.components||[]).map(item=>[item.key,item]));
+    return componentOrder.map(key=>{const item=byKey.get(key);if(!item)return '';const locked=key==='maternity'?' readonly':'';return '<div class="oms-v1__scheme-rate-row"><strong>'+safe(components[key])+'</strong><label><span>个人比例</span><span class="oms-v1__input-suffix"><input name="'+key+'_individual_rate" inputmode="decimal" required value="'+percentInput(item.individual_rate_bps)+'"'+locked+'><i>%</i></span></label><label><span>单位比例</span><span class="oms-v1__input-suffix"><input name="'+key+'_employer_rate" inputmode="decimal" required value="'+percentInput(item.employer_rate_bps)+'"'+locked+'><i>%</i></span></label><label><span>个人固定额</span><span class="oms-v1__input-prefix"><i>¥</i><input name="'+key+'_individual_fixed" inputmode="decimal" required value="'+minorInput(item.individual_fixed_minor||0)+'"'+locked+'></span></label><label><span>单位固定额</span><span class="oms-v1__input-prefix"><i>¥</i><input name="'+key+'_employer_fixed" inputmode="decimal" required value="'+minorInput(item.employer_fixed_minor||0)+'"'+locked+'></span></label></div>'}).join('');
+  }
+  function openSchemeEditor(scheme){
+    const social=(scheme.components||[]).find(item=>item.base_kind==='social'),housing=(scheme.components||[]).find(item=>item.base_kind==='housing'),custom=scheme.scheme_kind==='custom';
+    const source=custom?state.schemes.find(item=>item.id===scheme.source_scheme_id&&item.scheme_kind==='standard'):scheme;
+    if(!source){show({kicker:'工资设置',title:'无法编辑方案',dismissOnly:true,body:'<div class="oms-v1__empty"><strong>标准来源不可用</strong><span>当前自定义方案缺少可追溯的标准来源，请联系管理员恢复来源 revision。</span></div>'});return}
+    show({kicker:'工资设置',title:custom?'编辑本公司缴费方案':'确认北京参考方案',submit:custom?'保存新版本':'保存本公司方案',enabled:true,body:'<form class="oms-v1__form-grid">'+field('方案名称 *','<input name="title" required maxlength="160" value="'+safe(custom?scheme.title:'本公司北京五险一金方案')+'">')+field('生效月份 *','<input name="effective_month" type="month" required value="'+safe(custom?scheme.effective_month:currentMonth())+'">')+field('社保基数下限（元） *','<input name="social_floor" inputmode="decimal" required value="'+minorInput(social?.base_floor_minor||0)+'">')+field('社保基数上限（元） *','<input name="social_cap" inputmode="decimal" required value="'+minorInput(social?.base_cap_minor||0)+'">')+field('公积金基数下限（元） *','<input name="housing_floor" inputmode="decimal" required value="'+minorInput(housing?.base_floor_minor||0)+'">')+field('公积金基数上限（元） *','<input name="housing_cap" inputmode="decimal" required value="'+minorInput(housing?.base_cap_minor||0)+'">')+'<div class="oms-v1__scheme-rate-editor is-wide"><div class="oms-v1__scheme-rate-head"><strong>缴费比例与固定额</strong><span>金额均按人民币／月</span></div>'+schemeEditorRows(scheme)+'</div>'+field('设置说明 *','<textarea name="reason" required maxlength="500">'+safe(custom?'核对并调整本公司实际缴费方案':'基于北京官方公开口径建立；已核对本公司工伤档位和公积金比例')+'</textarea>',true)+'<label class="oms-v1__inline-check is-wide"><input name="confirmed" type="checkbox" value="yes" required><span>我已核对工伤行业档位、公积金比例和生效月份；这份方案用于后续工资计算。</span></label><div class="oms-v1__form-note is-wide"><strong>北京参考：</strong>养老 16%／8%，医疗（含生育）9.8%／2%＋个人固定 3 元，失业 0.5%／0.5%；工伤按最低档 0.2% 预填，公积金按最低可选 5% 预填。后两项必须结合本公司实际确认。</div>'+formStatus('')+'</form>',onSubmit:async formData=>{
+      if(formData.get('confirmed')!=='yes')throw new Error('请先确认本公司实际适用的工伤档位和公积金比例');
+      const floors={social:nonnegativeMinor(formData.get('social_floor'),'社保基数下限'),housing:nonnegativeMinor(formData.get('housing_floor'),'公积金基数下限')},caps={social:nonnegativeMinor(formData.get('social_cap'),'社保基数上限'),housing:nonnegativeMinor(formData.get('housing_cap'),'公积金基数上限')};
+      if(caps.social<floors.social||caps.housing<floors.housing)throw new Error('缴费基数上限不能低于下限');
+      const next=(scheme.components||[]).map(item=>({...item,individual_rate_bps:percentBPS(formData.get(item.key+'_individual_rate')),employer_rate_bps:percentBPS(formData.get(item.key+'_employer_rate')),individual_fixed_minor:nonnegativeMinor(formData.get(item.key+'_individual_fixed'),components[item.key]+'个人固定额'),employer_fixed_minor:nonnegativeMinor(formData.get(item.key+'_employer_fixed'),components[item.key]+'单位固定额'),base_floor_minor:floors[item.base_kind],base_cap_minor:caps[item.base_kind]}));
+      const payload={command_id:uuid(),title:String(formData.get('title')||'').trim(),effective_month:String(formData.get('effective_month')||''),components:next,reason:String(formData.get('reason')||'').trim()};
+      if(custom)await put('/api/v1/contribution-schemes/custom/'+encodeURIComponent(scheme.id),{...payload,expected_revision:scheme.revision});else await post('/api/v1/contribution-schemes/custom',{...payload,source_scheme_id:source.id,source_scheme_revision:source.revision});
+      close();await load();openSchemes();
+    }});
   }
   function eligibleMembers(run=null){
     const compensationIDs=new Set(state.compensations.map(item=>item.person_id)),existing=new Set((run?.lines||[]).map(item=>item.person_id));

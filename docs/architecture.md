@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-26 工资缴费方案边界（BF-273）：Payroll 仍独占 Contribution Scheme 当前投影、追加 revision 和工资计算快照。平台标准方案是 `tenant_id IS NULL` 的只读、可追溯目录；Tenant 自定义方案必须引用精确标准 ID／revision，通过 Payroll 命令复制或修订，Workbench 只组合这些版本化端口。北京参考方案通过 migration 幂等建立，不设全局租户、不复制到 People，也不改变 Money 对实际发放的所有权。计算组件的比例使用整数基点、固定额使用整数分，取整策略作为方案快照字段一起冻结。[验证报告](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)
+
 2026-10-26 账号开通边界（BF-272）：手机号、邮箱和兼容用户名都是 IAM Subject 的登录标识，不是 People Person 属性或 Workbench 事实。Workbench 只组合管理员新增、Subject 列表、一次性链接交付和激活页面；IAM 独占规范化、唯一性、待激活状态、Token 摘要、密码、Session Generation 与审计。重新签发邀请只替换 IAM 内同类未使用 Token，不改写 Subject、Tenant 或业务引用。未配置消息提供商时架构中不存在“发送邀请”步骤。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
 
 2026-10-26 页面与接入边界（BF-268～BF-270）：Internal Finance 继续拥有报销／付款申请，两类表单和支付方式只是其版本化输入与投影；报销正式提交仍经 Evidence，实际付款仍归 Money。IAM 继续独占 Tenant、Subject、Session、邀请、状态和密码重置，Workbench 的账号／租户页只组合其受保护接口，不复制账号事实。Feedback 对所有有效登录账号开放而不发布业务 Capability；Gateway 只以 CSRF＋IAM Session 派生配置，Feedback 平台仍独占反馈事实，跨域、Secret 和脱敏身份边界不变。

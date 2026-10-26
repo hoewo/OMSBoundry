@@ -13,7 +13,21 @@ test('formal payroll execution replaces browser persistence only when both owner
   assert.match(internal,/ownerPayroll\?\{payroll_periods:\[\]\}/);
   assert.match(internal,/renderMembers\(\);if\(!ownerPayroll\)renderPayroll\(\);if\(!ownerFinance\)renderFinance\(\)/);
   assert.ok(payroll.includes("if(!root||!model||!ownerAPI?.app?.('people-groups')||!ownerAPI?.app?.('payroll'))return"));
-  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261025\.1/);
+  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261026\.1/);
+});
+
+test('payroll offers a visible Beijing reference and an editable tenant scheme journey',()=>{
+  for(const marker of [
+    '北京官方口径参考方案',
+    '以此创建本公司方案',
+    '我已核对工伤行业档位',
+    "post('/api/v1/contribution-schemes/custom'",
+    "put('/api/v1/contribution-schemes/custom/'",
+    'individual_fixed_minor',
+    'work_injury',
+    'housing_fund',
+  ])assert.ok(payroll.includes(marker),`missing ${marker}`);
+  assert.doesNotMatch(payroll,/请先由工资管理员导入/);
 });
 
 test('payroll owner journey uses versioned owner APIs and revision guards',()=>{

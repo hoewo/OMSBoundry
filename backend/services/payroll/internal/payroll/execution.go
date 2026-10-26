@@ -28,13 +28,15 @@ type Adjustment struct {
 }
 
 type ContributionAmount struct {
-	Key               string `json:"key"`
-	BaseMinor         int64  `json:"base_minor"`
-	IndividualRateBPS int64  `json:"individual_rate_bps"`
-	EmployerRateBPS   int64  `json:"employer_rate_bps"`
-	IndividualMinor   int64  `json:"individual_minor"`
-	EmployerMinor     int64  `json:"employer_minor"`
-	RoundingMode      string `json:"rounding_mode"`
+	Key                  string `json:"key"`
+	BaseMinor            int64  `json:"base_minor"`
+	IndividualRateBPS    int64  `json:"individual_rate_bps"`
+	EmployerRateBPS      int64  `json:"employer_rate_bps"`
+	IndividualFixedMinor int64  `json:"individual_fixed_minor,omitempty"`
+	EmployerFixedMinor   int64  `json:"employer_fixed_minor,omitempty"`
+	IndividualMinor      int64  `json:"individual_minor"`
+	EmployerMinor        int64  `json:"employer_minor"`
+	RoundingMode         string `json:"rounding_mode"`
 }
 
 type PayrollLine struct {
@@ -634,6 +636,8 @@ func calculateContribution(base, floor, cap, rate int64, mode string) (int64, er
 	}
 	product := base * rate
 	switch mode {
+	case "yuan_half_up":
+		return ((product + 500000) / 1000000) * 100, nil
 	case "down":
 		return product / 10000, nil
 	case "up":
@@ -679,11 +683,19 @@ func CalculatePayrollLine(fixed, socialBase, housingBase, performance, tax int64
 		if contributionErr != nil {
 			return 0, nil, 0, 0, 0, 0, 0, contributionErr
 		}
+		individual, contributionErr = addMinor(individual, c.IndividualFixedMinor)
+		if contributionErr != nil || individual > maxPayrollMinor {
+			return 0, nil, 0, 0, 0, 0, 0, fmt.Errorf("invalid payroll contribution")
+		}
 		company, contributionErr := calculateContribution(base, c.BaseFloorMinor, c.BaseCapMinor, c.EmployerRateBPS, c.RoundingMode)
 		if contributionErr != nil {
 			return 0, nil, 0, 0, 0, 0, 0, contributionErr
 		}
-		contributions = append(contributions, ContributionAmount{Key: c.Key, BaseMinor: max(c.BaseFloorMinor, minNonzeroCap(base, c.BaseCapMinor)), IndividualRateBPS: c.IndividualRateBPS, EmployerRateBPS: c.EmployerRateBPS, IndividualMinor: individual, EmployerMinor: company, RoundingMode: c.RoundingMode})
+		company, contributionErr = addMinor(company, c.EmployerFixedMinor)
+		if contributionErr != nil || company > maxPayrollMinor {
+			return 0, nil, 0, 0, 0, 0, 0, fmt.Errorf("invalid payroll contribution")
+		}
+		contributions = append(contributions, ContributionAmount{Key: c.Key, BaseMinor: max(c.BaseFloorMinor, minNonzeroCap(base, c.BaseCapMinor)), IndividualRateBPS: c.IndividualRateBPS, EmployerRateBPS: c.EmployerRateBPS, IndividualFixedMinor: c.IndividualFixedMinor, EmployerFixedMinor: c.EmployerFixedMinor, IndividualMinor: individual, EmployerMinor: company, RoundingMode: c.RoundingMode})
 		employee, err = addMinor(employee, individual)
 		if err != nil {
 			return 0, nil, 0, 0, 0, 0, 0, err
