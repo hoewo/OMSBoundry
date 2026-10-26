@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前账号开通修复（BF-272）：公网 Workbench 与 Identity Access 的账号邀请契约已对齐，手机号／邮箱使用 `login_identifier` 创建待激活账号，旧 `username` 客户端继续兼容；修复已随 D1 Suite `v0.1.0-test.oms-v1.38` 发布。发布后 Identity schema 8、D1 检查、19/19 healthy、备份 checksum 和公网入口核对通过；验证没有代建测试账号。[发布记录](./docs/reports/oms-v1-account-onboarding-publication-20261026.md)
+
 当前工资可用性修订（BF-273）：北京 2026 五险一金参考方案、精确固定额／整元取整计算和工资页“设置比例”已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布到 [oatest](https://oatest.antuinfo.cn/)。发布后 D1 检查、Payroll schema 4、真实标准方案读取、19/19 healthy 和公网资源核对通过；升级前备份为 `/var/backups/omsbizfoundry/20261026T132424Z`。工伤 0.2% 与公积金 5% 只是最低可选预填值，租户仍须复制为本公司方案并确认实际适用参数。[发布记录](./docs/reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)
 
 当前 OMS1 迭代 P6：Identity & Access 已独立拥有员工 API Key、一次 secret、不可逆 verifier、期限／上限／撤销和 180 天脱敏使用审计；Gateway 已建立 `/open-api/v1/` HTTPS allowlist、当前账号／Grant／Person 复验、Key／Tenant 限流和统一错误；Workbench 已提供 Key 管理、本人调用记录与 Webhook 未开放占位。真实 PostgreSQL 18、IAM HTTP、Gateway 契约和前端静态交互门禁通过；尚未部署 D1／公网。当前进入 P7 Evidence 发票上传、本人报销 API 与 Finance→Money 闭环。[P6 验证报告](./docs/reports/oms-v1-iteration-p6-open-api-validation-20261025.md)

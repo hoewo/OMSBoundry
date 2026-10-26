@@ -6,7 +6,7 @@ BF-273 必须验证：新 PostgreSQL schema 执行全部 migration 后存在且�
 
 BF-272 账号开通回归要求：真实 PostgreSQL migration 必须接受规范大陆手机号、规范邮箱和历史用户名；管理员新增手机号／邮箱待激活账号后可重签链接，旧 Token 必须拒绝、新 Token 可激活并用于登录；非管理员、跨 Tenant、重复标识和非 pending 重签必须拒绝。Workbench 静态与浏览器回归必须覆盖“新增账号”、三步说明、复制链接／完整通知、待激活重签、登录页默认手机号／邮箱密码入口及未接消息服务时不出现虚假已发送。通过状态只按本轮实际执行结果登记。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)
 
-2026-10-26 BF-272 本地候选验证：Identity Access 与 Unified Workbench 的 `go test ./...`、`go vet ./...` 通过，带 `integration` build tag 的 HTTP 生命周期测试编译并在缺少 `TEST_DATABASE_URL` 时按约定跳过；两份前端脚本 `node --check`、`git diff --check` 通过。本地临时 Workbench 已实际观察“新增账号”三步页、手机号／邮箱表单以及默认账号密码登录页，进程随后关闭。当前没有可用 PostgreSQL 进程，因此 migration、旧链接失效和手机／邮箱真实激活登录尚未形成数据库运行证据；也未部署 D1／公网。
+2026-10-26 BF-272 发布验证：本地 Identity Access 与 Unified Workbench 的 `go test ./...`、`go vet ./...` 通过，带 `integration` build tag 的 HTTP 生命周期测试编译并在当时缺少 `TEST_DATABASE_URL` 时按约定跳过；页面脚本和本地 Workbench 走查通过。首次公网组合暴露 Workbench `login_identifier` 与旧 Identity `username` 字段不一致并返回 400。D1 Suite `v0.1.0-test.oms-v1.38` 已补齐新 Identity 镜像；正式 release bundle、升级前预检、联合备份 checksum、发布后独立 `check`、schema `000008_login_identifiers.sql`、19/19 healthy 和公网入口通过。为不制造假账号，公网真实新增／激活留给用户重试，不写作已通过。[发布记录](./reports/oms-v1-account-onboarding-publication-20261026.md)
 
 ## OMS1 页面、账号与 Feedback 登录门禁（2026-10-26，本地验证中／未部署）
 
