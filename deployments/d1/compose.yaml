@@ -317,7 +317,7 @@ services:
       TENANT_NAME: ${TENANT_NAME:-OMSBizFoundry}
       PUBLIC_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       SIGNING_KEY_FILE: /data/iam/signing-keys.json
-      CAPABILITY_MANIFEST_PATHS: /config/identity-access-capabilities.json,/config/internal-finance-requests-capabilities.json,/config/payroll-capabilities.json,/config/open-api-capabilities.json,/config/feedback-capabilities.json,/config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
+      CAPABILITY_MANIFEST_PATHS: /config/identity-access-capabilities.json,/config/internal-finance-requests-capabilities.json,/config/payroll-capabilities.json,/config/open-api-capabilities.json,/config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
       SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
       BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-系统管理员}
@@ -339,7 +339,6 @@ services:
       - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
       - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
       - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
-      - ../../contracts/access/v1/examples/feedback-capabilities.json:/config/feedback-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro
@@ -377,7 +376,6 @@ services:
       - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
       - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
       - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
-      - ../../contracts/access/v1/examples/feedback-capabilities.json:/config/feedback-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/people-groups-capabilities.json:/config/people-groups-capabilities.json:ro

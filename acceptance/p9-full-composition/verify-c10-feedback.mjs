@@ -127,10 +127,6 @@ async function prepareActor(label, username, passwordFile, tenant) {
   })
   const session = await requestJSON(`${baseURL}/auth/api/v1/session`, { jar, label: `GET ${label} session` })
   if (session.principal?.tenant_id !== tenant.id || session.principal?.subject_id !== tenant.administrator_subject_id) throw new Error(`${label} IAM session does not match C1`)
-  await requestJSON(`${baseURL}/auth/api/v1/admin/grants`, {
-    method: 'POST', jar, expected: [204, 409], label: `POST ${label} Feedback grant`, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-    body: JSON.stringify({ subject_id: tenant.administrator_subject_id, audience: 'feedback', action: 'feedback.use' }),
-  })
   const envelope = await requestJSON(`${baseURL}/gateway/feedback/config`, {
     method: 'POST', jar, label: `POST ${label} Feedback config`, headers: { 'X-CSRF-Token': csrf },
   })

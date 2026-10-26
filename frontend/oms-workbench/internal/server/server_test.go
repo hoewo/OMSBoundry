@@ -181,8 +181,6 @@ func TestHomeHidesTechnicalApplications(t *testing.T) {
 		`data-workflow-assistant`,
 		`data-workflow-settings`,
 		`data-feedback-toggle`,
-		`data-feedback-mobile-toggle`,
-		`data-feedback-mobile-menu`,
 		`data-feedback-menu`,
 		"临河新区岩土勘察试验报告.pdf",
 		"文件保存后自动计入勘察试验阶段",
@@ -556,9 +554,18 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-identity-route-prefix="/configured-iam"`,
 		`data-operating-party-id="` + operatingPartyID + `"`,
 		`data-feedback-sdk-url="https://feedback.example.test/sdk-v2/index.html?embed=web"`,
-		`data-feedback-toggle`,
+		`data-oms-v1-nav="feedback"`,
+		`data-feedback-page`,
 		`data-feedback-mode="submit"`,
 		`data-feedback-mode="status"`,
+		`data-oms-v1-top-feedback`,
+		`data-oms-v1-rail-logout`,
+		`data-oms-v1-top-logout`,
+		`action="/gateway/logout"`,
+		`data-oms-v1-nav="account"`,
+		`data-oms-v1-page="account"`,
+		`data-internal-new-finance="reimbursement"`,
+		`data-internal-new-finance="payment"`,
 		`data-oms-v1-nav="overview"`,
 		`data-oms-v1-nav="projects"`,
 		`data-oms-v1-nav="receivable"`,
@@ -590,9 +597,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="party-directory" data-oms-v1-route="/party"`,
 		`data-oms-v1-application="billing-invoice" data-oms-v1-route="/billing"`,
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
-		"assets/oms-phase1.css?v=20261025.2",
+		"assets/oms-phase1.css?v=20261026.2",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
-		"assets/oms-phase1.js?v=20261023.2",
+		"assets/oms-phase1.js?v=20261026.1",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -636,13 +643,20 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"assets/oms-phase1-internal-model.js?v=20261023.2",
 		"assets/oms-phase1-internal.js?v=20261025.2",
 		"assets/oms-phase1-payroll-owner.js?v=20261025.1",
-		"assets/oms-phase1-finance-owner.js?v=20261025.1",
+		"assets/oms-phase1-finance-owner.js?v=20261026.1",
 		"assets/oms-phase1-open-api.js?v=20261025.1",
-		"assets/oms-phase1-feedback.js?v=20261026.1",
+		"assets/oms-phase1-identity.js?v=20261026.1",
+		"assets/oms-phase1-feedback.js?v=20261026.2",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("OMS phase 1 page missing %q status=%d", marker, response.Code)
 		}
+	}
+	if got := strings.Count(omsPhase1HTML, `action="/gateway/logout"`); got != 2 {
+		t.Fatalf("OMS phase 1 template must expose exactly two logout forms, got %d", got)
+	}
+	if got := strings.Count(omsPhase1HTML, `data-oms-v1-nav="feedback"`); got != 3 {
+		t.Fatalf("OMS phase 1 template feedback must be reachable from sidebar, top bar, and mobile navigation, got %d entries", got)
 	}
 	if strings.Contains(body, `<aside class="ant-layout-sider app-shell__sider">`) || strings.Contains(body, `src="assets/workbench.js"`) {
 		t.Fatal("primary OMS response must not render or boot the legacy OA shell")
@@ -697,6 +711,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		{"/assets/oms-phase1-payroll-owner.js", "application/javascript; charset=utf-8", "payments:batch"},
 		{"/assets/oms-phase1-finance-owner.js", "application/javascript; charset=utf-8", "finance-payments/batch"},
 		{"/assets/oms-phase1-open-api.js", "application/javascript; charset=utf-8", "完整 secret 只显示一次"},
+		{"/assets/oms-phase1-identity.js", "application/javascript; charset=utf-8", "/api/v1/admin/invitations"},
 		{"/assets/oms-phase1-feedback.js", "application/javascript; charset=utf-8", "event.origin !== sdkOrigin"},
 		{"/assets/oms-phase1-evidence.js", "application/javascript; charset=utf-8", "createEvidenceTransfer"},
 		{"/assets/workbench.js", "application/javascript; charset=utf-8", "window.location.assign('/workbench/?view=oms-v1')"},
@@ -706,6 +721,9 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		if assetResponse.Code != http.StatusOK || assetResponse.Header().Get("Content-Type") != asset.contentType || !strings.Contains(assetResponse.Body.String(), asset.marker) {
 			t.Fatalf("OMS phase 1 asset %s missing %q status=%d", asset.path, asset.marker, assetResponse.Code)
 		}
+	}
+	if !strings.Contains(omsPhase1CSS, `.oms-v1__nav-tree{flex:1;min-height:0;overflow-y:auto`) || !strings.Contains(omsPhase1CSS, `.oms-v1__rail-logout button{display:flex;width:100%`) {
+		t.Fatal("OMS phase 1 must keep the business navigation scrollable and the labeled logout action visible")
 	}
 	ownerAsset := httptest.NewRecorder()
 	handler.ServeHTTP(ownerAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-internal.js", nil))
@@ -720,7 +738,26 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 			t.Fatalf("OMS P3 owner composition asset missing %q status=%d", marker, ownerAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261025.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261023.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261025.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-feedback.js?v=20261026.1", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	financeAsset := httptest.NewRecorder()
+	handler.ServeHTTP(financeAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-finance-owner.js", nil))
+	for _, marker := range []string{
+		"正式提交报销前请上传发票或其他有效凭证",
+		"payment_method",
+		"method==='cash'",
+		"OMSPhase1EvidenceBridge",
+	} {
+		if financeAsset.Code != http.StatusOK || !strings.Contains(financeAsset.Body.String(), marker) {
+			t.Fatalf("OMS finance owner asset missing %q status=%d", marker, financeAsset.Code)
+		}
+	}
+	identityAsset := httptest.NewRecorder()
+	handler.ServeHTTP(identityAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-identity.js", nil))
+	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/invitations", "/api/v1/admin/password-resets", "password_reset_token"} {
+		if identityAsset.Code != http.StatusOK || !strings.Contains(identityAsset.Body.String(), marker) {
+			t.Fatalf("OMS identity asset missing %q status=%d", marker, identityAsset.Code)
+		}
+	}
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261026.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261025.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261026.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -858,7 +895,7 @@ func TestOMSPhase1FeedbackSDKHostIsFailClosedAndEphemeral(t *testing.T) {
 		"badge.hidden = count === 0",
 		"hostContext: buildHostContext()",
 		"setEntryVisible(true)",
-		"error.status !== 401 && error.status !== 403",
+		"error && error.status === 401",
 	} {
 		if !strings.Contains(omsPhase1FeedbackJS, marker) {
 			t.Fatalf("feedback host missing invariant %q", marker)
@@ -898,7 +935,7 @@ func TestOMSPhase1LoginDoesNotLoadRetiredOARuntime(t *testing.T) {
 	for _, marker := range []string{
 		`data-oms-login`,
 		`assets/oms-phase1-login.css?v=20261022.6`,
-		`assets/oms-phase1-login.js?v=20261022.6`,
+		`assets/oms-phase1-login.js?v=20261026.1`,
 		`data-iam-route-prefix="/configured-iam"`,
 		`action="/gateway/login"`,
 	} {
@@ -922,7 +959,7 @@ func TestOMSPhase1LoginDoesNotLoadRetiredOARuntime(t *testing.T) {
 		path, contentType, marker string
 	}{
 		{"/assets/oms-phase1-login.css?v=20261022.6", "text/css; charset=utf-8", ".login-page__watermark-mark--main"},
-		{"/assets/oms-phase1-login.js?v=20261022.6", "application/javascript; charset=utf-8", "OMSPhase1GatewayCSRF"},
+		{"/assets/oms-phase1-login.js?v=20261026.1", "application/javascript; charset=utf-8", "OMSPhase1GatewayCSRF"},
 	} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, asset.path, nil))
@@ -963,7 +1000,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261023.2"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261026.1"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}

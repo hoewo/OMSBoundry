@@ -63,7 +63,7 @@ exact inputs and secret-free evidence contracts.
 
 `verify-c11-browser.mjs` then uses real Chromium contexts for both Tenant
 administrators. It opens submit and status against the configured cross-origin
-Feedback frame, records page／Console health, revokes `feedback.use`, proves
+Feedback frame, records page／Console health, ends the primary browser session, proves
 that Feedback disappears without breaking normal OMS navigation, restores the
 grant, and proves the entry returns. Playwright and Chromium are operator
 prerequisites and are not bundled into the release archive.

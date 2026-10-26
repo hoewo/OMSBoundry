@@ -31,8 +31,7 @@
     {"key": "project.production", "name": "项目 / 生产"},
     {"key": "finance", "name": "财务"},
     {"key": "office", "name": "办公"},
-    {"key": "user.permission", "name": "人员与权限"},
-    {"key": "system", "name": "系统功能"}
+    {"key": "user.permission", "name": "人员与权限"}
   ],
   "items": [
     {"key": "project.base.view", "group_key": "project.base", "name": "查看项目基础信息"},
@@ -87,17 +86,15 @@
     {"key": "user.position.assign", "group_key": "user.permission", "name": "分配职位模板", "risk": "high"},
     {"key": "user.permission.adjust", "group_key": "user.permission", "name": "调整人员权限", "risk": "high"},
     {"key": "project.permission.adjust", "group_key": "user.permission", "name": "设置项目临时权限", "risk": "high"},
-    {"key": "permission.template.maintain", "group_key": "user.permission", "name": "维护权限模板", "risk": "high"},
-
-    {"key": "feedback.use", "group_key": "system", "name": "使用产品反馈"}
+    {"key": "permission.template.maintain", "group_key": "user.permission", "name": "维护权限模板", "risk": "high"}
   ],
   "templates": {
     "admin": {"name": "OA 管理员默认模板", "scope": "tenant", "all_permissions": true},
-    "general": {"name": "总经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.child.create", "project.business.info.view", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.info.view", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view", "finance.invoice.view", "finance.payment.view", "finance.company_revenue.view", "office.cost.view", "office.guideline.view"]},
-    "business": {"name": "经营经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.create", "project.base.child.create", "project.base.delete", "project.base.business_manager.assign", "project.base.production_manager.assign", "project.business.info.view", "project.business.member.assign", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.member.assign"]},
-    "production": {"name": "生产经理默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "project.base.child.create", "project.base.production_manager.assign", "project.production.info.view", "project.production.member.assign", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view"]},
-    "finance": {"name": "财务默认模板", "scope": "tenant", "keys": ["feedback.use", "finance.invoice.view", "finance.invoice.upload", "finance.invoice.update", "finance.payment.view", "finance.payment.update", "finance.company_revenue.view", "finance.data.update", "project.business.cost.view", "project.business.cost.update", "project.production.cost.view", "project.production.cost.update"]},
-    "office": {"name": "办公室主任默认模板", "scope": "tenant", "keys": ["feedback.use", "project.base.view", "office.cost.view", "office.guideline.create", "office.guideline.view", "office.guideline.update"]},
+    "general": {"name": "总经理默认模板", "scope": "tenant", "keys": ["project.base.view", "project.base.child.create", "project.business.info.view", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.info.view", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view", "finance.invoice.view", "finance.payment.view", "finance.company_revenue.view", "office.cost.view", "office.guideline.view"]},
+    "business": {"name": "经营经理默认模板", "scope": "tenant", "keys": ["project.base.view", "project.base.create", "project.base.child.create", "project.base.delete", "project.base.business_manager.assign", "project.base.production_manager.assign", "project.business.info.view", "project.business.member.assign", "project.business.file.view", "project.business.file.download", "project.business.bonus.view", "project.business.cost.view", "project.production.member.assign"]},
+    "production": {"name": "生产经理默认模板", "scope": "tenant", "keys": ["project.base.view", "project.base.child.create", "project.base.production_manager.assign", "project.production.info.view", "project.production.member.assign", "project.production.file.view", "project.production.file.download", "project.production.bonus.view", "project.production.cost.view"]},
+    "finance": {"name": "财务默认模板", "scope": "tenant", "keys": ["finance.invoice.view", "finance.invoice.upload", "finance.invoice.update", "finance.payment.view", "finance.payment.update", "finance.company_revenue.view", "finance.data.update", "project.business.cost.view", "project.business.cost.update", "project.production.cost.view", "project.production.cost.update"]},
+    "office": {"name": "办公室主任默认模板", "scope": "tenant", "keys": ["project.base.view", "office.cost.view", "office.guideline.create", "office.guideline.view", "office.guideline.update"]},
     "member": {"name": "普通职员默认模板", "scope": "tenant", "keys": []},
     "business-owner": {"name": "项目经营负责人模板", "scope": "project", "keys": ["project.base.view", "project.base.child.create", "project.base.update", "project.business.info.view", "project.business.info.update", "project.business.member.assign", "project.business.file.view", "project.business.file.upload", "project.business.file.download", "project.business.file.delete", "project.business.bonus.view", "project.business.bonus.allocate"]},
     "production-owner": {"name": "项目生产负责人模板", "scope": "project", "keys": ["project.base.view", "project.base.child.create", "project.production.info.view", "project.production.info.update", "project.production.member.assign", "project.production.discipline.assign", "project.production.file.view", "project.production.file.upload", "project.production.file.download", "project.production.file.delete", "project.production.bonus.view", "project.production.bonus.allocate", "project.production.cost.view", "project.production.cost.update"]},

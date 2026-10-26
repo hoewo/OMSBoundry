@@ -89,5 +89,4 @@ grant_manifest() {
 [ "$(env_value ENABLE_COST_OUTSOURCING false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/cost-outsourcing-capabilities.json"
 [ "$(env_value ENABLE_BONUS_DISTRIBUTION false)" != true ] || grant_manifest "$repo_dir/contracts/access/v1/examples/bonus-distribution-capabilities.json"
 grant_manifest "$repo_dir/contracts/access/v1/examples/open-api-capabilities.json"
-grant_manifest "$repo_dir/contracts/access/v1/examples/feedback-capabilities.json"
 echo "bootstrap administrator capabilities are ready: $subject_id"

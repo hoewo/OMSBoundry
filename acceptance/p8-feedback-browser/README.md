@@ -9,7 +9,7 @@ It verifies:
 - rejection of a same-page forged SDK message;
 - validated close and session refresh messages;
 - logout cleanup;
-- undiscoverable `403` capability denial;
+- explicit `401` after the IAM session ends, followed by clean local degradation;
 - local `503` degradation while the rest of the OMS page remains interactive.
 
 The fixture uses an obviously synthetic key and never contacts the external Feedback project. Passing this test proves the local browser bridge only; it does not prove project 115 notifications, real credentials, tenant isolation, attachments, replies or external origin allowlisting.

@@ -116,7 +116,7 @@ done
 for file in evidence-imds-guard.conf evidence-imds-guard.env.example; do
   cp "$d1_dir/systemd/$file" "$root/deployments/d1/systemd/$file"
 done
-for file in identity-access-capabilities.json internal-finance-requests-capabilities.json payroll-capabilities.json open-api-capabilities.json feedback-capabilities.json contract-ledger-capabilities.json money-flow-ledger-capabilities.json people-groups-capabilities.json party-directory-capabilities.json project-workspace-capabilities.json evidence-service-capabilities.json business-engagement-capabilities.json billing-invoice-capabilities.json production-operations-capabilities.json approval-audit-results-capabilities.json cost-outsourcing-capabilities.json bonus-distribution-capabilities.json; do
+for file in identity-access-capabilities.json internal-finance-requests-capabilities.json payroll-capabilities.json open-api-capabilities.json contract-ledger-capabilities.json money-flow-ledger-capabilities.json people-groups-capabilities.json party-directory-capabilities.json project-workspace-capabilities.json evidence-service-capabilities.json business-engagement-capabilities.json billing-invoice-capabilities.json production-operations-capabilities.json approval-audit-results-capabilities.json cost-outsourcing-capabilities.json bonus-distribution-capabilities.json; do
   cp "$repo_dir/contracts/access/v1/examples/$file" "$root/contracts/access/v1/examples/$file"
 done
 for file in project-assignment-policy.json business-engagement-project-assignment-policy.json production-operations-project-assignment-policy.json workload-identity-policy.json; do

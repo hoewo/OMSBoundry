@@ -429,7 +429,7 @@ func validateActor(actor Actor) error {
 }
 func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) error {
 	d.Applicant.ID, d.Applicant.Digest, d.Applicant.DisplayName = normalizeID(d.Applicant.ID), strings.ToLower(strings.TrimSpace(d.Applicant.Digest)), strings.TrimSpace(d.Applicant.DisplayName)
-	d.Payee.Kind, d.Payee.EntityKind, d.Payee.Reference.ID, d.Payee.Reference.Digest = strings.ToLower(strings.TrimSpace(d.Payee.Kind)), strings.ToLower(strings.TrimSpace(d.Payee.EntityKind)), normalizeID(d.Payee.Reference.ID), strings.ToLower(strings.TrimSpace(d.Payee.Reference.Digest))
+	d.Payee.Kind, d.Payee.EntityKind, d.Payee.PaymentMethod, d.Payee.Reference.ID, d.Payee.Reference.Digest = strings.ToLower(strings.TrimSpace(d.Payee.Kind)), strings.ToLower(strings.TrimSpace(d.Payee.EntityKind)), strings.ToLower(strings.TrimSpace(d.Payee.PaymentMethod)), normalizeID(d.Payee.Reference.ID), strings.ToLower(strings.TrimSpace(d.Payee.Reference.Digest))
 	d.Payee.DisplayName, d.Payee.BankName, d.Payee.AccountNumber, d.Payee.DelegateReason = strings.TrimSpace(d.Payee.DisplayName), strings.TrimSpace(d.Payee.BankName), strings.TrimSpace(d.Payee.AccountNumber), strings.TrimSpace(d.Payee.DelegateReason)
 	if d.Payee.AccountNumber != "" {
 		d.Payee.AccountLast4 = last4(d.Payee.AccountNumber)
@@ -485,6 +485,11 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 			return fmt.Errorf("invalid reimbursement: Evidence is required")
 		}
 	} else if requestType == "payment" {
+		// Empty snapshots predate explicit payment methods and already contain a
+		// bank account, so they retain their original bank-transfer meaning.
+		if d.Payee.PaymentMethod == "" && (d.Payee.BankName != "" || d.Payee.AccountNumber != "") {
+			d.Payee.PaymentMethod = "bank_transfer"
+		}
 		if d.Payee.Kind != "party" && d.Payee.Kind != "one_time" {
 			return fmt.Errorf("invalid payment payee kind")
 		}
@@ -494,8 +499,14 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 		if d.Payee.Kind == "one_time" && d.Payee.EntityKind != "organization" && d.Payee.EntityKind != "individual" {
 			return fmt.Errorf("invalid one-time payee entity kind")
 		}
-		if d.Payee.DisplayName == "" || d.Payee.BankName == "" || d.Payee.AccountNumber == "" {
+		if d.Payee.DisplayName == "" || (d.Payee.PaymentMethod != "cash" && d.Payee.PaymentMethod != "bank_transfer") {
 			return fmt.Errorf("invalid payment payee snapshot")
+		}
+		if d.Payee.PaymentMethod == "bank_transfer" && (d.Payee.BankName == "" || d.Payee.AccountNumber == "") {
+			return fmt.Errorf("invalid payment bank account snapshot")
+		}
+		if d.Payee.PaymentMethod == "cash" {
+			d.Payee.BankName, d.Payee.AccountNumber, d.Payee.AccountLast4 = "", "", ""
 		}
 	}
 	return nil

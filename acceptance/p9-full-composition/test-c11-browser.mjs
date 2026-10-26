@@ -34,7 +34,6 @@ const listen = (server, port = 0) => new Promise((resolve, reject) => {
 const close = (server) => new Promise((resolve) => server.close(() => resolve()))
 const actorFromCookie = (request) => String(request.headers.cookie || '').includes('session=secondary') ? 'secondary' : 'primary'
 
-const grants = { primary: true, secondary: true }
 const csrf = 'csrf-token-0123456789'
 let hostOrigin = ''
 let sdkOrigin = ''
@@ -63,10 +62,10 @@ const hostDocument = (actor) => {
   const sdkURL = `${sdkOrigin}/embed?parentOrigin=${encodeURIComponent(hostOrigin)}`
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>OMS P9 browser fixture</title><style>[hidden]{display:none!important}.oms-v1__feedback-layer{position:fixed;inset:0}.oms-v1__feedback-frame{width:100%;height:100%;border:0}</style></head><body>
   <main data-oms-v1 data-feedback-sdk-url="${sdkURL}" data-tenant-id="${tenant.id}" data-subject-id="${tenant.administrator_subject_id}">
-    <button type="button" data-oms-v1-nav="overview">总览</button><button type="button" data-oms-v1-nav="internal">公司内部管理</button>
+    <button type="button" data-oms-v1-nav="overview">总览</button><button type="button" data-oms-v1-nav="internal">公司内部管理</button><button type="button" data-oms-v1-nav="feedback">产品反馈</button>
     <section class="is-active" data-oms-v1-page="overview">总览页</section><section data-oms-v1-page="internal">公司内部管理页</section>
+    <section data-oms-v1-page="feedback" data-feedback-page><div data-feedback-notice><p>正在连接产品反馈。</p></div><button type="button" data-feedback-mode="submit">提交反馈</button><button type="button" data-feedback-mode="status">我的反馈</button></section>
   </main>
-  <div data-feedback-entry hidden><button type="button" data-feedback-toggle aria-expanded="false">产品反馈</button><div data-feedback-menu hidden><button type="button" data-feedback-mode="submit">提交反馈</button><button type="button" data-feedback-mode="status">我的反馈</button></div></div>
   <script>document.querySelectorAll('[data-oms-v1-nav]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-oms-v1-page]').forEach(page=>page.classList.toggle('is-active',page.dataset.omsV1Page===button.dataset.omsV1Nav))}))</script>
   <script src="/assets/oms-phase1-feedback.js"></script></body></html>`
 }
@@ -82,13 +81,13 @@ const hostServer = createServer(async (request, response) => {
       return sendJSON(response, 200, { status: 'authenticated' }, { 'Set-Cookie': `session=${selected}; Path=/; HttpOnly; SameSite=Lax` })
     }
     if (request.method === 'GET' && url.pathname === '/auth/api/v1/session') {
+      if (!String(request.headers.cookie || '').includes('session=')) return sendJSON(response, 401, { code: 'UNAUTHENTICATED' })
       const tenant = c1.tenants[actor === 'primary' ? 0 : 1]
       return sendJSON(response, 200, { principal: { tenant_id: tenant.id, subject_id: tenant.administrator_subject_id } })
     }
-    if (request.method === 'POST' && url.pathname === '/auth/api/v1/admin/grants/revoke') { grants[actor] = false; return sendJSON(response, 204, {}) }
-    if (request.method === 'POST' && url.pathname === '/auth/api/v1/admin/grants') { grants[actor] = true; return sendJSON(response, 204, {}) }
+    if (request.method === 'POST' && url.pathname === '/auth/api/v1/logout') return sendJSON(response, 204, {}, { 'Set-Cookie': 'session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax' })
     if (request.method === 'POST' && url.pathname === '/gateway/feedback/config') {
-      if (!grants[actor]) return sendJSON(response, 403, { code: 'FORBIDDEN' })
+      if (!String(request.headers.cookie || '').includes('session=')) return sendJSON(response, 401, { code: 'UNAUTHENTICATED' })
       return sendJSON(response, 200, { config: { feedbackV2Enabled: true, feedbackV2NotificationsEnabled: true, feedbackV2AuthMode: 'apiKey', apiKey: 'ak_fixture_0123456789abcdef0123456789abcdef', projectId: 115, customUserId: `oms1_v1_${(actor === 'primary' ? 'A' : 'B').repeat(43)}`, gatewayUrl: sdkOrigin, theme: 'system', locale: 'zh-CN' } })
     }
     if (request.method === 'GET' && url.pathname === '/workbench/') return send(response, 200, 'text/html; charset=utf-8', hostDocument(actor))
@@ -143,7 +142,6 @@ try {
   const run = await runDriver()
   if (run.code !== 0 || !run.stdout.includes('PASS P9 C11 real browser')) throw new Error(`C11 browser driver failed: ${run.code}\n${run.stderr}`)
   execFileSync(join(scriptDir, 'verify-c11-evidence'), [evidence], { stdio: 'ignore' })
-  assert.equal(grants.primary, true, 'primary Feedback grant must be restored')
   const secretDir = join(runtime, 'secrets'); mkdirSync(secretDir, { mode: 0o700 })
   const resumed = execFileSync(join(scriptDir, 'run-c0-c11'), [], { env: { ...process.env, P9_RUN_EVIDENCE_ROOT: fixture, P9_C5_SECRET_DIR: secretDir, P9_PRIMARY_ADMIN_USERNAME: 'primary-admin', P9_PRIMARY_ADMIN_PASSWORD_FILE: join(fixture, 'primary.password'), P9_SECONDARY_ADMIN_USERNAME: 'secondary-admin', P9_SECONDARY_ADMIN_PASSWORD_FILE: join(fixture, 'secondary.password') }, encoding: 'utf8' })
   assert.match(resumed, /PASS P9 continuous C0-C11 evidence chain/)
@@ -176,15 +174,15 @@ try {
   assert.equal(verifierRejects(consoleLeak), true, 'C11 accepted a browser console warning')
 
   const missingDenial = join(runtime, 'missing-denial'); cpSync(evidence, missingDenial, { recursive: true })
-  const httpPath = join(missingDenial, 'browser-evidence.tsv'); writeFileSync(httpPath, readFileSync(httpPath, 'utf8').split('\n').filter((line) => !line.includes('\trevoked-config\t')).join('\n'))
+  const httpPath = join(missingDenial, 'browser-evidence.tsv'); writeFileSync(httpPath, readFileSync(httpPath, 'utf8').split('\n').filter((line) => !line.includes('\tlogged-out-config\t')).join('\n'))
   const denialManifest = join(missingDenial, 'checksums.sha256'); writeFileSync(denialManifest, readFileSync(denialManifest, 'utf8').replace(/^[0-9a-f]{64}  browser-evidence\.tsv$/m, `${sha256(readFileSync(httpPath))}  browser-evidence.tsv`))
-  assert.equal(verifierRejects(missingDenial), true, 'C11 accepted missing browser authorization-denial evidence')
+  assert.equal(verifierRejects(missingDenial), true, 'C11 accepted missing browser session-denial evidence')
 
   const secretLeak = join(runtime, 'secret-leak'); cpSync(evidence, secretLeak, { recursive: true }); const resultPath = join(secretLeak, 'result.md'); writeFileSync(resultPath, `${readFileSync(resultPath, 'utf8')}ak_leaked_0123456789abcdef\n`)
   const secretManifest = join(secretLeak, 'checksums.sha256'); writeFileSync(secretManifest, readFileSync(secretManifest, 'utf8').replace(/^[0-9a-f]{64}  result\.md$/m, `${sha256(readFileSync(resultPath))}  result.md`))
   assert.equal(verifierRejects(secretLeak), true, 'C11 accepted a Feedback API Key leak')
 
-  console.log('PASS P9 C11 real Chromium fixture, capability recovery and evidence negatives')
+  console.log('PASS P9 C11 real Chromium fixture, session recovery and evidence negatives')
 } finally {
   await Promise.allSettled([close(hostServer), close(sdkServer)])
   rmSync(runtime, { recursive: true, force: true })

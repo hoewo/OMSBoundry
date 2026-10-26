@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"omsbizfoundry/identity-access/internal/apikey"
@@ -68,6 +69,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.HandleFunc("POST /api/v1/activate", server.requireCSRF(server.activate))
 	mux.HandleFunc("POST /api/v1/password-reset/complete", server.requireCSRF(server.completePasswordReset))
 	mux.Handle("GET /api/v1/session", server.authenticate(http.HandlerFunc(server.currentSession)))
+	mux.Handle("GET /api/v1/tenant", server.authenticate(http.HandlerFunc(server.currentTenant)))
 	mux.Handle("POST /api/v1/logout", server.authenticate(http.HandlerFunc(server.requireCSRF(server.logout))))
 	mux.Handle("POST /api/v1/credentials", server.authenticate(http.HandlerFunc(server.requireCSRF(server.issueCredential))))
 	if server.apiKeys != nil {
@@ -209,6 +211,24 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) currentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"principal": currentPrincipal(r.Context())})
+}
+func (s *Server) currentTenant(w http.ResponseWriter, r *http.Request) {
+	principal := currentPrincipal(r.Context())
+	var value struct {
+		ID        string    `json:"id"`
+		Name      string    `json:"name"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	if err := s.pool.QueryRow(r.Context(), `SELECT id::text,name,created_at FROM tenants WHERE id=$1`, principal.TenantID).Scan(&value.ID, &value.Name, &value.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeProblem(w, http.StatusNotFound, "tenant_not_found", "当前租户不存在")
+			return
+		}
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "无法读取当前租户")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"tenant": value})
 }
 func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
 	var input struct {

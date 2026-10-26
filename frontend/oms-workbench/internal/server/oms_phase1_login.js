@@ -108,6 +108,44 @@
     csrf: new GatewayCSRF({route: page.dataset.iamRoutePrefix, request: boundedRequest})
   })
 
+  const tokenParameters = new URLSearchParams(location.hash.replace(/^#/, ''))
+  const activationToken = tokenParameters.get('activation_token')
+  const resetToken = tokenParameters.get('password_reset_token')
+  if (activationToken || resetToken) {
+    const panel = document.createElement('div')
+    panel.dataset.loginPanel = 'credential'
+    panel.innerHTML = '<div class="login-page__card-header"><span class="login-page__card-kicker">IAM 账号安全</span><h2>' + (activationToken ? '激活组织账号' : '设置新密码') + '</h2><p class="login-page__card-copy">密码长度为 12 至 72 个字符。一次性凭证成功使用后立即失效。</p></div><form class="login-page__form ant-form ant-form-vertical"><div class="ant-form-item"><div class="ant-form-item-label"><label>新密码</label></div><div class="ant-form-item-control"><input class="ant-input ant-input-lg" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></div></div><div class="ant-form-item"><div class="ant-form-item-label"><label>确认新密码</label></div><div class="ant-form-item-control"><input class="ant-input ant-input-lg" name="confirmation" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></div></div><div class="ant-form-item"><button class="ant-btn ant-btn-primary ant-btn-lg ant-btn-block" type="submit"><span>' + (activationToken ? '激活账号' : '确认新密码') + '</span></button></div></form><div class="login-page__environment-note" role="status" aria-live="polite" tabindex="-1" data-credential-status hidden></div>'
+    page.querySelector('.login-page__card')?.append(panel)
+    smsPanel.hidden = true
+    iamPanel.hidden = true
+    const tokenForm = panel.querySelector('form')
+    tokenForm.addEventListener('submit', async event => {
+      event.preventDefault()
+      if (!tokenForm.reportValidity()) return
+      const values = new FormData(tokenForm), password = String(values.get('password') || ''), confirmation = String(values.get('confirmation') || ''), status = panel.querySelector('[data-credential-status]'), button = tokenForm.querySelector('button[type="submit"]')
+      status.hidden = true
+      if (password !== confirmation) { status.textContent = '两次输入的密码不一致。'; status.hidden = false; status.focus(); return }
+      button.disabled = true
+      try {
+        const csrfToken = await login.csrf.token()
+        const response = await boundedRequest(page.dataset.iamRoutePrefix + (activationToken ? '/api/v1/activate' : '/api/v1/password-reset/complete'), {method:'POST', credentials:'same-origin', cache:'no-store', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken}, body:JSON.stringify({token:activationToken||resetToken,password})})
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(body.detail || '一次性凭证无效或已经过期。')
+        history.replaceState(null, '', location.pathname + location.search)
+        status.textContent = activationToken ? '账号已激活，请使用新密码登录。' : '密码已更新，请使用新密码登录。'
+        status.hidden = false
+        tokenForm.hidden = true
+        const loginButton = document.createElement('button')
+        loginButton.type = 'button'; loginButton.className = 'ant-btn ant-btn-primary ant-btn-lg ant-btn-block'; loginButton.textContent = '返回登录'
+        loginButton.addEventListener('click', () => { panel.hidden = true; iamPanel.hidden = false; iamPanel.querySelector('input[name="username"]')?.focus() })
+        panel.append(loginButton)
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : '账号操作未完成，请重试。'; status.hidden = false; status.focus()
+      } finally { button.disabled = false }
+    })
+    panel.querySelector('input[name="password"]')?.focus()
+  }
+
   form?.addEventListener('submit', async event => {
     event.preventDefault()
     if (login.busy || !form.reportValidity()) return
@@ -129,6 +167,8 @@
   })
 
   function setMode(mode) {
+    const credentialPanel = page.querySelector('[data-login-panel="credential"]')
+    if (credentialPanel && !credentialPanel.hidden) return
     const iam = mode === 'iam'
     smsPanel.hidden = iam
     iamPanel.hidden = !iam

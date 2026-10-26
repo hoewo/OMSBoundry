@@ -79,6 +79,7 @@ type Line struct {
 type PayeeSnapshot struct {
 	Kind           string            `json:"kind"`
 	EntityKind     string            `json:"entity_kind,omitempty"`
+	PaymentMethod  string            `json:"payment_method,omitempty"`
 	Reference      ReferenceSnapshot `json:"reference,omitempty"`
 	DisplayName    string            `json:"display_name"`
 	BankName       string            `json:"bank_name"`

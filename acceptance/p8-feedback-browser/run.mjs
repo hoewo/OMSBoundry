@@ -87,19 +87,12 @@ function hostDocument(sdkURL) {
 <body>
 <main data-oms-v1 data-feedback-sdk-url="${sdkURL}" data-tenant-id="tenant-fixture" data-subject-id="subject-fixture">
   <section class="is-active" data-oms-v1-page="internal"><button id="business-button" type="button">业务页面</button><output id="business-state">0</output></section>
-</main>
-<div data-feedback-entry hidden>
-  <button type="button" data-feedback-toggle aria-expanded="false">产品反馈 <b data-feedback-unread hidden></b></button>
-  <div data-feedback-menu hidden>
+  <section data-oms-v1-page="feedback" data-feedback-page>
+    <div data-feedback-notice><p>正在连接产品反馈。</p></div>
     <button type="button" data-feedback-mode="submit">提交反馈</button>
-    <button type="button" data-feedback-mode="status">我的反馈</button>
-  </div>
-</div>
-<button type="button" data-feedback-mobile-toggle hidden aria-expanded="false">移动端反馈 <b data-feedback-unread hidden></b></button>
-<div data-feedback-mobile-menu hidden>
-  <button type="button" data-feedback-mode="submit">提交反馈</button>
-  <button type="button" data-feedback-mode="status">我的反馈</button>
-</div>
+    <button type="button" data-feedback-mode="status">我的反馈 <b data-feedback-unread hidden></b></button>
+  </section>
+</main>
 <form action="/gateway/logout" method="post"><button type="submit">退出</button></form>
 <script>document.querySelector('#business-button').addEventListener('click',()=>{const state=document.querySelector('#business-state');state.value=String(Number(state.value||0)+1)})</script>
 <script src="/assets/oms-phase1-feedback.js"></script>
@@ -135,7 +128,7 @@ const hostServer = createServer((request, response) => {
     if (!/(?:^|;\s*)oms_iam_csrf=fixture_csrf_token_123456(?:;|$)/.test(request.headers.cookie || '') || request.headers['x-csrf-token'] !== 'fixture_csrf_token_123456') {
       return send(response, 403, 'application/json', '{"error":"csrf"}');
     }
-    if (configMode === 'forbidden') return send(response, 403, 'application/json', '{"error":"forbidden"}');
+    if (configMode === 'invalid-session') return send(response, 401, 'application/json', '{"error":"session"}');
     if (configMode === 'unavailable') return send(response, 503, 'application/json', '{"error":"unavailable"}');
     return send(response, 200, 'application/json', JSON.stringify({
       config: {
@@ -188,7 +181,7 @@ try {
   {
     const { context, page, errors } = await newPage('ok');
     try {
-      await page.locator('[data-feedback-entry]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.waitForFunction(() => document.querySelector('[data-feedback-notice] p')?.textContent.includes('已连接'));
       await page.waitForFunction(() => {
         const badge = document.querySelector('[data-feedback-unread]');
         return badge && !badge.hidden && badge.textContent === '3';
@@ -196,7 +189,6 @@ try {
       assert.equal(configHits, 1, 'idle preparation should coalesce runtime configuration');
       assert.equal(await page.locator('[data-feedback-unread]').first().textContent(), '3');
 
-      await page.locator('[data-feedback-toggle]').click();
       await page.locator('[data-feedback-mode="submit"]').first().click();
       const layer = page.locator('[data-feedback-layer]');
       await layer.waitFor({ state: 'visible' });
@@ -228,7 +220,6 @@ try {
       for (let attempt = 0; attempt < 50 && configHits <= beforeRefresh; attempt += 1) await page.waitForTimeout(20);
       assert.equal(configHits, beforeRefresh + 1, 'refresh must fetch one new protected configuration');
 
-      await page.locator('[data-feedback-toggle]').click();
       await page.locator('[data-feedback-mode="status"]').first().click();
       await frame.waitForFunction(() => document.body.dataset.openMode === 'status');
 
@@ -237,7 +228,7 @@ try {
         form.addEventListener('submit', event => event.preventDefault(), { once: true });
         form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       });
-      await page.waitForFunction(() => !document.querySelector('[data-feedback-layer]') && document.querySelector('[data-feedback-entry]').hidden === true);
+      await page.waitForFunction(() => !document.querySelector('[data-feedback-layer]') && document.querySelector('[data-feedback-notice] p')?.textContent.includes('已结束'));
       assert.equal(errors.length, 0);
       result.scenarios.push({ name: 'cross-origin-bridge', passed: true, assertions: 19 });
     } finally {
@@ -246,16 +237,16 @@ try {
   }
 
   {
-    const { context, page, errors } = await newPage('forbidden');
+    const { context, page, errors } = await newPage('invalid-session');
     try {
       for (let attempt = 0; attempt < 50 && configHits === 0; attempt += 1) await page.waitForTimeout(20);
       assert.equal(configHits, 1);
-      assert.equal(await page.locator('[data-feedback-entry]').isHidden(), true, '403 must remain undiscoverable');
+      assert.match(await page.locator('[data-feedback-notice] p').textContent(), /登录已失效/);
       await page.locator('#business-button').click();
       assert.equal(await page.locator('#business-state').textContent(), '1');
-      assert.equal(page.frames().length, 1, 'authorization denial must not load the SDK');
+      assert.equal(page.frames().length, 1, 'an invalid session must not load the SDK');
       assert.equal(errors.length, 0);
-      result.scenarios.push({ name: 'capability-denied', passed: true, assertions: 5 });
+      result.scenarios.push({ name: 'session-expired', passed: true, assertions: 5 });
     } finally {
       await context.close();
     }
@@ -264,8 +255,6 @@ try {
   {
     const { context, page, errors } = await newPage('unavailable');
     try {
-      await page.locator('[data-feedback-entry]').waitFor({ state: 'visible', timeout: 5000 });
-      await page.locator('[data-feedback-toggle]').click();
       await page.locator('[data-feedback-mode="submit"]').first().click();
       await page.locator('[data-feedback-toast]').waitFor({ state: 'visible' });
       assert.match(await page.locator('[data-feedback-toast]').textContent(), /暂时不可用/);

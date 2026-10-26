@@ -121,8 +121,14 @@ var omsPhase1FinanceOwnerJS string
 //go:embed oms_phase1_open_api.js
 var omsPhase1OpenAPIJS string
 
+// omsPhase1Identity presents IAM-owned tenant and account facts without
+// duplicating them in Workbench.
+//
+//go:embed oms_phase1_identity.js
+var omsPhase1IdentityJS string
+
 // omsPhase1Feedback mounts one isolated Feedback SDK V2 iframe and obtains its
-// runtime credential only after Gateway verifies the current IAM capability.
+// runtime credential only after Gateway verifies the current IAM session.
 //
 //go:embed oms_phase1_feedback.js
 var omsPhase1FeedbackJS string

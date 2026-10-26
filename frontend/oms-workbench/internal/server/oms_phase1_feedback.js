@@ -2,13 +2,10 @@
   'use strict';
 
   var root = document.querySelector('[data-oms-v1]');
-  var entry = document.querySelector('[data-feedback-entry]');
-  if (!root || !entry) return;
+  var page = document.querySelector('[data-feedback-page]');
+  if (!root || !page) return;
 
-  var toggle = entry.querySelector('[data-feedback-toggle]');
-  var menu = entry.querySelector('[data-feedback-menu]');
-  var mobileToggle = document.querySelector('[data-feedback-mobile-toggle]');
-  var mobileMenu = document.querySelector('[data-feedback-mobile-menu]');
+  var notice = page.querySelector('[data-feedback-notice] p');
   var badges = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-unread]'));
   var sdkURL = String(root.dataset.feedbackSdkUrl || '').trim();
   var sdkOrigin = '';
@@ -83,13 +80,12 @@
   }
 
   function setEntryVisible(visible) {
-    entry.hidden = !visible;
-    if (mobileToggle) mobileToggle.hidden = !visible;
+    if (notice) notice.textContent = visible ? '反馈服务已连接；当前登录账号可直接使用。' : '反馈服务暂时不可用，OMS 其他功能不受影响。';
   }
 
   function buildHostContext() {
     var activePage = document.querySelector('[data-oms-v1-page].is-active');
-    var allowedRoutes = ['overview', 'projects', 'receivable', 'payable', 'internal', 'open-api'];
+    var allowedRoutes = ['overview', 'projects', 'receivable', 'payable', 'internal', 'open-api', 'account', 'feedback'];
     var route = activePage && allowedRoutes.indexOf(activePage.dataset.omsV1Page) >= 0 ? activePage.dataset.omsV1Page : 'unknown';
     var browser = 'browser';
     if (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands)) {
@@ -132,9 +128,8 @@
       setEntryVisible(true);
       return runtimeConfig;
     }).catch(function (error) {
-      // Capability denial remains undiscoverable. Transient IAM, Gateway or
-      // network failure exposes a retryable entry without granting SDK access.
-      if (!error || (error.status !== 401 && error.status !== 403)) setEntryVisible(true);
+      setEntryVisible(false);
+      if (notice && error && error.status === 401) notice.textContent = '登录已失效，请重新登录后使用产品反馈。';
       throw error;
     }).finally(function () {
       configRequest = null;
@@ -216,10 +211,6 @@
 
   async function openFeedback(mode) {
     if (!sdkURL || (mode !== 'submit' && mode !== 'status')) return showFailure();
-    menu.hidden = true;
-    toggle.setAttribute('aria-expanded', 'false');
-    if (mobileMenu) mobileMenu.hidden = true;
-    if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'false');
     try {
       var config = await fetchRuntimeConfig(false);
       ensureFrame();
@@ -234,7 +225,11 @@
   }
 
   async function prepareUnread() {
-    if (!sdkURL || document.visibilityState === 'hidden') return;
+    if (!sdkURL) {
+      setEntryVisible(false);
+      return;
+    }
+    if (document.visibilityState === 'hidden') return;
     try {
       var config = await fetchRuntimeConfig(false);
       ensureFrame();
@@ -248,7 +243,7 @@
 
   function clearRuntime() {
     identityKey = currentIdentityKey();
-    setEntryVisible(false);
+    if (notice) notice.textContent = '反馈会话已结束。';
     runtimeConfig = null;
     configRequest = null;
     unreadRequestID = '';
@@ -290,31 +285,9 @@
     }
   });
 
-  toggle.addEventListener('click', function () {
-    menu.hidden = !menu.hidden;
-    toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-  });
-  menu.addEventListener('click', function (event) {
+  page.addEventListener('click', function (event) {
     var button = event.target.closest('[data-feedback-mode]');
     if (button) void openFeedback(button.dataset.feedbackMode);
-  });
-  if (mobileToggle && mobileMenu) {
-    mobileToggle.addEventListener('click', function () {
-      mobileMenu.hidden = !mobileMenu.hidden;
-      mobileToggle.setAttribute('aria-expanded', mobileMenu.hidden ? 'false' : 'true');
-    });
-    mobileMenu.addEventListener('click', function (event) {
-      var button = event.target.closest('[data-feedback-mode]');
-      if (button) void openFeedback(button.dataset.feedbackMode);
-    });
-  }
-  document.addEventListener('click', function (event) {
-    if (!entry.contains(event.target) && (!mobileToggle || !mobileToggle.contains(event.target)) && (!mobileMenu || !mobileMenu.contains(event.target))) {
-      menu.hidden = true;
-      toggle.setAttribute('aria-expanded', 'false');
-      if (mobileMenu) mobileMenu.hidden = true;
-      if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'false');
-    }
   });
   Array.prototype.forEach.call(document.querySelectorAll('form[action="/gateway/logout"]'), function (form) {
     form.addEventListener('submit', clearRuntime);

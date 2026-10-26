@@ -6,7 +6,7 @@
   document.body.classList.add('oms-v1-active');
 
   const state={projects:[],parties:[],partyCandidates:[],partyCache:new Map(),operatingParty:null,invoices:[],cash:[],moneyContext:null,contractContext:null,commercial:new Map(),projectPage:1,projectPageSize:20,listPages:{},listPageSizes:{},filters:{},sorts:{projects:{key:'start_date',direction:'desc'},'party-client':{key:'usage',direction:'desc'},'party-contractor':{key:'usage',direction:'desc'},'commitment-receivable':{key:'linked_at',direction:'desc'},'commitment-payable':{key:'linked_at',direction:'desc'},'invoice-outgoing':{key:'date',direction:'desc'},'invoice-incoming':{key:'date',direction:'desc'},'cash-receipt':{key:'date',direction:'desc'},'cash-payment':{key:'date',direction:'desc'}},authorized:new Set(),errors:[],projectActions:new Set(),partyActions:new Set(),invoiceActions:new Set(),contractActions:new Set(),selectedProjectID:'',projectDetailToken:0,moneyAvailable:false,contractAvailable:false,evidenceTransfer:null};
-  const labels={overview:'经营总览',projects:'项目经营',receivable:'应收回款',payable:'应付支付',internal:'公司内部管理','open-api':'开放平台'};
+  const labels={overview:'经营总览',projects:'项目经营',receivable:'应收回款',payable:'应付支付',internal:'公司内部管理','open-api':'开放平台',account:'账号与租户',feedback:'产品反馈'};
   const tabLabels={'project-list':'项目列表',clients:'甲方管理',contractors:'施工方管理',receivables:'应收管理','outgoing-invoices':'开票管理',receipts:'回款记录',payables:'应付管理',payments:'支付记录','incoming-invoices':'发票管理',members:'成员管理',payroll:'工资管理',finance:'财务管理'};
   const defaultTabs={projects:'project-list',receivable:'receivables',payable:'payables',internal:'members'};
   const invoiceDateLabel=direction=>direction==='incoming'?'收票日期':'开票日期';
@@ -139,6 +139,9 @@
     }
     return refs;
   }
+  globalThis.OMSPhase1EvidenceBridge={
+    uploadFiles:(files,options)=>uploadEvidence(Array.from(files||[]),options)
+  };
   async function evidenceDescriptor(ref){
     const value=await api('evidence-service','/v1/references/files/'+encodeURIComponent(ref.file_id)+'/versions/'+encodeURIComponent(String(ref.version)));
     return {fileId:ref.file_id,version:Number(ref.version),fileName:value.display_name||value.file_name||value.original_name||ref.display_name||'附件',sizeBytes:Number(value.size_bytes||value.file_size||1),mediaType:value.media_type||value.mime_type||'application/octet-stream'};
@@ -357,11 +360,11 @@
   }
   function renderCommitments(direction){
     const items=filteredCommitmentItems(direction);
-    const key='commitment-'+direction,page=pageItems(items,key),body=root.querySelector('[data-oms-v1-commitment-body="'+direction+'"]'),paidLabel=direction==='receivable'?'已回款':'已支付',emptyTitle=direction==='receivable'?'暂无应收记录':'暂无应付记录';
+    const key='commitment-'+direction,page=pageItems(items,key),body=root.querySelector('[data-oms-v1-commitment-body="'+direction+'"]'),emptyTitle=direction==='receivable'?'暂无应收记录':'暂无应付记录';
     updateFilterButton(root.querySelector('[data-oms-v1-commitment-filter="'+direction+'"]'),state.filters[key]||{});
     syncSortHeaders(key);
     root.querySelector('[data-oms-v1-commitment-total="'+direction+'"]').textContent=items.length+' 条';
-    body.innerHTML=page.items.length?page.items.map(item=>{const counterparty=item.counterparty?.legal_name||item.summary||item.segment.display_summary||'往来主体待核对',subjectCells=direction==='receivable'?'<td><strong title="'+safeText(item.project.name)+'">'+safeText(item.project.name)+'</strong></td><td><span class="oms-v1__cell-text" title="'+safeText(counterparty)+'">'+safeText(counterparty)+'</span></td>':'<td><strong title="'+safeText(item.project.name)+'">'+safeText(item.project.name)+'</strong><small title="'+safeText(counterparty)+'">'+safeText(counterparty)+'</small></td>',paidCopy=direction==='receivable'?'':'<small>'+paidLabel+'</small>';return '<tr data-oms-v1-row data-project-id="'+safeText(item.project.id)+'" data-commitment-id="'+safeText(item.segment.link_id)+'" data-commitment-direction="'+direction+'" data-commitment-source="'+safeText(item.source)+'">'+subjectCells+'<td class="is-number is-money"><strong>'+safeText(money(item.facts.effective))+'</strong></td><td class="is-number is-money"><strong>'+safeText(money(item.facts.allocated))+'</strong>'+paidCopy+'</td><td class="is-number is-money"><strong>'+safeText(money(item.facts.outstanding))+'</strong></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(direction==='receivable'?6:5,emptyTitle,direction==='receivable'?'建立项目及应收后将在这里显示。':'关联施工方及应付后将在这里显示。');
+    body.innerHTML=page.items.length?page.items.map(item=>{const counterparty=item.counterparty?.legal_name||item.summary||item.segment.display_summary||'往来主体待核对',subjectCells='<td><strong title="'+safeText(item.project.name)+'">'+safeText(item.project.name)+'</strong></td><td><span class="oms-v1__cell-text" title="'+safeText(counterparty)+'">'+safeText(counterparty)+'</span></td>';return '<tr data-oms-v1-row data-project-id="'+safeText(item.project.id)+'" data-commitment-id="'+safeText(item.segment.link_id)+'" data-commitment-direction="'+direction+'" data-commitment-source="'+safeText(item.source)+'">'+subjectCells+'<td class="is-number is-money"><strong>'+safeText(money(item.facts.effective))+'</strong></td><td class="is-number is-money"><strong>'+safeText(money(item.facts.allocated))+'</strong></td><td class="is-number is-money"><strong>'+safeText(money(item.facts.outstanding))+'</strong></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(6,emptyTitle,direction==='receivable'?'建立项目及应收后将在这里显示。':'关联施工方及应付后将在这里显示。');
     for(const row of body.querySelectorAll('[data-commitment-id]'))row.addEventListener('click',()=>openCommitment(row.dataset.projectId,row.dataset.commitmentId,row.dataset.commitmentDirection,row.dataset.commitmentSource));
     syncListPager(body,key,page,()=>renderCommitments(direction));
   }
@@ -373,10 +376,10 @@
   function partyVisibleForRole(kind,id,clientIDs,contractorIDs){return kind==='client'?clientIDs.has(id)||!contractorIDs.has(id):contractorIDs.has(id)}
   function activePartiesForRole(kind){const {clientIDs,contractorIDs}=partyRoleProjection();return activeExternalParties().filter(item=>partyVisibleForRole(kind,item.id,clientIDs,contractorIDs))}
   function renderParties(kind){
-    const {key,items,roleCount}=partyListData(kind);
+    const {key,items}=partyListData(kind);
     syncSortHeaders(key);
     root.querySelector('[data-oms-v1-party-total="'+kind+'"]').textContent=String(items.length);
-    const page=pageItems(items,key),body=root.querySelector('[data-oms-v1-party-body="'+kind+'"]');body.innerHTML=page.items.length?page.items.map(item=>{const count=roleCount.get(item.id)||0,usage=count?((kind==='client'?'已作为甲方关联 ':'已作为施工方关联 ')+count+' 个项目'):'尚未关联项目';return '<tr data-oms-v1-row data-party-id="'+safeText(item.id)+'"><td><strong title="'+safeText(item.legal_name)+'">'+safeText(item.legal_name)+'</strong><small>'+safeText((item.kind==='organization'?'企业 / 组织':item.kind||'主体')+' · '+usage)+'</small></td><td>'+safeText(item.registration_identifier||'—')+'</td><td><span class="oms-v1__tag '+(item.status==='active'?'':'is-muted')+'">'+safeText(item.status==='active'?'启用':'停用')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(4,kind==='client'?'暂无甲方档案':'暂无施工方档案',kind==='client'?'点击“新增甲方”录入第一条甲方档案。':'点击“新增施工方”录入第一条施工方档案。');
+    const page=pageItems(items,key),body=root.querySelector('[data-oms-v1-party-body="'+kind+'"]');body.innerHTML=page.items.length?page.items.map(item=>'<tr data-oms-v1-row data-party-id="'+safeText(item.id)+'"><td><strong title="'+safeText(item.legal_name)+'">'+safeText(item.legal_name)+'</strong></td><td>'+safeText(item.registration_identifier||'—')+'</td><td><span class="oms-v1__tag '+(item.status==='active'?'':'is-muted')+'">'+safeText(item.status==='active'?'启用':'停用')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>').join(''):emptyRow(4,kind==='client'?'暂无甲方档案':'暂无施工方档案',kind==='client'?'点击“新增甲方”录入第一条甲方档案。':'点击“新增施工方”录入第一条施工方档案。');
     for(const row of body.querySelectorAll('[data-party-id]'))row.addEventListener('click',()=>openParty(row.dataset.partyId,kind));
     syncListPager(body,key,page,()=>renderParties(kind));
   }
@@ -392,7 +395,7 @@
       const items=filteredInvoiceItems(direction);
       const page=pageItems(items,key);
       total.textContent=items.length+' 条';
-      body.innerHTML=page.items.length?page.items.map(item=>{const project=invoiceProject(item),flow=(item.issuer_party?.legal_name||'开票方待核对')+' → '+(item.recipient_party?.legal_name||'收票方待核对');return '<tr data-oms-v1-row data-invoice-id="'+safeText(item.id)+'" data-invoice-direction="'+direction+'"><td>'+safeText(item.issued_on)+'</td><td><strong title="'+safeText(project?.name||'项目来源待核对')+'">'+safeText(project?.name||'项目来源待核对')+'</strong><small>'+safeText(flow)+'</small></td><td class="is-number is-money"><strong>'+safeText(item.amount_visible?money(item.amount_minor_decimal):'未授权')+'</strong></td><td><span class="oms-v1__clamp" title="'+safeText(item.note||'')+'">'+safeText(item.note||'—')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(5,'暂无记录','新增记录后将在这里显示。');
+      body.innerHTML=page.items.length?page.items.map(item=>{const project=invoiceProject(item);return '<tr data-oms-v1-row data-invoice-id="'+safeText(item.id)+'" data-invoice-direction="'+direction+'"><td>'+safeText(item.issued_on)+'</td><td><strong title="'+safeText(project?.name||'项目来源待核对')+'">'+safeText(project?.name||'项目来源待核对')+'</strong></td><td class="is-number is-money"><strong>'+safeText(item.amount_visible?money(item.amount_minor_decimal):'未授权')+'</strong></td><td><span class="oms-v1__clamp" title="'+safeText(item.note||'')+'">'+safeText(item.note||'—')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(5,'暂无记录','新增记录后将在这里显示。');
       for(const row of body.querySelectorAll('[data-invoice-id]'))row.addEventListener('click',()=>openInvoice(row.dataset.invoiceId,row.dataset.invoiceDirection));
       syncListPager(body,key,page,renderInvoices);
     }
@@ -417,7 +420,7 @@
       const page=pageItems(items,key);
       root.querySelector('[data-oms-v1-cash-total="'+type+'"]').textContent=items.length+' 条';
       const body=root.querySelector('[data-oms-v1-cash-body="'+type+'"]');
-      body.innerHTML=page.items.length?page.items.map(item=>{const project=cashProject(item),counterparty=type==='receipt'?item.payer:item.payee;return '<tr data-oms-v1-row data-cash-id="'+safeText(item.id)+'"><td>'+safeText(item.occurred_on)+'</td><td><strong title="'+safeText(project?.name||'项目来源待核对')+'">'+safeText(project?.name||'项目来源待核对')+'</strong><small>'+safeText(counterparty?.legal_name||'往来主体待核对')+'</small></td><td class="is-number is-money"><strong>'+safeText(decimalMoney(item.amount_visible?item.amount:null))+'</strong></td><td><span class="oms-v1__clamp" title="'+safeText(item.description||'')+'">'+safeText(item.description||'—')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(5,type==='receipt'?'暂无回款记录':'暂无支付记录','有效记录会按'+cashDateLabel(type)+'倒序显示。');
+      body.innerHTML=page.items.length?page.items.map(item=>{const project=cashProject(item),counterparty=type==='receipt'?item.payer:item.payee;return '<tr data-oms-v1-row data-cash-id="'+safeText(item.id)+'"><td>'+safeText(item.occurred_on)+'</td><td><strong title="'+safeText(project?.name||'项目来源待核对')+'">'+safeText(project?.name||'项目来源待核对')+'</strong></td><td><span class="oms-v1__cell-text" title="'+safeText(counterparty?.legal_name||'往来主体待核对')+'">'+safeText(counterparty?.legal_name||'往来主体待核对')+'</span></td><td class="is-number is-money"><strong>'+safeText(decimalMoney(item.amount_visible?item.amount:null))+'</strong></td><td><span class="oms-v1__clamp" title="'+safeText(item.description||'')+'">'+safeText(item.description||'—')+'</span></td><td><button class="oms-v1__row-action" type="button">详情 ›</button></td></tr>'}).join(''):emptyRow(6,type==='receipt'?'暂无回款记录':'暂无支付记录','有效记录会按'+cashDateLabel(type)+'倒序显示。');
       for(const row of body.querySelectorAll('[data-cash-id]'))row.addEventListener('click',()=>openCash(row.dataset.cashId));
       syncListPager(body,key,page,renderCash);
     }

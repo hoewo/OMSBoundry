@@ -25,13 +25,13 @@ jq -e --arg uuid "$uuid" '
   .deployment.profile=="D1" and ([.deployment.c0_checksums_sha256,.deployment.c1_checksums_sha256,.deployment.c9_checksums_sha256,.deployment.c10_checksums_sha256]|all(test("^[0-9a-f]{64}$"))) and
   .browser.engine=="chromium" and (.browser.version|type)=="string" and (.browser.version|length)>0 and .browser.headless==true and
   (.tenants|length)==2 and .tenants[0].tenant_id!=.tenants[1].tenant_id and
-  all(.tenants[];(.tenant_id|test($uuid)) and (.subject_id|test($uuid)) and (.submit_frame_origin|test("^https://|^http://(127[.]0[.]0[.]1|localhost)(:[0-9]+)?$")) and .status_frame_origin==.submit_frame_origin and .unexpected_console_error_or_warning_count==0 and .page_error_count==0 and (.expected_authorization_console_error_count|type)=="number" and .expected_authorization_console_error_count>=0) and
-  ([.tenants[]|select(.capability_revocation_checked==true)|.capability_denial_http_status]|length)==1 and ([.tenants[]|select(.capability_revocation_checked==true)|.capability_denial_http_status]|all(.==403)) and
-  ([.tenants[]|select(.capability_revocation_checked==false)|.capability_denial_http_status]|all(.==null)) and ([.tenants[]|select(.capability_revocation_checked==false)|.expected_authorization_console_error_count]|all(.==0)) and
-  ([.tenants[].capability_revocation_checked]|sort)==[false,true] and
+  all(.tenants[];(.tenant_id|test($uuid)) and (.subject_id|test($uuid)) and (.submit_frame_origin|test("^https://|^http://(127[.]0[.]0[.]1|localhost)(:[0-9]+)?$")) and .status_frame_origin==.submit_frame_origin and .unexpected_console_error_or_warning_count==0 and .page_error_count==0 and (.expected_session_console_error_count|type)=="number" and .expected_session_console_error_count>=0) and
+  ([.tenants[]|select(.session_expiry_checked==true)|.session_denial_http_status]|length)==1 and ([.tenants[]|select(.session_expiry_checked==true)|.session_denial_http_status]|all(.==401)) and
+  ([.tenants[]|select(.session_expiry_checked==false)|.session_denial_http_status]|all(.==null)) and ([.tenants[]|select(.session_expiry_checked==false)|.expected_session_console_error_count]|all(.==0)) and
+  ([.tenants[].session_expiry_checked]|sort)==[false,true] and
   .checks.two_tenant_sessions=="pass" and .checks.submit_and_status_open=="pass" and .checks.cross_origin_sdk=="pass" and
-  .checks.capability_revocation_hidden=="pass" and .checks.non_feedback_navigation_during_revocation=="pass" and
-  .checks.capability_regrant_restored=="pass" and .checks.unexpected_console_clean=="pass" and .checks.credentials_recorded==false
+  .checks.logged_out_session_denied=="pass" and .checks.non_feedback_navigation_during_logout=="pass" and
+  .checks.relogin_restored=="pass" and .checks.unexpected_console_clean=="pass" and .checks.credentials_recorded==false
 ' "$evidence_dir/state-after-c11.json" >/dev/null || { echo 'P9 C11 state has an invalid schema or failed check' >&2; exit 1; }
 
 awk -F '\t' '
@@ -40,10 +40,9 @@ awk -F '\t' '
   $2=="login"&&$3=="200"{login[$1]++}
   $2=="session"&&$3=="200"{session[$1]++}
   $2=="config"&&$3=="200"{config[$1]++}
-  $1=="primary"&&$2=="revoke-feedback"&&$3=="204"{revoke++}
-  $1=="primary"&&$2=="revoked-config"&&$3=="403"{denied++}
-  $1=="primary"&&$2=="grant-feedback"&&$3=="204"{grant++}
-  END{if(login["primary"]!=1||login["secondary"]!=1||session["primary"]!=1||session["secondary"]!=1||config["primary"]!=1||config["secondary"]!=1||revoke!=1||denied!=1||grant!=1)exit 1}
+  $1=="primary"&&$2=="logout-feedback"&&$3=="204"{logout++}
+  $1=="primary"&&$2=="logged-out-config"&&$3=="401"{denied++}
+  END{if(login["primary"]!=2||login["secondary"]!=1||session["primary"]!=2||session["secondary"]!=1||config["primary"]!=1||config["secondary"]!=1||logout!=1||denied!=1)exit 1}
 ' "$evidence_dir/browser-evidence.tsv" || { echo 'P9 C11 browser HTTP evidence is incomplete' >&2; exit 1; }
 if grep -REq 'Authorization:|ak_[A-Za-z0-9_-]{16,}|fbs_[A-Za-z0-9_.-]{12,}|customUserId|custom_user_id|password|oms_iam_(session|csrf)' "$evidence_dir"; then echo 'P9 C11 evidence contains a credential or pseudonymous identity' >&2; exit 1; fi
 echo 'PASS P9 C11 browser evidence integrity and secret exclusion'

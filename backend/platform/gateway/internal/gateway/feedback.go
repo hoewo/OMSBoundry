@@ -16,8 +16,6 @@ import (
 	"time"
 )
 
-const feedbackUseAction = "feedback.use"
-
 var feedbackIdentityVersionPattern = regexp.MustCompile(`^v[1-9][0-9]{0,3}$`)
 
 // FeedbackOptions configures the external Feedback SDK adapter. APIKeys are
@@ -128,10 +126,6 @@ func (s *Server) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnauthorized, "session_required", "请重新登录后使用产品反馈")
 		return
 	}
-	if err := s.requireFeedbackCapability(r.Context(), r, principal.Principal.TenantID, principal.Principal.SubjectID); err != nil {
-		writeProblem(w, http.StatusForbidden, "feedback_capability_denied", "当前账号没有产品反馈权限")
-		return
-	}
 	customUserID := deriveFeedbackUserID(s.feedback.identityHMACKey, s.feedback.identityVersion, principal.Principal.TenantID, principal.Principal.SubjectID)
 	config := map[string]any{
 		"feedbackV2Enabled":              true,
@@ -157,34 +151,6 @@ func (s *Server) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 		config["expiresAt"] = session.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"config": config})
-}
-
-func (s *Server) requireFeedbackCapability(ctx context.Context, original *http.Request, tenantID, subjectID string) error {
-	payload, _ := json.Marshal(map[string]string{"audience": "feedback"})
-	request, err := s.iamRequest(ctx, http.MethodPost, "/api/v1/credentials", bytes.NewReader(payload), original)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := s.client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("IAM rejected feedback capability")
-	}
-	var issued credentialResponse
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&issued); err != nil || issued.Token == "" || issued.TokenType != "Bearer" {
-		return fmt.Errorf("IAM returned invalid feedback credential")
-	}
-	claims, err := s.verifier.Verify(issued.Token, "feedback", feedbackUseAction)
-	if err != nil || claims.Tenant != tenantID || claims.Subject != subjectID {
-		return fmt.Errorf("feedback credential identity mismatch")
-	}
-	return nil
 }
 
 func (s *Server) exchangeFeedbackSession(ctx context.Context, customUserID string) (feedbackSession, error) {

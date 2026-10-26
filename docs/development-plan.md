@@ -1,6 +1,8 @@
 # OMSBizFoundry 开发计划
 
-2026-10-26 P9 增量（BF-267）：新增随 D1 release bundle 交付的 C11 真实 Chromium 驱动、固定证据 verifier、`run-c0-c11` 与全链 verifier。C11 双 Tenant 打开 Feedback submit／status，核对跨域 SDK，并在主 Tenant 完成撤销 capability→入口隐藏且 OMS 可用→恢复 capability→入口返回。总入口先验证凭证并真实启动／关闭浏览器，再允许进入早期阶段或破坏性 C9；已有完整 C11 时只读复验全链并零执行退出。低资源双 Origin 夹具实际使用生产 Feedback bridge 通过，且授权最终恢复、摘要／Actor／Origin／403／Console／Secret 负例失败关闭。下一步只在真实 D1 使用 `run-c0-c11` 完成全组合并单独补回滚记录；不再新增业务阶段，也不自行增加未确认的 soak 时长。
+2026-10-26 页面与接入修订（BF-268～BF-271）：本地分支把报销／付款拆为两套表单，按现金／银行卡约束收款信息，并统一经营列表列语义；账号／租户改为 IAM 实际页面；Feedback 改为所有有效登录账号可用，移除 `feedback.use` Manifest／Grant，并把 C10／C11 改为 Session 门禁。BF-271 进一步把反馈和退出接到侧栏／顶部可见入口，并让侧栏业务导航独立滚动。受影响 Go／Node、真实本地 Chrome、P9 C10／C11 离线驱动、D1 bundle 和入口模板回归已经通过。下一步是本地人工页面走查及用户确认；未部署 D1／公网，外部 project 115 与真实恢复仍待原 P9 窗口执行。[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)
+
+2026-10-26 P9 增量（BF-267，授权部分由 BF-270 取代）：C11 真实 Chromium 驱动、固定证据 verifier、`run-c0-c11` 与全链 verifier 随 D1 release bundle 交付。C11 双 Tenant 打开 Feedback submit／status并核对跨域 SDK；主 Tenant 退出后配置必须 401，重新登录后入口恢复，Feedback 不再执行 Capability 撤销／恢复。总入口先验证凭证并真实启动／关闭浏览器，再允许进入早期阶段或破坏性 C9；已有完整 C11 时只读复验全链并零执行退出。下一步只在真实 D1 使用 `run-c0-c11` 完成全组合并单独补回滚记录；不再新增业务阶段，也不自行增加未确认的 soak 时长。
 
 2026-10-26 P9 增量（BF-266）：新增随 D1 release bundle 交付的 `run-c0-c10` 与只读 `verify-run-c0-c10`，把 C0～C8 连续业务、C9 原项目空目标恢复和 C10 外部 Feedback 收成一个可中断恢复入口；C9 仍需独立显式确认，C10 的开发者回复等待仍以 exit 3 暂停。离线完整制品复用、checksum-valid C9 断链和未授权 C9 拒绝通过。下一步只执行真实全组合窗口并补真实浏览器 Console／点击与回滚记录；需求没有规定 soak 时长，实施不得自行制造时长门槛，也不得继续增加业务阶段。
 

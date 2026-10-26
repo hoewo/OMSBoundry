@@ -1,6 +1,8 @@
 # OMSBizFoundry 开发进度
 
-2026-10-26：完成 BF-267 的 P9 C11 真实浏览器验收驱动与 C0～C11 可恢复总入口。低资源测试用两个短生命周期 loopback Origin、生产 Feedback bridge 和真实 Chrome 验证两个 Tenant 的 submit／status 点击、跨域 iframe、主 Tenant capability 撤销后入口隐藏但 OMS 导航可用、授权恢复后入口返回，并确认最终 Grant 已还原；摘要漂移、错误 Actor／Origin、缺 403、非预期 Console 错误和 API Key 注入均被拒绝。总入口会在破坏性 C9 前实际启动／关闭浏览器，依赖缺失立即停止；完整 C11 则全链复验后零执行退出。C11／全链脚本已进入 D1 release bundle，测试结束无常驻服务。真实 D1 与回滚证据仍待执行，P9 尚未完成。
+2026-10-26：BF-268～BF-270 页面与接入修订已在本地通过当前源码门禁。报销／付款已拆分表单并增加现金／银行卡约束，经营列表按一列一个事实调整；账号／租户改为 IAM 实际页面；Feedback 改为有效登录即可使用并移除角色 Capability，C10／C11 相应改为 Session 门禁。受影响 Go／Node、真实本地 Chrome、P9 C10／C11 离线驱动和 D1 bundle 测试通过且无常驻服务。本轮尚未部署 D1／公网，外部 project 115 与真实 P9 仍待执行。[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)
+
+2026-10-26：完成 BF-267 的 P9 C11 真实浏览器验收驱动与 C0～C11 可恢复总入口；其角色撤权部分已由 BF-270 取代。C11 现在验证两个 Tenant 的 submit／status、跨域 iframe、主 Tenant 退出后配置 401 与重新登录恢复，不再修改 Grant。真实 D1 与回滚证据仍待执行，P9 尚未完成。
 
 2026-10-26：完成 BF-266 的 P9 C0～C10 可恢复总入口和独立全链 verifier。总入口复用已有阶段，缺失 C9 时仍要求显式清卷确认，C10 等开发者回复时保留 `PENDING`；最终核对十一套固定制品、单一 project／Origin 和跨 C0～C10 checksum 绑定。离线完整复用、重算 checksum 后的 C9 断链与未确认恢复负例通过，脚本进入 D1 release bundle。未启动 Docker 或 OMS 常驻服务；真实 D1、真实浏览器 Console／点击与回滚记录仍待执行，P9 未完成，且未擅自增加未确认的 soak 时长。
 
@@ -40,7 +42,7 @@
 
 2026-10-26 P9 装配源码门禁已完成，真实全组合与恢复待执行。审计发现 D1 的 Finance／Payroll 虽可健康启动，却未完整接入下游：现已为 Finance 增加独立工作负载身份、Evidence／Money 短期 Capability、401 单次换票和 D1 key lifecycle；Payroll 补上 Money 端点；选择器强制 Finance→Money＋Evidence、Payroll→People＋Money。静态 Compose、相关 Go test／vet、IAM policy、release bundle 与 P9 组合测试通过，未启动容器。P8 真实 Feedback、P9 连续旅程、联合恢复、digest 和浏览器证据仍待执行，不能标记整轮完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
-2026-10-26 P8 Feedback V2 源码门禁和本地真实浏览器宿主门禁已完成，外部运行验收待执行。Gateway 已提供受会话、CSRF 和 `feedback.use` 约束的运行配置，Workbench 已接入桌面／移动入口、单 iframe、未读、精确消息校验、退出清理和降级；D1 只接受环境秘密。Arckit SDK 独立本地提交已增加闭集诊断上下文和 OMS Origin。Go／Node／SDK 构建／release bundle 及本地 Chromium 29 项断言均通过且未启动常驻服务。项目 115 通知、有效 Key、双账号／双租户与外部真实跨域旅程尚未验收，未部署 D1／公网；完成这些门禁后才能关闭 P8。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+2026-10-26 P8 Feedback V2 旧源码门禁和本地真实浏览器宿主门禁已完成，角色授权部分已由 BF-270 取代。Gateway 现在只以会话和 CSRF 保护运行配置，Workbench 使用实际产品反馈页面、单 iframe、未读、精确消息校验、退出清理和降级；D1 只接受环境秘密。项目 115 通知、有效 Key、双账号／双租户与外部真实跨域旅程尚未验收，未部署 D1／公网；完成本轮回归和这些门禁后才能关闭 P8。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 
 2026-10-26 P7 本地完成，进入 P8。员工 API Key 已可经正式 `/open-api/v1/` 上传发票、建立／提交本人报销并查询结果；Evidence 完成有界格式／结构／危险主动内容校验与失败关闭清理，Finance 完成重复识别、草稿生命周期和本人资源授权，财务确认后 Money 保存唯一付款／核销。真实 TLS 五进程／四库验收 13／13 通过，故障恢复、危险 PDF、强重复、付款唯一性和撤权均有证据；相关单元、vet 与 PostgreSQL 集成测试通过。没有部署 D1／公网，下一步为 P8 Feedback V2，随后 P9 全组合／恢复／公网验收。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 

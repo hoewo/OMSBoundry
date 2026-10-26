@@ -1,10 +1,17 @@
 # OMS1 版本迭代计划（2026-10-25）
 
-状态：需求已确认，实施已启动；BF-184～BF-237 是本轮当前产品基线，本文件是产品与开发入口。
+状态：需求已确认，实施已启动；BF-184～BF-237 是初始需求基线，BF-268～BF-270 是 2026-10-26 页面与接入修订，本文件是产品与开发入口。
 
 工程分期、依赖和验收门见 [`oms-v1-iteration-implementation-plan-20261025.md`](./oms-v1-iteration-implementation-plan-20261025.md)。BF-237 已关闭最后产品待确认项，后续状态以各阶段实际代码、测试和运行证据为准，不能因文档完成就宣称功能完成。
 
 问题 A → 可验证结果 B：会议结论只有五条短标题，容易在实现时被误解或遗漏 → 把每一项逐条澄清为可验证范围、边界、依赖、延期项和验收证据，再按确认后的顺序实施。
+
+## 0. 2026-10-26 页面与接入修订
+
+- 报销与付款申请使用不同表单。报销填写内容、金额、日期和可选发票；无发票只允许保存草稿，正式提交仍须通过 Evidence `invoice-v1`。付款申请填写说明、金额、付款方式、日期和收款信息；现金不保存银行账号，银行卡必须提供账号。
+- 经营列表按一列一个事实：票据项目列移除“方向”，回款拆项目／付款方，应付和支付拆项目／施工方，施工方名称列只显示名称，金额列不重复显示状态标签。
+- OMS1 增加实际“账号与租户”页面，读取 IAM 当前 Session、Tenant 和 Subject；管理员通过 IAM 正式接口邀请、停用和发起密码重置。
+- OMS1 增加实际“产品反馈”页面。Feedback 对所有有效登录账号开放，不设置 `feedback.use` 或其他角色 Capability；Gateway 仍以 CSRF＋IAM Session 门禁，退出后 401，重新登录后恢复。
 
 ## 1. 迭代主线
 
@@ -590,7 +597,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 
 - `customUserId` 由 OMS 可信 IAM 上下文中的 Tenant ID＋Subject ID 派生为稳定、脱敏、不可猜测的标识；不能由页面参数自报，不能直接使用手机号、邮箱、昵称或递增账号编号；
 - 同一租户内同一账号应持续得到同一值，以便“我的反馈”看到历史；不同租户即使关联同一自然人也必须得到不同值，避免跨租户反馈串读；
-- Workbench 只有在当前账号具备 `feedback.use` 时才展示入口并注入 SDK 配置；隐藏按钮不是授权，OMS 的配置装配端点仍须校验可信会话、租户和能力；
+- Workbench 对所有有效登录账号展示入口并注入 SDK 配置；Gateway 配置端点必须校验 CSRF、可信会话和 Tenant／Subject，不以页面可见性代替会话门禁；
 - Feedback 项目 API Key 与 OMS1 员工开放平台 API Key 是完全不同的凭证类型、权限域和生命周期，不得复用、互换或由员工开放平台页面管理。
 
 #### 安全边界
@@ -618,7 +625,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 
 #### 首阶段验收方向
 
-1. 具备 `feedback.use` 的两个 OMS 测试账号分别提交反馈，只能在各自“我的反馈”中看到自己的记录、消息和附件；
+1. 两个不同 Tenant 的有效 OMS 登录账号分别提交反馈，只能在各自“我的反馈”中看到自己的记录、消息和附件；
 2. 不同 Tenant 下的账号即使名称相同也使用不同 `customUserId`，不能相互枚举或读取；
 3. 无能力、账号停用、Key 无效／吊销、错误 Project ID、未允许父 origin 和 Feedback 服务不可用均有明确失败且不影响 OMS 其他页面；
 4. “提交反馈”与“我的反馈”共用 iframe 并正确切换，关闭事件只隐藏反馈层，不改变 OMS 当前业务路由；
@@ -629,7 +636,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 #### 当前实现审计与拆解依据（2026-10-25）
 
 - 当前 OMS1 主页面由 `oms_phase1.html`／`oms_phase1.js` 装配，其主侧栏尚无产品反馈入口；现有“产品反馈／提交反馈／我的反馈”只存在于已退役的参考 OA 页面，并且点击后只显示“SDK 尚未接入”的提示，不能直接当作 V2 已接入；
-- `feedback.use` 当前可在参考 OA 的浏览器权限展示目录中找到，但这只是一项 UI fixture，尚未证明 IAM Capability Manifest、Grant、Gateway 派生凭证和 Workbench 正式门禁已经具备；实施时必须先建立并验证正式 Capability 链，不能复用页面布尔值冒充授权；
+- BF-270 明确 Feedback 不进入参考 OA 岗位权限目录，也不发布业务 Capability；正式门禁是有效 IAM Session、CSRF 与 Gateway 派生的 Tenant＋Subject 身份，不能复用页面布尔值冒充认证；
 - Workbench 已能从可信请求上下文取得 Subject ID，并从 Suite Manifest 取得 Tenant ID，具备生成稳定脱敏 `customUserId` 的输入；具体派生必须使用服务端受控、版本化算法，不能把两个原始 ID 直接拼接后暴露给 Feedback；
 - 当前 Workbench 配置只覆盖既有 OMS 运行参数，尚无 Feedback SDK URL、Gateway URL、Project ID、通知开关或 Key 的结构化配置与启动校验；这些配置需要区分非秘密装配值和敏感 Key，测试中使用无效占位值；
 - Feedback SDK V2 的父页面默认信任列表不含 `https://oatest.antuinfo.cn`，因此接入不是只改 OMS 仓库：还必须在 Arckit Feedback SDK V2 的独立发布配置中增加该精确 origin，并验证 OSS／API 跨域与 iframe bridge；

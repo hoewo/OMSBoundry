@@ -90,16 +90,16 @@ const authenticate = async (context, actor) => {
   return token
 }
 
-const changeGrant = async (context, actor, operation) => {
-  const csrf = await requestJSON(context.request, `${baseURL}/auth/api/v1/csrf`, { method: 'GET' }, [200], `${actor.label} ${operation}-csrf`)
-  await requestJSON(context.request, `${baseURL}/auth/api/v1/admin/grants${operation === 'revoke' ? '/revoke' : ''}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.csrf_token },
-    data: { subject_id: actor.tenant.administrator_subject_id, audience: 'feedback', action: 'feedback.use' },
-  }, [204], `${actor.label} ${operation}-feedback`)
+const endSession = async (context, actor) => {
+  const csrf = await requestJSON(context.request, `${baseURL}/auth/api/v1/csrf`, { method: 'GET' }, [200], `${actor.label} logout-csrf`)
+  await requestJSON(context.request, `${baseURL}/auth/api/v1/logout`, {
+    method: 'POST', headers: { 'X-CSRF-Token': csrf.csrf_token },
+  }, [204], `${actor.label} logout-feedback`)
 }
 
 const openMode = async (page, mode, expectedOrigin) => {
-  await page.locator('[data-feedback-toggle]').click()
+  await page.locator('[data-oms-v1-nav="feedback"]').first().click()
+  await page.locator('[data-oms-v1-page="feedback"].is-active').waitFor({ state: 'visible' })
   await page.locator(`[data-feedback-mode="${mode}"]`).first().click()
   const layer = page.locator('[data-feedback-layer]')
   await layer.waitFor({ state: 'visible', timeout: 15000 })
@@ -123,7 +123,6 @@ try {
   browser = await chromium.launch(launchOptions)
   for (const actor of actors) {
     const context = await browser.newContext()
-    let revoked = false
     try {
       await authenticate(context, actor)
       const configEnvelope = await requestJSON(context.request, `${baseURL}/gateway/feedback/config`, { method: 'POST', headers: { 'X-CSRF-Token': (await requestJSON(context.request, `${baseURL}/auth/api/v1/csrf`, { method: 'GET' }, [200], `${actor.label} config-csrf`)).csrf_token } }, [200], `${actor.label} config`)
@@ -133,40 +132,32 @@ try {
       const page = await context.newPage()
       const consoleProblems = []
       const pageErrors = []
-      let intentionalDenialWindow = false
-      page.on('console', (message) => { if (message.type() === 'error' || message.type() === 'warning') consoleProblems.push({ type: message.type(), text: message.text(), intentionalDenialWindow }) })
+      let intentionalSessionDenialWindow = false
+      page.on('console', (message) => { if (message.type() === 'error' || message.type() === 'warning') consoleProblems.push({ type: message.type(), text: message.text(), intentionalSessionDenialWindow }) })
       page.on('pageerror', (error) => pageErrors.push(error.name || 'Error'))
       await page.goto(workbenchURL, { waitUntil: 'domcontentloaded' })
       const rootNode = page.locator('[data-oms-v1]')
       await rootNode.waitFor({ state: 'visible' })
       assert.equal(await rootNode.getAttribute('data-tenant-id'), actor.tenant.id)
       assert.equal(await rootNode.getAttribute('data-subject-id'), actor.tenant.administrator_subject_id)
-      await page.locator('[data-feedback-entry]').waitFor({ state: 'visible', timeout: 15000 })
+      await page.locator('[data-feedback-page]').waitFor({ state: 'attached', timeout: 15000 })
+      await page.waitForFunction(() => document.querySelector('[data-feedback-notice] p')?.textContent.includes('已连接'))
       const submitOrigin = await openMode(page, 'submit', expectedOrigin)
       const statusOrigin = await openMode(page, 'status', expectedOrigin)
 
       if (actor.label === 'primary') {
-        await changeGrant(context, actor, 'revoke')
-        revoked = true
-        intentionalDenialWindow = true
-        const denied = page.waitForResponse((response) => response.url() === `${baseURL}/gateway/feedback/config` && response.status() === 403, { timeout: 15000 })
-        await page.reload({ waitUntil: 'domcontentloaded' })
-        await denied
-        rows.push([actor.label, 'revoked-config', '403'])
-        await page.waitForTimeout(100)
-        intentionalDenialWindow = false
-        await page.locator('[data-oms-v1]').waitFor({ state: 'visible' })
-        assert.equal(await page.locator('[data-feedback-entry]').isHidden(), true, 'revoked Feedback entry must remain hidden')
+        await endSession(context, actor)
+        const loggedOutCSRF = await requestJSON(context.request, `${baseURL}/auth/api/v1/csrf`, { method: 'GET' }, [200], `${actor.label} logged-out-config-csrf`)
+        await requestJSON(context.request, `${baseURL}/gateway/feedback/config`, { method: 'POST', headers: { 'X-CSRF-Token': loggedOutCSRF.csrf_token } }, [401], `${actor.label} logged-out-config`)
         await page.locator('[data-oms-v1-nav="internal"]').click()
         await page.locator('[data-oms-v1-page="internal"].is-active').waitFor({ state: 'visible' })
-        await changeGrant(context, actor, 'grant')
-        revoked = false
+        await authenticate(context, actor)
         await page.reload({ waitUntil: 'domcontentloaded' })
-        await page.locator('[data-feedback-entry]').waitFor({ state: 'visible', timeout: 15000 })
+        await page.waitForFunction(() => document.querySelector('[data-feedback-notice] p')?.textContent.includes('已连接'))
       }
 
-      const expectedAuthorizationErrors = actor.label === 'primary' ? consoleProblems.filter((problem) => problem.intentionalDenialWindow && problem.type === 'error' && /^Failed to load resource: the server responded with a status of 403(?: \([^)]*\))?$/.test(problem.text)) : []
-      const unexpectedConsoleProblems = consoleProblems.filter((problem) => !expectedAuthorizationErrors.includes(problem))
+      const expectedSessionErrors = actor.label === 'primary' ? consoleProblems.filter((problem) => problem.intentionalSessionDenialWindow && problem.type === 'error' && /^Failed to load resource: the server responded with a status of 401(?: \([^)]*\))?$/.test(problem.text)) : []
+      const unexpectedConsoleProblems = consoleProblems.filter((problem) => !expectedSessionErrors.includes(problem))
       assert.deepEqual(unexpectedConsoleProblems, [], `${actor.label} browser console contains unexpected warning/error`)
       assert.deepEqual(pageErrors, [], `${actor.label} browser page contains errors`)
       tenantResults.push({
@@ -174,18 +165,14 @@ try {
         subject_id: actor.tenant.administrator_subject_id,
         submit_frame_origin: submitOrigin,
         status_frame_origin: statusOrigin,
-        expected_authorization_console_error_count: expectedAuthorizationErrors.length,
+        expected_session_console_error_count: expectedSessionErrors.length,
         unexpected_console_error_or_warning_count: 0,
         page_error_count: 0,
-        capability_revocation_checked: actor.label === 'primary',
-        capability_denial_http_status: actor.label === 'primary' ? 403 : null,
+        session_expiry_checked: actor.label === 'primary',
+        session_denial_http_status: actor.label === 'primary' ? 401 : null,
       })
     } finally {
-      try {
-        if (revoked) await changeGrant(context, actor, 'grant')
-      } finally {
-        await context.close()
-      }
+      await context.close()
     }
   }
 
@@ -205,13 +192,13 @@ try {
     tenants: tenantResults,
     checks: {
       two_tenant_sessions: 'pass', submit_and_status_open: 'pass', cross_origin_sdk: 'pass',
-      capability_revocation_hidden: 'pass', non_feedback_navigation_during_revocation: 'pass',
-      capability_regrant_restored: 'pass', unexpected_console_clean: 'pass', credentials_recorded: false,
+      logged_out_session_denied: 'pass', non_feedback_navigation_during_logout: 'pass',
+      relogin_restored: 'pass', unexpected_console_clean: 'pass', credentials_recorded: false,
     },
   }
   writeFileSync(join(runtime, 'browser-evidence.tsv'), `${rows.map((row) => row.join('\t')).join('\n')}\n`, { mode: 0o600 })
   writeFileSync(join(runtime, 'state-after-c11.json'), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 })
-  writeFileSync(join(runtime, 'result.md'), '# P9 C11 browser result\n\nPASS: two Tenant sessions opened Feedback submit/status in the configured cross-origin frame; primary capability revocation hid Feedback while OMS navigation remained usable, and regrant restored it. Unexpected Console warnings/errors and page errors: 0. The expected authorization-denial resource error is counted separately.\n', { mode: 0o600 })
+  writeFileSync(join(runtime, 'result.md'), '# P9 C11 browser result\n\nPASS: two Tenant sessions opened Feedback submit/status in the configured cross-origin frame; logging out the primary session denied Feedback configuration while OMS navigation remained usable, and logging in again restored it. Unexpected Console warnings/errors and page errors: 0. The expected session-denial resource error is counted separately.\n', { mode: 0o600 })
   const stage = `${evidenceDir}.stage-${process.pid}`
   mkdirSync(stage, { mode: 0o700 })
   for (const file of ['browser-evidence.tsv', 'result.md', 'state-after-c11.json']) copyFileSync(join(runtime, file), join(stage, file))
@@ -219,7 +206,7 @@ try {
   runVerifier('verify-c11-evidence', [stage])
   if (existsSync(evidenceDir)) rmdirSync(evidenceDir)
   renameSync(stage, evidenceDir)
-  console.log(`PASS P9 C11 real browser, cross-origin Feedback and revocation recovery: ${evidenceDir}`)
+  console.log(`PASS P9 C11 real browser, cross-origin Feedback and session recovery: ${evidenceDir}`)
 } finally {
   if (browser) await browser.close()
   rmSync(runtime, { recursive: true, force: true })

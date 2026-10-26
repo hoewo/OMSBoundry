@@ -20,8 +20,7 @@ func TestLoadCatalogAndRejectUnknownOrDuplicateAudience(t *testing.T) {
 	financePath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "internal-finance-requests-capabilities.json")
 	payrollPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "payroll-capabilities.json")
 	openAPIPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "open-api-capabilities.json")
-	feedbackPath := filepath.Join("..", "..", "..", "..", "..", "contracts", "access", "v1", "examples", "feedback-capabilities.json")
-	catalog, err := Load([]string{path, projectPath, moneyPath, peoplePath, engagementPath, productionPath, resultsPath, costPath, bonusPath, identityPath, financePath, payrollPath, openAPIPath, feedbackPath})
+	catalog, err := Load([]string{path, projectPath, moneyPath, peoplePath, engagementPath, productionPath, resultsPath, costPath, bonusPath, identityPath, financePath, payrollPath, openAPIPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +32,6 @@ func TestLoadCatalogAndRejectUnknownOrDuplicateAudience(t *testing.T) {
 		"internal-finance-requests": "internal-finance-requests.payment.confirm",
 		"payroll":                   "payroll.payment.confirm",
 		"open-api":                  "open-api.invoice-reimbursement.use",
-		"feedback":                  "feedback.use",
 	} {
 		if !catalog.Contains(audience, action) {
 			t.Fatalf("P1 capability missing: %s/%s", audience, action)

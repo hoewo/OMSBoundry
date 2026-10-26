@@ -1,6 +1,8 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-10-26 P9 浏览器闭环基线（BF-267）：最终全链入口为 `run-c0-c11`；C11 必须以两个 C1 Tenant 管理员在真实 Chromium 中核对 Workbench 身份并点击 Feedback submit／status，SDK 必须来自同一已配置跨域 Origin。主 Tenant 撤销 `feedback.use` 后入口应隐藏但 OMS 其他导航可用，恢复授权后入口应返回；预期 403 与非预期 Console／Page error 分开记录。总入口必须在任何早期阶段／破坏性恢复前实际启动并关闭一次目标浏览器，缺依赖立即失败；完整 C11 存在时只复验全链，不重复业务或恢复动作。固定证据不保存任何反馈运行 Secret 或派生身份。离线真实浏览器夹具通过只证明驱动和生产 bridge 可执行，真实 D1 和回滚记录仍待完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
+2026-10-26 OMS1 页面与接入基线（BF-268～BF-271）：内部财务按报销／付款分别建表单，报销无附件只可保存草稿，正式提交仍走 Evidence 发票闭环；付款按现金／银行卡分别约束收款信息。经营列表保持一列一个事实。账号／租户页面直接读取 IAM Session、Tenant 和 Subject，并由管理员调用 IAM 正式邀请、状态和密码重置命令。Feedback V2 是全部有效登录账号的基础入口，不设 `feedback.use` 或其他角色权限；Gateway 仍校验 CSRF 和 IAM Session，退出后返回 401，重新登录恢复入口。所有登录页面都必须有明确可见的反馈和退出入口，长侧栏只能滚动业务导航、不能遮蔽账号会话操作。本条取代历史 Feedback 决策中的角色授权部分，不改变身份派生、跨域、Secret、数据所有权和外部验收边界。
+
+2026-10-26 P9 浏览器闭环基线（BF-267，授权部分由 BF-270 取代）：最终全链入口为 `run-c0-c11`；C11 必须以两个 C1 Tenant 管理员在真实 Chromium 中核对 Workbench 身份并点击 Feedback submit／status，SDK 必须来自同一已配置跨域 Origin。主 Tenant 退出后配置端点必须 401，重新登录后入口必须恢复；Feedback 不设置角色 Capability。总入口必须在任何早期阶段／破坏性恢复前实际启动并关闭一次目标浏览器，缺依赖立即失败；完整 C11 存在时只复验全链，不重复业务或恢复动作。固定证据不保存任何反馈运行 Secret 或派生身份。离线真实浏览器夹具通过只证明驱动和生产 bridge 可执行，真实 D1 和回滚记录仍待完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
 2026-10-26 P9 全程执行基线（BF-266）：C0～C10 使用一个可恢复入口；C9 缺失时必须再次显式授权原项目清卷恢复，C10 等待真实开发者回复时保持 `PENDING`，不能生成成功证据。最终独立 verifier 复验十一阶段闭集、单一 Compose project／Origin 及完整 checksum 绑定。执行器不负责部署或服务生命周期，且当前未定义最小 soak 时长；真实浏览器 Console／点击和回滚记录仍是独立运行证据，不能由离线总入口代替。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
@@ -42,7 +44,7 @@
 
 2026-10-26 P9 装配源码基线（BF-244；运行／恢复验收待执行）：D1 的 Finance 与 Payroll 不再允许“Owner 健康但下游闭环未接线”。Finance 以独立工作负载身份取得 Evidence File 与 Money Payment Command 的精确短期能力，Payroll 同样以自身身份读取 People 并登记 Money；D1 选择器分别强制 Finance→Money＋Evidence、Payroll→People＋Money，且 Finance key lifecycle、pull 镜像和停用清理均进入同一装配。静态 Compose、Owner／IAM／Payroll 测试和 release bundle 已通过，未启动容器；全组合连续旅程、备份／空目标恢复、恢复后复跑、digest 和浏览器证据仍待 P9 运行验收，P8 的真实 Feedback 门禁也未完成。[P9 装配源码报告](./reports/oms-v1-iteration-p9-composition-source-validation-20261026.md)
 
-2026-10-26 P8 Feedback V2 源码基线（BF-243／BF-246；外部运行验收待执行）：OMS 只拥有受 `feedback.use` 门禁的宿主入口和运行适配，Feedback 平台继续独占反馈、附件、消息、未读与处理状态。Gateway 从可信 Tenant＋Subject 派生版本化 HMAC 身份，Workbench 只保存内存配置并以单一 iframe 和精确 origin／source 通信；桌面、移动、未读、退出清理和故障降级均已接线。部署 Key／HMAC 只允许环境注入，Arckit SDK 另以闭集 allowlist 接收最小非标识诊断。源码、构建、release bundle 和本地真实 Chromium 跨 origin 宿主门禁已过，但项目 115 通知、有效凭证、双账号／双租户和外部浏览器仍未验收，P8 未完成、未上线。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
+2026-10-26 P8 Feedback V2 源码基线（BF-243／BF-246；授权部分由 BF-270 取代，外部运行验收待执行）：OMS 只拥有登录后宿主入口和运行适配，Feedback 平台继续独占反馈、附件、消息、未读与处理状态。Gateway 从可信 Tenant＋Subject 及有效 Session 派生版本化 HMAC 身份，Workbench 只保存内存配置并以单一 iframe 和精确 origin／source 通信；桌面、移动、未读、退出清理和故障降级均已接线。部署 Key／HMAC 只允许环境注入，Arckit SDK 另以闭集 allowlist 接收最小非标识诊断。Feedback 不设置角色 Capability。项目 115 通知、有效凭证、双账号／双租户和外部浏览器仍未验收，P8 未完成、未上线。[P8 源码报告](./reports/oms-v1-iteration-p8-feedback-v2-source-validation-20261026.md)
 
 2026-10-26 P7 实现基线（BF-242）：`/open-api/v1/` 已从凭证底座扩展为员工本人发票报销闭环。Evidence 在独立数据库保存发票 File Version 校验与清理事实，Finance 保存本人申请、发票指纹、提交／撤回／归档／恢复／软删除 revision 和 Money 引用，Money 保存实际资金与核销；三者继续通过版本化端口连接而不共享表。正式 TLS 本地验收覆盖 Evidence／Finance／Money 故障恢复、强重复、危险 PDF、付款唯一性、本人 paid 查询与 Key 撤销。格式／结构和危险主动内容校验不等同通用杀毒；本批未部署 D1／公网，P8／P9 仍待实施。[P7 报告](./reports/oms-v1-iteration-p7-invoice-reimbursement-validation-20261026.md)
 
@@ -62,7 +64,7 @@
 
 2026-10-25 Feedback V2 通知基线（BF-236，需求确认／尚未实施）：项目 115 首阶段启用 V2 通知，“产品反馈”入口显示当前账号未读数且 0 隐藏。读计数不改状态，打开单条只标记该反馈已读，不清空其他通知；Tenant＋Subject 派生身份保证账号／租户隔离。通知、实时连接或角标失败只降级反馈体验，不阻塞 OMS 主业务。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)
 
-2026-10-25 Feedback V2 接入基线（BF-235，需求确认／尚未实施）：OMS1 首阶段以跨域 iframe 装配现有 Feedback SDK V2，当前选择 `apiKey` 直连并绑定项目 115。Key 只从部署配置注入且不落 Git／文档／URL／日志；浏览器直连风险通过项目专用、轮换／吊销、限流和监控约束，正式目标仍是服务端短期 Session。IAM Tenant＋Subject 派生稳定脱敏 `customUserId`，Feedback 独占反馈事实，OMS 只拥有 `feedback.use` 门禁和宿主入口。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)
+2026-10-25 Feedback V2 接入基线（BF-235，授权部分由 BF-270 取代）：OMS1 首阶段以跨域 iframe 装配现有 Feedback SDK V2，当前选择 `apiKey` 直连并绑定项目 115。Key 只从部署配置注入且不落 Git／文档／URL／日志；浏览器直连风险通过项目专用、轮换／吊销、限流和监控约束，正式目标仍是服务端短期 Session。IAM Tenant＋Subject 派生稳定脱敏 `customUserId`，Feedback 独占反馈事实，OMS 只拥有登录后宿主入口。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)
 
 2026-10-25 发票报销闭环基线（BF-234，需求确认／尚未实施）：本轮闭环从管理员建立账号／成员映射和授权开始，经员工 Key、外部工具上传发票／提交本人报销、无需审批待支付、财务确认付款和 Money 资金／核销，最终由员工 API 查到已支付。正式验收覆盖真实入口／数据库、幂等、故障未知恢复、撤权、跨租户／越权和文件防重安全；不外推为自动代付、AI、Webhook 或 OMS1 全业务闭环。[迭代计划](./specs/assembly/oms-v1-iteration-plan-20261025.md)
 

@@ -1,6 +1,14 @@
 # OMSBizFoundry 开发决策总表
 
-2026-10-26 BF-267（已接受／P9 C11 真实浏览器与撤权恢复门禁，真实 D1 待执行）：C0～C10 的 HTTP 证据不能替代真人可观察的 Workbench／Feedback 交互。C11 必须绑定同一 C0、C1、C9、C10，以两个 C1 Tenant 管理员的隔离 Chromium Context 登录，核对页面渲染 Tenant／Subject，并分别点击打开 submit／status；Feedback iframe 必须来自 Gateway 配置的同一跨域 Origin。主 Tenant 还必须通过 IAM 正式入口撤销 `feedback.use`，证明入口不可发现但非 Feedback 导航可用，再恢复授权并证明入口重新出现；中断清理必须尽力恢复授权。故意 403 的 HTTP 响应与可能出现的预期资源 Console error 分别记录，Page error 与其他 Console warning/error 必须为零。固定证据不得保存密码、Cookie、API Key、Capability 或 `customUserId`。`run-c0-c11` 在任何 C0～C10／破坏性 C9 动作前验证凭证输入并实际启动后关闭一次浏览器；完整 C11 存在时先验证全链并零执行退出。`verify-run-c0-c11` 负责十二阶段 checksum／Actor／Origin 连续性，二者仍不拥有服务生命周期。使用生产 Feedback bridge 的短生命周期双 Origin Chromium 夹具、撤权恢复、摘要漂移、缺 403 证据、Console 非零和 Secret 注入负例已通过并进入 release bundle；真实 D1 与回滚记录未执行时 P9 不完成。
+2026-10-26 BF-271（已接受／登录会话与反馈入口可见性）：OMS1 的所有已登录页面必须提供明确可见的“退出登录”和“产品反馈”入口，不能只依赖隐藏菜单、侧栏尾部可滚出区域或角色权限。桌面侧栏底部显示当前账号与文字退出按钮，顶部同时提供反馈／退出快捷入口以覆盖窄屏和长导航；侧栏业务导航独立滚动，不得把会话操作挤出视口。退出仍由 Gateway `/gateway/logout`、IAM Session 和 CSRF 契约处理，Feedback 仍按 BF-270 对全部有效登录账号开放；本条只修正入口与可达性，不新增身份、反馈或业务事实所有权。
+
+2026-10-26 BF-270（已接受／Feedback V2 登录即用，取代角色权限门禁）：产品反馈是所有有效登录账号的基础入口，不设置岗位、角色或业务 Capability。Workbench 提供独立“产品反馈”页面，Gateway 配置端点只校验 CSRF 与有效 IAM Session；D1 不再装载 Feedback Capability Manifest 或为管理员补发 `feedback.use`。C10 仅以两个 Tenant 的有效会话验证隔离，C11 改为退出后配置 401、重新登录后恢复入口，不再执行 Grant 撤销／恢复。本条取代 BF-235、BF-243、BF-265、BF-267 中 `feedback.use` 相关要求；可信 Tenant＋Subject 派生、跨域 origin／source 校验、Secret 注入、Feedback 数据所有权、外部 project 115 回复／通知和真实 D1 待验边界保持不变。
+
+2026-10-26 BF-269（已接受／账号与租户使用 IAM 实际页面）：主 OMS1 增加独立“账号与租户”页面，当前账号通过 IAM Session 与受保护的 `GET /api/v1/tenant` 读取自己的 Subject／Tenant；租户管理员通过 IAM 正式 Subject 列表、邀请、状态和密码重置接口操作账号。邀请／重置一次性令牌只通过 URL fragment 交给登录页面并由其调用正式激活／重置命令，不写查询参数或业务数据库。首版仍不提供租户自助创建、同账号多租户切换或物理隔离；非管理员只能查看自身和租户摘要。
+
+2026-10-26 BF-268（已接受／内部财务表单和经营列表修订）：报销与付款申请必须使用不同表单。报销录入内容、金额、日期和可选发票；允许无附件保存草稿，但正式提交仍须满足 BF-230／BF-234 的 Evidence `invoice-v1` 闭环。付款申请录入说明、金额、付款方式、日期和收款信息；现金方式不保存银行账号，银行卡方式必须保存并审计账号快照。Money 仍独占实际付款。经营列表按“一列一个事实”展示：票据只显示项目名，回款拆项目／付款方，应付和支付拆项目／施工方，施工方名称列只显示名称，已支付金额列不重复渲染状态标签。
+
+2026-10-26 BF-267（已接受／P9 C11 真实浏览器门禁；授权部分已由 BF-270 取代，真实 D1 待执行）：C0～C10 的 HTTP 证据不能替代真人可观察的 Workbench／Feedback 交互。C11 必须绑定同一 C0、C1、C9、C10，以两个 C1 Tenant 管理员的隔离 Chromium Context 登录，核对页面渲染 Tenant／Subject，并分别点击打开 submit／status；Feedback iframe 必须来自 Gateway 配置的同一跨域 Origin。根据 BF-270，主 Tenant 改为退出 Session 后配置 401、重新登录后入口恢复，不再撤销或恢复 `feedback.use`。Page error 与其他 Console warning/error 必须为零。固定证据不得保存密码、Cookie、API Key、Capability 或 `customUserId`。`run-c0-c11` 在任何 C0～C10／破坏性 C9 动作前验证凭证输入并实际启动后关闭一次浏览器；完整 C11 存在时先验证全链并零执行退出。`verify-run-c0-c11` 负责十二阶段 checksum／Actor／Origin 连续性，二者仍不拥有服务生命周期。真实 D1 与回滚记录未执行时 P9 不完成。
 
 2026-10-26 BF-266（已接受／P9 C0～C10 可恢复总入口，真实 D1 待执行）：最终运行窗口不得由操作者分别拼接 C0～C8、破坏性 C9 和外部 C10。`run-c0-c10` 必须先复用 C0～C8 连续执行器，再只在显式 `P9_C9_CONFIRM_IN_PLACE_RESTORE=yes` 时执行缺失的 C9；C10 缺开发者回复时原样返回 `PENDING` 且不伪造证据，回复后同命令只恢复缺失阶段。`verify-run-c0-c10` 必须独立复验十一阶段固定制品、同一 Compose project／公共 Origin、C0～C8 完整 checksum 有向链、C9 对 C0～C8 的绑定及 C10 对 C0／C1／C9 的绑定。执行器不拥有服务启停或部署；当前没有接受最小 soak 时长，不能自行把某个等待时长写成通过条件。离线完整复用、checksum-valid 断链和 C9 未确认拒绝已通过并进入 release bundle；真实 D1、真实浏览器 Console／点击和回滚记录仍待执行，因此 P9 未完成。
 

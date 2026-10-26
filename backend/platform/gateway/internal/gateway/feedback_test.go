@@ -60,43 +60,23 @@ func TestFeedbackRuntimeRejectsUnsafeOrAmbiguousConfiguration(t *testing.T) {
 	}
 }
 
-func TestFeedbackConfigRequiresCapabilityAndReturnsOnlyPseudonymousScope(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+func TestFeedbackConfigRequiresOnlyActiveSessionAndReturnsPseudonymousScope(t *testing.T) {
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	keyPath := writeKeys(t, publicKey)
 	now := time.Now().UTC()
-	token := signToken(t, privateKey, map[string]any{
-		"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": testTenant,
-		"aud": "feedback", "name": "体验账号", "actions": []string{feedbackUseAction},
-		"scope": map[string]any{"kind": "tenant", "resources": []any{}},
-		"iat":   now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(),
-		"jti": "99999999-9999-4999-8999-999999999999",
-	})
-	denied := false
 	iam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie(sessionCookieName); err != nil || cookie.Value != "session-good" {
 			writeProblem(w, http.StatusUnauthorized, "session", "bad")
 			return
 		}
-		switch r.URL.Path {
-		case "/api/v1/session":
+		if r.URL.Path == "/api/v1/session" {
 			writeJSON(w, http.StatusOK, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": testTenant, "username": "tester", "display_name": "体验账号", "administrator": false, "auth_time": now}})
-		case "/api/v1/credentials":
-			var request map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request["audience"] != "feedback" {
-				writeProblem(w, http.StatusBadRequest, "request", "bad")
-				return
-			}
-			if denied {
-				writeProblem(w, http.StatusForbidden, "capability", "denied")
-				return
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"token": token, "token_type": "Bearer", "expires_at": now.Add(5 * time.Minute)})
-		default:
-			http.NotFound(w, r)
+			return
 		}
+		http.NotFound(w, r)
 	}))
 	defer iam.Close()
 
@@ -130,11 +110,14 @@ func TestFeedbackConfigRequiresCapabilityAndReturnsOnlyPseudonymousScope(t *test
 		t.Fatalf("feedback config leaked IAM identity/session: %s", encoded)
 	}
 
-	denied = true
+	request = httptest.NewRequest(http.MethodPost, "https://oms.example.test/gateway/feedback/config", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-invalid"})
+	request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token-0123456789"})
+	request.Header.Set("X-CSRF-Token", "csrf-token-0123456789")
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, request.Clone(request.Context()))
-	if response.Code != http.StatusForbidden || strings.Contains(response.Body.String(), "ak_0123456789abcdef") {
-		t.Fatalf("denied feedback capability response = %d %s", response.Code, response.Body.String())
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || strings.Contains(response.Body.String(), "ak_0123456789abcdef") {
+		t.Fatalf("invalid feedback session response = %d %s", response.Code, response.Body.String())
 	}
 }
 

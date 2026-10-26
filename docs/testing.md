@@ -1,8 +1,12 @@
 # OMSBizFoundry 验证入口
 
-## P9 C11 真实浏览器与撤权恢复门禁（2026-10-26，源码门禁通过／真实 D1 待执行）
+## OMS1 页面、账号与 Feedback 登录门禁（2026-10-26，本地验证中／未部署）
 
-入口 `verify-c11-browser.mjs` 先复验同一 C0～C10 链，再用两个 C1 Tenant 管理员的隔离 Chromium Context 登录 Workbench，核对页面 Tenant／Subject，分别点击 Feedback submit／status 并验证同一跨域 SDK Origin。主 Tenant 随后撤销 `feedback.use`，要求入口隐藏且公司内部管理导航仍可用；恢复 capability 后刷新并要求入口返回。故意 403 的预期浏览器资源错误单独计数，其他 Console warning/error 和 Page error 必须为零。固定证据不包含密码、Cookie、API Key、Capability 或派生反馈身份。
+BF-268～BF-271 的回归覆盖：报销／付款表单字段和现金／银行卡服务端约束；经营列表一列一个事实；IAM 当前 Session／Tenant 读取、管理员邀请／停用／密码重置与一次性 fragment 消费；Feedback 所有登录账号可见、无 `feedback.use` Catalog／Grant、有效 Session 可取配置、退出后 401、重新登录恢复；HTML 必须同时包含侧栏和顶部退出入口及顶部反馈入口，长侧栏导航独立滚动。报销无附件只允许保存草稿，正式提交仍必须通过 Evidence `invoice-v1`。Go、Node、真实本地 Chrome、P9 C10／C11 离线驱动和 D1 bundle 门禁已经实际通过，范围与未验证项见[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)。
+
+## P9 C11 真实浏览器与会话恢复门禁（2026-10-26，源码门禁待复验／真实 D1 待执行）
+
+入口 `verify-c11-browser.mjs` 先复验同一 C0～C10 链，再用两个 C1 Tenant 管理员的隔离 Chromium Context 登录 Workbench，核对页面 Tenant／Subject，分别点击 Feedback submit／status 并验证同一跨域 SDK Origin。主 Tenant 随后退出，Gateway Feedback 配置必须返回 401；再次登录并刷新后入口必须恢复。Feedback 不设置岗位／角色 Capability。其他 Console warning/error 和 Page error 必须为零。固定证据不包含密码、Cookie、API Key 或派生反馈身份。
 
 `PLAYWRIGHT_MODULE_PATH=... BROWSER_EXECUTABLE=... make p9-browser-driver-test` 已实际通过：测试先构造完整 C0～C10 fixture，再在两个短生命周期回环 Origin 上运行生产 `oms_phase1_feedback.js` 与真实 Chrome，验证双 Tenant 点击、跨域 iframe、撤权、明确 403、非 Feedback 导航、恢复授权和最终 Grant 还原；独立 verifier 同时拒绝摘要漂移、缺 403、重算摘要后的非预期 Console 错误和 API Key 注入，全链 verifier 额外拒绝错误 C1 Actor 与同域 iframe。测试还证明完整 C11 会零执行复用，Playwright 缺失会在到达 C9 确认前失败。两个 server 与 Chrome 均在测试退出时关闭，未启动 Docker、数据库或 OMS 常驻服务。`run-c0-c11` 可恢复既有阶段，`verify-run-c0-c11` 还会核对十二套制品、精确 C1 Actor 和跨 Origin。该夹具不等于真实 D1，真实全链和回滚记录仍待执行。
 
@@ -14,7 +18,7 @@
 
 ## P9 C10 Feedback V2 真实旅程门禁（2026-10-26，源码门禁通过／真实 project 115 待执行）
 
-入口 `acceptance/p9-full-composition/verify-c10-feedback.mjs` 绑定同一 C0、C1 与 C9，使用两个 Tenant 的真实管理员会话取得 `feedback.use` 后从 Gateway 获取外部运行配置。每侧建立或复用两条 project 115 会话并幂等追加带 HTTPS URL 附件的客户消息；缺少开发者回复时明确返回 `PENDING` 且不生成证据。平台回复后复跑，要求两条会话均有开发者消息和未读通知，标记第一条已读不影响第二条，再单独清除第二条。证据不包含 API Key、Session token、密码、Cookie 或 HMAC 派生用户身份。
+入口 `acceptance/p9-full-composition/verify-c10-feedback.mjs` 绑定同一 C0、C1 与 C9，使用两个 Tenant 的真实管理员会话从 Gateway 获取外部运行配置，不要求 Feedback 角色 Capability。每侧建立或复用两条 project 115 会话并幂等追加带 HTTPS URL 附件的客户消息；缺少开发者回复时明确返回 `PENDING` 且不生成证据。平台回复后复跑，要求两条会话均有开发者消息和未读通知，标记第一条已读不影响第二条，再单独清除第二条。证据不包含 API Key、Session token、密码、Cookie 或 HMAC 派生用户身份。
 
 `make p9-feedback-driver-test` 已实际通过：短时回环 HTTP server 模拟 OMS Gateway 与 Feedback API，首次运行停在四条真实回复门禁，注入开发者消息后同命令恢复完成；同时覆盖双租户身份、幂等消息、URL 附件、逐会话已读，以及 checksum 漂移、缺开发者消息和 Secret 注入负例。测试进程在 `finally` 中关闭且不启动容器；它不替代 project 115、生产 Origin allowlist 或外部 Console 的真实证据。
 

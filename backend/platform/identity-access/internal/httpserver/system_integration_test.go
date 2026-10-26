@@ -104,6 +104,11 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if stringField(t, adminPrincipal, "tenant_id") != testTenantID {
 		t.Fatalf("bootstrap administrator tenant = %#v", adminPrincipal)
 	}
+	tenantResponse := getJSON(t, admin, server.URL+"/api/v1/tenant", http.StatusOK)
+	tenantObject := objectField(t, tenantResponse, "tenant")
+	if stringField(t, tenantObject, "id") != testTenantID || stringField(t, tenantObject, "name") != "测试企业" {
+		t.Fatalf("bootstrap tenant = %#v", tenantObject)
+	}
 
 	otherAdmin := newClient(t)
 	otherAdminCSRF := fetchCSRF(t, otherAdmin, server.URL)
@@ -111,6 +116,11 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	otherAdminPrincipal := currentSession(t, otherAdmin, server.URL, http.StatusOK)
 	if stringField(t, otherAdminPrincipal, "tenant_id") != otherTenantID || stringField(t, otherAdminPrincipal, "subject_id") != otherAdministrator.ID {
 		t.Fatalf("second administrator principal = %#v", otherAdminPrincipal)
+	}
+	otherTenantResponse := getJSON(t, otherAdmin, server.URL+"/api/v1/tenant", http.StatusOK)
+	otherTenantObject := objectField(t, otherTenantResponse, "tenant")
+	if stringField(t, otherTenantObject, "id") != otherTenantID || stringField(t, otherTenantObject, "name") != "第二测试企业" {
+		t.Fatalf("second tenant = %#v", otherTenantObject)
 	}
 
 	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"username": "operator", "display_name": "业务操作员"}, http.StatusCreated)
