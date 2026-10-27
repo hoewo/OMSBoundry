@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 账号操作列排版（2026-10-27，本地与公网发布门禁通过）
+
+BF-278 必须验证：账号表最后一列显示“操作”；列宽至少 190px 且右对齐；动作容器和按钮文字均不换行；普通用户一行可同时显示“重置密码／设为管理员／停用”，管理员行保持“重置密码”；窄视口不通过压缩文字解决空间问题，而由既有表格滚动容器承接。静态回归必须断言账号表专用类、表头和三条关键布局规则。
+
+本地实际通过 Workbench `GOMAXPROCS=2 go test -p 1 ./internal/server`、`GOMAXPROCS=2 go test -p 1 ./...`、对应 `go vet`、`git diff --check`，正式 D1 release bundle 测试与 checksum 也通过。公网仅升级 Unified Workbench 到 `v0.1.0-test.oms-v1.43@sha256:bb17534eee43ea047c7d40a48f229916e4cee53bd75502cf3e22932773727ee9`；升级与独立 D1 `check` 成功，附加断言确认 19/19 running、0 unhealthy 和精确镜像。真实登录页面刷新后，“操作”表头与三个动作同一行、整体右对齐；验证未点击任何账号动作，也未修改账号、组织或业务数据。[验证及发布记录](./reports/oms-v1-account-action-column-layout-validation-20261027.md)
+
 ## 组织显示名称设置（2026-10-27，本地与公网发布门禁通过）
 
 BF-277 必须验证：只有同 Tenant 启用管理员可通过 `POST /api/v1/admin/tenant` 修改本人所属 Tenant 的显示名称；请求按 Session Tenant 限定，不接受客户端 Tenant ID。名称去除首尾空白后为 1～100 字符，空值稳定返回 422；系统管理员与普通用户返回 403。真实改名锁定 Tenant 行、保持稳定 ID 和账号归属、写一条 `iam_tenant_name_changed` 不可变审计；相同名称重复保存成功但不增加审计。Workbench 必须提供“组织设置”入口、编辑当前显示名称、只读展示稳定 ID，并说明证照字段归 Party Directory。

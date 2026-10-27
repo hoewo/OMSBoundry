@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-10-27 账号操作列排版修复（BF-278）：Workbench 账号表为最后一列增加明确的“操作”表头，并使用 190px 最小宽度、右对齐、禁止动作容器与按钮文字换行；窄视口由既有表格滚动容器承接。Go 单测、全模块测试、vet、diff、release bundle 与 checksum 已通过；D1 Suite `v0.1.0-test.oms-v1.43` 仅替换 Unified Workbench 发布，正式 D1 `check`、19/19 running、0 unhealthy、精确镜像断言和公网真实管理员页面走查通过。本项不改变 IAM、账号级别、组织、Owner、API、schema、Grant 或业务数据。[验证及发布记录](./reports/oms-v1-account-action-column-layout-validation-20261027.md)
+
 2026-10-27 组织设置修订（BF-277）：IAM 已增加本组织管理员改名命令与 `POST /api/v1/admin/tenant`，使用 Session Tenant、Tenant 行锁和不可变审计；同名保存幂等，普通用户和系统管理员越权拒绝。Workbench“账号与租户”页增加“组织设置”，可编辑组织显示名称并只读展示稳定 ID，同时明确企业证照资料属于主体档案。Identity／Workbench Go、vet、Node、diff、页面资源回归及短生命周期 PostgreSQL 18 完整 HTTP 生命周期通过；D1 Suite `v0.1.0-test.oms-v1.42` 的联合备份、正式升级、D1 检查、19/19 healthy 和公网管理员页面复验也已通过，发布验收未修改现有组织名称。[验证及发布记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
 
 2026-10-27 既有用户管理员挂载修复（BF-276）：Identity 已把系统端“新增组织管理员”收敛为一个分支明确的命令：同组织启用普通用户提升、已有管理员幂等、无账号才邀请，跨组织／系统管理员／非启用稳定拒绝；提升会写审计并使目标旧 Session 失效。Workbench 改为“设置组织管理员”，分别反馈提升、幂等和激活链接，并透传 IAM 业务错误。本地 Identity／Workbench Go、vet、Node、diff 以及短生命周期 PostgreSQL 18 migration 9／HTTP 生命周期均通过；修复已随 D1 Suite `v0.1.0-test.oms-v1.41` 发布，升级前联合备份 `20261027T132851Z`、schema 9、D1 检查、19/19 healthy、公网页面及资源版本核对通过。发布验收没有替用户提升真实账号，下一步由系统管理员在新页面明确确认目标账号。[验证及发布记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
