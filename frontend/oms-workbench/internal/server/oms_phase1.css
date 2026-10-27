@@ -240,6 +240,7 @@ body.oms-v1-active.oms-v1-dialog-open{overflow:hidden}body.oms-v1-active.oms-v1-
 .oms-v1__internal-tag.is-positive{background:#e8f3ed;color:#176b4f}.oms-v1__internal-tag.is-warning{background:#f6eee2;color:#9a6728}.oms-v1__internal-tag.is-muted{background:#f0f1ef;color:#7b827e}
 .oms-v1__row-actions{display:flex;justify-content:flex-end;gap:10px;min-width:76px}
 .oms-v1__row-actions button{padding:0;border:0;background:transparent;color:var(--green);font-size:11px;font-weight:700}
+.oms-v1__identity-table th:last-child,.oms-v1__identity-table td:last-child{width:190px;min-width:190px;text-align:right}.oms-v1__identity-table .oms-v1__row-actions{min-width:0;flex-wrap:nowrap;white-space:nowrap}.oms-v1__identity-table .oms-v1__row-actions button{flex:none;white-space:nowrap}
 .oms-v1__internal-batch{display:flex;align-items:center;gap:9px;min-height:42px;margin:8px 0;padding:7px 10px;border:1px solid #d8e5dd;border-radius:8px;background:#f4f8f5}
 .oms-v1__internal-batch span{margin-right:auto;color:#53615a;font-size:11px}.oms-v1__internal-batch strong{color:var(--ink)}
 .oms-v1__internal-batch button{min-height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#53615a;font-size:11px;font-weight:700}
