@@ -1,10 +1,10 @@
 # OMSBizFoundry 验证入口
 
-## 既有用户管理员挂载（2026-10-27，本地门禁通过／公网待发布）
+## 既有用户管理员挂载（2026-10-27，本地与公网发布门禁通过）
 
 BF-276 必须验证：同 Tenant 启用普通用户经系统端设置后保持同一 Subject ID、升级为管理员、revision 与 Session Generation 各递增并产生一次提升审计；再次设置幂等且不重复审计；另一 Tenant、系统管理员、pending／disabled 账号稳定拒绝且零写入；标识不存在仍创建待激活管理员并返回一次性链接。HTTP 必须分别返回 `promoted`、`already_administrator`、`invited`；Workbench 必须按动作显示结果并读取标准 `{error:{message}}`，不能统一显示服务不可用。
 
-本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_system_admin.js`、`git diff --check`，并以短生命周期 PostgreSQL 18 从空库重放 migration 9 后运行完整 HTTP 生命周期集成测试；容器已停止删除。公网发布和真实页面重试尚未执行。[验证记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
+本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_system_admin.js`、`git diff --check`，并以短生命周期 PostgreSQL 18 从空库重放 migration 9 后运行完整 HTTP 生命周期集成测试；容器已停止删除。公网 D1 Suite `v0.1.0-test.oms-v1.41` 发布已完成升级前联合备份、schema 9、D1 `check`、19/19 healthy、Identity／Workbench 镜像版本、公网页面与资源内容核对；页面只读打开新弹窗，未替用户提交真实权限变化。[验证及发布记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
 
 ## 系统用户与组织管理（2026-10-27，本地门禁及 D1 公网发布通过）
 
