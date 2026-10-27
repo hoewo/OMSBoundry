@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-10-27 系统用户管理修订（BF-275）：登录页公开创建组织候选已撤销，账号页面统一使用“普通用户／管理员”。IAM 已显式建模系统管理员，系统管理页、全组织列表、原子创建组织＋首位管理员激活链接、现有 `admin` 迁移、组织至少一名管理员保护、Gateway 可信上下文及系统管理员业务 Capability 拒绝均完成本地实现；真实 PostgreSQL migration／HTTP 生命周期、Go、vet、JS 与静态页面隔离回归通过。下一步只发布 Identity、Gateway、Workbench 的兼容闭包并做公网系统管理员登录、组织读取与零业务写入验收；People 成员页面与职位／业务角色不随本项修改，用户—成员关联另走稳定引用。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)、[本地验证](./reports/oms-v1-system-user-tenant-management-validation-20261027.md)
+2026-10-27 系统用户管理修订（BF-275）：登录页公开创建组织候选已撤销，账号页面统一使用“普通用户／管理员”。IAM 已显式建模系统管理员，系统管理页、全组织列表、原子创建组织＋首位管理员激活链接、现有 `admin` 迁移、组织至少一名管理员保护、Gateway 可信上下文及系统管理员业务 Capability 拒绝均随 D1 Suite `v0.1.0-test.oms-v1.39` 发布；本地真实 PostgreSQL migration／HTTP 生命周期、Go、vet、JS 与页面隔离，以及公网联合备份、schema 9、19/19 healthy、真实系统管理员登录、组织读取和零业务写入验收均通过。当前既有组织有 0 名组织管理员，下一步由系统管理员明确邀请一名管理员，不在发布中擅自提升既有普通用户；People 成员页面与职位／业务角色不随本项修改，用户—成员关联另走稳定引用。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)、[验证及发布报告](./reports/oms-v1-system-user-tenant-management-validation-20261027.md)
 
 2026-10-26 BF-274 的公开注册候选未部署，并已由 BF-275 取代；兼容的管理员级别调整已按“用户”术语完成验证。
 
