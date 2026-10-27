@@ -601,7 +601,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		`data-oms-v1-application="money-flow-ledger" data-oms-v1-route="/money"`,
 		"assets/oms-phase1.css?v=20261027.2",
 		"assets/oms-phase1-pagination.js?v=20261022.6",
-		"assets/oms-phase1.js?v=20261026.1",
+		"assets/oms-phase1.js?v=20261028.2",
 		`data-oms-v1-flow="receivable-total"`,
 		`data-oms-v1-flow-count="receipt"`,
 		`data-oms-v1-flow-count="payment"`,
@@ -712,7 +712,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}{
 		{"/assets/oms-phase1.css", "text/css; charset=utf-8", ".oms-v1__nav-sub"},
 		{"/assets/oms-phase1-pagination.js", "application/javascript; charset=utf-8", "async function loadOffsetCollection(api, id, base, params = {})"},
-		{"/assets/oms-phase1.js", "application/javascript; charset=utf-8", "loadOffsetCollection('project-workspace','/api/v1/project-directory',{status:'all'})"},
+		{"/assets/oms-phase1.js", "application/javascript; charset=utf-8", "refreshAdministratorCapabilitiesOnce().finally(loadAll)"},
 		{"/assets/oms-phase1-internal-model.js", "application/javascript; charset=utf-8", "scope.OMSInternalModel"},
 		{"/assets/oms-phase1-internal.js", "application/javascript; charset=utf-8", "oms-v1.company-internal"},
 		{"/assets/oms-phase1-payroll-owner.js", "application/javascript; charset=utf-8", "payments:batch"},
@@ -767,7 +767,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	if strings.Contains(identityAsset.Body.String(), "不会自动获得财务、工资等业务权限") {
 		t.Fatal("OMS identity asset still advertises the superseded administrator permission rule")
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261027.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261028.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261027.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261028.2", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261028.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -1064,7 +1064,7 @@ func TestPrimaryOMSAndLegacyWorkbenchAreSeparateSurfaces(t *testing.T) {
 	primary := httptest.NewRecorder()
 	handler.ServeHTTP(primary, primaryRequest)
 	primaryBody := primary.Body.String()
-	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261026.1"`} {
+	for _, marker := range []string{`<body class="oms-v1-active"`, `data-page-hydrated="true"`, `src="assets/oms-phase1.js?v=20261028.2"`} {
 		if primary.Code != http.StatusOK || !strings.Contains(primaryBody, marker) {
 			t.Fatalf("primary OMS missing %q status=%d", marker, primary.Code)
 		}

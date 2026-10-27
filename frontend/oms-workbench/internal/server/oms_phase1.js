@@ -79,6 +79,14 @@
     authorizationTasks.set(id,task);
     try{return await task}finally{if(authorizationTasks.get(id)===task)authorizationTasks.delete(id)}
   }
+  async function refreshAdministratorCapabilitiesOnce(){
+    if(root.dataset.administrator!=='true')return;
+    const version='oms-administrator-full-access-v1.1',tenant=root.dataset.tenantId||'unknown-tenant',subject=root.dataset.subjectId||'unknown-subject',marker=['oms-v1-capability-refresh',version,tenant,subject].join(':');
+    try{if(sessionStorage.getItem(marker)==='complete')return}catch{}
+    const ids=['party-directory','project-workspace','billing-invoice','money-flow-ledger','contract-ledger'].filter(id=>app(id));
+    const results=await Promise.allSettled(ids.map(id=>authorize(id,true)));
+    if(results.every(result=>result.status==='fulfilled'))try{sessionStorage.setItem(marker,'complete')}catch{}
+  }
   async function api(id,path,options={}){
     const config=app(id);if(!config||!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.route||''))throw new Error('相关功能暂不可用，请联系管理员');
     const evidencePath=id==='evidence-service'&&/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(path);
@@ -789,5 +797,5 @@
   }
   root.querySelector('[data-oms-v1-refresh]').addEventListener('click',loadAll);
   document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!dialog.hidden)closeDialog();else if(!root.querySelector('[data-oms-v1-project-detail]').hidden)root.querySelector('[data-oms-v1-project-back]').click()}});
-  loadAll();
+  refreshAdministratorCapabilitiesOnce().finally(loadAll);
 })();
