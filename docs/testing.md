@@ -1,10 +1,12 @@
 # OMSBizFoundry 验证入口
 
-## 组织显示名称设置（2026-10-27，本地门禁通过／公网待发布）
+## 组织显示名称设置（2026-10-27，本地与公网发布门禁通过）
 
 BF-277 必须验证：只有同 Tenant 启用管理员可通过 `POST /api/v1/admin/tenant` 修改本人所属 Tenant 的显示名称；请求按 Session Tenant 限定，不接受客户端 Tenant ID。名称去除首尾空白后为 1～100 字符，空值稳定返回 422；系统管理员与普通用户返回 403。真实改名锁定 Tenant 行、保持稳定 ID 和账号归属、写一条 `iam_tenant_name_changed` 不可变审计；相同名称重复保存成功但不增加审计。Workbench 必须提供“组织设置”入口、编辑当前显示名称、只读展示稳定 ID，并说明证照字段归 Party Directory。
 
-本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js`、`git diff --check`；另以限 1 CPU／512 MiB 的短生命周期 PostgreSQL 18.6 从空库重放 schema 9，执行完整 Identity HTTP 生命周期集成测试，覆盖改名、读回、审计和两类越权。临时容器已停止删除，公网尚未发布。[验证记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
+2026-10-27 BF-277 公网发布已验证：Identity 与 Workbench 以 `v0.1.0-test.oms-v1.42` 精确镜像升级，升级前联合备份和 checksum、D1 `check`、Identity schema 9、19/19 running 且 0 unhealthy 均通过。真实管理员登录公网“账号与租户”后可见“组织设置”，弹窗显示当前组织名称、只读稳定 ID、资料边界说明和保存动作；验收仅打开并关闭弹窗，没有修改现有组织名称。ECS 证据保存在 `/opt/omsbizfoundry/acceptance/oms-v1-tenant-settings-v42-20261027`。[验证及发布记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
+
+本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js`、`git diff --check`；另以限 1 CPU／512 MiB 的短生命周期 PostgreSQL 18.6 从空库重放 schema 9，执行完整 Identity HTTP 生命周期集成测试，覆盖改名、读回、审计和两类越权。临时容器已停止删除；对应公网发布证据见上项。[验证记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
 
 ## 既有用户管理员挂载（2026-10-27，本地与公网发布门禁通过）
 

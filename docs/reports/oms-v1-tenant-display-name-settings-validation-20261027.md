@@ -2,7 +2,7 @@
 
 ## 结论
 
-BF-277 本地实现与真实 PostgreSQL 18 门禁通过，公网尚未发布。组织管理员现在可以从“账号与租户 → 组织设置”修改本人所属组织的 IAM 显示名称；组织稳定 ID、账号归属和业务事实引用均不改变。
+BF-277 本地实现、真实 PostgreSQL 18 门禁和 Auth58 D1 公网发布均已通过。组织管理员现在可以从“账号与租户 → 组织设置”修改本人所属组织的 IAM 显示名称；组织稳定 ID、账号归属和业务事实引用均不改变。
 
 该功能只维护登录与工作台显示资料。营业执照名称、统一社会信用代码、法定代表人等企业主体事实继续归 Party Directory，不因本功能复制到 IAM。
 
@@ -35,6 +35,22 @@ go test -tags=integration ./internal/httpserver \
 
 集成旅程实际覆盖组织管理员改名、首尾空白规范化、GET 立即读回、稳定 Tenant ID、单条不可变审计、空名称 422、普通用户 403 和系统管理员 403。测试结束后临时容器已停止并删除。
 
-## 公网门禁
+## 公网发布与复验
 
-候选发布只应更新 Identity 与 Workbench 兼容闭包。发布前必须生成并校验联合备份；发布后验证 schema 9、D1 `check`、19/19 healthy、资源版本、真实管理员打开“组织设置”和只读读回。发布验收不得替用户修改线上组织名称。
+发布使用 D1 Suite `v0.1.0-test.oms-v1.42`，目标镜像为：
+
+- Identity：`v0.1.0-test.oms-v1.42@sha256:58deffefec42f7121f44d9d345f347a00922c4f8741564dd3e4b4c8d6ba63afe`；
+- Workbench：`v0.1.0-test.oms-v1.42@sha256:c69118560d44cf23b1d77045598fdec851a2df1c0f5c935dee5e3d4e9e1994ce`。
+
+实际执行并通过：
+
+1. 使用受保护 D1 环境生成升级前联合备份并校验 checksum；
+2. 执行正式 `preflight-upgrade`、`upgrade` 与 `check`；
+3. Identity schema 保持当前 `000009_system_administrators.sql`，无业务 schema 变化；
+4. 升级后 19 个容器全部运行，`UNHEALTHY=0`，Identity 与 Workbench 均为 v42 且 healthy；
+5. 真实管理员登录 `https://oatest.antuinfo.cn/workbench/?view=oms-v1`，进入“账号与租户”，确认“组织设置”入口可见；
+6. 打开弹窗确认当前名称、只读组织稳定 ID、Party Directory 边界说明和“保存设置”动作正确，随后直接关闭，现有组织名称未被修改。
+
+ECS 证据目录为 `/opt/omsbizfoundry/acceptance/oms-v1-tenant-settings-v42-20261027`，包含 `preflight.log`、`upgrade.log` 与 `check.log`。受保护运行环境记录的联合备份根目录为 `/var/backups/omsbizfoundry`。
+
+远端现存正式运维包版本较旧，两个 People 辅助服务缺少镜像 pin。发布前先确认它们是仅有的未解析镜像，并以当前已运行的 People v33 精确摘要写入兼容 override；没有替换 People、其他 Owner 或业务数据。该兼容项是远端运维包清单缺口，不改变 BF-277 的 Identity／Workbench 发布范围。
