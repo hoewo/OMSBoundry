@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 组织显示名称设置（2026-10-27，本地门禁通过／公网待发布）
+
+BF-277 必须验证：只有同 Tenant 启用管理员可通过 `POST /api/v1/admin/tenant` 修改本人所属 Tenant 的显示名称；请求按 Session Tenant 限定，不接受客户端 Tenant ID。名称去除首尾空白后为 1～100 字符，空值稳定返回 422；系统管理员与普通用户返回 403。真实改名锁定 Tenant 行、保持稳定 ID 和账号归属、写一条 `iam_tenant_name_changed` 不可变审计；相同名称重复保存成功但不增加审计。Workbench 必须提供“组织设置”入口、编辑当前显示名称、只读展示稳定 ID，并说明证照字段归 Party Directory。
+
+本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js`、`git diff --check`；另以限 1 CPU／512 MiB 的短生命周期 PostgreSQL 18.6 从空库重放 schema 9，执行完整 Identity HTTP 生命周期集成测试，覆盖改名、读回、审计和两类越权。临时容器已停止删除，公网尚未发布。[验证记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
+
 ## 既有用户管理员挂载（2026-10-27，本地与公网发布门禁通过）
 
 BF-276 必须验证：同 Tenant 启用普通用户经系统端设置后保持同一 Subject ID、升级为管理员、revision 与 Session Generation 各递增并产生一次提升审计；再次设置幂等且不重复审计；另一 Tenant、系统管理员、pending／disabled 账号稳定拒绝且零写入；标识不存在仍创建待激活管理员并返回一次性链接。HTTP 必须分别返回 `promoted`、`already_administrator`、`invited`；Workbench 必须按动作显示结果并读取标准 `{error:{message}}`，不能统一显示服务不可用。

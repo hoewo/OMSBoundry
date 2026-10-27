@@ -88,6 +88,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.Handle("POST /api/v1/admin/grants/revoke", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.revokeGrant)))))
 	mux.Handle("POST /api/v1/admin/status", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.changeStatus)))))
 	mux.Handle("POST /api/v1/admin/administrator", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.changeAdministrator)))))
+	mux.Handle("POST /api/v1/admin/tenant", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.updateTenant)))))
 	mux.Handle("GET /api/v1/system/tenants", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.listTenants))))
 	mux.Handle("POST /api/v1/system/tenants", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.requireCSRF(server.createTenant)))))
 	mux.Handle("POST /api/v1/system/administrators", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.requireCSRF(server.inviteTenantAdministrator)))))
@@ -503,6 +504,19 @@ func (s *Server) changeAdministrator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.identities.ChangeAdministrator(r.Context(), currentPrincipal(r.Context()), input.SubjectID, input.Administrator); err != nil {
+		mapError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *Server) updateTenant(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.identities.UpdateTenantName(r.Context(), currentPrincipal(r.Context()), input.Name); err != nil {
 		mapError(w, err)
 		return
 	}

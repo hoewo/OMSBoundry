@@ -137,6 +137,17 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if stringField(t, tenantObject, "id") != testTenantID || stringField(t, tenantObject, "name") != "测试企业" {
 		t.Fatalf("bootstrap tenant = %#v", tenantObject)
 	}
+	postJSON(t, systemAdmin, server.URL+"/api/v1/admin/tenant", systemAdminCSRF, map[string]any{"name": "系统管理员越权修改"}, http.StatusForbidden)
+	postJSON(t, admin, server.URL+"/api/v1/admin/tenant", adminCSRF, map[string]any{"name": "  测试企业新名称  "}, http.StatusNoContent)
+	updatedTenant := objectField(t, getJSON(t, admin, server.URL+"/api/v1/tenant", http.StatusOK), "tenant")
+	if stringField(t, updatedTenant, "id") != testTenantID || stringField(t, updatedTenant, "name") != "测试企业新名称" {
+		t.Fatalf("updated tenant = %#v", updatedTenant)
+	}
+	postJSON(t, admin, server.URL+"/api/v1/admin/tenant", adminCSRF, map[string]any{"name": "   "}, http.StatusUnprocessableEntity)
+	var tenantRenameAudits int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM iam_audit_entries WHERE tenant_id=$1 AND action='iam_tenant_name_changed'`, testTenantID).Scan(&tenantRenameAudits); err != nil || tenantRenameAudits != 1 {
+		t.Fatalf("tenant rename audits = %d, %v", tenantRenameAudits, err)
+	}
 
 	otherAdmin := newClient(t)
 	otherAdminCSRF := fetchCSRF(t, otherAdmin, server.URL)
@@ -214,6 +225,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusOK)
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
+	postJSON(t, operator, server.URL+"/api/v1/admin/tenant", operatorCSRF, map[string]any{"name": "普通用户越权修改"}, http.StatusForbidden)
 	promotion := postJSON(t, systemAdmin, server.URL+"/api/v1/system/administrators", systemAdminCSRF, map[string]any{"tenant_id": testTenantID, "login_identifier": "13800138000", "display_name": "业务操作员"}, http.StatusOK)
 	if stringField(t, promotion, "action") != "promoted" || stringField(t, objectField(t, promotion, "subject"), "id") != operatorID {
 		t.Fatalf("existing account promotion = %#v", promotion)

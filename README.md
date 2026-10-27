@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前组织设置修订（BF-277）：组织管理员可在“账号与租户”页面打开“组织设置”，修改本人所属组织的 IAM 显示名称；稳定组织 ID 与创建归属不变。真实变更在 Tenant 行锁内完成并写不可变 IAM 审计，相同名称重复保存不产生冗余审计；普通用户和系统管理员不能越权调用组织管理员入口。营业执照名称、统一社会信用代码等企业主体资料继续由 Party Directory 拥有，不写入 IAM Tenant。本地 Go、vet、Node、Workbench 页面回归及真实 PostgreSQL 18 生命周期已通过，尚未发布公网。[验证记录](./docs/reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
+
 当前既有用户管理员挂载修复（BF-276）：系统管理员为既有组织设置管理员时，IAM 会先按规范手机号／邮箱查找现有用户；同组织启用中的普通用户直接提升为管理员并使旧 Session 失效，已经是管理员时幂等返回，只有账号不存在时才创建待激活用户和 24 小时链接。跨组织、系统管理员账号和非启用账号稳定拒绝；Workbench 同时显示 IAM 返回的真实错误，不再把账号冲突误报为“系统管理服务暂时不可用”。修复已随 D1 Suite `v0.1.0-test.oms-v1.41` 发布；升级前联合备份、schema 9、D1 检查、19/19 healthy、公网页面与资源版本核对通过，发布验收未替用户提升真实账号。[验证及发布记录](./docs/reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
 
 当前账号开通修复（BF-272）：公网 Workbench 与 Identity Access 的账号邀请契约已对齐，手机号／邮箱使用 `login_identifier` 创建待激活账号，旧 `username` 客户端继续兼容；修复已随 D1 Suite `v0.1.0-test.oms-v1.38` 发布。发布后 Identity schema 8、D1 检查、19/19 healthy、备份 checksum 和公网入口核对通过；验证没有代建测试账号。[发布记录](./docs/reports/oms-v1-account-onboarding-publication-20261026.md)

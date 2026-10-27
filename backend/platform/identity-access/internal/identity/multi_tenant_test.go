@@ -28,6 +28,8 @@ type multiTenantRepository struct {
 	adminTenant      string
 	adminSubject     string
 	adminValue       bool
+	updatedTenant    string
+	updatedName      string
 	tenants          []TenantSummary
 	provisionTenant  string
 	provisionName    string
@@ -103,6 +105,11 @@ func (r *multiTenantRepository) ChangeStatus(context.Context, string, string, St
 }
 func (r *multiTenantRepository) ChangeAdministrator(_ context.Context, tenantID, subjectID string, administrator bool, entry AuditEntry) error {
 	r.adminTenant, r.adminSubject, r.adminValue = tenantID, subjectID, administrator
+	r.audits = append(r.audits, entry)
+	return nil
+}
+func (r *multiTenantRepository) UpdateTenantName(_ context.Context, tenantID, name string, entry AuditEntry) error {
+	r.updatedTenant, r.updatedName = tenantID, name
 	r.audits = append(r.audits, entry)
 	return nil
 }
@@ -231,6 +238,24 @@ func TestChangeAdministratorUsesAuthenticatedTenantAndRejectsSelfDemotion(t *tes
 	}
 	if err := service.ChangeAdministrator(context.Background(), actor, actor.SubjectID, false); err == nil {
 		t.Fatal("current administrator demoted self")
+	}
+}
+
+func TestAdministratorUpdatesOwnTenantName(t *testing.T) {
+	repository := &multiTenantRepository{}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
+	if err := service.UpdateTenantName(context.Background(), actor, "  第二组织新名称  "); err != nil {
+		t.Fatal(err)
+	}
+	if repository.updatedTenant != secondTenant || repository.updatedName != "第二组织新名称" || len(repository.audits) != 1 || repository.audits[0].Action != "iam_tenant_name_changed" {
+		t.Fatalf("tenant=%q name=%q audits=%#v", repository.updatedTenant, repository.updatedName, repository.audits)
+	}
+	if err := service.UpdateTenantName(context.Background(), Principal{SubjectID: testSubject, TenantID: secondTenant}, "越权名称"); err == nil {
+		t.Fatal("ordinary user updated tenant name")
+	}
+	if err := service.UpdateTenantName(context.Background(), actor, "   "); err == nil {
+		t.Fatal("blank tenant name accepted")
 	}
 }
 

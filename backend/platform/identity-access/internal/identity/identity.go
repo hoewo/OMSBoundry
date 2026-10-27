@@ -149,6 +149,7 @@ type Repository interface {
 	ListSubjects(context.Context, string) ([]Subject, error)
 	ChangeStatus(context.Context, string, string, Status, AuditEntry) error
 	ChangeAdministrator(context.Context, string, string, bool, AuditEntry) error
+	UpdateTenantName(context.Context, string, string, AuditEntry) error
 	ListTenants(context.Context) ([]TenantSummary, error)
 	ProvisionTenantInvitation(context.Context, string, string, Subject, ActivationToken, AuditEntry) error
 }
@@ -959,6 +960,21 @@ func (s *Service) ChangeAdministrator(ctx context.Context, actor Principal, subj
 	return s.repository.ChangeAdministrator(ctx, actor.TenantID, subjectID, administrator, s.audit(actor.TenantID, auditID, "iam_subject_administrator_changed", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"administrator": administrator}))
 }
 
+func (s *Service) UpdateTenantName(ctx context.Context, actor Principal, rawName string) error {
+	if err := requireAdministrator(actor); err != nil {
+		return err
+	}
+	name, err := normalizeTenantName(rawName)
+	if err != nil {
+		return err
+	}
+	auditID, err := s.newID()
+	if err != nil {
+		return err
+	}
+	return s.repository.UpdateTenantName(ctx, actor.TenantID, name, s.audit(actor.TenantID, auditID, "iam_tenant_name_changed", "tenant", actor.TenantID, actor.Actor(), s.now(), map[string]any{"name": name}))
+}
+
 func (s *Service) ListTenants(ctx context.Context, actor Principal) ([]TenantSummary, error) {
 	if err := requireSystemAdministrator(actor); err != nil {
 		return nil, err
@@ -970,9 +986,9 @@ func (s *Service) CreateTenant(ctx context.Context, actor Principal, input Syste
 	if err := requireSystemAdministrator(actor); err != nil {
 		return TokenResult{}, TenantSummary{}, err
 	}
-	name := strings.TrimSpace(input.Name)
-	if name == "" || len([]rune(name)) > 100 {
-		return TokenResult{}, TenantSummary{}, &ValidationError{Field: "name", Message: "组织名称必须为 1 至 100 个字符"}
+	name, err := normalizeTenantName(input.Name)
+	if err != nil {
+		return TokenResult{}, TenantSummary{}, err
 	}
 	username, err := normalizeUsername(input.AdminUsername)
 	if err != nil {
@@ -1130,6 +1146,14 @@ func normalizeUsername(raw string) (string, error) {
 	}
 	if !(len(value) <= 254 && emailPattern.MatchString(value)) && !usernamePattern.MatchString(value) {
 		return "", &ValidationError{Field: "username", Message: "登录账号必须是有效手机号、邮箱或 3 至 64 位用户名"}
+	}
+	return value, nil
+}
+
+func normalizeTenantName(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" || len([]rune(value)) > 100 {
+		return "", &ValidationError{Field: "name", Message: "组织名称必须为 1 至 100 个字符"}
 	}
 	return value, nil
 }

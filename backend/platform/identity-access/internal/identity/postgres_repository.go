@@ -447,6 +447,35 @@ func (r *PostgresRepository) ListTenants(ctx context.Context) ([]TenantSummary, 
 	return values, rows.Err()
 }
 
+func (r *PostgresRepository) UpdateTenantName(ctx context.Context, tenantID, name string, entry AuditEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	var previous string
+	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id=$1 FOR UPDATE`, tenantID).Scan(&previous); errors.Is(err, pgx.ErrNoRows) {
+		return &NotFoundError{Message: "组织不存在"}
+	} else if err != nil {
+		return err
+	}
+	if previous == name {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE tenants SET name=$2 WHERE id=$1`, tenantID, name); err != nil {
+		return err
+	}
+	if entry.Details == nil {
+		entry.Details = map[string]any{}
+	}
+	entry.Details["previous_name"] = previous
+	entry.Details["name"] = name
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *PostgresRepository) ChangeStatus(ctx context.Context, tenantID, subjectID string, status Status, entry AuditEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
