@@ -102,6 +102,9 @@ func run(logger *slog.Logger) error {
 	if _, err := service.EnsureBootstrap(startup, identity.BootstrapInput{Username: cfg.BootstrapAdminUsername, DisplayName: cfg.BootstrapAdminDisplayName, Password: cfg.BootstrapAdminPassword}); err != nil {
 		return err
 	}
+	if err := service.ReconcileAdministratorProfiles(startup); err != nil {
+		return err
+	}
 	handler, err := httpserver.New(pool, service, keys, httpserver.Options{SessionCookieSecure: cfg.SessionCookieSecure, Workloads: workloads, APIKeys: apiKeys})
 	if err != nil {
 		return err

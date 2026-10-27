@@ -16,6 +16,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,14 +52,14 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000009_system_administrators.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000010_administrator_profile_grants.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/identity-access-capabilities.json", "../../../../../contracts/access/v1/examples/open-api-capabilities.json", "../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
+	catalog, err := capability.Load([]string{"../../../../../contracts/access/v1/examples/identity-access-capabilities.json", "../../../../../contracts/access/v1/examples/open-api-capabilities.json", "../../../../../contracts/access/v1/examples/contract-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/money-flow-ledger-capabilities.json", "../../../../../contracts/access/v1/examples/people-groups-capabilities.json", "../../../../../contracts/access/v1/examples/party-directory-capabilities.json", "../../../../../contracts/access/v1/examples/project-workspace-capabilities.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +132,19 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	adminID := stringField(t, adminPrincipal, "subject_id")
 	if stringField(t, adminPrincipal, "tenant_id") != testTenantID || adminPrincipal["administrator"] != true || adminPrincipal["system_administrator"] != false {
 		t.Fatalf("bootstrap administrator tenant = %#v", adminPrincipal)
+	}
+	expectedAdministratorGrants := 0
+	for _, actions := range catalog.Actions() {
+		expectedAdministratorGrants += len(actions)
+	}
+	var administratorProfileGrants int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM capability_grants WHERE subject_id=$1 AND source_kind='administrator_profile' AND revoked_at IS NULL`, adminID).Scan(&administratorProfileGrants); err != nil || administratorProfileGrants != expectedAdministratorGrants {
+		t.Fatalf("administrator profile grants = %d, expected %d, %v", administratorProfileGrants, expectedAdministratorGrants, err)
+	}
+	partyCredential := postJSON(t, admin, server.URL+"/api/v1/credentials", adminCSRF, map[string]any{"audience": "party-directory"}, http.StatusOK)
+	partyClaims := verifyCredential(t, stringField(t, partyCredential, "token"), keys)
+	if !slices.Contains(partyClaims.Actions, "party-directory.create") {
+		t.Fatalf("administrator party credential actions = %#v", partyClaims.Actions)
 	}
 	tenantResponse := getJSON(t, admin, server.URL+"/api/v1/tenant", http.StatusOK)
 	tenantObject := objectField(t, tenantResponse, "tenant")
@@ -235,11 +249,23 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if promoted := currentSession(t, operator, server.URL, http.StatusOK); promoted["administrator"] != true {
 		t.Fatalf("promoted principal = %#v", promoted)
 	}
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM capability_grants WHERE subject_id=$1 AND source_kind='administrator_profile' AND revoked_at IS NULL`, operatorID).Scan(&administratorProfileGrants); err != nil || administratorProfileGrants != expectedAdministratorGrants {
+		t.Fatalf("promoted administrator profile grants = %d, expected %d, %v", administratorProfileGrants, expectedAdministratorGrants, err)
+	}
+	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
 	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": operatorID, "administrator": false}, http.StatusNoContent)
 	currentSession(t, operator, server.URL, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
 	if demoted := currentSession(t, operator, server.URL, http.StatusOK); demoted["administrator"] != false {
 		t.Fatalf("demoted principal = %#v", demoted)
+	}
+	var activeProfileGrants, activeManualGrants int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FILTER (WHERE source_kind='administrator_profile'),count(*) FILTER (WHERE source_kind='manual') FROM capability_grants WHERE subject_id=$1 AND revoked_at IS NULL`, operatorID).Scan(&activeProfileGrants, &activeManualGrants); err != nil || activeProfileGrants != 0 || activeManualGrants != 1 {
+		t.Fatalf("demoted grants profile=%d manual=%d, %v", activeProfileGrants, activeManualGrants, err)
+	}
+	var auditedProfileRevocations int
+	if err := pool.QueryRow(context.Background(), `SELECT (details->>'revoked_profile_grant_count')::int FROM iam_audit_entries WHERE object_id=$1 AND action='iam_subject_administrator_changed' ORDER BY occurred_at DESC LIMIT 1`, operatorID).Scan(&auditedProfileRevocations); err != nil || auditedProfileRevocations != expectedAdministratorGrants-1 {
+		t.Fatalf("audited profile revocations = %d, expected %d, %v", auditedProfileRevocations, expectedAdministratorGrants-1, err)
 	}
 	getJSON(t, operator, server.URL+"/api/v1/api-keys", http.StatusForbidden)
 	for _, action := range []string{apikey.ActionUse, apikey.ActionKeyManage, apikey.ActionSelfAudit} {
@@ -262,7 +288,6 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	getJSON(t, operator, server.URL+"/api/v1/open-api-usage?scope=tenant", http.StatusForbidden)
 	postJSON(t, operator, server.URL+"/api/v1/api-keys/"+keyID+"/revoke", operatorCSRF, map[string]any{}, http.StatusOK)
 
-	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
 	credentialResponse := postJSON(t, operator, server.URL+"/api/v1/credentials", operatorCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusOK)
 	token := stringField(t, credentialResponse, "token")
 	claims := verifyCredential(t, token, keys)

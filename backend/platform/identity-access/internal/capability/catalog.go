@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -94,6 +95,20 @@ func (c *Catalog) Audiences() []string {
 	values := make([]string, 0, len(c.actions))
 	for audience := range c.actions {
 		values = append(values, audience)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func (c *Catalog) Actions() map[string][]string {
+	values := make(map[string][]string, len(c.actions))
+	for audience, actions := range c.actions {
+		items := make([]string, 0, len(actions))
+		for action := range actions {
+			items = append(items, action)
+		}
+		sort.Strings(items)
+		values[audience] = items
 	}
 	return values
 }

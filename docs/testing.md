@@ -22,7 +22,7 @@ BF-276 必须验证：同 Tenant 启用普通用户经系统端设置后保持�
 
 ## 系统用户与组织管理（2026-10-27，本地门禁及 D1 公网发布通过）
 
-BF-275 验证要求：登录页没有公开组织创建入口；普通用户与管理员访问系统管理接口均为 403；系统管理员只能进入独立系统管理面，读取全服务器组织元数据并原子创建 Tenant、首位待激活管理员、一次性 Token 和审计，不能凭该级别访问工资、财务、经营等业务事实。组织管理员新增普通用户／管理员后必须保留所选级别；提升或降级同 Tenant 其他用户时，跨 Tenant、本人自降级、移除最后一名启用管理员及组织管理员授予系统管理员均拒绝，变化使目标用户旧 Session 失效。People 成员与 IAM 用户必须分别创建和停用，稳定关联不能导致任一方字段或生命周期被另一方改写。
+BF-275 验证要求（组织管理员业务授权以 BF-279 为准）：登录页没有公开组织创建入口；普通用户与管理员访问系统管理接口均为 403；系统管理员只能进入独立系统管理面，读取全服务器组织元数据并原子创建 Tenant、首位待激活管理员、一次性 Token 和审计，不能凭该级别访问工资、财务、经营等业务事实。组织管理员新增普通用户／管理员后必须保留所选级别；提升或降级同 Tenant 其他用户时，跨 Tenant、本人自降级、移除最后一名启用管理员及组织管理员授予系统管理员均拒绝，变化使目标用户旧 Session 失效；组织管理员自身的默认业务权限按 BF-279 权限画像验证。People 成员与 IAM 用户必须分别创建和停用，稳定关联不能导致任一方字段或生命周期被另一方改写。
 
 本地已经实际通过 Identity、Gateway、Workbench 的 `go test ./...` 与 `go vet ./...`，两份浏览器脚本 `node --check`、文档差异检查，以及短生命周期 PostgreSQL 18 容器内的完整 migration 9／HTTP 生命周期集成测试；容器测试结束后已停止。页面回归确认系统管理员只加载独立系统管理资源，业务导航和 Owner 脚本不出现在其响应中；Gateway 回归确认客户端伪造系统管理员 Header 会被删除，可信值只由 IAM Session 派生。D1 Suite `v0.1.0-test.oms-v1.39` 又实际通过发布包内外 checksum、19 镜像、IAM 契约预检、升级前联合备份 checksum、schema 9、独立 `check`、19/19 healthy、公网真实 `admin` 登录、全组织读取、业务 Capability 403 和系统页面隔离核验；没有创建组织、邀请用户或写业务数据。[验证及发布报告](./reports/oms-v1-system-user-tenant-management-validation-20261027.md)
 
@@ -5879,3 +5879,4 @@ Source seed 的相邻引用为合成提供者，Evidence 为独立库 SQL 元数
 ## 小系统边界演变账核对（2026-10-06）
 
 入口为[小系统边界演变账](./specs/assembly/small-system-boundary-evolution-ledger.md)。本轮只读核对三份 Capability Manifest 和 Workload Policy：Project／Production／Contract 分别有 25／13／9 项能力；Project 当前出站 10 个 audience、入站 6 个 workload，Production 为出站 3／入站 1，Contract 为出站 2／入站 5；Project 与 Approval、Billing、Business Engagement、Cost、Production 存在 5 组双向引用。`make architecture-boundary-static-audit` 实际通过 15 应用、0 跨应用 import、0 replace、0 跨库 SQL 机制。该结果只登记为最低隔离守卫，不是运行时边界、第二客户或完整 OA 通过。
+BF-279 必须验证：IAM 实际装载的每个 Audience／Action 都被精确授予同 Tenant 启用管理员，重复启动／登录不重复有效 Grant；系统管理员、普通用户、其他 Tenant 零增量。提升启用用户后立即补齐画像并使旧 Session 失效；降级原子撤销 `administrator_profile` 来源 Grant且保留 `manual` Grant。Capability Manifest 新增动作后重启可补齐缺项。管理员可签发 Party 新增和 Project 创建凭证，但目标应用的跨 Tenant、业务状态、revision 与历史不变量继续拒绝。Workbench 文案不得再声称管理员不会自动获得业务权限。[规格](./specs/identity/oms-administrator-access-profile-v1.md)

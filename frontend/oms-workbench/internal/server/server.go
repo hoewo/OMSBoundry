@@ -494,7 +494,7 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261026.1" defer></script>
 <script src="assets/oms-phase1-finance-owner.js?v=20261026.1" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261025.1" defer></script>
-<script src="assets/oms-phase1-identity.js?v=20261027.1" defer></script>
+<script src="assets/oms-phase1-identity.js?v=20261028.1" defer></script>
 <script src="assets/oms-phase1-feedback.js?v=20261026.2" defer></script>
 {{end}}{{if .SystemAdministrator}}<script src="assets/oms-system-admin.js?v=20261027.2" defer></script>{{end}}
 {{else}}<div class="ant-layout app-shell">

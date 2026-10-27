@@ -21,6 +21,8 @@ type multiTenantRepository struct {
 	tenantExists     bool
 	createdSessionID string
 	grantTenant      string
+	grants           []Grant
+	revokedProfiles  []string
 	listedTenant     string
 	tokenTenant      string
 	createdToken     ActivationToken
@@ -31,6 +33,7 @@ type multiTenantRepository struct {
 	updatedTenant    string
 	updatedName      string
 	tenants          []TenantSummary
+	subjects         map[string][]Subject
 	provisionTenant  string
 	provisionName    string
 	provisionSubject Subject
@@ -81,13 +84,23 @@ func (r *multiTenantRepository) CreateActivationToken(_ context.Context, tenantI
 	r.audits = append(r.audits, entry)
 	return nil
 }
-func (r *multiTenantRepository) Grant(_ context.Context, tenantID string, _ Grant, entry AuditEntry) error {
+func (r *multiTenantRepository) Grant(_ context.Context, tenantID string, grant Grant, entry AuditEntry) error {
 	r.grantTenant = tenantID
+	for _, existing := range r.grants {
+		if existing.SubjectID == grant.SubjectID && existing.Audience == grant.Audience && existing.Action == grant.Action && existing.Scope.Kind == grant.Scope.Kind {
+			return &ConflictError{Message: "Capability 已授予"}
+		}
+	}
+	r.grants = append(r.grants, grant)
 	r.audits = append(r.audits, entry)
 	return nil
 }
 func (r *multiTenantRepository) RevokeGrant(context.Context, string, Grant, AuditEntry) error {
 	return nil
+}
+func (r *multiTenantRepository) RevokeAdministratorProfile(_ context.Context, _ string, subjectID, _ string, _ AuditEntry) (int64, error) {
+	r.revokedProfiles = append(r.revokedProfiles, subjectID)
+	return 0, nil
 }
 func (r *multiTenantRepository) ListGrants(_ context.Context, tenantID, subjectID, audience string) ([]Grant, error) {
 	r.listedTenant = tenantID
@@ -97,14 +110,17 @@ func (r *multiTenantRepository) RecordAudit(_ context.Context, entry AuditEntry)
 	r.audits = append(r.audits, entry)
 	return nil
 }
-func (r *multiTenantRepository) ListSubjects(context.Context, string) ([]Subject, error) {
-	return nil, nil
+func (r *multiTenantRepository) ListSubjects(_ context.Context, tenantID string) ([]Subject, error) {
+	return append([]Subject(nil), r.subjects[tenantID]...), nil
 }
 func (r *multiTenantRepository) ChangeStatus(context.Context, string, string, Status, AuditEntry) error {
 	return nil
 }
-func (r *multiTenantRepository) ChangeAdministrator(_ context.Context, tenantID, subjectID string, administrator bool, entry AuditEntry) error {
+func (r *multiTenantRepository) ChangeAdministrator(_ context.Context, tenantID, subjectID string, administrator bool, profileSource string, entry AuditEntry) error {
 	r.adminTenant, r.adminSubject, r.adminValue = tenantID, subjectID, administrator
+	if !administrator {
+		r.revokedProfiles = append(r.revokedProfiles, subjectID+":"+profileSource)
+	}
 	r.audits = append(r.audits, entry)
 	return nil
 }
@@ -133,6 +149,9 @@ type allowCatalog struct{}
 
 func (allowCatalog) Contains(string, string) bool               { return true }
 func (allowCatalog) AllowsResource(string, string, string) bool { return true }
+func (allowCatalog) Actions() map[string][]string {
+	return map[string][]string{"party-directory": {"party-directory.register"}, "project-workspace": {"project-workspace.create"}}
+}
 
 func newMultiTenantService(t *testing.T, repository Repository, signer Signer) *Service {
 	t.Helper()
@@ -166,6 +185,29 @@ func TestLoginAndSessionResolveTenantFromAccount(t *testing.T) {
 	resolved, found, err := service.ResolveSession(context.Background(), result.Token)
 	if err != nil || !found || resolved.TenantID != secondTenant {
 		t.Fatalf("resolved = %#v, %v, %v", resolved, found, err)
+	}
+}
+
+func TestAdministratorLoginReconcilesInstalledCapabilities(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct horse battery staple"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &multiTenantRepository{credential: Credential{Subject: Subject{
+		ID: testSubject, TenantID: secondTenant, Username: "administrator@example.com", DisplayName: "组织管理员",
+		Status: StatusActive, Administrator: true, SessionGeneration: 1,
+	}, PasswordHash: string(hash)}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	if _, err := service.Login(context.Background(), "administrator@example.com", "correct horse battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.grants) != 2 {
+		t.Fatalf("grants = %#v", repository.grants)
+	}
+	for _, grant := range repository.grants {
+		if grant.SourceKind != administratorProfileSource || grant.Scope.Kind != "tenant" || grant.SubjectID != testSubject {
+			t.Fatalf("grant = %#v", grant)
+		}
 	}
 }
 
@@ -227,13 +269,13 @@ func TestInviteCanCreatePendingTenantAdministrator(t *testing.T) {
 }
 
 func TestChangeAdministratorUsesAuthenticatedTenantAndRejectsSelfDemotion(t *testing.T) {
-	repository := &multiTenantRepository{}
+	repository := &multiTenantRepository{credential: Credential{Subject: Subject{ID: testSubject, TenantID: secondTenant, DisplayName: "待提升用户", Status: StatusActive}}}
 	service := newMultiTenantService(t, repository, &captureSigner{})
 	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
 	if err := service.ChangeAdministrator(context.Background(), actor, testSubject, true); err != nil {
 		t.Fatal(err)
 	}
-	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 1 || repository.audits[0].Action != "iam_subject_administrator_changed" {
+	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 3 || repository.audits[0].Action != "iam_subject_administrator_changed" || len(repository.grants) != 2 {
 		t.Fatalf("tenant=%q subject=%q value=%v audits=%#v", repository.adminTenant, repository.adminSubject, repository.adminValue, repository.audits)
 	}
 	if err := service.ChangeAdministrator(context.Background(), actor, actor.SubjectID, false); err == nil {
@@ -299,7 +341,7 @@ func TestSystemAdministratorAssignsExistingTenantUserAsAdministrator(t *testing.
 	if result.Action != "promoted" || !result.Subject.Administrator || result.Subject.DisplayName != "既有用户" || result.Subject.Revision != 4 || result.Subject.SessionGeneration != 3 {
 		t.Fatalf("result = %#v", result)
 	}
-	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 1 || repository.audits[0].Action != "iam_tenant_administrator_promoted" {
+	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 3 || repository.audits[0].Action != "iam_tenant_administrator_promoted" || len(repository.grants) != 2 {
 		t.Fatalf("tenant=%q subject=%q value=%v audits=%#v", repository.adminTenant, repository.adminSubject, repository.adminValue, repository.audits)
 	}
 
@@ -308,6 +350,23 @@ func TestSystemAdministratorAssignsExistingTenantUserAsAdministrator(t *testing.
 	already, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "13800138000", "既有用户")
 	if err != nil || already.Action != "already_administrator" || len(repository.audits) != 0 {
 		t.Fatalf("already=%#v err=%v audits=%#v", already, err, repository.audits)
+	}
+}
+
+func TestAdministratorProfileStartupReconcilesAndCleansOnlyProfileSource(t *testing.T) {
+	repository := &multiTenantRepository{
+		tenants: []TenantSummary{{ID: secondTenant, Name: "第二组织"}},
+		subjects: map[string][]Subject{secondTenant: {
+			{ID: testSubject, TenantID: secondTenant, DisplayName: "管理员", Status: StatusActive, Administrator: true},
+			{ID: testActor, TenantID: secondTenant, DisplayName: "普通用户", Status: StatusActive},
+		}},
+	}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	if err := service.ReconcileAdministratorProfiles(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.grants) != 2 || len(repository.revokedProfiles) != 1 || repository.revokedProfiles[0] != testActor {
+		t.Fatalf("grants=%#v revoked=%#v", repository.grants, repository.revokedProfiles)
 	}
 }
 

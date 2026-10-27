@@ -288,7 +288,11 @@ func (r *PostgresRepository) Grant(ctx context.Context, tenantID string, grant G
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	var inserted bool
 	if grant.Scope.Kind == "tenant" {
-		result, err := tx.Exec(ctx, `INSERT INTO capability_grants(subject_id,audience,action,scope_kind,granted_by,granted_at,revoked_at,revoked_by) SELECT target.id,$3,$4,'tenant',actor.id,$6,NULL,NULL FROM subjects target JOIN subjects actor ON actor.id=$5 AND actor.tenant_id=$1 WHERE target.tenant_id=$1 AND target.id=$2 AND target.status='active' ON CONFLICT (subject_id,audience,action) DO UPDATE SET granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_grants.revoked_at IS NOT NULL`, tenantID, grant.SubjectID, grant.Audience, grant.Action, grant.GrantedBy, grant.GrantedAt)
+		sourceKind := grant.SourceKind
+		if sourceKind == "" {
+			sourceKind = "manual"
+		}
+		result, err := tx.Exec(ctx, `INSERT INTO capability_grants(subject_id,audience,action,scope_kind,source_kind,granted_by,granted_at,revoked_at,revoked_by) SELECT target.id,$3,$4,'tenant',$7,actor.id,$6,NULL,NULL FROM subjects target JOIN subjects actor ON actor.id=$5 AND actor.tenant_id=$1 WHERE target.tenant_id=$1 AND target.id=$2 AND target.status='active' ON CONFLICT (subject_id,audience,action) DO UPDATE SET source_kind=EXCLUDED.source_kind,granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,revoked_at=NULL,revoked_by=NULL WHERE capability_grants.revoked_at IS NOT NULL OR (capability_grants.source_kind='administrator_profile' AND EXCLUDED.source_kind='manual')`, tenantID, grant.SubjectID, grant.Audience, grant.Action, grant.GrantedBy, grant.GrantedAt, sourceKind)
 		if err != nil {
 			if isUnique(err) {
 				return &ConflictError{Message: "Capability 已授予"}
@@ -377,10 +381,10 @@ func (r *PostgresRepository) RevokeGrant(ctx context.Context, tenantID string, g
 
 func (r *PostgresRepository) ListGrants(ctx context.Context, tenantID, subjectID, audience string) ([]Grant, error) {
 	rows, err := r.pool.Query(ctx, `
-SELECT subject_id::text,audience,action,'tenant' AS scope_kind,'' AS resource_type,'' AS resource_id,granted_by::text,granted_at
+SELECT subject_id::text,audience,action,'tenant' AS scope_kind,'' AS resource_type,'' AS resource_id,source_kind,granted_by::text,granted_at
 FROM capability_grants g WHERE g.subject_id=$2 AND g.audience=$3 AND g.revoked_at IS NULL AND EXISTS (SELECT 1 FROM subjects s WHERE s.tenant_id=$1 AND s.id=g.subject_id)
 UNION ALL
-SELECT subject_id::text,audience,action,'resources' AS scope_kind,resource_type,resource_id,granted_by::text,granted_at
+SELECT subject_id::text,audience,action,'resources' AS scope_kind,resource_type,resource_id,'manual' AS source_kind,granted_by::text,granted_at
 FROM capability_resource_grants g WHERE g.subject_id=$2 AND g.audience=$3 AND g.revoked_at IS NULL AND EXISTS (SELECT 1 FROM subjects s WHERE s.tenant_id=$1 AND s.id=g.subject_id)
 ORDER BY action,scope_kind,resource_type,resource_id`, tenantID, subjectID, audience)
 	if err != nil {
@@ -391,7 +395,7 @@ ORDER BY action,scope_kind,resource_type,resource_id`, tenantID, subjectID, audi
 	for rows.Next() {
 		var value Grant
 		var scopeKind, resourceType, resourceID string
-		if err := rows.Scan(&value.SubjectID, &value.Audience, &value.Action, &scopeKind, &resourceType, &resourceID, &value.GrantedBy, &value.GrantedAt); err != nil {
+		if err := rows.Scan(&value.SubjectID, &value.Audience, &value.Action, &scopeKind, &resourceType, &resourceID, &value.SourceKind, &value.GrantedBy, &value.GrantedAt); err != nil {
 			return nil, err
 		}
 		value.Scope = Scope{Kind: scopeKind, Resources: []ResourceRef{}}
@@ -401,6 +405,31 @@ ORDER BY action,scope_kind,resource_type,resource_id`, tenantID, subjectID, audi
 		values = append(values, value)
 	}
 	return values, rows.Err()
+}
+
+func (r *PostgresRepository) RevokeAdministratorProfile(ctx context.Context, tenantID, subjectID, sourceKind string, entry AuditEntry) (int64, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	result, err := tx.Exec(ctx, `UPDATE capability_grants g SET revoked_at=$4,revoked_by=$2 FROM subjects s WHERE s.id=g.subject_id AND s.tenant_id=$1 AND g.subject_id=$2 AND g.source_kind=$3 AND g.revoked_at IS NULL`, tenantID, subjectID, sourceKind, entry.OccurredAt)
+	if err != nil {
+		return 0, err
+	}
+	count := result.RowsAffected()
+	if count == 0 {
+		return 0, nil
+	}
+	entry.Details["revoked_grant_count"] = count
+	entry.Details["source_kind"] = sourceKind
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *PostgresRepository) RecordAudit(ctx context.Context, entry AuditEntry) error {
@@ -517,7 +546,7 @@ func (r *PostgresRepository) ChangeStatus(ctx context.Context, tenantID, subject
 	return tx.Commit(ctx)
 }
 
-func (r *PostgresRepository) ChangeAdministrator(ctx context.Context, tenantID, subjectID string, administrator bool, entry AuditEntry) error {
+func (r *PostgresRepository) ChangeAdministrator(ctx context.Context, tenantID, subjectID string, administrator bool, profileSource string, entry AuditEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -551,6 +580,14 @@ func (r *PostgresRepository) ChangeAdministrator(ctx context.Context, tenantID, 
 	}
 	if result.RowsAffected() != 1 {
 		return &NotFoundError{Message: "用户不存在"}
+	}
+	if !administrator {
+		profileRevocation, err := tx.Exec(ctx, `UPDATE capability_grants g SET revoked_at=$4,revoked_by=$2 FROM subjects s WHERE s.id=g.subject_id AND s.tenant_id=$1 AND g.subject_id=$2 AND g.source_kind=$3 AND g.revoked_at IS NULL`, tenantID, subjectID, profileSource, entry.OccurredAt)
+		if err != nil {
+			return err
+		}
+		entry.Details["revoked_profile_grant_count"] = profileRevocation.RowsAffected()
+		entry.Details["profile_source_kind"] = profileSource
 	}
 	if err := insertAudit(ctx, tx, entry); err != nil {
 		return err

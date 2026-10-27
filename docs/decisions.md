@@ -617,3 +617,4 @@ Project Workspace 与 Production Operations（兼容原 Design Operations）已�
 - 各 Deployment Profile 的资源规格、D4 负载均衡／数据库选型与自动化迁移回退方式。
 
 这些开放项可以形成实验和候选方案，但在被接受并登记前不能成为其他模块的隐含前提。
+2026-10-27 BF-279（已接受／管理员默认全业务权限画像）：组织内“管理员”默认获得当前 Tenant 已安装功能发布的全部业务 Capability，但实现必须是 IAM 中稳定画像 `oms-administrator-full-access-v1` 对已装 Capability Catalog 的逐 Audience／Action 精确展开，不允许通配符或目标应用 `administrator` 旁路。IAM 在启动、管理员登录和提升时幂等对齐存量与新增管理员；降级只撤销 `administrator_profile` 来源的 Grant，人工 Grant 保留。系统管理员继续没有组织业务权限，普通用户不继承；目标应用仍校验 Tenant、资源、业务状态、revision、历史和 `allowed_actions`。People 的职位与本画像分离，职位到权限模板的映射后续另行实现。本条取代 BF-275 中“管理员级别不自动授予业务 Capability”的组织管理员部分，不改变系统管理员／普通用户和用户／成员边界。[规格](./specs/identity/oms-administrator-access-profile-v1.md)

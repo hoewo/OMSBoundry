@@ -326,3 +326,4 @@ M0、M1、M2、M3、M4、M7、M8、M9、M10 已完成各自声明范围的工程
 3. `docs/discussions/` 按轮次保留问题、推导、反例和开放事项，避免只保留结论而丢失原因，但不要求开发时逐份重读。
 4. 新讨论形成共识时，必须在同一变更中更新决策总表及受影响的投影文档；修正旧结论时保留旧 ID 和来源并显式标为被取代，不静默覆盖。
 5. 讨论结论不自动等于客户需求、实现承诺或当前代码事实；目标是否完成仍以代码、进度和实际验证证据为准。
+当前管理员授权修订（BF-279）：组织管理员默认拥有本 Tenant 当前已安装功能的全部业务权限，IAM 通过锁定的 `oms-administrator-full-access-v1` 画像精确展开 Capability Catalog，不使用通配符或目标应用管理员旁路；启动、登录和提升会幂等补齐，降级只撤销画像来源 Grant。系统管理员仍不进入组织业务，People 职位与授权继续分层。本地实现、真实 PostgreSQL migration／生命周期和 Workbench 门禁已通过，尚未发布公网。[规格](./docs/specs/identity/oms-administrator-access-profile-v1.md)、[验证记录](./docs/reports/oms-administrator-default-access-profile-validation-20261028.md)

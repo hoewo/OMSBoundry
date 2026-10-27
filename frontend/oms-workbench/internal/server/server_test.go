@@ -647,7 +647,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"assets/oms-phase1-payroll-owner.js?v=20261026.1",
 		"assets/oms-phase1-finance-owner.js?v=20261026.1",
 		"assets/oms-phase1-open-api.js?v=20261025.1",
-		"assets/oms-phase1-identity.js?v=20261027.1",
+		"assets/oms-phase1-identity.js?v=20261028.1",
 		"组织设置",
 		"oms-v1__identity-table",
 		"assets/oms-phase1-feedback.js?v=20261026.2",
@@ -759,12 +759,15 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	identityAsset := httptest.NewRecorder()
 	handler.ServeHTTP(identityAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-identity.js", nil))
-	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/tenant", "/api/v1/admin/invitations", "/api/v1/admin/invitations/reissue", "/api/v1/admin/administrator", "body?.error?.message", "组织显示名称", "组织稳定 ID", "access_level", "login_identifier", "password_reset_token"} {
+	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/tenant", "/api/v1/admin/invitations", "/api/v1/admin/invitations/reissue", "/api/v1/admin/administrator", "body?.error?.message", "组织显示名称", "组织稳定 ID", "access_level", "login_identifier", "password_reset_token", "管理员默认获得本组织当前已安装功能的全部业务权限"} {
 		if identityAsset.Code != http.StatusOK || !strings.Contains(identityAsset.Body.String(), marker) {
 			t.Fatalf("OMS identity asset missing %q status=%d", marker, identityAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261027.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261027.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	if strings.Contains(identityAsset.Body.String(), "不会自动获得财务、工资等业务权限") {
+		t.Fatal("OMS identity asset still advertises the superseded administrator permission rule")
+	}
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261027.2", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261028.1", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {

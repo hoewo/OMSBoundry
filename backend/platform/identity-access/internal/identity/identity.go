@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -120,12 +121,13 @@ type ActivationToken struct {
 }
 
 type Grant struct {
-	SubjectID string    `json:"subject_id"`
-	Audience  string    `json:"audience"`
-	Action    string    `json:"action"`
-	Scope     Scope     `json:"scope"`
-	GrantedBy string    `json:"granted_by"`
-	GrantedAt time.Time `json:"granted_at"`
+	SubjectID  string    `json:"subject_id"`
+	Audience   string    `json:"audience"`
+	Action     string    `json:"action"`
+	Scope      Scope     `json:"scope"`
+	SourceKind string    `json:"source_kind,omitempty"`
+	GrantedBy  string    `json:"granted_by"`
+	GrantedAt  time.Time `json:"granted_at"`
 }
 
 type Repository interface {
@@ -148,7 +150,8 @@ type Repository interface {
 	RecordAudit(context.Context, AuditEntry) error
 	ListSubjects(context.Context, string) ([]Subject, error)
 	ChangeStatus(context.Context, string, string, Status, AuditEntry) error
-	ChangeAdministrator(context.Context, string, string, bool, AuditEntry) error
+	ChangeAdministrator(context.Context, string, string, bool, string, AuditEntry) error
+	RevokeAdministratorProfile(context.Context, string, string, string, AuditEntry) (int64, error)
 	UpdateTenantName(context.Context, string, string, AuditEntry) error
 	ListTenants(context.Context) ([]TenantSummary, error)
 	ProvisionTenantInvitation(context.Context, string, string, Subject, ActivationToken, AuditEntry) error
@@ -161,6 +164,7 @@ type Signer interface {
 type CapabilityCatalog interface {
 	Contains(audience, action string) bool
 	AllowsResource(audience, action, resourceType string) bool
+	Actions() map[string][]string
 }
 
 type BusinessFactReference struct {
@@ -201,6 +205,8 @@ type Service struct {
 	bcryptCost            int
 	dummyHash             []byte
 }
+
+const administratorProfileSource = "administrator_profile"
 
 type ServiceIdentity struct {
 	ID          string
@@ -491,6 +497,11 @@ func (s *Service) Login(ctx context.Context, username, password string) (LoginRe
 	if err := s.repository.ResetLoginFailures(ctx, credential.ID, now); err != nil {
 		return LoginResult{}, err
 	}
+	if credential.Administrator {
+		if err := s.ensureAdministratorProfile(ctx, credential.Subject); err != nil {
+			return LoginResult{}, fmt.Errorf("reconcile administrator access: %w", err)
+		}
+	}
 	rawToken, tokenHash, err := randomToken()
 	if err != nil {
 		return LoginResult{}, err
@@ -702,7 +713,7 @@ func (s *Service) Grant(ctx context.Context, actor Principal, subjectID, audienc
 	if err != nil {
 		return err
 	}
-	grant := Grant{SubjectID: subjectID, Audience: audience, Action: action, Scope: normalizedScope, GrantedBy: actor.SubjectID, GrantedAt: now}
+	grant := Grant{SubjectID: subjectID, Audience: audience, Action: action, Scope: normalizedScope, SourceKind: "manual", GrantedBy: actor.SubjectID, GrantedAt: now}
 	return s.repository.Grant(ctx, actor.TenantID, grant, s.audit(actor.TenantID, auditID, "iam_capability_granted", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"audience": audience, "action": action, "scope": normalizedScope}))
 }
 
@@ -957,7 +968,24 @@ func (s *Service) ChangeAdministrator(ctx context.Context, actor Principal, subj
 	if err != nil {
 		return err
 	}
-	return s.repository.ChangeAdministrator(ctx, actor.TenantID, subjectID, administrator, s.audit(actor.TenantID, auditID, "iam_subject_administrator_changed", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"administrator": administrator}))
+	if err := s.repository.ChangeAdministrator(ctx, actor.TenantID, subjectID, administrator, administratorProfileSource, s.audit(actor.TenantID, auditID, "iam_subject_administrator_changed", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"administrator": administrator})); err != nil {
+		return err
+	}
+	if !administrator {
+		return nil
+	}
+	subject, found, err := s.repository.FindSubject(ctx, actor.TenantID, subjectID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("administrator subject disappeared after promotion")
+	}
+	if subject.Status != StatusActive {
+		return nil
+	}
+	subject.Administrator = true
+	return s.ensureAdministratorProfile(ctx, subject)
 }
 
 func (s *Service) UpdateTenantName(ctx context.Context, actor Principal, rawName string) error {
@@ -1062,6 +1090,9 @@ func (s *Service) AssignTenantAdministrator(ctx context.Context, actor Principal
 			return TenantAdministratorResult{}, &ConflictError{Message: "该账号尚未激活或已停用，请先在组织账号管理中处理"}
 		}
 		if existing.Administrator {
+			if err := s.ensureAdministratorProfile(ctx, existing.Subject); err != nil {
+				return TenantAdministratorResult{}, err
+			}
 			return TenantAdministratorResult{Action: "already_administrator", Subject: existing.Subject}, nil
 		}
 		now := s.now()
@@ -1070,13 +1101,16 @@ func (s *Service) AssignTenantAdministrator(ctx context.Context, actor Principal
 			return TenantAdministratorResult{}, err
 		}
 		audit := s.audit(tenantID, auditID, "iam_tenant_administrator_promoted", "iam_subject", existing.ID, actor.Actor(), now, map[string]any{"login_identifier": normalized})
-		if err := s.repository.ChangeAdministrator(ctx, tenantID, existing.ID, true, audit); err != nil {
+		if err := s.repository.ChangeAdministrator(ctx, tenantID, existing.ID, true, administratorProfileSource, audit); err != nil {
 			return TenantAdministratorResult{}, err
 		}
 		existing.Administrator = true
 		existing.Revision++
 		existing.SessionGeneration++
 		existing.UpdatedAt = now
+		if err := s.ensureAdministratorProfile(ctx, existing.Subject); err != nil {
+			return TenantAdministratorResult{}, err
+		}
 		return TenantAdministratorResult{Action: "promoted", Subject: existing.Subject}, nil
 	}
 	displayName, err = normalizeDisplayName(displayName, normalized)
@@ -1107,6 +1141,85 @@ func (s *Service) AssignTenantAdministrator(ctx context.Context, actor Principal
 		return TenantAdministratorResult{}, err
 	}
 	return TenantAdministratorResult{Action: "invited", Subject: subject, Token: raw, ExpiresAt: &token.ExpiresAt}, nil
+}
+
+// ReconcileAdministratorProfiles applies the locked OMS administrator profile
+// to every active organization administrator and removes only grants that were
+// sourced from that profile after a user is no longer an administrator. It is
+// safe to run at every IAM start and after capability manifest changes.
+func (s *Service) ReconcileAdministratorProfiles(ctx context.Context) error {
+	tenants, err := s.repository.ListTenants(ctx)
+	if err != nil {
+		return err
+	}
+	for _, tenant := range tenants {
+		subjects, err := s.repository.ListSubjects(ctx, tenant.ID)
+		if err != nil {
+			return err
+		}
+		for _, subject := range subjects {
+			if subject.Status == StatusActive && subject.Administrator {
+				if err := s.ensureAdministratorProfile(ctx, subject); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := s.revokeAdministratorProfile(ctx, subject); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) ensureAdministratorProfile(ctx context.Context, subject Subject) error {
+	if !subject.Administrator || subject.SystemAdministrator || subject.Status != StatusActive {
+		return nil
+	}
+	actor := AuditActor{Kind: "service_identity", ID: "iam-administrator-profile-reconciler", DisplayName: "OMS 管理员权限模板"}
+	catalog := s.capabilities.Actions()
+	audiences := make([]string, 0, len(catalog))
+	for audience := range catalog {
+		audiences = append(audiences, audience)
+	}
+	sort.Strings(audiences)
+	for _, audience := range audiences {
+		actions := catalog[audience]
+		for _, action := range actions {
+			auditID, err := s.newID()
+			if err != nil {
+				return err
+			}
+			now := s.now()
+			grant := Grant{
+				SubjectID: subject.ID, Audience: audience, Action: action,
+				Scope: Scope{Kind: "tenant", Resources: []ResourceRef{}}, SourceKind: administratorProfileSource,
+				GrantedBy: subject.ID, GrantedAt: now,
+			}
+			entry := s.audit(subject.TenantID, auditID, "iam_administrator_profile_capability_granted", "iam_subject", subject.ID, actor, now, map[string]any{
+				"profile_id": "oms-administrator-full-access-v1", "audience": audience, "action": action,
+			})
+			if err := s.repository.Grant(ctx, subject.TenantID, grant, entry); err != nil {
+				var conflict *ConflictError
+				if errors.As(err, &conflict) {
+					continue
+				}
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) revokeAdministratorProfile(ctx context.Context, subject Subject) (int64, error) {
+	auditID, err := s.newID()
+	if err != nil {
+		return 0, err
+	}
+	now := s.now()
+	actor := AuditActor{Kind: "service_identity", ID: "iam-administrator-profile-reconciler", DisplayName: "OMS 管理员权限模板"}
+	entry := s.audit(subject.TenantID, auditID, "iam_administrator_profile_revoked", "iam_subject", subject.ID, actor, now, map[string]any{"profile_id": "oms-administrator-full-access-v1"})
+	return s.repository.RevokeAdministratorProfile(ctx, subject.TenantID, subject.ID, administratorProfileSource, entry)
 }
 
 func (s *Service) audit(tenantID, id, action, objectType, objectID string, actor AuditActor, at time.Time, details map[string]any) AuditEntry {
