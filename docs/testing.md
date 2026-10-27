@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 既有用户管理员挂载（2026-10-27，本地门禁通过／公网待发布）
+
+BF-276 必须验证：同 Tenant 启用普通用户经系统端设置后保持同一 Subject ID、升级为管理员、revision 与 Session Generation 各递增并产生一次提升审计；再次设置幂等且不重复审计；另一 Tenant、系统管理员、pending／disabled 账号稳定拒绝且零写入；标识不存在仍创建待激活管理员并返回一次性链接。HTTP 必须分别返回 `promoted`、`already_administrator`、`invited`；Workbench 必须按动作显示结果并读取标准 `{error:{message}}`，不能统一显示服务不可用。
+
+本地已经实际通过 Identity 与 Workbench 的 `go test ./...`、`go vet ./...`、`node --check frontend/oms-workbench/internal/server/oms_system_admin.js`、`git diff --check`，并以短生命周期 PostgreSQL 18 从空库重放 migration 9 后运行完整 HTTP 生命周期集成测试；容器已停止删除。公网发布和真实页面重试尚未执行。[验证记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
+
 ## 系统用户与组织管理（2026-10-27，本地门禁及 D1 公网发布通过）
 
 BF-275 验证要求：登录页没有公开组织创建入口；普通用户与管理员访问系统管理接口均为 403；系统管理员只能进入独立系统管理面，读取全服务器组织元数据并原子创建 Tenant、首位待激活管理员、一次性 Token 和审计，不能凭该级别访问工资、财务、经营等业务事实。组织管理员新增普通用户／管理员后必须保留所选级别；提升或降级同 Tenant 其他用户时，跨 Tenant、本人自降级、移除最后一名启用管理员及组织管理员授予系统管理员均拒绝，变化使目标用户旧 Session 失效。People 成员与 IAM 用户必须分别创建和停用，稳定关联不能导致任一方字段或生命周期被另一方改写。

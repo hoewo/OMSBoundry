@@ -260,6 +260,46 @@ func TestSystemAdministratorCreatesTenantWithoutBusinessAuthority(t *testing.T) 
 	}
 }
 
+func TestSystemAdministratorAssignsExistingTenantUserAsAdministrator(t *testing.T) {
+	repository := &multiTenantRepository{tenantExists: true, credential: Credential{Subject: Subject{
+		ID: testSubject, TenantID: secondTenant, Username: "13800138000", DisplayName: "既有用户",
+		Status: StatusActive, Revision: 3, SessionGeneration: 2,
+	}}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: bootstrapTenant, DisplayName: "系统管理员", SystemAdministrator: true}
+	result, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "+86 138-0013-8000", "不会覆盖既有姓名")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Action != "promoted" || !result.Subject.Administrator || result.Subject.DisplayName != "既有用户" || result.Subject.Revision != 4 || result.Subject.SessionGeneration != 3 {
+		t.Fatalf("result = %#v", result)
+	}
+	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 1 || repository.audits[0].Action != "iam_tenant_administrator_promoted" {
+		t.Fatalf("tenant=%q subject=%q value=%v audits=%#v", repository.adminTenant, repository.adminSubject, repository.adminValue, repository.audits)
+	}
+
+	repository.audits = nil
+	repository.credential.Administrator = true
+	already, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "13800138000", "既有用户")
+	if err != nil || already.Action != "already_administrator" || len(repository.audits) != 0 {
+		t.Fatalf("already=%#v err=%v audits=%#v", already, err, repository.audits)
+	}
+}
+
+func TestSystemAdministratorCannotMoveAccountBetweenTenants(t *testing.T) {
+	repository := &multiTenantRepository{tenantExists: true, credential: Credential{Subject: Subject{
+		ID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", Status: StatusActive,
+	}}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: bootstrapTenant, DisplayName: "系统管理员", SystemAdministrator: true}
+	if _, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "member@example.com", "跨组织用户"); err == nil {
+		t.Fatal("cross-tenant account was assigned as administrator")
+	}
+	if repository.invitedSubject.ID != "" || repository.adminSubject != "" || len(repository.audits) != 0 {
+		t.Fatalf("unexpected writes: invite=%#v admin=%q audits=%#v", repository.invitedSubject, repository.adminSubject, repository.audits)
+	}
+}
+
 func TestAdminAndCredentialOperationsUseAuthenticatedTenant(t *testing.T) {
 	repository := &multiTenantRepository{credential: Credential{Subject: Subject{ID: testSubject, TenantID: secondTenant, Status: StatusActive}}}
 	signer := &captureSigner{}

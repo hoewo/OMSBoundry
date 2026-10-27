@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前既有用户管理员挂载修复（BF-276）：系统管理员为既有组织设置管理员时，IAM 会先按规范手机号／邮箱查找现有用户；同组织启用中的普通用户直接提升为管理员并使旧 Session 失效，已经是管理员时幂等返回，只有账号不存在时才创建待激活用户和 24 小时链接。跨组织、系统管理员账号和非启用账号稳定拒绝；Workbench 同时显示 IAM 返回的真实错误，不再把账号冲突误报为“系统管理服务暂时不可用”。本地 Go、vet、Node 与真实 PostgreSQL 18 生命周期门禁已通过，公网待发布。[验证记录](./docs/reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
+
 当前账号开通修复（BF-272）：公网 Workbench 与 Identity Access 的账号邀请契约已对齐，手机号／邮箱使用 `login_identifier` 创建待激活账号，旧 `username` 客户端继续兼容；修复已随 D1 Suite `v0.1.0-test.oms-v1.38` 发布。发布后 Identity schema 8、D1 检查、19/19 healthy、备份 checksum 和公网入口核对通过；验证没有代建测试账号。[发布记录](./docs/reports/oms-v1-account-onboarding-publication-20261026.md)
 
 当前工资可用性修订（BF-273）：北京 2026 五险一金参考方案、精确固定额／整元取整计算和工资页“设置比例”已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布到 [oatest](https://oatest.antuinfo.cn/)。发布后 D1 检查、Payroll schema 4、真实标准方案读取、19/19 healthy 和公网资源核对通过；升级前备份为 `/var/backups/omsbizfoundry/20261026T132424Z`。工伤 0.2% 与公积金 5% 只是最低可选预填值，租户仍须复制为本公司方案并确认实际适用参数。[发布记录](./docs/reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)

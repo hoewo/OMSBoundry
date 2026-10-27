@@ -910,7 +910,7 @@ func TestSystemAdministratorGetsIsolatedPlatformManagementSurface(t *testing.T) 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	body := response.Body.String()
-	for _, marker := range []string{"系统管理", "全部组织", "＋ 创建组织", "data-oms-system-admin", "assets/oms-system-admin.css?v=20261027.1", "assets/oms-system-admin.js?v=20261027.1"} {
+	for _, marker := range []string{"系统管理", "全部组织", "＋ 创建组织", "data-oms-system-admin", "assets/oms-system-admin.css?v=20261027.2", "assets/oms-system-admin.js?v=20261027.2"} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
 			t.Fatalf("system administrator surface missing %q status=%d", marker, response.Code)
 		}
@@ -922,7 +922,7 @@ func TestSystemAdministratorGetsIsolatedPlatformManagementSurface(t *testing.T) 
 	}
 	for _, asset := range []struct{ path, contentType, marker string }{
 		{"/assets/oms-system-admin.css", "text/css; charset=utf-8", ".oms-system-admin__topbar"},
-		{"/assets/oms-system-admin.js", "application/javascript; charset=utf-8", "/api/v1/system/tenants"},
+		{"/assets/oms-system-admin.js", "application/javascript; charset=utf-8", "already_administrator"},
 	} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, asset.path, nil))

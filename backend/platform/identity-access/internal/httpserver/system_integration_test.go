@@ -214,7 +214,10 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusOK)
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
-	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": operatorID, "administrator": true}, http.StatusNoContent)
+	promotion := postJSON(t, systemAdmin, server.URL+"/api/v1/system/administrators", systemAdminCSRF, map[string]any{"tenant_id": testTenantID, "login_identifier": "13800138000", "display_name": "业务操作员"}, http.StatusOK)
+	if stringField(t, promotion, "action") != "promoted" || stringField(t, objectField(t, promotion, "subject"), "id") != operatorID {
+		t.Fatalf("existing account promotion = %#v", promotion)
+	}
 	currentSession(t, operator, server.URL, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
 	if promoted := currentSession(t, operator, server.URL, http.StatusOK); promoted["administrator"] != true {

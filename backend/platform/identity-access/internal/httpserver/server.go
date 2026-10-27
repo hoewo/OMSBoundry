@@ -543,13 +543,17 @@ func (s *Server) inviteTenantAdministrator(w http.ResponseWriter, r *http.Reques
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	result, err := s.identities.InviteTenantAdministrator(r.Context(), currentPrincipal(r.Context()), input.TenantID, input.LoginIdentifier, input.DisplayName)
+	result, err := s.identities.AssignTenantAdministrator(r.Context(), currentPrincipal(r.Context()), input.TenantID, input.LoginIdentifier, input.DisplayName)
 	if err != nil {
 		mapError(w, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusCreated, result)
+	status := http.StatusOK
+	if result.Action == "invited" {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, result)
 }
 
 func (s *Server) jwks(w http.ResponseWriter, _ *http.Request) {

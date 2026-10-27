@@ -228,6 +228,13 @@ type TokenResult struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type TenantAdministratorResult struct {
+	Action    string     `json:"action"`
+	Subject   Subject    `json:"subject"`
+	Token     string     `json:"token,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
 type CapabilityClaims struct {
 	Version   string   `json:"ver"`
 	Issuer    string   `json:"iss"`
@@ -1005,53 +1012,85 @@ func (s *Service) CreateTenant(ctx context.Context, actor Principal, input Syste
 	return TokenResult{Subject: subject, Token: raw, ExpiresAt: token.ExpiresAt}, TenantSummary{ID: tenantID, Name: name, Status: "active", UserCount: 1, AdministratorCount: 1, CreatedAt: now}, nil
 }
 
-func (s *Service) InviteTenantAdministrator(ctx context.Context, actor Principal, tenantID, username, displayName string) (TokenResult, error) {
+func (s *Service) AssignTenantAdministrator(ctx context.Context, actor Principal, tenantID, username, displayName string) (TenantAdministratorResult, error) {
 	if err := requireSystemAdministrator(actor); err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	tenantID = strings.ToLower(strings.TrimSpace(tenantID))
 	if !uuidPattern.MatchString(tenantID) {
-		return TokenResult{}, &ValidationError{Field: "tenant_id", Message: "组织 ID 无效"}
+		return TenantAdministratorResult{}, &ValidationError{Field: "tenant_id", Message: "组织 ID 无效"}
 	}
 	exists, err := s.repository.TenantExists(ctx, tenantID)
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	if !exists {
-		return TokenResult{}, &NotFoundError{Message: "组织不存在"}
+		return TenantAdministratorResult{}, &NotFoundError{Message: "组织不存在"}
 	}
 	normalized, err := normalizeUsername(username)
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
+	}
+	existing, found, err := s.repository.FindCredential(ctx, normalized)
+	if err != nil {
+		return TenantAdministratorResult{}, err
+	}
+	if found {
+		if existing.SystemAdministrator {
+			return TenantAdministratorResult{}, &ConflictError{Message: "系统管理员账号不能设为组织管理员"}
+		}
+		if existing.TenantID != tenantID {
+			return TenantAdministratorResult{}, &ConflictError{Message: "该手机号或邮箱已属于其他组织"}
+		}
+		if existing.Status != StatusActive {
+			return TenantAdministratorResult{}, &ConflictError{Message: "该账号尚未激活或已停用，请先在组织账号管理中处理"}
+		}
+		if existing.Administrator {
+			return TenantAdministratorResult{Action: "already_administrator", Subject: existing.Subject}, nil
+		}
+		now := s.now()
+		auditID, err := s.newID()
+		if err != nil {
+			return TenantAdministratorResult{}, err
+		}
+		audit := s.audit(tenantID, auditID, "iam_tenant_administrator_promoted", "iam_subject", existing.ID, actor.Actor(), now, map[string]any{"login_identifier": normalized})
+		if err := s.repository.ChangeAdministrator(ctx, tenantID, existing.ID, true, audit); err != nil {
+			return TenantAdministratorResult{}, err
+		}
+		existing.Administrator = true
+		existing.Revision++
+		existing.SessionGeneration++
+		existing.UpdatedAt = now
+		return TenantAdministratorResult{Action: "promoted", Subject: existing.Subject}, nil
 	}
 	displayName, err = normalizeDisplayName(displayName, normalized)
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	subjectID, err := s.newID()
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	tokenID, err := s.newID()
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	auditID, err := s.newID()
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	raw, hash, err := randomToken()
 	if err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
 	now := s.now()
 	subject := Subject{ID: subjectID, TenantID: tenantID, Username: normalized, DisplayName: displayName, Status: StatusPending, Administrator: true, Revision: 1, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
 	token := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: now.Add(24 * time.Hour), CreatedBy: actor.SubjectID, CreatedAt: now}
 	audit := s.audit(tenantID, auditID, "iam_tenant_administrator_invited", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": normalized})
 	if err := s.repository.Invite(ctx, subject, token, audit); err != nil {
-		return TokenResult{}, err
+		return TenantAdministratorResult{}, err
 	}
-	return TokenResult{Subject: subject, Token: raw, ExpiresAt: token.ExpiresAt}, nil
+	return TenantAdministratorResult{Action: "invited", Subject: subject, Token: raw, ExpiresAt: &token.ExpiresAt}, nil
 }
 
 func (s *Service) audit(tenantID, id, action, objectType, objectID string, actor AuditActor, at time.Time, details map[string]any) AuditEntry {
