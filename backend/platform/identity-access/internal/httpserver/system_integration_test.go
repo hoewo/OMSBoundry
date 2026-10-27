@@ -51,7 +51,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000008_login_identifiers.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000009_system_administrators.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
@@ -96,12 +96,40 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
+	systemAdmin := newClient(t)
+	systemAdminCSRF := fetchCSRF(t, systemAdmin, server.URL)
+	login(t, systemAdmin, server.URL, systemAdminCSRF, "admin", "correct horse battery staple", http.StatusOK)
+	systemPrincipal := currentSession(t, systemAdmin, server.URL, http.StatusOK)
+	if systemPrincipal["system_administrator"] != true || systemPrincipal["administrator"] != false {
+		t.Fatalf("bootstrap system administrator principal = %#v", systemPrincipal)
+	}
+	getJSON(t, systemAdmin, server.URL+"/api/v1/admin/subjects", http.StatusForbidden)
+	postJSON(t, systemAdmin, server.URL+"/api/v1/credentials", systemAdminCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusForbidden)
+	tenantList := getJSON(t, systemAdmin, server.URL+"/api/v1/system/tenants", http.StatusOK)
+	if values, ok := tenantList["tenants"].([]any); !ok || len(values) != 2 {
+		t.Fatalf("system tenant list = %#v", tenantList)
+	}
+	createdTenant := postJSON(t, systemAdmin, server.URL+"/api/v1/system/tenants", systemAdminCSRF, map[string]any{"name": "系统创建测试组织", "admin_login_identifier": "created-admin@example.com", "admin_display_name": "创建组织管理员"}, http.StatusCreated)
+	createdTenantObject := objectField(t, createdTenant, "tenant")
+	createdAdministrator := objectField(t, createdTenant, "administrator")
+	if stringField(t, createdTenantObject, "name") != "系统创建测试组织" || stringField(t, objectField(t, createdAdministrator, "subject"), "username") != "created-admin@example.com" {
+		t.Fatalf("created tenant response = %#v", createdTenant)
+	}
+	createdAdmin := newClient(t)
+	createdAdminCSRF := fetchCSRF(t, createdAdmin, server.URL)
+	postJSON(t, createdAdmin, server.URL+"/api/v1/activate", createdAdminCSRF, map[string]any{"token": stringField(t, createdAdministrator, "token"), "password": "created administrator password 123"}, http.StatusOK)
+	login(t, createdAdmin, server.URL, createdAdminCSRF, "created-admin@example.com", "created administrator password 123", http.StatusOK)
+	if principal := currentSession(t, createdAdmin, server.URL, http.StatusOK); principal["administrator"] != true || principal["system_administrator"] != false || stringField(t, principal, "tenant_id") != stringField(t, createdTenantObject, "id") {
+		t.Fatalf("created tenant administrator principal = %#v", principal)
+	}
+	adminInvitation := postJSON(t, systemAdmin, server.URL+"/api/v1/system/administrators", systemAdminCSRF, map[string]any{"tenant_id": testTenantID, "login_identifier": "tenant-admin@example.com", "display_name": "测试企业管理员"}, http.StatusCreated)
 	admin := newClient(t)
 	adminCSRF := fetchCSRF(t, admin, server.URL)
-	login(t, admin, server.URL, adminCSRF, "admin", "correct horse battery staple", http.StatusOK)
+	postJSON(t, admin, server.URL+"/api/v1/activate", adminCSRF, map[string]any{"token": stringField(t, adminInvitation, "token"), "password": "tenant administrator password 123"}, http.StatusOK)
+	login(t, admin, server.URL, adminCSRF, "tenant-admin@example.com", "tenant administrator password 123", http.StatusOK)
 	adminPrincipal := currentSession(t, admin, server.URL, http.StatusOK)
 	adminID := stringField(t, adminPrincipal, "subject_id")
-	if stringField(t, adminPrincipal, "tenant_id") != testTenantID {
+	if stringField(t, adminPrincipal, "tenant_id") != testTenantID || adminPrincipal["administrator"] != true || adminPrincipal["system_administrator"] != false {
 		t.Fatalf("bootstrap administrator tenant = %#v", adminPrincipal)
 	}
 	tenantResponse := getJSON(t, admin, server.URL+"/api/v1/tenant", http.StatusOK)
@@ -123,7 +151,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 		t.Fatalf("second tenant = %#v", otherTenantObject)
 	}
 
-	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"login_identifier": "+86 138-0013-8000", "display_name": "业务操作员"}, http.StatusCreated)
+	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"login_identifier": "+86 138-0013-8000", "display_name": "业务操作员", "administrator": false}, http.StatusCreated)
 	inviteToken := stringField(t, inviteResponse, "token")
 	operatorObject := objectField(t, inviteResponse, "subject")
 	operatorID := stringField(t, operatorObject, "id")
@@ -176,6 +204,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, admin, server.URL+"/api/v1/admin/password-resets", adminCSRF, map[string]any{"subject_id": otherOperatorID}, http.StatusNotFound)
 	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNotFound)
 	postJSON(t, admin, server.URL+"/api/v1/admin/status", adminCSRF, map[string]any{"subject_id": otherOperatorID, "status": "disabled"}, http.StatusNotFound)
+	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": otherOperatorID, "administrator": true}, http.StatusNotFound)
 	assertSubjectList(t, getJSON(t, admin, server.URL+"/api/v1/admin/subjects", http.StatusOK), testTenantID, 2)
 	assertSubjectList(t, getJSON(t, otherAdmin, server.URL+"/api/v1/admin/subjects", http.StatusOK), otherTenantID, 2)
 
@@ -185,6 +214,18 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusOK)
 	postJSON(t, operator, server.URL+"/api/v1/activate", operatorCSRF, map[string]any{"token": reissuedToken, "password": "operator password 123"}, http.StatusUnauthorized)
 	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
+	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": operatorID, "administrator": true}, http.StatusNoContent)
+	currentSession(t, operator, server.URL, http.StatusUnauthorized)
+	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
+	if promoted := currentSession(t, operator, server.URL, http.StatusOK); promoted["administrator"] != true {
+		t.Fatalf("promoted principal = %#v", promoted)
+	}
+	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": operatorID, "administrator": false}, http.StatusNoContent)
+	currentSession(t, operator, server.URL, http.StatusUnauthorized)
+	login(t, operator, server.URL, operatorCSRF, "13800138000", "operator password 123", http.StatusOK)
+	if demoted := currentSession(t, operator, server.URL, http.StatusOK); demoted["administrator"] != false {
+		t.Fatalf("demoted principal = %#v", demoted)
+	}
 	getJSON(t, operator, server.URL+"/api/v1/api-keys", http.StatusForbidden)
 	for _, action := range []string{apikey.ActionUse, apikey.ActionKeyManage, apikey.ActionSelfAudit} {
 		postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": operatorID, "audience": "open-api", "action": action}, http.StatusNoContent)

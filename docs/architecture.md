@@ -1,5 +1,9 @@
 # OMSBizFoundry 当前工程架构
 
+2026-10-27 用户身份架构边界（BF-275）：IAM Subject 是系统用户，用户级别为平台级 `system_administrator`、组织级 `administrator` 与普通用户；People Person 是成员档案，独占部门、职位、业务角色与职责。两者仅通过显式、可选、版本化引用关联，不复用表、ORM、生命周期或权限字段。系统管理员端点与页面必须独立于组织业务路由，只能执行平台组织／用户运维，不能凭该级别签发组织业务 Capability；管理员只能操作当前 Tenant 用户。组织创建只接受系统管理员的可信 Session，并原子建立 Tenant、首位待激活管理员、一次性 Token 与审计。Gateway 必须从已验证 IAM Session 派生系统管理员上下文，不接受客户端自报 Header；Workbench 不保存身份副本。
+
+2026-10-26 BF-274 的公开组织自助入口已由 BF-275 在发布前取代；原子建 Tenant、同组织管理员防护、Session 失效和业务 Capability 分离约束继续有效。
+
 2026-10-26 工资缴费方案边界（BF-273）：Payroll 仍独占 Contribution Scheme 当前投影、追加 revision 和工资计算快照。平台标准方案是 `tenant_id IS NULL` 的只读、可追溯目录；Tenant 自定义方案必须引用精确标准 ID／revision，通过 Payroll 命令复制或修订，Workbench 只组合这些版本化端口。北京参考方案通过 migration 幂等建立，不设全局租户、不复制到 People，也不改变 Money 对实际发放的所有权。计算组件的比例使用整数基点、固定额使用整数分，取整策略作为方案快照字段一起冻结。[验证报告](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)
 
 2026-10-26 账号开通边界（BF-272）：手机号、邮箱和兼容用户名都是 IAM Subject 的登录标识，不是 People Person 属性或 Workbench 事实。Workbench 只组合管理员新增、Subject 列表、一次性链接交付和激活页面；IAM 独占规范化、唯一性、待激活状态、Token 摘要、密码、Session Generation 与审计。重新签发邀请只替换 IAM 内同类未使用 Token，不改写 Subject、Tenant 或业务引用。未配置消息提供商时架构中不存在“发送邀请”步骤。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)

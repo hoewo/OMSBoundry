@@ -87,6 +87,10 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.Handle("POST /api/v1/admin/grants", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.grant)))))
 	mux.Handle("POST /api/v1/admin/grants/revoke", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.revokeGrant)))))
 	mux.Handle("POST /api/v1/admin/status", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.changeStatus)))))
+	mux.Handle("POST /api/v1/admin/administrator", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.changeAdministrator)))))
+	mux.Handle("GET /api/v1/system/tenants", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.listTenants))))
+	mux.Handle("POST /api/v1/system/tenants", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.requireCSRF(server.createTenant)))))
+	mux.Handle("POST /api/v1/system/administrators", server.authenticate(server.requireSystemAdmin(http.HandlerFunc(server.requireCSRF(server.inviteTenantAdministrator)))))
 	server.handler = securityHeaders(server.requestID(mux))
 	return server, nil
 }
@@ -397,6 +401,7 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 		Username        string `json:"username,omitempty"`
 		LoginIdentifier string `json:"login_identifier,omitempty"`
 		DisplayName     string `json:"display_name"`
+		Administrator   bool   `json:"administrator"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -405,7 +410,7 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(identifier) == "" {
 		identifier = input.Username
 	}
-	result, err := s.identities.Invite(r.Context(), currentPrincipal(r.Context()), identifier, input.DisplayName)
+	result, err := s.identities.Invite(r.Context(), currentPrincipal(r.Context()), identifier, input.DisplayName, input.Administrator)
 	if err != nil {
 		mapError(w, err)
 		return
@@ -489,6 +494,63 @@ func (s *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+func (s *Server) changeAdministrator(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		SubjectID     string `json:"subject_id"`
+		Administrator bool   `json:"administrator"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.identities.ChangeAdministrator(r.Context(), currentPrincipal(r.Context()), input.SubjectID, input.Administrator); err != nil {
+		mapError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *Server) listTenants(w http.ResponseWriter, r *http.Request) {
+	values, err := s.identities.ListTenants(r.Context(), currentPrincipal(r.Context()))
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"tenants": values})
+}
+func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name             string `json:"name"`
+		AdminUsername    string `json:"admin_login_identifier"`
+		AdminDisplayName string `json:"admin_display_name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, tenant, err := s.identities.CreateTenant(r.Context(), currentPrincipal(r.Context()), identity.SystemTenantInput{Name: input.Name, AdminUsername: input.AdminUsername, AdminDisplayName: input.AdminDisplayName})
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, map[string]any{"tenant": tenant, "administrator": result})
+}
+func (s *Server) inviteTenantAdministrator(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		TenantID        string `json:"tenant_id"`
+		LoginIdentifier string `json:"login_identifier"`
+		DisplayName     string `json:"display_name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := s.identities.InviteTenantAdministrator(r.Context(), currentPrincipal(r.Context()), input.TenantID, input.LoginIdentifier, input.DisplayName)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, result)
+}
 
 func (s *Server) jwks(w http.ResponseWriter, _ *http.Request) {
 	keys, err := s.keys.PublicKeys(time.Now().UTC())
@@ -537,6 +599,17 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !currentPrincipal(r.Context()).Administrator {
 			writeProblem(w, 403, "permission_denied", "需要 IAM 管理权限")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) requireSystemAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal := currentPrincipal(r.Context())
+		if !principal.SystemAdministrator || principal.Administrator {
+			writeProblem(w, http.StatusForbidden, "forbidden", "仅系统管理员可以执行该操作")
 			return
 		}
 		next.ServeHTTP(w, r)

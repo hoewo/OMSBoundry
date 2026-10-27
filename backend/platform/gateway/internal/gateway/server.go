@@ -58,12 +58,13 @@ type Server struct {
 }
 type sessionResponse struct {
 	Principal struct {
-		SubjectID     string    `json:"subject_id"`
-		TenantID      string    `json:"tenant_id"`
-		Username      string    `json:"username"`
-		DisplayName   string    `json:"display_name"`
-		Administrator bool      `json:"administrator"`
-		AuthTime      time.Time `json:"auth_time"`
+		SubjectID           string    `json:"subject_id"`
+		TenantID            string    `json:"tenant_id"`
+		Username            string    `json:"username"`
+		DisplayName         string    `json:"display_name"`
+		Administrator       bool      `json:"administrator"`
+		SystemAdministrator bool      `json:"system_administrator"`
+		AuthTime            time.Time `json:"auth_time"`
 	} `json:"principal"`
 }
 type credentialResponse struct {
@@ -200,6 +201,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 			r.Header.Set("X-OMS-Tenant-ID", session.Principal.TenantID)
 			r.Header.Set("X-OMS-Display-Name", session.Principal.DisplayName)
 			r.Header.Set("X-OMS-Administrator", strconv.FormatBool(session.Principal.Administrator))
+			r.Header.Set("X-OMS-System-Administrator", strconv.FormatBool(session.Principal.SystemAdministrator))
 		}
 		if cookie, err := r.Cookie(csrfCookieName); err == nil {
 			r.Header.Set("X-OMS-CSRF-Token", cookie.Value)

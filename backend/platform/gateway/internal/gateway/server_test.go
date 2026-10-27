@@ -33,7 +33,7 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	}
 	keyPath := writeKeys(t, publicKey)
 	workbench := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"subject": r.Header.Get("X-OMS-Subject-ID"), "tenant": r.Header.Get("X-OMS-Tenant-ID"), "csrf": r.Header.Get("X-OMS-CSRF-Token")})
+		writeJSON(w, 200, map[string]string{"subject": r.Header.Get("X-OMS-Subject-ID"), "tenant": r.Header.Get("X-OMS-Tenant-ID"), "csrf": r.Header.Get("X-OMS-CSRF-Token"), "system_administrator": r.Header.Get("X-OMS-System-Administrator")})
 	}))
 	defer workbench.Close()
 	contract := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 				writeProblem(w, 401, "auth", "bad")
 				return
 			}
-			writeJSON(w, 200, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": sessionTenant, "username": "admin", "display_name": "系统管理员", "administrator": true, "auth_time": time.Now().UTC()}})
+			writeJSON(w, 200, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": sessionTenant, "username": "admin", "display_name": "系统管理员", "administrator": false, "system_administrator": true, "auth_time": time.Now().UTC()}})
 		case "/api/v1/credentials":
 			cookie, err := r.Cookie(sessionCookieName)
 			if err != nil || cookie.Value != "session-good" {
@@ -98,10 +98,11 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	request, _ := http.NewRequest(http.MethodGet, gateway.URL+"/workbench/", nil)
 	request.Header.Set("Authorization", "Bearer forged")
 	request.Header.Set("X-OMS-Subject-ID", "attacker")
+	request.Header.Set("X-OMS-System-Administrator", "true")
 	response := do(t, client, request, 200)
 	anonymous := decodeMap(t, response.Body)
 	_ = response.Body.Close()
-	if anonymous["subject"] != "" {
+	if anonymous["subject"] != "" || anonymous["system_administrator"] != "" {
 		t.Fatalf("forged subject reached workbench: %#v", anonymous)
 	}
 	csrf := cookieValue(t, client, gateway.URL, csrfCookieName)
@@ -120,7 +121,7 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	response = get(t, client, gateway.URL+"/workbench/", 200)
 	authenticated := decodeMap(t, response.Body)
 	_ = response.Body.Close()
-	if authenticated["subject"] != testSubject || authenticated["tenant"] != sessionTenant {
+	if authenticated["subject"] != testSubject || authenticated["tenant"] != sessionTenant || authenticated["system_administrator"] != "true" {
 		t.Fatalf("validated session context missing: %#v", authenticated)
 	}
 	form := url.Values{"csrf_token": {csrf}}

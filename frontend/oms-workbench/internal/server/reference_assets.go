@@ -127,6 +127,18 @@ var omsPhase1OpenAPIJS string
 //go:embed oms_phase1_identity.js
 var omsPhase1IdentityJS string
 
+// omsSystemAdmin is the isolated platform administration surface. It only
+// composes IAM system-administrator endpoints and never loads business owners.
+//
+//go:embed oms_system_admin.html
+var omsSystemAdminHTML string
+
+//go:embed oms_system_admin.css
+var omsSystemAdminCSS string
+
+//go:embed oms_system_admin.js
+var omsSystemAdminJS string
+
 // omsPhase1Feedback mounts one isolated Feedback SDK V2 iframe and obtains its
 // runtime credential only after Gateway verifies the current IAM session.
 //

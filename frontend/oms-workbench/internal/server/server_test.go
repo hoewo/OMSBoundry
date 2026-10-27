@@ -380,7 +380,7 @@ func TestLoginUsesReferenceOABrandAndIAMContract(t *testing.T) {
 		"验证码登录",
 		"请输入组织内手机号获取验证码",
 		"当前验证环境尚未接入短信服务",
-		"账号、租户和权限由 IAM 处理",
+		"账号、组织和权限由 IAM 处理",
 		"手机号或邮箱",
 	} {
 		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
@@ -647,7 +647,7 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 		"assets/oms-phase1-payroll-owner.js?v=20261026.1",
 		"assets/oms-phase1-finance-owner.js?v=20261026.1",
 		"assets/oms-phase1-open-api.js?v=20261025.1",
-		"assets/oms-phase1-identity.js?v=20261026.2",
+		"assets/oms-phase1-identity.js?v=20261026.3",
 		"assets/oms-phase1-feedback.js?v=20261026.2",
 		"＋ 新增账号",
 		"账号开通流程",
@@ -757,12 +757,12 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	identityAsset := httptest.NewRecorder()
 	handler.ServeHTTP(identityAsset, httptest.NewRequest(http.MethodGet, "/assets/oms-phase1-identity.js", nil))
-	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/invitations", "/api/v1/admin/invitations/reissue", "login_identifier", "password_reset_token"} {
+	for _, marker := range []string{"/api/v1/tenant", "/api/v1/admin/invitations", "/api/v1/admin/invitations/reissue", "/api/v1/admin/administrator", "access_level", "login_identifier", "password_reset_token"} {
 		if identityAsset.Code != http.StatusOK || !strings.Contains(identityAsset.Body.String(), marker) {
 			t.Fatalf("OMS identity asset missing %q status=%d", marker, identityAsset.Code)
 		}
 	}
-	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261026.4", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261026.2", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
+	for _, assetPath := range []string{"/assets/oms-phase1.css?v=20261026.4", "/assets/oms-phase1-pagination.js?v=20261022.6", "/assets/oms-phase1.js?v=20261026.1", "/assets/oms-phase1-internal-model.js?v=20261023.2", "/assets/oms-phase1-internal.js?v=20261025.2", "/assets/oms-phase1-payroll-owner.js?v=20261026.1", "/assets/oms-phase1-finance-owner.js?v=20261026.1", "/assets/oms-phase1-open-api.js?v=20261025.1", "/assets/oms-phase1-identity.js?v=20261026.3", "/assets/oms-phase1-feedback.js?v=20261026.2", "/assets/oms-phase1-evidence.js?v=20261022.6"} {
 		assetResponse := httptest.NewRecorder()
 		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, assetPath, nil))
 		if got := assetResponse.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -883,6 +883,52 @@ func TestOMSPhase1IsAuthenticatedOwnerComposition(t *testing.T) {
 	}
 	if _, err := NewWithProfiles(path, ReferenceOAProfiles{OMSOperatingPartyID: "not-a-party-id"}); err == nil {
 		t.Fatal("invalid OMS operating Party ID accepted")
+	}
+}
+
+func TestSystemAdministratorGetsIsolatedPlatformManagementSurface(t *testing.T) {
+	manifest := suite{SchemaVersion: "1", SuiteID: "test-suite", TenantID: "77777777-7777-4777-8777-777777777777", Applications: []application{
+		{ID: "identity-access", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/auth", Audience: "identity-access"},
+		{ID: "project-workspace", Version: "0.1.0", Enabled: true, RoutePrefix: "/project", Audience: "project-workspace", EntryAction: "project-workspace.read"},
+	}}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "suite.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/?view=oms-v1", nil)
+	request.Header.Set("X-OMS-Subject-ID", "88888888-8888-4888-8888-888888888888")
+	request.Header.Set("X-OMS-Display-Name", "平台管理员")
+	request.Header.Set("X-OMS-System-Administrator", "true")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	body := response.Body.String()
+	for _, marker := range []string{"系统管理", "全部组织", "＋ 创建组织", "data-oms-system-admin", "assets/oms-system-admin.css?v=20261027.1", "assets/oms-system-admin.js?v=20261027.1"} {
+		if response.Code != http.StatusOK || !strings.Contains(body, marker) {
+			t.Fatalf("system administrator surface missing %q status=%d", marker, response.Code)
+		}
+	}
+	for _, forbidden := range []string{"data-oms-v1-nav=", "assets/oms-phase1.js", `data-oms-v1-nav="projects"`, `data-oms-v1-nav-group="internal"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("system administrator surface leaked business UI %q", forbidden)
+		}
+	}
+	for _, asset := range []struct{ path, contentType, marker string }{
+		{"/assets/oms-system-admin.css", "text/css; charset=utf-8", ".oms-system-admin__topbar"},
+		{"/assets/oms-system-admin.js", "application/javascript; charset=utf-8", "/api/v1/system/tenants"},
+	} {
+		assetResponse := httptest.NewRecorder()
+		handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, asset.path, nil))
+		if assetResponse.Code != http.StatusOK || assetResponse.Header().Get("Content-Type") != asset.contentType || !strings.Contains(assetResponse.Body.String(), asset.marker) {
+			t.Fatalf("system administrator asset %s missing %q", asset.path, asset.marker)
+		}
 	}
 }
 

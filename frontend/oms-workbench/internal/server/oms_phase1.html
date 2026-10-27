@@ -29,7 +29,7 @@
       <div class="oms-v1__rail-foot">
         <button class="oms-v1__rail-profile" type="button" data-oms-v1-nav="account" aria-label="进入账号与租户">
           <span class="oms-v1__rail-avatar">{{if .Administrator}}管{{else}}用{{end}}</span>
-          <span><strong>{{if .DisplayName}}{{.DisplayName}}{{else}}当前账号{{end}}</strong><small>{{if .Administrator}}租户管理员{{else}}已登录账号{{end}}</small></span>
+          <span><strong>{{if .DisplayName}}{{.DisplayName}}{{else}}当前账号{{end}}</strong><small>{{if .Administrator}}管理员{{else}}普通用户{{end}}</small></span>
         </button>
         <form class="oms-v1__rail-logout" method="post" action="/gateway/logout" data-oms-v1-rail-logout>
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -187,8 +187,8 @@
         <section class="oms-v1__page" data-oms-v1-page="account">
           <header class="oms-v1__page-head"><div><h1>账号与租户</h1><p>当前组织、登录账号与账号开通状态均来自 IAM</p></div>{{if .Administrator}}<button class="oms-v1__primary" type="button" data-identity-invite>＋ 新增账号</button>{{end}}</header>
           <div class="oms-v1__notice" data-identity-notice><span></span><p>正在读取账号与租户信息。</p></div>
-          <div class="oms-v1__summary oms-v1__identity-summary"><article><span>当前租户</span><strong data-identity-tenant-name>—</strong><small data-identity-tenant-id>—</small></article><article><span>当前账号</span><strong data-identity-display-name>—</strong><small data-identity-username>—</small></article><article><span>账号状态</span><strong data-identity-account-status>—</strong><small data-identity-account-role>—</small></article>{{if .Administrator}}<article><span>租户账号</span><strong data-identity-subject-count>—</strong><small>个</small></article>{{end}}</div>
-          {{if .Administrator}}<ol class="oms-v1__identity-flow" aria-label="账号开通流程"><li><b>1</b><span><strong>录入登录账号</strong><small>管理员填写姓名及手机号或邮箱</small></span></li><li><b>2</b><span><strong>交付激活链接</strong><small>复制一次性链接，通过可信渠道交给本人</small></span></li><li><b>3</b><span><strong>本人设置密码</strong><small>激活后即可使用手机号或邮箱登录</small></span></li></ol><div class="oms-v1__result-line"><span>账号录入与激活由 IAM 隔离管理</span></div><div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>状态</th><th>更新时间</th><th></th></tr></thead><tbody data-identity-subject-body><tr><td colspan="6"><div class="oms-v1__empty"><strong>正在读取租户账号</strong><span>请稍候。</span></div></td></tr></tbody></table></div>{{else}}<div class="oms-v1__notice is-warning"><span></span><p>普通账号只能查看本人身份；新增账号、停用和密码重置由租户管理员处理。</p></div>{{end}}
+          <div class="oms-v1__summary oms-v1__identity-summary"><article><span>所属组织</span><strong data-identity-tenant-name>—</strong><small data-identity-tenant-id>—</small></article><article><span>当前账号</span><strong data-identity-display-name>—</strong><small data-identity-username>—</small></article><article><span>账号身份</span><strong data-identity-account-status>—</strong><small data-identity-account-role>—</small></article>{{if .Administrator}}<article><span>组织账号</span><strong data-identity-subject-count>—</strong><small>个</small></article>{{end}}</div>
+          {{if .Administrator}}<ol class="oms-v1__identity-flow" aria-label="账号开通流程"><li><b>1</b><span><strong>录入用户与级别</strong><small>选择普通用户或管理员</small></span></li><li><b>2</b><span><strong>交付激活链接</strong><small>复制一次性链接，通过可信渠道交给本人</small></span></li><li><b>3</b><span><strong>本人设置密码</strong><small>激活后即可使用手机号或邮箱登录</small></span></li></ol><div class="oms-v1__result-line"><span>用户录入与激活由 IAM 隔离管理</span></div><div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th>用户姓名</th><th>登录账号</th><th>用户级别</th><th>状态</th><th>更新时间</th><th></th></tr></thead><tbody data-identity-subject-body><tr><td colspan="6"><div class="oms-v1__empty"><strong>正在读取组织用户</strong><span>请稍候。</span></div></td></tr></tbody></table></div>{{else}}<div class="oms-v1__notice is-warning"><span></span><p>普通用户可以查看所属组织和本人身份；新增用户、调整管理员、停用和密码重置由管理员处理。</p></div>{{end}}
         </section>
 
         <section class="oms-v1__page" data-oms-v1-page="feedback" data-feedback-page>
@@ -254,4 +254,4 @@
     </div>
   </div>
 {{end}}
-<template data-page-template="oms-v1">{{template "oms-phase1-body" .}}</template>
+{{if not .SystemAdministrator}}<template data-page-template="oms-v1">{{template "oms-phase1-body" .}}</template>{{end}}

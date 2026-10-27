@@ -24,6 +24,14 @@ type multiTenantRepository struct {
 	listedTenant     string
 	tokenTenant      string
 	createdToken     ActivationToken
+	invitedSubject   Subject
+	adminTenant      string
+	adminSubject     string
+	adminValue       bool
+	tenants          []TenantSummary
+	provisionTenant  string
+	provisionName    string
+	provisionSubject Subject
 	audits           []AuditEntry
 }
 
@@ -57,7 +65,9 @@ func (r *multiTenantRepository) ResolveSession(context.Context, []byte, time.Tim
 	return r.resolved, r.resolved.SubjectID != "", nil
 }
 func (r *multiTenantRepository) RevokeSession(context.Context, []byte, time.Time) error { return nil }
-func (r *multiTenantRepository) Invite(context.Context, Subject, ActivationToken, AuditEntry) error {
+func (r *multiTenantRepository) Invite(_ context.Context, subject Subject, _ ActivationToken, entry AuditEntry) error {
+	r.invitedSubject = subject
+	r.audits = append(r.audits, entry)
 	return nil
 }
 func (r *multiTenantRepository) Activate(context.Context, []byte, TokenKind, string, time.Time, AuditEntry) (Subject, error) {
@@ -89,6 +99,19 @@ func (r *multiTenantRepository) ListSubjects(context.Context, string) ([]Subject
 	return nil, nil
 }
 func (r *multiTenantRepository) ChangeStatus(context.Context, string, string, Status, AuditEntry) error {
+	return nil
+}
+func (r *multiTenantRepository) ChangeAdministrator(_ context.Context, tenantID, subjectID string, administrator bool, entry AuditEntry) error {
+	r.adminTenant, r.adminSubject, r.adminValue = tenantID, subjectID, administrator
+	r.audits = append(r.audits, entry)
+	return nil
+}
+func (r *multiTenantRepository) ListTenants(context.Context) ([]TenantSummary, error) {
+	return r.tenants, nil
+}
+func (r *multiTenantRepository) ProvisionTenantInvitation(_ context.Context, tenantID, name string, subject Subject, _ ActivationToken, entry AuditEntry) error {
+	r.provisionTenant, r.provisionName, r.provisionSubject = tenantID, name, subject
+	r.audits = append(r.audits, entry)
 	return nil
 }
 
@@ -180,8 +203,65 @@ func TestReissueInvitationUsesAuthenticatedTenantAndPendingSubject(t *testing.T)
 	}
 }
 
-func TestAdminAndCredentialOperationsUseAuthenticatedTenant(t *testing.T) {
+func TestInviteCanCreatePendingTenantAdministrator(t *testing.T) {
 	repository := &multiTenantRepository{}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
+	result, err := service.Invite(context.Background(), actor, "Member.Admin@Example.COM", "成员管理员", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Subject.Administrator || result.Subject.Status != StatusPending || result.Subject.Username != "member.admin@example.com" || !repository.invitedSubject.Administrator {
+		t.Fatalf("invited subject = %#v, result = %#v", repository.invitedSubject, result.Subject)
+	}
+	if len(repository.audits) != 1 || repository.audits[0].Details["administrator"] != true {
+		t.Fatalf("audits = %#v", repository.audits)
+	}
+}
+
+func TestChangeAdministratorUsesAuthenticatedTenantAndRejectsSelfDemotion(t *testing.T) {
+	repository := &multiTenantRepository{}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
+	if err := service.ChangeAdministrator(context.Background(), actor, testSubject, true); err != nil {
+		t.Fatal(err)
+	}
+	if repository.adminTenant != secondTenant || repository.adminSubject != testSubject || !repository.adminValue || len(repository.audits) != 1 || repository.audits[0].Action != "iam_subject_administrator_changed" {
+		t.Fatalf("tenant=%q subject=%q value=%v audits=%#v", repository.adminTenant, repository.adminSubject, repository.adminValue, repository.audits)
+	}
+	if err := service.ChangeAdministrator(context.Background(), actor, actor.SubjectID, false); err == nil {
+		t.Fatal("current administrator demoted self")
+	}
+}
+
+func TestSystemAdministratorCreatesTenantWithoutBusinessAuthority(t *testing.T) {
+	repository := &multiTenantRepository{tenants: []TenantSummary{{ID: secondTenant, Name: "既有组织", Status: "active"}}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	ids := []string{secondTenant, testSubject, testActor, "55555555-5555-4555-8555-555555555555"}
+	service.newID = func() (string, error) { value := ids[0]; ids = ids[1:]; return value, nil }
+	actor := Principal{SubjectID: "66666666-6666-4666-8666-666666666666", TenantID: bootstrapTenant, DisplayName: "系统管理员", SystemAdministrator: true}
+	tenants, err := service.ListTenants(context.Background(), actor)
+	if err != nil || len(tenants) != 1 || tenants[0].ID != secondTenant {
+		t.Fatalf("tenants=%#v err=%v", tenants, err)
+	}
+	result, tenant, err := service.CreateTenant(context.Background(), actor, SystemTenantInput{Name: "新组织", AdminUsername: "Admin@Example.COM", AdminDisplayName: "首位管理员"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tenant.ID != secondTenant || repository.provisionTenant != secondTenant || repository.provisionName != "新组织" || !repository.provisionSubject.Administrator || repository.provisionSubject.SystemAdministrator || result.Subject.Username != "admin@example.com" || result.Token == "" {
+		t.Fatalf("tenant=%#v result=%#v repository=%#v", tenant, result, repository)
+	}
+	if _, err := service.IssueCredential(context.Background(), actor, "contract-ledger", Scope{}); err == nil {
+		t.Fatal("system administrator received a business capability")
+	}
+	organizationAdmin := Principal{SubjectID: testActor, TenantID: secondTenant, Administrator: true}
+	if _, _, err := service.CreateTenant(context.Background(), organizationAdmin, SystemTenantInput{Name: "越权组织", AdminUsername: "other@example.com"}); err == nil {
+		t.Fatal("organization administrator created a tenant")
+	}
+}
+
+func TestAdminAndCredentialOperationsUseAuthenticatedTenant(t *testing.T) {
+	repository := &multiTenantRepository{credential: Credential{Subject: Subject{ID: testSubject, TenantID: secondTenant, Status: StatusActive}}}
 	signer := &captureSigner{}
 	service := newMultiTenantService(t, repository, signer)
 	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true, AuthTime: service.now()}

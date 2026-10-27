@@ -1,5 +1,9 @@
 # OMSBizFoundry 开发计划
 
+2026-10-27 系统用户管理修订（BF-275）：登录页公开创建组织候选已撤销，账号页面统一使用“普通用户／管理员”。IAM 已显式建模系统管理员，系统管理页、全组织列表、原子创建组织＋首位管理员激活链接、现有 `admin` 迁移、组织至少一名管理员保护、Gateway 可信上下文及系统管理员业务 Capability 拒绝均完成本地实现；真实 PostgreSQL migration／HTTP 生命周期、Go、vet、JS 与静态页面隔离回归通过。下一步只发布 Identity、Gateway、Workbench 的兼容闭包并做公网系统管理员登录、组织读取与零业务写入验收；People 成员页面与职位／业务角色不随本项修改，用户—成员关联另走稳定引用。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)、[本地验证](./reports/oms-v1-system-user-tenant-management-validation-20261027.md)
+
+2026-10-26 BF-274 的公开注册候选未部署，并已由 BF-275 取代；兼容的管理员级别调整已按“用户”术语完成验证。
+
 2026-10-26 工资可用性修订（BF-273）：北京 2026 参考方案、Payroll 固定额／整元取整计算，以及工资页“设置比例”的查看、复制、调整和确认已随 D1 Suite `v0.1.0-test.oms-v1.37` 发布。发布后 schema 4、19/19 healthy、真实标准方案读取和公网资源核对通过；未在验证中复制租户方案或写业务数据。下一步由用户登录体验并按本公司实际工伤档位、公积金比例创建 Tenant 方案；全国地区政策平台和自动合规判定仍不进入本轮。[本地验证](./reports/oms-v1-beijing-contribution-scheme-validation-20261026.md)、[发布记录](./reports/oms-v1-beijing-contribution-scheme-publication-20261026.md)
 
 2026-10-26 账号开通修订（BF-272）：管理员直接录入手机号／邮箱、生成 24 小时一次性激活链接、本人设置密码的 IAM 流程，以及待激活重签、旧链接失效和手机号／邮箱登录已随 D1 Suite `v0.1.0-test.oms-v1.38` 发布。该版本修正首次发布中 Workbench／Identity 字段契约不一致的问题；schema 8、19/19 healthy、备份与公网入口核对通过，未创建测试账号。下一步由用户完成真实新增／激活旅程；自动发送、同账号多租户和公共注册仍不进入本轮。[规格](./specs/identity/oms-v1-account-onboarding-v1.md)、[发布记录](./reports/oms-v1-account-onboarding-publication-20261026.md)

@@ -1,0 +1,24 @@
+{{define "oms-system-admin-body"}}
+<div class="oms-system-admin" data-oms-system-admin data-identity-route-prefix="{{.IAMRoutePrefix}}" data-display-name="{{.DisplayName}}">
+  <header class="oms-system-admin__topbar">
+    <div><span class="oms-system-admin__eyebrow">平台管理</span><h1>系统管理</h1><p>创建组织、查看当前服务器组织信息，并交付首位管理员的激活链接。</p></div>
+    <div class="oms-system-admin__account"><span class="oms-system-admin__avatar">系</span><span><strong>{{if .DisplayName}}{{.DisplayName}}{{else}}系统管理员{{end}}</strong><small>系统管理员</small></span><form method="post" action="/gateway/logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">退出登录</button></form></div>
+  </header>
+  <main class="oms-system-admin__main">
+    <section class="oms-system-admin__hero">
+      <div><span>组织与账号</span><h2>组织管理</h2><p>系统管理员只管理平台组织，不参与任一组织的项目、财务、工资等业务。</p></div>
+      <button class="oms-system-admin__primary" type="button" data-system-create-tenant>＋ 创建组织</button>
+    </section>
+    <section class="oms-system-admin__summary" aria-label="组织概览">
+      <article><span>组织总数</span><strong data-system-tenant-count>—</strong><small>当前服务器</small></article>
+      <article><span>用户总数</span><strong data-system-user-count>—</strong><small>含待激活用户</small></article>
+      <article><span>管理员总数</span><strong data-system-admin-count>—</strong><small>组织内管理员</small></article>
+    </section>
+    <section class="oms-system-admin__panel">
+      <div class="oms-system-admin__panel-head"><div><h2>全部组织</h2><p data-system-notice>正在读取 IAM 组织列表…</p></div><button type="button" data-system-refresh>刷新</button></div>
+      <div class="oms-system-admin__table-wrap"><table><thead><tr><th>组织</th><th>组织 ID</th><th>用户数</th><th>管理员数</th><th>状态</th><th>创建时间</th><th></th></tr></thead><tbody data-system-tenant-body><tr><td colspan="7"><div class="oms-system-admin__empty">正在读取组织信息…</div></td></tr></tbody></table></div>
+    </section>
+  </main>
+  <div class="oms-system-admin__mask" data-system-dialog hidden><section class="oms-system-admin__dialog" role="dialog" aria-modal="true" aria-labelledby="system-dialog-title"><header><div><span data-system-dialog-kicker>系统管理</span><h2 id="system-dialog-title" data-system-dialog-title>创建组织</h2></div><button type="button" data-system-dialog-close aria-label="关闭">×</button></header><div class="oms-system-admin__dialog-body" data-system-dialog-body></div><footer><button type="button" data-system-dialog-close>取消</button><button class="oms-system-admin__primary" type="button" data-system-dialog-submit>保存</button></footer></section></div>
+</div>
+{{end}}

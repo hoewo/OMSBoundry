@@ -130,6 +130,7 @@ type pageData struct {
 	LegacyWorkspace            bool
 	DisplayName                string
 	Administrator              bool
+	SystemAdministrator        bool
 	CSRFToken                  string
 	ReturnTo                   string
 	Applications               []application
@@ -267,7 +268,7 @@ func NewWithProfiles(manifestPath string, profiles ReferenceOAProfiles) (*Server
 			}
 			return result, nil
 		},
-	}).Parse(pageHTML + businessViewsHTML + projectDetailPanelsHTML + referenceOAP0WorkspacesHTML + referenceOAInteractiveWorkspacesHTML + referenceOAInitiationWorkspaceHTML + referenceOARealProjectsHTML + referenceOMSDemoHTML + omsPhase1HTML)
+	}).Parse(pageHTML + businessViewsHTML + projectDetailPanelsHTML + referenceOAP0WorkspacesHTML + referenceOAInteractiveWorkspacesHTML + referenceOAInitiationWorkspaceHTML + referenceOARealProjectsHTML + referenceOMSDemoHTML + omsPhase1HTML + omsSystemAdminHTML)
 	if err != nil {
 		return nil, err
 	}
@@ -362,6 +363,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/assets/oms-phase1-identity.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1IdentityJS))
+	case "/assets/oms-system-admin.css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		_, _ = w.Write([]byte(omsSystemAdminCSS))
+	case "/assets/oms-system-admin.js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(omsSystemAdminJS))
 	case "/assets/oms-phase1-feedback.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1FeedbackJS))
@@ -424,10 +431,12 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	displayName := r.Header.Get("X-OMS-Display-Name")
 	administrator := r.Header.Get("X-OMS-Administrator") == "true"
+	systemAdministrator := r.Header.Get("X-OMS-System-Administrator") == "true"
 	if demoPreview {
 		subject = "00000000-0000-4000-8000-000000000001"
 		displayName = "OA 演示用户"
 		administrator = true
+		systemAdministrator = false
 		// Preview is deliberately detached from protected projections. It proves
 		// the reference UI and local interactions without turning demo data into
 		// an IAM bypass or making requests with a fabricated actor.
@@ -451,7 +460,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 			tenantID = sessionTenantID
 		}
 	}
-	data := pageData{SuiteID: s.suite.SuiteID, Authenticated: subject != "", DemoPreview: demoPreview, OMSPhase1: omsPhase1, LegacyWorkspace: legacyWorkspace, DisplayName: displayName, Administrator: administrator, CSRFToken: r.Header.Get("X-OMS-CSRF-Token"), ReturnTo: returnTo, Applications: apps, BusinessApplications: businessApps, SubjectID: subject, WorkSources: sources, MetricSources: metricSources, TenantID: tenantID, IAMRoutePrefix: iamRoute}
+	data := pageData{SuiteID: s.suite.SuiteID, Authenticated: subject != "", DemoPreview: demoPreview, OMSPhase1: omsPhase1, LegacyWorkspace: legacyWorkspace, DisplayName: displayName, Administrator: administrator, SystemAdministrator: systemAdministrator, CSRFToken: r.Header.Get("X-OMS-CSRF-Token"), ReturnTo: returnTo, Applications: apps, BusinessApplications: businessApps, SubjectID: subject, WorkSources: sources, MetricSources: metricSources, TenantID: tenantID, IAMRoutePrefix: iamRoute}
 	if !demoPreview {
 		data.ProductionPersonnelProfile = s.profiles.ProductionPersonnel
 		data.BonusProfile = s.profiles.Bonus
@@ -475,9 +484,9 @@ const pageHTML = `<!doctype html>
 /* Authenticated application shell mirrors the reference OA sidebar and project workspace. */
 .app-sidebar__nav-item--current{margin-bottom:5px;border-color:rgba(15,118,110,.2);background:#f2f8f5;color:#0f5d46}.app-sidebar__nav-item--current:hover{border-color:rgba(15,118,110,.34);background:#eaf4ef}.app-sidebar__nav-item--current .app-sidebar__nav-icon{background:#176b4f;color:#fff}.app-sidebar__brand{text-decoration:none}
 @keyframes fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}@media(max-width:1100px){.app-shell{grid-template-columns:92px minmax(0,1fr)}.sidebar-brand-copy,.nav-copy,.sidebar-group,.user-copy,.logout-button{display:none}.sidebar-top{justify-content:center}.nav-item{display:flex;justify-content:center;padding:9px}.app-sidebar{padding-inline:10px}.global-search{width:230px}.statistics-grid,.detail-grid{grid-template-columns:1fr}}@media(max-width:760px){.login-shell{transform:none}.login-title{font-size:34px}.login-card{padding:27px 22px}.app-shell{display:block;height:auto;min-height:100vh;overflow:visible}.app-sidebar{position:sticky;top:0;width:100%;height:auto;min-height:0;display:flex;flex-direction:row;align-items:center;overflow-x:auto;padding:8px 12px;border-right:0;border-bottom:1px solid #e2e8f0}.sidebar-top{border:0;padding:0}.nav-item{min-width:44px;min-height:44px;padding:5px}.sidebar-footer,.sidebar-group{display:none}.app-main{height:auto;overflow:visible}.topbar{padding:0 14px}.context span:nth-child(n+3),.top-user span{display:none}.global-search{width:170px}.app-content{padding:18px 14px 30px}.page-heading{align-items:flex-start}.page-heading form{display:none}.summary-strip{grid-template-columns:1fr}.summary-item{border-right:0;border-bottom:1px solid #e2e8f0}.summary-item:last-child{border-bottom:0}.journey-steps{grid-template-columns:1fr 1fr}.project-years{grid-template-columns:1fr}.year-rail{display:flex;overflow-x:auto}.project-row{grid-template-columns:1fr}.form-grid,.statistics-grid,.detail-grid{grid-template-columns:1fr}.field--full{grid-column:auto}.metric-items{grid-template-columns:1fr}}
-</style>{{if .OMSPhase1}}{{if .Authenticated}}<link rel="stylesheet" href="assets/oms-phase1.css?v=20261026.4">{{else}}<link rel="stylesheet" href="assets/oms-phase1-login.css?v=20261022.6">{{end}}{{else}}<link rel="stylesheet" href="assets/reference-oa-login.css"><link rel="stylesheet" href="assets/reference-oa-workspace.css"><link rel="stylesheet" href="assets/reference-oa-admin.css"><link rel="stylesheet" href="assets/reference-oa-business.css"><link rel="stylesheet" href="assets/reference-oa-detail.css"><link rel="stylesheet" href="assets/reference-oms-demo.css">{{end}}</head>
+</style>{{if .OMSPhase1}}{{if .Authenticated}}{{if .SystemAdministrator}}<link rel="stylesheet" href="assets/oms-system-admin.css?v=20261027.1">{{else}}<link rel="stylesheet" href="assets/oms-phase1.css?v=20261026.4">{{end}}{{else}}<link rel="stylesheet" href="assets/oms-phase1-login.css?v=20261022.6">{{end}}{{else}}<link rel="stylesheet" href="assets/reference-oa-login.css"><link rel="stylesheet" href="assets/reference-oa-workspace.css"><link rel="stylesheet" href="assets/reference-oa-admin.css"><link rel="stylesheet" href="assets/reference-oa-business.css"><link rel="stylesheet" href="assets/reference-oa-detail.css"><link rel="stylesheet" href="assets/reference-oms-demo.css">{{end}}</head>
 <body class="{{if and .Authenticated .OMSPhase1}}oms-v1-active{{end}}" data-demo-preview="{{.DemoPreview}}">{{if .Authenticated}}{{if .DemoPreview}}<div class="demo-preview-badge" role="status"><strong>OA 界面演示</strong><span>演示数据 · 不读取或写入真实业务</span></div>{{end}}{{if .OMSPhase1}}
-<div class="ant-layout app-shell"><section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content"><section class="oa-view is-active" data-view="oms-v1" data-page-hydrated="true">{{template "oms-phase1-body" .}}</section></div></main></section></div>
+{{if .SystemAdministrator}}{{template "oms-system-admin-body" .}}{{else}}<div class="ant-layout app-shell"><section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content"><section class="oa-view is-active" data-view="oms-v1" data-page-hydrated="true">{{template "oms-phase1-body" .}}</section></div></main></section></div>
 <script src="assets/oms-phase1-pagination.js?v=20261022.6" defer></script>
 <script src="assets/oms-phase1.js?v=20261026.1" defer></script>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
@@ -485,8 +494,9 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261026.1" defer></script>
 <script src="assets/oms-phase1-finance-owner.js?v=20261026.1" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261025.1" defer></script>
-<script src="assets/oms-phase1-identity.js?v=20261026.2" defer></script>
+<script src="assets/oms-phase1-identity.js?v=20261026.3" defer></script>
 <script src="assets/oms-phase1-feedback.js?v=20261026.2" defer></script>
+{{end}}{{if .SystemAdministrator}}<script src="assets/oms-system-admin.js?v=20261027.1" defer></script>{{end}}
 {{else}}<div class="ant-layout app-shell">
 <aside class="ant-layout-sider app-shell__sider"><div class="app-sidebar"><div class="app-sidebar__topbar"><a class="app-sidebar__brand" href="/" aria-label="返回 OMS 一期"><img src="assets/jinghong-logo.webp" alt="旧版项目管理系统 Logo" class="app-sidebar__brand-logo"><span class="app-sidebar__brand-copy"><span class="app-sidebar__brand-title">旧版项目管理</span><span class="app-sidebar__brand-subtitle">历史功能与原型对照</span></span></a><button class="app-sidebar__collapse-button" type="button" aria-label="收起侧边栏" data-sidebar-collapse>☰</button></div>
 <div class="app-sidebar__group-label">旧版功能</div><nav class="app-sidebar__nav" aria-label="旧版工作台导航">
@@ -497,7 +507,7 @@ const pageHTML = `<!doctype html>
 <button class="nav-item app-sidebar__nav-item" type="button" data-view-target="statistics-reference"><span class="nav-icon app-sidebar__nav-icon">▥</span><span class="nav-copy app-sidebar__nav-copy"><strong>项目统计信息</strong><span>项目台账与各类统计视图</span></span></button>
 <button class="nav-item app-sidebar__nav-item" type="button" data-view-target="oms-reference"><span class="nav-icon app-sidebar__nav-icon">O</span><span class="nav-copy app-sidebar__nav-copy"><strong>OMS 参考版</strong><span>资质单位经营总览 Demo</span></span></button>
 </nav>
-<div class="app-sidebar__footer"><div class="app-sidebar__utility"><div class="reference-feedback-entry"><button class="app-sidebar__quick-action feedback-entry" type="button" aria-label="产品反馈" aria-expanded="false" data-feedback-toggle><span class="app-sidebar__quick-action-icon">✉</span><span class="app-sidebar__quick-action-copy"><strong>产品反馈</strong><span>提交问题或查看处理进度</span></span></button><div class="reference-feedback-menu" role="menu" data-feedback-menu hidden><button type="button" role="menuitem" data-feedback-action="提交反馈"><span>↗</span><span>提交反馈</span></button><button type="button" role="menuitem" data-feedback-action="我的反馈"><span>◷</span><span>我的反馈</span></button></div></div><button class="app-sidebar__quick-action" type="button" data-guide-entry><span class="app-sidebar__quick-action-icon">?</span><span class="app-sidebar__quick-action-copy"><strong>使用指南</strong><span>查看完整 OA 操作路径</span></span></button></div><div class="app-sidebar__footer-label">当前账号</div><div class="app-sidebar__user-card"><span class="app-sidebar__user-trigger"><span class="user-avatar">{{if .Administrator}}管{{else}}用{{end}}</span><span class="user-copy"><strong>{{if .DisplayName}}{{.DisplayName}}{{else}}当前用户{{end}}</strong><span>{{if .Administrator}}系统管理员{{else}}项目成员{{end}}</span></span></span><span class="workbench-footer-actions"><button class="app-sidebar__settings-action" type="button" title="设置" aria-label="进入设置" data-view-target="settings">⚙</button><form method="post" action="/gateway/logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="app-sidebar__settings-action logout-button" type="submit" title="退出登录" aria-label="退出登录">↪</button></form></span></div></div></div></aside>
+<div class="app-sidebar__footer"><div class="app-sidebar__utility"><div class="reference-feedback-entry"><button class="app-sidebar__quick-action feedback-entry" type="button" aria-label="产品反馈" aria-expanded="false" data-feedback-toggle><span class="app-sidebar__quick-action-icon">✉</span><span class="app-sidebar__quick-action-copy"><strong>产品反馈</strong><span>提交问题或查看处理进度</span></span></button><div class="reference-feedback-menu" role="menu" data-feedback-menu hidden><button type="button" role="menuitem" data-feedback-action="提交反馈"><span>↗</span><span>提交反馈</span></button><button type="button" role="menuitem" data-feedback-action="我的反馈"><span>◷</span><span>我的反馈</span></button></div></div><button class="app-sidebar__quick-action" type="button" data-guide-entry><span class="app-sidebar__quick-action-icon">?</span><span class="app-sidebar__quick-action-copy"><strong>使用指南</strong><span>查看完整 OA 操作路径</span></span></button></div><div class="app-sidebar__footer-label">当前账号</div><div class="app-sidebar__user-card"><span class="app-sidebar__user-trigger"><span class="user-avatar">{{if .Administrator}}管{{else}}用{{end}}</span><span class="user-copy"><strong>{{if .DisplayName}}{{.DisplayName}}{{else}}当前用户{{end}}</strong><span>{{if .Administrator}}管理员{{else}}普通用户{{end}}</span></span></span><span class="workbench-footer-actions"><button class="app-sidebar__settings-action" type="button" title="设置" aria-label="进入设置" data-view-target="settings">⚙</button><form method="post" action="/gateway/logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="app-sidebar__settings-action logout-button" type="submit" title="退出登录" aria-label="退出登录">↪</button></form></span></div></div></div></aside>
 <section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content">
 <section class="oa-view project-list-page" data-view="initiation-reference"></section>
 
@@ -550,7 +560,7 @@ const pageHTML = `<!doctype html>
 {{end}}{{else}}<main class="login-page login-page--reference" aria-labelledby="login-brand-heading">
 <div class="login-page__backdrop" aria-hidden="true"></div>
 <div class="login-page__watermark" aria-hidden="true"><img src="assets/jinghong-logo.webp" alt="" class="login-page__watermark-mark login-page__watermark-mark--main"><img src="assets/jinghong-logo.webp" alt="" class="login-page__watermark-mark login-page__watermark-mark--upper-left"><img src="assets/jinghong-logo.webp" alt="" class="login-page__watermark-mark login-page__watermark-mark--left"><img src="assets/jinghong-logo.webp" alt="" class="login-page__watermark-mark login-page__watermark-mark--right"><img src="assets/jinghong-logo.webp" alt="" class="login-page__watermark-mark login-page__watermark-mark--lower-center"></div>
-<div class="login-page__shell"><section class="login-page__intro"><span class="login-page__eyebrow"><span class="login-page__eyebrow-text">{{if .OMSPhase1}}OMS Phase 1{{else}}Road Design OA{{end}}</span></span><h1 id="login-brand-heading" class="login-page__brand-title">北京京宏勘察设计有限公司</h1><p class="login-page__intro-note">{{if .OMSPhase1}}项目、票据与资金经营工作台{{else}}公路设计项目经营、生产、资料与统计协同平台{{end}}</p></section>
+<div class="login-page__shell"><section class="login-page__intro"><span class="login-page__eyebrow"><span class="login-page__eyebrow-text">{{if .OMSPhase1}}OMS Phase 1{{else}}Road Design OA{{end}}</span></span><h1 id="login-brand-heading" class="login-page__brand-title">{{if .OMSPhase1}}OMS 企业经营管理{{else}}北京京宏勘察设计有限公司{{end}}</h1><p class="login-page__intro-note">{{if .OMSPhase1}}项目、票据与资金经营工作台{{else}}公路设计项目经营、生产、资料与统计协同平台{{end}}</p></section>
 <section class="login-page__panel" {{if .OMSPhase1}}data-oms-login{{else}}data-reference-login{{end}} data-iam-route-prefix="{{.IAMRoutePrefix}}"><div class="login-page__card">
 <div data-login-panel="sms"{{if .OMSPhase1}} hidden{{end}}><div class="login-page__card-header"><span class="login-page__card-kicker">验证码登录</span><h2>{{if .OMSPhase1}}登录 OMS 一期{{else}}进入旧版工作台{{end}}</h2><p class="login-page__card-copy">{{if .OMSPhase1}}登录后直接进入 OMS 经营管理工作面。{{else}}请输入组织内手机号获取验证码，登录后进入旧版项目列表。{{end}}</p></div>
 <form class="login-page__form ant-form ant-form-vertical" novalidate><div class="ant-form-item"><div class="ant-form-item-label"><label for="phone">手机号</label></div><div class="ant-form-item-control"><input class="ant-input ant-input-lg" id="phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="请输入手机号" maxlength="11" data-sms-phone autofocus></div></div><div class="ant-form-item"><button class="ant-btn ant-btn-primary ant-btn-lg ant-btn-block" type="button" data-sms-send disabled><span>获取验证码</span></button></div></form>
@@ -558,7 +568,7 @@ const pageHTML = `<!doctype html>
 <div class="login-page__support-copy"><span>如需账号，请联系系统管理员。</span><span>系统不提供公开注册功能。</span></div><div class="login-page__environment-access"><button class="login-page__mode-switch" type="button" data-login-mode="iam" aria-pressed="false">当前验证环境：使用 IAM 账号密码验证</button></div></div>
 <div data-login-panel="iam"{{if .OMSPhase1}}{{else}} hidden{{end}}><div class="login-page__card-header"><span class="login-page__card-kicker">账号密码登录</span><h2>{{if .OMSPhase1}}登录 OMS 一期{{else}}进入旧版工作台{{end}}</h2><p class="login-page__card-copy">请使用管理员录入的手机号、邮箱或兼容用户名与密码。</p></div>
 <form class="login-page__form ant-form ant-form-vertical" method="post" action="/gateway/login"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="return_to" value="{{.ReturnTo}}"><div class="ant-form-item"><div class="ant-form-item-label"><label for="username">手机号或邮箱</label></div><div class="ant-form-item-control"><input class="ant-input ant-input-lg" id="username" name="username" autocomplete="username" placeholder="请输入手机号或邮箱" required autofocus></div></div><div class="ant-form-item"><div class="ant-form-item-label"><label for="password">密码</label></div><div class="ant-form-item-control"><input class="ant-input ant-input-lg" id="password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required></div></div><div class="ant-form-item"><button class="ant-btn ant-btn-primary ant-btn-lg ant-btn-block" type="submit"><span>登录</span></button></div></form>
-<div class="login-page__environment-note" role="alert" aria-live="polite" tabindex="-1" data-login-error hidden></div><div class="login-page__support-copy"><span>账号、租户和权限由 IAM 处理。</span><span>系统不提供公开注册功能。</span></div><div class="login-page__environment-access"><button class="login-page__mode-switch" type="button" data-login-mode="sms" aria-pressed="false">验证码登录（暂未开通）</button></div></div>
+<div class="login-page__environment-note" role="alert" aria-live="polite" tabindex="-1" data-login-error hidden></div><div class="login-page__support-copy"><span>账号、组织和权限由 IAM 处理。</span><span>创建组织由系统管理员处理。</span></div><div class="login-page__environment-access"><button class="login-page__mode-switch" type="button" data-login-mode="sms" aria-pressed="false">验证码登录（暂未开通）</button></div></div>
 </div></section></div>{{if .OMSPhase1}}<script src="assets/oms-phase1-login.js?v=20261026.2" defer></script>{{else}}<script src="assets/reference-oa-initiation-runtime.js" defer></script><script src="assets/reference-oa-login.js" defer></script>{{end}}</main>{{end}}</body></html>`
 
 const workbenchScript = `(()=>{for(const template of document.querySelectorAll('template[data-page-template]')){const view=document.querySelector('[data-view="'+template.dataset.pageTemplate+'"]');if(view&&!view.dataset.pageHydrated){view.replaceChildren(template.content.cloneNode(true));view.dataset.pageHydrated='true'}}const demoPreview=document.body.dataset.demoPreview==='true';
