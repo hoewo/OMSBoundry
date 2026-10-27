@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 管理员默认全业务权限画像（2026-10-28，本地与公网发布门禁通过）
+
+BF-279 必须验证：IAM 实际装载的每个 Audience／Action 都被精确授予同 Tenant 启用管理员，重复启动／登录不重复有效 Grant；系统管理员、普通用户、其他 Tenant 零增量。提升启用用户后立即补齐画像并使旧 Session 失效；降级原子撤销 `administrator_profile` 来源 Grant 且保留 `manual` Grant。Capability Manifest 新增动作后重启可补齐缺项。管理员可签发 Party 新增和 Project 创建凭证，但目标应用的跨 Tenant、业务状态、revision 与历史不变量继续拒绝。
+
+本地 Identity／Workbench、真实 PostgreSQL 18 migration 10 与生命周期门禁已通过。公网 D1 又确认管理员 176 条当前 Catalog 精确 Grant；Party、Contract、Money、Billing、Evidence 已升级到当前多租户 Credential 校验实现，Evidence migration 3／4 与 Money migration 25／26 已补齐。联合备份、19 个正式容器、0 unhealthy、0 隔离残留、独立 D1 `check` exit 0 和公网入口 HTTP 200 通过。发布验证没有代替用户创建业务事实；管理员页面最终动作由用户重新登录后复验。[验证及发布记录](./reports/oms-administrator-default-access-profile-validation-20261028.md)
+
 ## 账号操作列排版（2026-10-27，本地与公网发布门禁通过）
 
 BF-278 必须验证：账号表最后一列显示“操作”；列宽至少 190px 且右对齐；动作容器和按钮文字均不换行；普通用户一行可同时显示“重置密码／设为管理员／停用”，管理员行保持“重置密码”；窄视口不通过压缩文字解决空间问题，而由既有表格滚动容器承接。静态回归必须断言账号表专用类、表头和三条关键布局规则。

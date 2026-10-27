@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -73,6 +74,9 @@ func (p *IAMProvider) ProviderName() string { return "iam" }
 func (p *IAMProvider) Authenticate(r *http.Request) (Principal, error) {
 	claims, err := p.verify(bearerToken(r))
 	if err != nil {
+		// Keep the credential itself out of logs while retaining the exact
+		// contract rejection reason needed to diagnose IAM/Owner drift.
+		slog.Warn("party-directory capability credential rejected", "reason", err.Error())
 		return Principal{}, ErrUnauthenticated
 	}
 	actions := map[string]bool{}
