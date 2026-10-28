@@ -4,7 +4,7 @@
 
 BF-279 必须验证：IAM 实际装载的每个 Audience／Action 都被精确授予同 Tenant 启用管理员，重复启动／登录不重复有效 Grant；系统管理员、普通用户、其他 Tenant 零增量。提升启用用户后立即补齐画像并使旧 Session 失效；降级原子撤销 `administrator_profile` 来源 Grant 且保留 `manual` Grant。Capability Manifest 新增动作后重启可补齐缺项。管理员可签发 Party 新增和 Project 创建凭证，但目标应用的跨 Tenant、业务状态、revision 与历史不变量继续拒绝。
 
-本地 Identity／Workbench、真实 PostgreSQL 18 migration 10 与生命周期门禁已通过。公网 D1 又确认管理员 176 条当前 Catalog 精确 Grant；Party、Contract、Money、Billing、Evidence 已升级到当前多租户 Credential 校验实现，Evidence migration 3／4 与 Money migration 25／26 已补齐。联合备份、19 个正式容器、0 unhealthy、0 隔离残留、独立 D1 `check` exit 0 和公网入口 HTTP 200 通过。发布验证没有代替用户创建业务事实；管理员页面最终动作由用户重新登录后复验。[验证及发布记录](./reports/oms-administrator-default-access-profile-validation-20261028.md)
+本地 Identity／Workbench、真实 PostgreSQL 18 migration 10 与生命周期门禁已通过。公网 D1 又确认管理员 176 条当前 Catalog 精确 Grant；Party、Contract、Money、Billing、Evidence、Project 已升级到当前多租户 Credential 校验实现，Evidence migration 3／4 与 Money migration 25／26 已补齐。联合备份、完整 D1 `v48` bundle、19 个正式容器、0 unhealthy、独立 D1 `check` exit 0 和公网入口通过；真实管理员浏览器“新增甲方”不再显示项目候选维护缺权且保存动作可用。复验没有提交测试业务事实。[验证及发布记录](./reports/oms-administrator-default-access-profile-validation-20261028.md)
 
 ## 账号操作列排版（2026-10-27，本地与公网发布门禁通过）
 
