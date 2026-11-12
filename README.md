@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前工资批量输入标签（BF-335，待发布）：每位成员的两个金额输入框分别显示“当月绩效（元）”和“个人所得税（元）”，无障碍名称同时包含成员姓名与字段名；移动端保持成员信息在上、两个已标注金额字段在下。该变更不改变 Payroll 预览、确认写入或工资计算。本地专项 9/9、Workbench Node 308/308、Go test／vet、P9／D1 组合门禁与 diff check 已通过。[本地验证](./docs/reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+
 当前财务申请审计删除与账号菜单收起（BF-333／BF-334，已发布）：`oatest` v1.101 的报销和付款申请共用独立删除能力、expected revision 与必填原因；草稿、已撤回和未发生任何资金／未知结果的待支付申请可软删除，默认列表隐藏并可在“已删除”筛选审计回看。申请历史、Evidence 和发票指纹保留，但已删除申请释放发票占用；已付款或结果未知继续禁止删除。账号行操作菜单支持点外部、切换其他菜单和 Escape 收起。备份、D1 check、21/21 healthy、公网资源及真实 Chrome 只读验收通过，未执行线上删除。[发布记录](./docs/reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 当前已确认发票识别记录删除（BF-332，已发布）：`oatest` v1.100 的待确认与已确认识别记录都可填写必填原因后追加为 `discarded`，默认列表隐藏但确认记录、Evidence、revision、操作人、凭证、时间和审计全部保留；删除识别记录不会级联撤销已生成的报销、付款申请或正式票据。联合备份、D1 check、21/21 healthy、公网静态资源和真实 Chrome 空白原因弹窗验证通过，未删除线上数据。[发布记录](./docs/reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)

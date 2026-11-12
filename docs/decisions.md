@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-12 BF-335（已接受／待发布）：工资批量录入中每位成员的 `performance_minor` 与 `tax_minor` 必须分别具有可见的“当月绩效（元）”和“个人所得税（元）”标签；可访问名称还必须包含成员姓名，避免重复字段无法区分。外层成员行不得用一个 `<label>` 包住两个输入控件。该决定只改变 Workbench 呈现，不改变 Payroll Owner 的 preview／commit 契约、整数分计算、revision 门禁或事实所有权。[本地验证](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+
 2026-11-12 BF-333（已接受／已发布；扩展 BF-324 的本人未提交草稿删除）：报销与付款申请都允许获得独立 `internal-finance-requests.request.delete` Capability 的授权人员执行租户内审计软删除。命令必须携带 expected revision、独立 Command ID、确认值和非空原因；只允许 `draft`、`withdrawn`，以及未产生实际付款、核销、超额或未知付款结果的 `payable`。删除设置 `deleted_at` 并追加不可变保留事件，默认列表隐藏、授权审计筛选可见；申请、全部 revision、Evidence 精确引用、发票指纹、Actor、Credential、时间与原因均保留。为解除错误记录的业务占用，重复发票判断只把未删除申请视为有效占用者。不得删除已实际付款或结果未知的申请，不得级联删除 Money、Evidence、Billing 或其他 Owner 事实。v1.101 已发布，线上未执行删除。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 2026-11-12 BF-334（已接受／已发布）：账号目录的行操作 `<details>` 菜单是瞬时界面状态；打开一个菜单应收起其他行菜单，点击菜单外部或按 Escape 必须收起当前菜单，点击菜单内部和摘要按钮仍保留原生切换语义。该修复不改变 IAM 命令、账号、Tenant、成员关联、权限或审计。v1.101 真实 Chrome 点击菜单外搜索框后已确认收起。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)

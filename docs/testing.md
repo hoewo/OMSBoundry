@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 工资批量输入可见标签（2026-11-12，本地通过／待发布）
+
+BF-335 必须验证每位成员的绩效和个税输入分别由可见 label 关联，文本明确包含字段含义与“元”单位；可访问名称必须包含成员姓名，外层不得一个 label 包含两个输入。桌面双列和窄屏成员优先布局都必须存在；字段名、preview／commit 请求和 Payroll 计算不得改变。
+
+已实际运行变更 JavaScript 语法检查、Payroll 专项 9/9、Workbench Node 308/308、Workbench Go test／vet、P9 preflight、D1 P9 composition 和 `git diff --check`，均通过。发布包、目标机、公网资源与真实浏览器尚未运行，不登记通过。[本地报告](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+
 ## 财务申请审计删除与账号菜单收起（2026-11-12，已发布）
 
 BF-333 必须分别验证报销与付款申请可在授权、expected revision、确认值和非空原因齐备时软删除；`draft`、`withdrawn` 和零付款且无未知投递的 `payable` 可删除，已付、已核销、超额、未知结果、旧 revision、重复或异义命令必须失败关闭。默认列表隐藏，独立能力才能读取“已删除”；删除后申请、revision、Evidence 引用、发票指纹和删除 Actor／Credential／时间／原因仍可审计，但同一发票可由新的纠正申请重新提交。不得级联写入 Money、Evidence、Billing。BF-334 必须验证账号行菜单同一时刻最多展开一个，点击外部和 Escape 收起，菜单内点击不被外部处理器误关。

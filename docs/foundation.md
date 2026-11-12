@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-12 工资批量输入可理解性基线（BF-335，待发布）：任何并排金额输入都必须在输入位置直接说明字段含义和单位；工资批量录入固定显示“当月绩效（元）”与“个人所得税（元）”，不能仅依靠输入顺序、默认值或预览中的内部字段名解释。成员姓名与字段名共同构成无障碍名称。[本地验证](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+
 2026-11-12 财务申请删除基线（BF-333，已发布）：报销与付款申请的删除资格由 Internal Finance Requests 依据独立 Capability、当前 revision、生命周期和付款事实最终判断，不由页面按钮或“管理员”角色名推断。删除是带原因、Actor、Credential 和时间的软删除；默认隐藏不等于物理删除。已删除申请保留完整历史和发票指纹审计，但不再阻止同一发票用于纠正后的新申请；一旦存在实际付款、核销、超额或未知付款结果，删除失败关闭且只能沿业务调整／冲销路径处理。v1.101 已通过目标机与公网只读验收，未执行线上删除。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 2026-11-12 账号行操作菜单基线（BF-334，已发布）：账号目录每次最多展开一个行操作菜单；点外部或按 Escape 收起。该瞬时状态不持久化，也不影响 IAM／People 事实和权限。真实 Chrome 已验证点击搜索框收起。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)

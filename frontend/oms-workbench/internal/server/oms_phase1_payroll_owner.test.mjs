@@ -6,6 +6,7 @@ const html=readFileSync(new URL('./oms_phase1.html',import.meta.url),'utf8');
 const shell=readFileSync(new URL('./oms_phase1.js',import.meta.url),'utf8');
 const internal=readFileSync(new URL('./oms_phase1_internal.js',import.meta.url),'utf8');
 const payroll=readFileSync(new URL('./oms_phase1_payroll_owner.js',import.meta.url),'utf8');
+const styles=readFileSync(new URL('./oms_phase1.css',import.meta.url),'utf8');
 const server=readFileSync(new URL('./server.go',import.meta.url),'utf8');
 
 test('formal payroll execution replaces browser persistence only when both owners are assembled',()=>{
@@ -13,7 +14,17 @@ test('formal payroll execution replaces browser persistence only when both owner
   assert.match(internal,/ownerPayroll\?\{payroll_periods:\[\]\}/);
   assert.match(internal,/renderMembers\(\);if\(!ownerPayroll\)renderPayroll\(\);if\(!ownerFinance\)renderFinance\(\)/);
   assert.ok(payroll.includes("if(!root||!model||!ownerAPI?.app?.('people-groups')||!ownerAPI?.app?.('payroll'))return"));
-  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261105\.1/);
+  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261112\.2/);
+});
+
+test('payroll batch import visibly labels performance and individual income tax inputs',()=>{
+  assert.match(payroll,/class="oms-v1__batch-payroll-row"/);
+  assert.match(payroll,/<label><span>当月绩效（元）<\/span><input name="performance_/);
+  assert.match(payroll,/<label><span>个人所得税（元）<\/span><input name="tax_/);
+  assert.match(payroll,/aria-label="'\+safe\(item\.line\.person_display_name\)\+'当月绩效（元）"/);
+  assert.match(payroll,/aria-label="'\+safe\(item\.line\.person_display_name\)\+'个人所得税（元）"/);
+  assert.match(styles,/\.oms-v1__batch-inputs label\{display:grid!important/);
+  assert.match(styles,/@media\(max-width:760px\).*\.oms-v1__batch-payroll-row\{grid-template-columns:1fr\}/);
 });
 
 test('payroll hides voided records by default while keeping history reachable',()=>{

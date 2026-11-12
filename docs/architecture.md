@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-12 工资批量输入标签边界（BF-335，待发布）：可见 label、成员字段可访问名称和响应式排列完全属于 Unified Workbench；Payroll 继续独占 `performance_minor`、`tax_minor`、`tax_snapshot`、`net_payable_minor` 计算与 preview／commit。该 UI 修复不增加字段、不在浏览器计算税额、不改变 API、schema、Capability 或跨应用写入。[本地验证](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+
 2026-11-12 财务申请审计删除边界（BF-333，已发布）：Internal Finance Requests 独占报销／付款申请的删除资格、当前投影和不可变保留事件；IAM 只签发独立 `request.delete` Capability，Gateway 只传递已验证能力，Workbench 不代替 Owner 判定状态。软删除保留申请、revision、Evidence 引用和发票指纹，重复判断通过关联申请 `deleted_at` 只排除已删除占用。Money 实际资金、核销和未知投递状态仍是硬门禁，删除命令不跨库、不物理删除文件、不撤销 Billing 或其他业务事实。v1.101 已部署并只读复验。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 2026-11-12 账号菜单交互边界（BF-334，已发布）：账号行操作菜单的外部点击与 Escape 关闭逻辑完全位于 Unified Workbench；Identity Access 和 People & Groups 的 API、schema、Capability 和事实所有权不变。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
