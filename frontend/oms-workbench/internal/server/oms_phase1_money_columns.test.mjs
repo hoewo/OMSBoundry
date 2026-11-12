@@ -9,7 +9,7 @@ const styles = readFileSync(new URL('./oms_phase1.css', import.meta.url), 'utf8'
 
 test('all ledger money headers use the dedicated monetary column class', () => {
   const moneyHeaders = html.match(/<th class="is-number is-money">/g) || [];
-  assert.equal(moneyHeaders.length, 18);
+  assert.equal(moneyHeaders.length, 19);
   assert.match(html, /<th class="is-number"><button[^>]+data-oms-v1-sort-key="receivable"/);
   assert.match(html, /<th class="is-number"><button[^>]+data-oms-v1-sort-key="payable"/);
 });

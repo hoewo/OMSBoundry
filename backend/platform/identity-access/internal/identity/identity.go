@@ -43,6 +43,7 @@ var (
 
 type Subject struct {
 	ID                  string    `json:"id"`
+	AccountID           string    `json:"-"`
 	TenantID            string    `json:"tenant_id"`
 	Username            string    `json:"username"`
 	DisplayName         string    `json:"display_name"`
@@ -65,6 +66,7 @@ type Credential struct {
 
 type Principal struct {
 	SubjectID           string    `json:"subject_id"`
+	AccountID           string    `json:"-"`
 	TenantID            string    `json:"tenant_id"`
 	Username            string    `json:"username"`
 	DisplayName         string    `json:"display_name"`
@@ -104,6 +106,17 @@ type TenantSummary struct {
 	CreatedAt          time.Time `json:"created_at"`
 }
 
+type OrganizationMembership struct {
+	TenantID      string    `json:"tenant_id"`
+	TenantName    string    `json:"tenant_name"`
+	SubjectID     string    `json:"subject_id"`
+	DisplayName   string    `json:"display_name"`
+	Status        Status    `json:"status"`
+	Administrator bool      `json:"administrator"`
+	Current       bool      `json:"current"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type SystemTenantInput struct {
 	Name             string
 	AdminUsername    string
@@ -118,6 +131,18 @@ type ActivationToken struct {
 	ExpiresAt time.Time
 	CreatedBy string
 	CreatedAt time.Time
+}
+
+type RegistrationInvitation struct {
+	TenantID      string    `json:"tenant_id"`
+	TenantName    string    `json:"tenant_name"`
+	Administrator bool      `json:"administrator"`
+	ExpiresAt     time.Time `json:"expires_at"`
+}
+
+type RegistrationResult struct {
+	Action  string  `json:"action"`
+	Subject Subject `json:"subject"`
 }
 
 type Grant struct {
@@ -135,26 +160,34 @@ type Repository interface {
 	Bootstrap(context.Context, string, string, Subject, string, AuditEntry) (bool, error)
 	TenantExists(context.Context, string) (bool, error)
 	FindSubject(context.Context, string, string) (Subject, bool, error)
+	FindAccountSubject(context.Context, string, string) (Subject, bool, error)
 	FindCredential(context.Context, string) (Credential, bool, error)
 	RecordLoginFailure(context.Context, string, time.Time, int, time.Duration) error
 	ResetLoginFailures(context.Context, string, time.Time) error
 	CreateSession(context.Context, []byte, string, int64, time.Time, time.Time) error
+	RotateSession(context.Context, []byte, []byte, string, int64, time.Time, time.Time) (Principal, error)
 	ResolveSession(context.Context, []byte, time.Time) (Principal, bool, error)
 	RevokeSession(context.Context, []byte, time.Time) error
 	Invite(context.Context, Subject, ActivationToken, AuditEntry) error
+	JoinAccount(context.Context, Subject, AuditEntry) error
 	Activate(context.Context, []byte, TokenKind, string, time.Time, AuditEntry) (Subject, error)
+	PreviewRegistrationInvitation(context.Context, []byte, time.Time) (RegistrationInvitation, error)
+	CompleteRegistrationInvitation(context.Context, []byte, string, string, string, *Credential, time.Time, AuditEntry) (RegistrationResult, error)
 	CreateActivationToken(context.Context, string, ActivationToken, AuditEntry) error
 	Grant(context.Context, string, Grant, AuditEntry) error
 	RevokeGrant(context.Context, string, Grant, AuditEntry) error
 	ListGrants(context.Context, string, string, string) ([]Grant, error)
 	RecordAudit(context.Context, AuditEntry) error
 	ListSubjects(context.Context, string) ([]Subject, error)
+	UpdateSubjectDisplayName(context.Context, string, string, int64, string, AuditEntry) error
 	ChangeStatus(context.Context, string, string, Status, AuditEntry) error
 	ChangeAdministrator(context.Context, string, string, bool, string, AuditEntry) error
 	RevokeAdministratorProfile(context.Context, string, string, string, AuditEntry) (int64, error)
 	UpdateTenantName(context.Context, string, string, AuditEntry) error
 	ListTenants(context.Context) ([]TenantSummary, error)
 	ProvisionTenantInvitation(context.Context, string, string, Subject, ActivationToken, AuditEntry) error
+	ProvisionTenantMembership(context.Context, string, string, Subject, AuditEntry) error
+	ListAccountMemberships(context.Context, string) ([]OrganizationMembership, error)
 }
 
 type Signer interface {
@@ -230,9 +263,10 @@ type LoginResult struct {
 }
 
 type TokenResult struct {
+	Action    string    `json:"action,omitempty"`
 	Subject   Subject   `json:"subject"`
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token     string    `json:"token,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
 }
 
 type TenantAdministratorResult struct {
@@ -533,6 +567,67 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	return s.repository.RevokeSession(ctx, hash, s.now())
 }
 
+func (s *Service) ListOrganizations(ctx context.Context, actor Principal) ([]OrganizationMembership, error) {
+	if !uuidPattern.MatchString(actor.SubjectID) || actor.SystemAdministrator {
+		return nil, &AuthorizationError{}
+	}
+	return s.repository.ListAccountMemberships(ctx, actor.SubjectID)
+}
+
+func (s *Service) SwitchOrganization(ctx context.Context, token string, actor Principal, tenantID string) (LoginResult, error) {
+	if !uuidPattern.MatchString(actor.SubjectID) || actor.SystemAdministrator {
+		return LoginResult{}, &AuthorizationError{}
+	}
+	tenantID = strings.ToLower(strings.TrimSpace(tenantID))
+	if !uuidPattern.MatchString(tenantID) {
+		return LoginResult{}, &ValidationError{Field: "tenant_id", Message: "组织 ID 无效"}
+	}
+	if tenantID == actor.TenantID {
+		return LoginResult{}, &ConflictError{Message: "已经在当前组织"}
+	}
+	memberships, err := s.repository.ListAccountMemberships(ctx, actor.SubjectID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	var target OrganizationMembership
+	for _, membership := range memberships {
+		if membership.TenantID == tenantID {
+			target = membership
+			break
+		}
+	}
+	if target.SubjectID == "" || target.Status != StatusActive {
+		return LoginResult{}, &AuthorizationError{}
+	}
+	subject, found, err := s.repository.FindSubject(ctx, tenantID, target.SubjectID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	if !found || subject.AccountID != actor.AccountID || subject.Status != StatusActive {
+		return LoginResult{}, &AuthorizationError{}
+	}
+	if subject.Administrator {
+		if err := s.ensureAdministratorProfile(ctx, subject); err != nil {
+			return LoginResult{}, fmt.Errorf("reconcile administrator access: %w", err)
+		}
+	}
+	oldHash, valid := tokenHash(token)
+	if !valid {
+		return LoginResult{}, &AuthenticationError{}
+	}
+	rawToken, newHash, err := randomToken()
+	if err != nil {
+		return LoginResult{}, err
+	}
+	now := s.now()
+	expiresAt := now.Add(s.sessionTTL)
+	principal, err := s.repository.RotateSession(ctx, oldHash, newHash, subject.ID, subject.SessionGeneration, now, expiresAt)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	return LoginResult{Principal: principal, Token: rawToken, ExpiresAt: expiresAt}, nil
+}
+
 func (s *Service) Invite(ctx context.Context, actor Principal, username, displayName string, administrator bool) (TokenResult, error) {
 	if err := requireAdministrator(actor); err != nil {
 		return TokenResult{}, err
@@ -546,6 +641,42 @@ func (s *Service) Invite(ctx context.Context, actor Principal, username, display
 		return TokenResult{}, err
 	}
 	now := s.now()
+	existing, found, err := s.repository.FindCredential(ctx, normalized)
+	if err != nil {
+		return TokenResult{}, err
+	}
+	if found {
+		if existing.SystemAdministrator {
+			return TokenResult{}, &ConflictError{Message: "系统管理员账号不能加入业务组织"}
+		}
+		if existing.Status != StatusActive {
+			return TokenResult{}, &ConflictError{Message: "该登录账号尚未激活或当前不可用"}
+		}
+		if _, joined, err := s.repository.FindAccountSubject(ctx, actor.TenantID, existing.AccountID); err != nil {
+			return TokenResult{}, err
+		} else if joined {
+			return TokenResult{}, &ConflictError{Message: "该账号已经加入当前组织"}
+		}
+		subjectID, err := s.newID()
+		if err != nil {
+			return TokenResult{}, err
+		}
+		auditID, err := s.newID()
+		if err != nil {
+			return TokenResult{}, err
+		}
+		subject := Subject{ID: subjectID, AccountID: existing.AccountID, TenantID: actor.TenantID, Username: normalized, DisplayName: displayName, Status: StatusActive, Administrator: administrator, Revision: 1, SessionGeneration: 1, PasswordChangedAt: existing.PasswordChangedAt, CreatedAt: now, UpdatedAt: now}
+		audit := s.audit(actor.TenantID, auditID, "iam_account_joined_tenant", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": normalized, "administrator": administrator, "account_id": existing.AccountID})
+		if err := s.repository.JoinAccount(ctx, subject, audit); err != nil {
+			return TokenResult{}, err
+		}
+		if administrator {
+			if err := s.ensureAdministratorProfile(ctx, subject); err != nil {
+				return TokenResult{}, err
+			}
+		}
+		return TokenResult{Action: "joined", Subject: subject}, nil
+	}
 	subjectID, err := s.newID()
 	if err != nil {
 		return TokenResult{}, err
@@ -570,6 +701,96 @@ func (s *Service) Invite(ctx context.Context, actor Principal, username, display
 		return TokenResult{}, err
 	}
 	return TokenResult{Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
+}
+
+// CreateRegistrationInvitation creates a tenant-scoped, single-use invitation
+// without collecting another person's name or login identifier.  The pending
+// subject uses an internal identifier that can never be used for login and is
+// replaced atomically when the recipient completes registration.
+func (s *Service) CreateRegistrationInvitation(ctx context.Context, actor Principal, administrator bool) (TokenResult, error) {
+	if err := requireAdministrator(actor); err != nil {
+		return TokenResult{}, err
+	}
+	now := s.now()
+	subjectID, err := s.newID()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	tokenID, err := s.newID()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	auditID, err := s.newID()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	raw, hash, err := randomToken()
+	if err != nil {
+		return TokenResult{}, err
+	}
+	placeholder := "invite-" + strings.ReplaceAll(subjectID, "-", "")
+	subject := Subject{ID: subjectID, TenantID: actor.TenantID, Username: placeholder, DisplayName: "待受邀人注册", Status: StatusPending, Administrator: administrator, Revision: 1, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
+	expiresAt := now.Add(24 * time.Hour)
+	activation := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
+	entry := s.audit(actor.TenantID, auditID, "iam_registration_invitation_created", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"administrator": administrator})
+	if err := s.repository.Invite(ctx, subject, activation, entry); err != nil {
+		return TokenResult{}, err
+	}
+	return TokenResult{Action: "registration_invited", Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
+}
+
+func (s *Service) PreviewRegistrationInvitation(ctx context.Context, rawToken string) (RegistrationInvitation, error) {
+	hash, valid := tokenHash(rawToken)
+	if !valid {
+		return RegistrationInvitation{}, &AuthenticationError{}
+	}
+	return s.repository.PreviewRegistrationInvitation(ctx, hash, s.now())
+}
+
+func (s *Service) CompleteRegistrationInvitation(ctx context.Context, rawToken, username, displayName, password string) (RegistrationResult, error) {
+	hash, valid := tokenHash(rawToken)
+	if !valid {
+		return RegistrationResult{}, &AuthenticationError{}
+	}
+	normalized, err := normalizeUsername(username)
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	if !phonePattern.MatchString(normalized) && !emailPattern.MatchString(normalized) {
+		return RegistrationResult{}, &ValidationError{Field: "login_identifier", Message: "注册账号必须选择有效手机号或邮箱"}
+	}
+	displayName, err = normalizeDisplayName(displayName, normalized)
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	existing, found, err := s.repository.FindCredential(ctx, normalized)
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	var passwordHash string
+	var existingAccount *Credential
+	if found {
+		if existing.SystemAdministrator {
+			return RegistrationResult{}, &ConflictError{Message: "系统管理员账号不能加入业务组织"}
+		}
+		if existing.Status != StatusActive || bcrypt.CompareHashAndPassword([]byte(existing.PasswordHash), []byte(password)) != nil {
+			return RegistrationResult{}, &AuthenticationError{}
+		}
+		passwordHash = existing.PasswordHash
+		existingAccount = &existing
+	} else {
+		passwordHash, err = s.hashPassword(password)
+		if err != nil {
+			return RegistrationResult{}, err
+		}
+	}
+	auditID, err := s.newID()
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	now := s.now()
+	entry := s.audit("", auditID, "iam_registration_invitation_completed", "iam_subject", "pending-registration-subject", AuditActor{Kind: "activation_token", ID: auditID, DisplayName: "一次性注册邀请"}, now, map[string]any{"login_identifier": normalized, "existing_account": existingAccount != nil})
+	return s.repository.CompleteRegistrationInvitation(ctx, hash, normalized, displayName, passwordHash, existingAccount, now, entry)
 }
 
 // ReissueInvitation replaces the one-time activation credential for an
@@ -609,11 +830,19 @@ func (s *Service) ReissueInvitation(ctx context.Context, actor Principal, subjec
 	}
 	expiresAt := now.Add(24 * time.Hour)
 	token := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: expiresAt, CreatedBy: actor.SubjectID, CreatedAt: now}
-	entry := s.audit(actor.TenantID, auditID, "iam_invitation_reissued", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": subject.Username})
+	action := "iam_invitation_reissued"
+	details := map[string]any{"login_identifier": subject.Username}
+	resultAction := ""
+	if isRegistrationPlaceholder(subject.Username) {
+		action = "iam_registration_invitation_reissued"
+		details = map[string]any{"administrator": subject.Administrator}
+		resultAction = "registration_invited"
+	}
+	entry := s.audit(actor.TenantID, auditID, action, "iam_subject", subjectID, actor.Actor(), now, details)
 	if err := s.repository.CreateActivationToken(ctx, actor.TenantID, token, entry); err != nil {
 		return TokenResult{}, err
 	}
-	return TokenResult{Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
+	return TokenResult{Action: resultAction, Subject: subject, Token: raw, ExpiresAt: expiresAt}, nil
 }
 
 func (s *Service) Activate(ctx context.Context, rawToken, password string) (Subject, error) {
@@ -935,6 +1164,32 @@ func (s *Service) ListSubjects(ctx context.Context, actor Principal) ([]Subject,
 	return s.repository.ListSubjects(ctx, actor.TenantID)
 }
 
+func (s *Service) UpdateSubjectDisplayName(ctx context.Context, actor Principal, subjectID string, expectedRevision int64, rawDisplayName string) error {
+	if err := requireAdministrator(actor); err != nil {
+		return err
+	}
+	if !uuidPattern.MatchString(subjectID) {
+		return &ValidationError{Field: "subject_id", Message: "Subject ID 无效"}
+	}
+	if expectedRevision < 1 {
+		return &ValidationError{Field: "expected_revision", Message: "账号 revision 无效"}
+	}
+	displayName := strings.TrimSpace(rawDisplayName)
+	if displayName == "" {
+		return &ValidationError{Field: "display_name", Message: "姓名不能为空"}
+	}
+	var err error
+	displayName, err = normalizeDisplayName(displayName, "")
+	if err != nil {
+		return err
+	}
+	auditID, err := s.newID()
+	if err != nil {
+		return err
+	}
+	return s.repository.UpdateSubjectDisplayName(ctx, actor.TenantID, subjectID, expectedRevision, displayName, s.audit(actor.TenantID, auditID, "iam_subject_display_name_changed", "iam_subject", subjectID, actor.Actor(), s.now(), map[string]any{"display_name": displayName, "expected_revision": expectedRevision}))
+}
+
 func (s *Service) ChangeStatus(ctx context.Context, actor Principal, subjectID string, status Status) error {
 	if err := requireAdministrator(actor); err != nil {
 		return err
@@ -1026,6 +1281,16 @@ func (s *Service) CreateTenant(ctx context.Context, actor Principal, input Syste
 	if err != nil {
 		return TokenResult{}, TenantSummary{}, err
 	}
+	existing, found, err := s.repository.FindCredential(ctx, username)
+	if err != nil {
+		return TokenResult{}, TenantSummary{}, err
+	}
+	if found && existing.SystemAdministrator {
+		return TokenResult{}, TenantSummary{}, &ConflictError{Message: "系统管理员账号不能加入业务组织"}
+	}
+	if found && existing.Status != StatusActive {
+		return TokenResult{}, TenantSummary{}, &ConflictError{Message: "该登录账号尚未激活或当前不可用"}
+	}
 	tenantID, err := s.newID()
 	if err != nil {
 		return TokenResult{}, TenantSummary{}, err
@@ -1033,6 +1298,22 @@ func (s *Service) CreateTenant(ctx context.Context, actor Principal, input Syste
 	subjectID, err := s.newID()
 	if err != nil {
 		return TokenResult{}, TenantSummary{}, err
+	}
+	now := s.now()
+	if found {
+		auditID, err := s.newID()
+		if err != nil {
+			return TokenResult{}, TenantSummary{}, err
+		}
+		subject := Subject{ID: subjectID, AccountID: existing.AccountID, TenantID: tenantID, Username: username, DisplayName: displayName, Status: StatusActive, Administrator: true, Revision: 1, SessionGeneration: 1, PasswordChangedAt: existing.PasswordChangedAt, CreatedAt: now, UpdatedAt: now}
+		audit := s.audit(tenantID, auditID, "iam_tenant_created_with_existing_account", "tenant", tenantID, actor.Actor(), now, map[string]any{"tenant_name": name, "administrator_subject_id": subjectID, "account_id": existing.AccountID})
+		if err := s.repository.ProvisionTenantMembership(ctx, tenantID, name, subject, audit); err != nil {
+			return TokenResult{}, TenantSummary{}, err
+		}
+		if err := s.ensureAdministratorProfile(ctx, subject); err != nil {
+			return TokenResult{}, TenantSummary{}, err
+		}
+		return TokenResult{Action: "joined", Subject: subject}, TenantSummary{ID: tenantID, Name: name, Status: "active", UserCount: 1, AdministratorCount: 1, CreatedAt: now}, nil
 	}
 	tokenID, err := s.newID()
 	if err != nil {
@@ -1046,7 +1327,6 @@ func (s *Service) CreateTenant(ctx context.Context, actor Principal, input Syste
 	if err != nil {
 		return TokenResult{}, TenantSummary{}, err
 	}
-	now := s.now()
 	subject := Subject{ID: subjectID, TenantID: tenantID, Username: username, DisplayName: displayName, Status: StatusPending, Administrator: true, Revision: 1, SessionGeneration: 1, CreatedAt: now, UpdatedAt: now}
 	token := ActivationToken{ID: tokenID, SubjectID: subjectID, Kind: TokenInvitation, TokenHash: hash, ExpiresAt: now.Add(24 * time.Hour), CreatedBy: actor.SubjectID, CreatedAt: now}
 	audit := s.audit(tenantID, auditID, "iam_tenant_created", "tenant", tenantID, actor.Actor(), now, map[string]any{"tenant_name": name, "administrator_subject_id": subjectID})
@@ -1083,35 +1363,63 @@ func (s *Service) AssignTenantAdministrator(ctx context.Context, actor Principal
 		if existing.SystemAdministrator {
 			return TenantAdministratorResult{}, &ConflictError{Message: "系统管理员账号不能设为组织管理员"}
 		}
-		if existing.TenantID != tenantID {
-			return TenantAdministratorResult{}, &ConflictError{Message: "该手机号或邮箱已属于其他组织"}
-		}
 		if existing.Status != StatusActive {
 			return TenantAdministratorResult{}, &ConflictError{Message: "该账号尚未激活或已停用，请先在组织账号管理中处理"}
 		}
-		if existing.Administrator {
-			if err := s.ensureAdministratorProfile(ctx, existing.Subject); err != nil {
+		membership, joined, err := s.repository.FindAccountSubject(ctx, tenantID, existing.AccountID)
+		if err != nil {
+			return TenantAdministratorResult{}, err
+		}
+		if !joined {
+			displayName, err = normalizeDisplayName(displayName, normalized)
+			if err != nil {
 				return TenantAdministratorResult{}, err
 			}
-			return TenantAdministratorResult{Action: "already_administrator", Subject: existing.Subject}, nil
+			subjectID, err := s.newID()
+			if err != nil {
+				return TenantAdministratorResult{}, err
+			}
+			auditID, err := s.newID()
+			if err != nil {
+				return TenantAdministratorResult{}, err
+			}
+			now := s.now()
+			membership = Subject{ID: subjectID, AccountID: existing.AccountID, TenantID: tenantID, Username: normalized, DisplayName: displayName, Status: StatusActive, Administrator: true, Revision: 1, SessionGeneration: 1, PasswordChangedAt: existing.PasswordChangedAt, CreatedAt: now, UpdatedAt: now}
+			audit := s.audit(tenantID, auditID, "iam_tenant_administrator_joined", "iam_subject", subjectID, actor.Actor(), now, map[string]any{"login_identifier": normalized, "account_id": existing.AccountID})
+			if err := s.repository.JoinAccount(ctx, membership, audit); err != nil {
+				return TenantAdministratorResult{}, err
+			}
+			if err := s.ensureAdministratorProfile(ctx, membership); err != nil {
+				return TenantAdministratorResult{}, err
+			}
+			return TenantAdministratorResult{Action: "joined", Subject: membership}, nil
+		}
+		if membership.Status != StatusActive {
+			return TenantAdministratorResult{}, &ConflictError{Message: "该账号在本组织尚未激活或已停用，请先在组织账号管理中处理"}
+		}
+		if membership.Administrator {
+			if err := s.ensureAdministratorProfile(ctx, membership); err != nil {
+				return TenantAdministratorResult{}, err
+			}
+			return TenantAdministratorResult{Action: "already_administrator", Subject: membership}, nil
 		}
 		now := s.now()
 		auditID, err := s.newID()
 		if err != nil {
 			return TenantAdministratorResult{}, err
 		}
-		audit := s.audit(tenantID, auditID, "iam_tenant_administrator_promoted", "iam_subject", existing.ID, actor.Actor(), now, map[string]any{"login_identifier": normalized})
-		if err := s.repository.ChangeAdministrator(ctx, tenantID, existing.ID, true, administratorProfileSource, audit); err != nil {
+		audit := s.audit(tenantID, auditID, "iam_tenant_administrator_promoted", "iam_subject", membership.ID, actor.Actor(), now, map[string]any{"login_identifier": normalized})
+		if err := s.repository.ChangeAdministrator(ctx, tenantID, membership.ID, true, administratorProfileSource, audit); err != nil {
 			return TenantAdministratorResult{}, err
 		}
-		existing.Administrator = true
-		existing.Revision++
-		existing.SessionGeneration++
-		existing.UpdatedAt = now
-		if err := s.ensureAdministratorProfile(ctx, existing.Subject); err != nil {
+		membership.Administrator = true
+		membership.Revision++
+		membership.SessionGeneration++
+		membership.UpdatedAt = now
+		if err := s.ensureAdministratorProfile(ctx, membership); err != nil {
 			return TenantAdministratorResult{}, err
 		}
-		return TenantAdministratorResult{Action: "promoted", Subject: existing.Subject}, nil
+		return TenantAdministratorResult{Action: "promoted", Subject: membership}, nil
 	}
 	displayName, err = normalizeDisplayName(displayName, normalized)
 	if err != nil {
@@ -1280,6 +1588,9 @@ func normalizeDisplayName(raw, fallback string) (string, error) {
 	}
 	return value, nil
 }
+func isRegistrationPlaceholder(value string) bool {
+	return strings.HasPrefix(value, "invite-") && len(value) == len("invite-")+32
+}
 func requireAdministrator(actor Principal) error {
 	if !uuidPattern.MatchString(actor.TenantID) || !uuidPattern.MatchString(actor.SubjectID) || !actor.Administrator || actor.SystemAdministrator {
 		return &AuthorizationError{}
@@ -1293,7 +1604,7 @@ func requireSystemAdministrator(actor Principal) error {
 	return nil
 }
 func principalFromCredential(value Credential, authTime time.Time) Principal {
-	return Principal{SubjectID: value.ID, TenantID: value.TenantID, Username: value.Username, DisplayName: value.DisplayName, Administrator: value.Administrator, SystemAdministrator: value.SystemAdministrator, SessionGeneration: value.SessionGeneration, AuthTime: authTime}
+	return Principal{SubjectID: value.ID, AccountID: value.AccountID, TenantID: value.TenantID, Username: value.Username, DisplayName: value.DisplayName, Administrator: value.Administrator, SystemAdministrator: value.SystemAdministrator, SessionGeneration: value.SessionGeneration, AuthTime: authTime}
 }
 
 func randomToken() (string, []byte, error) {

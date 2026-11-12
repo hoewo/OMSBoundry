@@ -42,6 +42,7 @@ type ExecutionUseCases interface {
 	GetExecutionRun(context.Context, string, string) (domain.ExecutionRun, error)
 	ListExecutionRuns(context.Context, string) ([]domain.ExecutionRun, error)
 	RevisePayrollLine(context.Context, domain.Actor, string, string, domain.ReviseLineInput) (domain.ExecutionRun, error)
+	ApplyAttendanceSummary(context.Context, domain.Actor, string, string, domain.ApplyAttendanceSummaryInput) (domain.ExecutionRun, error)
 	ReviewPayrollRun(context.Context, domain.Actor, string, domain.RunCommandInput) (domain.ExecutionRun, error)
 	ConfirmZeroLine(context.Context, domain.Actor, string, string, domain.LineCommandInput) (domain.ExecutionRun, error)
 	VoidPayrollRun(context.Context, domain.Actor, string, domain.RunCommandInput) (domain.ExecutionRun, error)
@@ -103,6 +104,7 @@ func (s *Server) registerExecutionRoutes(mux *http.ServeMux, prefix string) {
 	mux.Handle("GET "+prefix+"/payroll-periods", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.listExecutionRuns)))
 	mux.Handle("GET "+prefix+"/payroll-periods/{run_id}", s.protected(auth.ActionTenantRead, http.HandlerFunc(s.getExecutionRun)))
 	mux.Handle("PUT "+prefix+"/payroll-periods/{run_id}/lines/{line_id}", s.protected(auth.ActionRunManage, http.HandlerFunc(s.revisePayrollLine)))
+	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/attendance-summary", s.protected(auth.ActionRunManage, http.HandlerFunc(s.applyAttendanceSummary)))
 	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/review", s.protected(auth.ActionRunManage, http.HandlerFunc(s.reviewPayrollRun)))
 	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/void", s.protected(auth.ActionRunManage, http.HandlerFunc(s.voidPayrollRun)))
 	mux.Handle("POST "+prefix+"/payroll-periods/{run_id}/lines/{line_id}/confirm-no-payment", s.protected(auth.ActionRunManage, http.HandlerFunc(s.confirmZeroLine)))
@@ -254,6 +256,19 @@ func (s *Server) revisePayrollLine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := s.execution.RevisePayrollLine(r.Context(), actorFrom(p), runID, lineID, in)
+	s.writeExecution(w, http.StatusOK, v, err)
+}
+func (s *Server) applyAttendanceSummary(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	runID, lineID := executionIDs(r)
+	if !s.requireExecution(w) || !requireRunLineScope(w, p, runID, lineID) {
+		return
+	}
+	var in domain.ApplyAttendanceSummaryInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := s.execution.ApplyAttendanceSummary(r.Context(), actorFrom(p), runID, lineID, in)
 	s.writeExecution(w, http.StatusOK, v, err)
 }
 func (s *Server) reviewPayrollRun(w http.ResponseWriter, r *http.Request) {

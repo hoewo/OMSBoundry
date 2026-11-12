@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,6 +54,18 @@ type feedbackSession struct {
 type feedbackSessionEnvelope struct {
 	Code string          `json:"code"`
 	Data feedbackSession `json:"data"`
+}
+
+type feedbackListRecord struct {
+	ID int64 `json:"id"`
+}
+
+type feedbackListEnvelope struct {
+	Code string               `json:"code"`
+	Data []feedbackListRecord `json:"data"`
+	Meta struct {
+		Total int64 `json:"total"`
+	} `json:"meta"`
 }
 
 func newFeedbackRuntime(options FeedbackOptions) (feedbackRuntime, error) {
@@ -151,6 +164,90 @@ func (s *Server) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 		config["expiresAt"] = session.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"config": config})
+}
+
+// feedbackSubmissionSnapshot is a narrow same-origin observation port for the
+// Workbench host. The embedded SDK does not expose a submission-completed
+// event, so the host compares this current-account ID/count snapshot before and
+// after the modal opens and can treat creation as the terminal UI result. The Gateway
+// neither stores nor mutates Feedback facts and never returns the server-held
+// API Key to this endpoint.
+func (s *Server) feedbackSubmissionSnapshot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !s.feedback.enabled {
+		writeProblem(w, http.StatusServiceUnavailable, "feedback_not_configured", "产品反馈暂未配置")
+		return
+	}
+	if !s.validCSRF(r) {
+		writeProblem(w, http.StatusForbidden, "csrf_failed", "安全校验失败")
+		return
+	}
+	principal, ok := s.resolveSession(r.Context(), r)
+	if !ok {
+		writeProblem(w, http.StatusUnauthorized, "session_required", "请重新登录后使用产品反馈")
+		return
+	}
+	customUserID := deriveFeedbackUserID(s.feedback.identityHMACKey, s.feedback.identityVersion, principal.Principal.TenantID, principal.Principal.SubjectID)
+	ids, total, err := s.fetchFeedbackIDs(r.Context(), customUserID)
+	if err != nil {
+		writeProblem(w, http.StatusBadGateway, "feedback_unavailable", "产品反馈暂时不可用，请稍后重试")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"feedback_ids": ids, "feedback_count": strconv.FormatInt(total, 10)})
+}
+
+func (s *Server) fetchFeedbackIDs(ctx context.Context, customUserID string) ([]string, int64, error) {
+	endpoint, err := url.Parse(s.feedback.gatewayURL + "/workshop/v2/apikey/feedbacks")
+	if err != nil {
+		return nil, 0, err
+	}
+	query := endpoint.Query()
+	query.Set("page", "1")
+	query.Set("page_size", "20")
+	query.Set("project_id", strconv.Itoa(s.feedback.projectID))
+	query.Set("custom_user_id", customUserID)
+	endpoint.RawQuery = query.Encode()
+
+	for index, key := range s.feedback.apiKeys {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+		if err != nil {
+			return nil, 0, err
+		}
+		request.Header.Set("Authorization", "Bearer "+key)
+		request.Header.Set("Accept", "application/json")
+		response, err := s.client.Do(request)
+		if err != nil {
+			return nil, 0, err
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 128<<10))
+		_ = response.Body.Close()
+		if readErr != nil {
+			return nil, 0, readErr
+		}
+		if (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) && index+1 < len(s.feedback.apiKeys) {
+			continue
+		}
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return nil, 0, fmt.Errorf("feedback list returned HTTP %d", response.StatusCode)
+		}
+		var envelope feedbackListEnvelope
+		if err := json.Unmarshal(body, &envelope); err != nil || (envelope.Code != "" && envelope.Code != "OK") {
+			return nil, 0, fmt.Errorf("feedback list response is invalid")
+		}
+		ids := make([]string, 0, len(envelope.Data))
+		for _, item := range envelope.Data {
+			if item.ID < 1 {
+				return nil, 0, fmt.Errorf("feedback list contains an invalid ID")
+			}
+			ids = append(ids, strconv.FormatInt(item.ID, 10))
+		}
+		total := envelope.Meta.Total
+		if total < int64(len(ids)) {
+			total = int64(len(ids))
+		}
+		return ids, total, nil
+	}
+	return nil, 0, fmt.Errorf("feedback list failed")
 }
 
 func (s *Server) exchangeFeedbackSession(ctx context.Context, customUserID string) (feedbackSession, error) {

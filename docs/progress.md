@@ -1,5 +1,9 @@
 # OMSBizFoundry 开发进度
 
+2026-11-06：BF-307／BF-308 已完成纵向闭环并发布。Invoice Recognition 新增独立 PostgreSQL／HTTP／IAM Owner、Evidence 精确版本复验、电子发票 XML 本地解析、可替换 HTTP AI Provider、候选校对确认与 D1 恢复；Workforce Attendance 新增政策、缺勤、请假、People 多任职区间快照、月度整数日摘要，并由 Payroll 以半入法显式形成工资 revision。Workbench 提供“考勤与请假”“发票识别”两个正式入口。首次发布 Owner／Payroll／Workbench v1.76，随后以 Workbench v1.77 修复核心 JS 不可变缓存导致的新页标题显示路由名；最终恢复点 `20261105T164650Z`、21 项 checksum、21/21 healthy、D1 check 和登录后页面授权读取通过。当前部署未配置外部 AI Provider，XML 可用，图片／PDF／OFD 明确失败关闭。[发布记录](./reports/oms-invoice-recognition-attendance-proration-publication-20261106.md)
+
+2026-11-05：BF-303／BF-304 已随 Unified Workbench `v0.1.0-test.oms-v1.74@sha256:632c975b434c6fe914e6ebf88cf64aa9fdde7446500b0d864ec526165e952807` 发布。Feedback 提交后保持 iframe 并切换“我的反馈”；登录 Session 长于一小时 CSRF Cookie 时，宿主会同源刷新并校验 CSRF 后继续配置和快照。联合备份、正式升级、独立 D1 `check`、19/19 checksum、19/19 healthy、公网资源摘要与 CSRF／Session 安全边界通过；原浏览器 Session 因正式重启失效，需重新登录后做最终点击复验。[发布记录](./reports/oms-feedback-long-session-csrf-publication-20261105.md)
+
 2026-10-26：BF-268～BF-270 页面与接入修订已在本地通过当前源码门禁。报销／付款已拆分表单并增加现金／银行卡约束，经营列表按一列一个事实调整；账号／租户改为 IAM 实际页面；Feedback 改为有效登录即可使用并移除角色 Capability，C10／C11 相应改为 Session 门禁。受影响 Go／Node、真实本地 Chrome、P9 C10／C11 离线驱动和 D1 bundle 测试通过且无常驻服务。本轮尚未部署 D1／公网，外部 project 115 与真实 P9 仍待执行。[验证报告](./reports/oms-v1-ui-identity-feedback-adjustment-validation-20261026.md)
 
 2026-10-26：完成 BF-267 的 P9 C11 真实浏览器验收驱动与 C0～C11 可恢复总入口；其角色撤权部分已由 BF-270 取代。C11 现在验证两个 Tenant 的 submit／status、跨域 iframe、主 Tenant 退出后配置 401 与重新登录恢复，不再修改 Grant。真实 D1 与回滚证据仍待执行，P9 尚未完成。

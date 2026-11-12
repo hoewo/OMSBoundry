@@ -23,7 +23,7 @@ provenance=$("$repo_dir/ops/resolve-release-provenance" "$repo_dir")
 commit=$(printf '%s\n' "$provenance" | sed -n '1p')
 built_at=$(printf '%s\n' "$provenance" | sed -n '2p')
 
-image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_CONTRACT_IMAGE D1_MONEY_IMAGE D1_PEOPLE_IMAGE D1_PARTY_IMAGE D1_PROJECT_IMAGE D1_EVIDENCE_IMAGE D1_BUSINESS_ENGAGEMENT_IMAGE D1_BILLING_IMAGE D1_PRODUCTION_IMAGE D1_APPROVAL_AUDIT_RESULTS_IMAGE D1_COST_OUTSOURCING_IMAGE D1_BONUS_DISTRIBUTION_IMAGE D1_INTERNAL_FINANCE_REQUESTS_IMAGE D1_PAYROLL_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
+image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_CONTRACT_IMAGE D1_MONEY_IMAGE D1_PEOPLE_IMAGE D1_PARTY_IMAGE D1_PROJECT_IMAGE D1_EVIDENCE_IMAGE D1_BUSINESS_ENGAGEMENT_IMAGE D1_BILLING_IMAGE D1_PRODUCTION_IMAGE D1_APPROVAL_AUDIT_RESULTS_IMAGE D1_COST_OUTSOURCING_IMAGE D1_BONUS_DISTRIBUTION_IMAGE D1_INTERNAL_FINANCE_REQUESTS_IMAGE D1_PAYROLL_IMAGE D1_WORKFORCE_ATTENDANCE_IMAGE D1_INVOICE_RECOGNITION_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
 required_image_keys='D1_POSTGRES_IMAGE D1_IDENTITY_IMAGE D1_WORKBENCH_IMAGE D1_GATEWAY_IMAGE D1_NGINX_IMAGE'
 
 manifest_value() {
@@ -116,7 +116,7 @@ done
 for file in evidence-imds-guard.conf evidence-imds-guard.env.example; do
   cp "$d1_dir/systemd/$file" "$root/deployments/d1/systemd/$file"
 done
-for file in identity-access-capabilities.json internal-finance-requests-capabilities.json payroll-capabilities.json open-api-capabilities.json contract-ledger-capabilities.json money-flow-ledger-capabilities.json people-groups-capabilities.json party-directory-capabilities.json project-workspace-capabilities.json evidence-service-capabilities.json business-engagement-capabilities.json billing-invoice-capabilities.json production-operations-capabilities.json approval-audit-results-capabilities.json cost-outsourcing-capabilities.json bonus-distribution-capabilities.json; do
+for file in identity-access-capabilities.json internal-finance-requests-capabilities.json payroll-capabilities.json workforce-attendance-capabilities.json invoice-recognition-capabilities.json open-api-capabilities.json contract-ledger-capabilities.json money-flow-ledger-capabilities.json people-groups-capabilities.json party-directory-capabilities.json project-workspace-capabilities.json evidence-service-capabilities.json business-engagement-capabilities.json billing-invoice-capabilities.json production-operations-capabilities.json approval-audit-results-capabilities.json cost-outsourcing-capabilities.json bonus-distribution-capabilities.json; do
   cp "$repo_dir/contracts/access/v1/examples/$file" "$root/contracts/access/v1/examples/$file"
 done
 for file in project-assignment-policy.json business-engagement-project-assignment-policy.json production-operations-project-assignment-policy.json workload-identity-policy.json; do
@@ -145,7 +145,7 @@ cp "$repo_dir/docs/operations/d1-evidence-oss-profile.md" "$root/docs/operations
   awk '
     /^SUITE_VERSION=/ {next}
     /^D1_IMAGE_MODE=/ {next}
-    /^# D1_(POSTGRES|IDENTITY|CONTRACT|MONEY|PEOPLE|PARTY|PROJECT|EVIDENCE|BUSINESS_ENGAGEMENT|BILLING|PRODUCTION|APPROVAL_AUDIT_RESULTS|COST_OUTSOURCING|BONUS_DISTRIBUTION|INTERNAL_FINANCE_REQUESTS|PAYROLL|WORKBENCH|GATEWAY|NGINX)_IMAGE=/ {next}
+    /^# D1_(POSTGRES|IDENTITY|CONTRACT|MONEY|PEOPLE|PARTY|PROJECT|EVIDENCE|BUSINESS_ENGAGEMENT|BILLING|PRODUCTION|APPROVAL_AUDIT_RESULTS|COST_OUTSOURCING|BONUS_DISTRIBUTION|INTERNAL_FINANCE_REQUESTS|PAYROLL|WORKFORCE_ATTENDANCE|INVOICE_RECOGNITION|WORKBENCH|GATEWAY|NGINX)_IMAGE=/ {next}
     {print}
   ' "$d1_dir/.env.example"
 } > "$root/deployments/d1/.env.example"

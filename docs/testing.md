@@ -1,5 +1,374 @@
 # OMSBizFoundry 验证入口
 
+## Feedback API Key 并发校验（2026-11-11，已发布）
+
+BF-329 必须验证同一有效 Key 的并发冷校验只执行一次底层加载且所有等待者得到同一结果；成功结果可短缓存，无效结果不得缓存，clear 后必须重新加载。公网门禁使用现有 OMS Key 只读请求，不打印 bearer、不创建反馈：8 路冷请求必须全部在网关 5 秒预算内返回 200，热请求应直接命中快速路径；并单独复验 `/agent-chats/conversations` 的 200 与列表 envelope。
+
+`go test -race ./internal/api/apikey/...`、`go test -run '^$' ./...` 和 `go vet ./...` 通过。完整 `go test ./...` 的既有注册集成测试因本机无 Redis 触发空指针，未登记为通过。公网冷批 8/8 为 200、约 3.25 秒同时完成，热批 8/8 为 200、95～127ms；会话历史 8/8 为 `OK` 列表、94～125ms。auth-server 镜像 ID 为 `sha256:1db4587b4a695079d98012f1848b0bd6d3a37c7ddf76f42cdfab62add26150cb`，回滚标签为 `backup-20261111T144010Z`；auth-server／Workshop／OpenHands 均运行且后两者健康。[发布报告](./reports/oms-feedback-api-key-validation-burst-repair-publication-20261111.md)
+
+## Feedback V3 可见产品面（2026-11-11，已发布）
+
+BF-328 必须覆盖配置已在 React 监听前完成的时序，并从真实允许父域加载 channel alias，断言 ready 版本、V3 contract、最终标题与 Tab；旧“反馈建议”标题必须为 0。白名单缺失的 artifact 不得提升 stable，contract／configured 成功也不能替代可见产品面。
+
+Feedback SDK App 专项 3/3、全套 23 文件 142/142、release 8/8 与 V3 production build 通过。3.0.4 release artifact SHA-256 为 `e44d4f8e1388fd78dc12ff66080d38d64521d517217fe6b9dcee0536ca12f260`，JavaScript SHA-256 为 `23a04e5d8599f3945362e857613718b54277df248ec9880f5491a4de01b6897a`，线上与本地一致；source commit 为 `693e173474a9a2dd7723e6f08ffec95bfa9b23d8`。正式 `v3-stable` minimum／recommended 均为 3.0.4。Chrome 从 OMS 父域加载正式 `sdk-v3`，收到 3.0.4／V3，显示“帮助与反馈”“智能客服”“我的反馈”，旧“反馈建议”标题计数 0。[纠错与发布报告](./reports/oms-feedback-v3-product-surface-race-repair-20261111.md)
+
+## Feedback V3 快照非阻塞（2026-11-11，已发布）
+
+BF-327 必须验证 `submission-snapshot` 返回 5xx、超时或网络错误时，宿主仍完成 V3 configured／open、反馈层保持可见、关闭后 OMS 业务按钮仍可用；快照成功时才启动提交后轮询并切换状态。不得通过忽略 V3 ready、origin／window、request ID、CSRF 或 Session 校验来实现降级。
+
+Feedback 专项 Node 32 项、Workbench 全量 Node 303/303、Go test／vet 通过；真实跨域 P8 的 `snapshot-outage-nonblocking` 5 项、主桥 24 项、Session 失效 5 项、服务不可用 5 项均通过。公网 v1.98 镜像摘要 `sha256:a1f43df548462b626146c4788798ebd276d9556b3c601a2a131a4f99869903f0`，发布包 SHA-256 `bf0f12240f4ab0e54463bdb89d7594c1b3cd91bae71d4d7c280d4165e9e1e6ec`；候选 IAM 预检、恢复点 `20261111T140730Z` 的 21 项 checksum、独立 D1 check 和 21/21 healthy 通过。公网 Feedback JS 与本地同哈希 `b0b5883b9d3b39c7df16701dac70c095ce9026a97e756bc375398b51360e4efa`。共享浏览器控制连接超时，故不登记真人登录点击通过。[发布报告](./reports/oms-feedback-v3-snapshot-nonblocking-publication-20261111.md)
+
+## Feedback V3 与项目创建解耦（2026-11-11，已发布）
+
+BF-325 必须验证 Workbench 只接受声明支持 V3 的 SDK ready 事件，configured 仍绑定精确 request ID、origin 和 iframe window；稳定别名必须解析到不可变 3.0.2，V3 产品表面不得被描述为 HTTP V3。BF-326 必须验证 Project 创建只依赖 Project 权限与外部甲方；Contract 未就绪时不显示应收金额字段，保存 Project 后停止调用 Contract，项目合同页提供后续补录且继续执行完整 Contract readiness 门禁。
+
+Workbench 'node --check'、Feedback 专项 31 项、Project 创建专项 11 项、全量 Node 303/303、全部 Go test／vet 通过；真实跨域 P8 Playwright 三个场景分别通过 24、5、5 项断言。Feedback SDK 23 个测试文件 141/141、发布脚本 8/8 和 V3 production build 通过。SDK 'v3-stable' 指向 3.0.2，artifact SHA-256 为 'bc65d29aeda16cc7a701aff93292c3ced5d773dbf443b3468b82137710f94e44'。D1 v1.97 发布包 SHA-256 为 'c6acc8ad50f66dd1cf830f8a7df6c27b1ce8cc54ddad44903e3dd560fb6ba3f9'；候选 IAM 预检、恢复点 '20261111T133415Z' checksum、独立 D1 check、21/21 healthy 通过。公网主 JS 与 Feedback JS 分别和本地同哈希 '9eb904ef5b85bc2df2cef9a9ccf5a7ceab5665334366367164e13f40cb68028c'、'6333285eb13ea5cf7c79a28bc08489c381d1607188be9d0ba3673323e6421af6'；发布前后 Project 表仍只有两个既有租户各 1 行。共享浏览器控制连接超时，故不登记真人登录只读页面验收；本轮未创建项目、合同或反馈。[发布报告](./reports/oms-feedback-v3-project-creation-decoupling-publication-20261111.md)
+
+## 财务生命周期批量选择（2026-11-09，已发布）
+
+BF-321 必须验证草稿申请不再因缺少 `confirm_payment` 而全部禁用：有凭证报销和付款草稿显示提交动作，待支付／部分支付记录显示确认支付动作，缺凭证报销说明阻断原因，付款未知结果不可选择；提交和付款不能混选。逐笔与批量提交必须调用既有版本化端口并携带稳定 command ID、expected revision 和必要的缺凭证确认。
+
+`node --check internal/server/oms_phase1_finance_owner.js`、专项 Node 6/6、`node --test internal/server/*.test.mjs` 300/300、Workbench `GOWORK=off go test ./internal/server/...`／`go vet ./internal/server/...` 和 `git diff --check` 已通过。D1 v1.92 发布包、候选 IAM 预检、恢复点 `20261108T160513Z` 的 21 项 checksum、独立 `d1 check`、21/21 healthy、运行镜像摘要及公网 `oms-phase1-finance-owner.js?v=20261108.7` 同哈希通过；发布验证未执行线上业务写入。正式 Owner 数据的“提交—刷新—付款”浏览器写旅程仍须用明确测试数据单独验收。[发布报告](./reports/oms-finance-lifecycle-batch-selection-publication-20261109.md)、[本地报告](./reports/oms-finance-lifecycle-batch-selection-local-validation-20261108.md)
+
+## 发票优先录入入口（2026-11-08，已发布）
+
+BF-320 必须验证新增报销与新增付款申请都在基本信息之前呈现唯一显眼的“上传发票并识别”按钮；点击按钮必须显式切换为识别方式并调用共同识别桥，取消或确认后保留申请草稿。暂不录入和直接录入仍可用，既有申请不得出现该新建专用入口。
+
+`node --check`、专项 Node 11/11、Workbench 全量 Node 299/299，以及 Workbench `GOWORK=off go test ./internal/server/...`／`go vet ./internal/server/...` 已通过。静态回归锁定发票区先于基本信息、两种申请共用 `invoiceEntryMarkup`、主按钮统一绑定和静态资源版本；窄屏视觉复核确认入口全宽且无横向溢出。D1 v1.91 发布包 93 项 checksum、恢复点 `20261108T151241Z` 的 21 项 checksum、独立 `d1 check`、21/21 healthy、运行镜像摘要和两项公网资源同哈希通过；未执行线上业务写入。[发布报告](./reports/oms-finance-invoice-priority-entry-publication-20261108.md)
+
+## 开票日期局部复读（2026-11-08，已发布）
+
+BF-319 必须验证整页 OCR 日期缺失时只复读标准票面头部区域，完整中文日期可规范化为 ISO 日期并映射回原图区域；缺月份、非法日历日期、无日期标签仍保持空白，不得猜值。
+
+`go test ./...`、`go vet ./...`、中文日期／非法日期专项单测和线上同一原图的 Linux AMD64 Tesseract 容器回归通过；原图最终候选为 `2024-06-05`、日期置信度 88.8%，只保留原有税额低置信度警告。D1 v1.90 发布包检查、恢复点 `20261108T144301Z` 的 21 项 checksum、独立 `d1 check`、21/21 healthy、运行镜像摘要和公网 303→200 入口通过；未创建线上识别候选。[发布报告](./reports/oms-invoice-date-local-reread-publication-20261108.md)
+
+## 识别发票 Evidence 校验档案（2026-11-08，已发布）
+
+BF-318 必须验证“上传并识别”与直接上传都使用 Evidence 规范用途 `invoice`，线上脚本不得出现 `invoice_recognition_source`；人工确认后交给 Finance 的精确版本必须为 `available`、`invoice-v1`、`passed`。既有 `general/not_required` 版本不得被覆盖，必须重新识别。
+
+本地专项 Node 11/11、Workbench 全量 Node 299/299、Workbench 与 Evidence Service 的 Go test／vet、D1 93 项发布包校验通过。公网 v1.88 的恢复点 `20261108T134055Z` 含 21 项有效 checksum，独立 `d1 check`、21/21 healthy、运行摘要和 `oms-phase1-workforce.js?v=20261108.5` 同哈希通过；未执行线上业务写入。[发布报告](./reports/oms-recognized-invoice-evidence-validation-publication-20261108.md)
+
+## 全电发票代码选填（2026-11-08，已发布）
+
+BF-317 必须验证手工录入和图片识别都只要求发票号码，发票代码位于票面信息末尾且选填；无代码全电发票可以通过 Finance 校验并保存，同 Tenant 第二张同号码发票必须命中强重复。有代码发票继续按代码＋号码查重，Recognition 交付重复 key 与 Finance 保持一致。
+
+本地专项 Node 11/11、Workbench 全量 Node 299/299、Workbench／Finance／Recognition Contract 的 Go test 与 vet、PostgreSQL 18 两组重复集成测试通过。公网 v1.87 发布包与 93 项包内校验、IAM 预检、恢复点 `20261108T130844Z` 的 21 项 checksum、独立 `d1 check`、21/21 healthy 和两份静态资源同哈希通过；本轮未执行线上业务写入。[发布报告](./reports/oms-optional-invoice-code-publication-20261108.md)
+
+## 新增报销／付款申请发票录入与识别（2026-11-08，已发布）
+
+BF-316 必须验证新增报销与新增付款申请均提供暂不录入、直接录入和上传并识别；选择识别时必须保留当前申请草稿，人工确认后回填金额、日期、销售方、代码／号码并引用同一 Evidence File ID／Version。取消识别恢复原表单且不丢字段；只有用户保存才创建 Finance 申请。报销保存并提交仍必须有 Evidence；识别列表不得出现事后关联既有报销／付款申请或 Billing 外部关联入口。
+
+2026-11-08 BF-316 发布验证：Finance／Workforce 语法检查、专项 Node 11/11、Workbench 全量 Node 299/299、Workbench 与 Internal Finance Requests 的 `go test ./...`／`go vet ./...` 以及 `git diff --check` 通过。使用包含 `internal-finance-requests` 的验收 Suite Manifest 启动本地 Workbench，浏览器正式 Owner 界面确认新增报销和新增付款申请均显示“暂不录入、直接录入、上传并识别”；报销直接录入展开票面与原票字段，上传识别显示识别入口和确认回填说明，浏览器 console 0 warning／error。公网 v1.86 发布包、IAM 预检、恢复点 21 项 checksum、独立 `d1 check`、21/21 healthy 和两个静态资源同哈希均通过。本轮未使用线上业务账号创建 Finance 事实；上传识别后的保存与回读继续作为专门测试数据门禁。[本地报告](./reports/oms-reimbursement-invoice-entry-local-validation-20261108.md)、[发布报告](./reports/oms-reimbursement-invoice-entry-publication-20261108.md)
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_finance_owner.js
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_finance_owner.test.mjs frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server/... && GOWORK=off go vet ./internal/server/...)
+(cd backend/services/internal-finance-requests && GOWORK=off go test ./internal/finance/... && GOWORK=off go vet ./internal/finance/...)
+```
+
+专项 Node 11/11、Workbench Go test／vet 与 Finance Go test／vet 已通过；全量 Workbench Node、浏览器交互和发布门禁仍待本地候选继续验证。[本地验证](./reports/oms-reimbursement-invoice-entry-local-validation-20261108.md)
+
+## 财务类别、报销附件与折算入口（2026-11-08，已发布）
+
+BF-315 必须验证费用类别不再使用原生大复选框，平台类别不能改名、自定义类别仍可新增；Evidence 上传结果只能以 Finance 接受的 `file_id`、`version`、`purpose`、`sha256`、`media_type`、`size_bytes` 提交，不能携带 `display_name`、`content_sha256` 或 `mime_type`。Finance 创建成功后弹窗关闭并重新加载列表，创建失败保持弹窗和可见错误。折算政策入口隐藏，但登记缺勤／请假不受影响；无政策时隐藏生成摘要动作。
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_finance_owner.js
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_finance_owner.test.mjs frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server/... && GOWORK=off go vet ./internal/server/...)
+```
+
+本地专项 Node 11/11、Workbench Go test／vet 与引用实际 CSS 的 headless Chrome 静态截图复验通过。线上只读日志证明旧链路的 Evidence upload session 创建／完成成功，随后 Finance 创建返回 400。公网 Workbench `v0.1.0-test.oms-v1.85` 已完成发布包检查、升级前备份、独立 D1 检查、21/21 healthy 和三份资源逐字节同哈希；本次未执行修复后的线上业务写入。[发布验证](./reports/oms-finance-category-reimbursement-evidence-publication-20261108.md)、[本地验证](./reports/oms-finance-category-reimbursement-evidence-local-validation-20261108.md)
+
+## 发票识别授权预检与失败终态（2026-11-08，已发布）
+
+BF-314 必须验证付款申请或识别列表选择文件后，Workbench 在打开进度窗口前按顺序获取当前 Tenant 的 Evidence 与 Invoice Recognition Capability；任一 403 都不调用 Evidence、不生成 Proposal，并显示按组织授权的修复提示。上传／识别开始后的异常必须停止 spinner、将状态标为未完成并保留原因。不得跨 Tenant 复制管理员权限或由 Workbench 提升账号。
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs frontend/oms-workbench/internal/server/oms_phase1_finance_owner.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server/... && GOWORK=off go vet ./internal/server/...)
+deployments/d1/ops/test-release-bundle dist/omsbizfoundry-d1_v0.1.0-test.oms-v1.84_linux_amd64.tar.gz
+```
+
+专项 Node 9/9、Workbench Go test／vet、候选 IAM 预检、恢复点 `20261108T111419Z` 的 21 项 checksum、独立 D1 check、21/21 healthy 和公网 `oms-phase1-workforce.js?v=20261108.1` 同哈希均通过。线上日志证明原失败发生在 `/gateway/authorize/evidence-service` 403 且没有 Evidence 上传请求；发布后未提升账号、未上传文件、未创建识别候选或付款申请。[发布验证](./reports/oms-invoice-recognition-capability-preflight-publication-20261108.md)
+
+## 新增付款申请发票录入（2026-11-08，已发布）
+
+BF-313 必须验证新付款申请提供暂不录入、直接录入和识别录入；直接录入与识别结果都要求申请金额等于价税合计，识别结果必须引用同一 Evidence File ID／Version。关闭识别不得丢失已填申请，确认后必须回填并能在 Finance 详情回读。既有付款申请不得显示补票／换票入口，识别列表不得显示 Billing“关联使用”。付款发票必须进入 Finance 重复指纹，不能绕过 Owner 校验或自动创建项目票据／Money 资金。
+
+```sh
+gofmt -w backend/services/internal-finance-requests/internal/finance/{service.go,postgres.go,service_test.go}
+go test ./backend/services/internal-finance-requests/internal/finance
+node --check frontend/oms-workbench/internal/server/oms_phase1_finance_owner.js
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_finance_owner.test.mjs frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+go test ./frontend/oms-workbench/internal/server
+```
+
+当前 296 项 Workbench Node、Workbench 全部 Go test／vet、Finance 全部 Go test／vet、`git diff --check` 和临时 PostgreSQL 18.6 的付款发票跨类型重复集成均通过。D1 v1.83 候选预检、恢复点 `20261108T103211Z`、21 项 checksum、正式升级、独立 `d1 check`、21/21 healthy 和公网资源同哈希均通过；真实登录写旅程未在本次发布中执行。[本地验证](./reports/oms-internal-payment-invoice-entry-local-validation-20261106.md)、[发布验证](./reports/oms-internal-payment-invoice-entry-publication-20261108.md)
+
+## 发票识别候选删除、导出与业务登记（2026-11-06，已发布）
+
+BF-312 必须验证待确认候选只能通过显式原因追加 `discarded` revision，重放幂等、异义冲突、旧 revision 和已确认／已删除状态均失败关闭；删除后默认列表隐藏、可在“已删除”筛选只读回看，Evidence 与历史不被删除。已确认结果必须能导出 CSV 和含 Proposal revision／Evidence 精确引用／重复线索的 JSON；登记 Billing 时必须由用户明确选择进／销项、项目和往来单位，保存识别来源快照并关联原 Evidence，不能自动入账或按名称猜测。Billing 成功而附件续办失败时保留已创建事实并明确提示。
+
+```sh
+(cd packages/invoice-recognition-contract && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/invoice-recognition && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/invoice-recognition && TEST_DATABASE_URL='postgres://…' GOWORK=off go test -tags=integration ./internal/recognition -run PostgresProposalConfirmationReplayAndImmutableHistory -count=1)
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --check frontend/oms-workbench/internal/server/oms_phase1.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd acceptance/access-contract && GOWORK=off go test ./...)
+```
+
+本地普通 Go／Node 回归和临时 PostgreSQL 18 上的 migration／discard／confirm 集成已通过。D1 v1.82 候选解析、升级前恢复点 `20261106T142017Z`、21 项 checksum、正式升级、独立 `d1 check`、21/21 healthy、公网资源读取和未授权 discard 401 均通过；真实登录下的删除／登记写旅程未在本次发布中执行。[本地验证](./reports/oms-invoice-recognition-discard-delivery-local-validation-20261106.md)、[发布验证](./reports/oms-invoice-recognition-discard-delivery-publication-20261106.md)
+
+## 发票人工校对窗口尺寸回归（2026-11-06，已发布）
+
+BF-311 必须验证 `is-recognition` 加在对话框遮罩层时，宽屏选择器仍命中内部内容框；桌面窗口使用 1800 × 1120 上限且不回退 720px，固定页脚可见，980px／720px 响应式回退不变。浏览器实机必须保留用户原有缩放并验证原图、字段区和操作区同时可用；不得点击“确认识别结果”。
+
+```sh
+node --test frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+node --test frontend/oms-workbench/internal/server/*.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+deployments/d1/ops/test-release-bundle dist/omsbizfoundry-d1_v0.1.0-test.oms-v1.81_linux_amd64.tar.gz
+```
+
+公网 Unified Workbench 为 v1.81。恢复点 `20261106T133027Z` 的 21 项 checksum、独立 D1 `check`、21/21 healthy、运行镜像摘要、版本化 CSS 选择器与 Chrome 125% 实机均已复验；候选保持 `needs_review`。[发布验证](./reports/oms-invoice-review-canvas-sizing-publication-20261106.md)
+
+## 发票人工校对缩放与字段定位（2026-11-06，已发布）
+
+BF-310 必须验证查看器适应窗口、按钮／滚轮／键盘缩放、拖动、销毁清理、缩放后标注位置，字段卡片与标注双向定位，以及金额表单字段到 `*_minor` 识别区域 key 的显式映射；并确认关闭校对不确认候选。本次只发布 Workbench，不重建 Invoice Recognition。
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_workforce.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_workforce.test.mjs
+node --test frontend/oms-workbench/internal/server/*.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+deployments/d1/ops/test-release-bundle dist/omsbizfoundry-d1_v0.1.0-test.oms-v1.80_linux_amd64.tar.gz
+```
+
+公网 Unified Workbench 为 v1.80，Invoice Recognition 保持 v1.79。恢复点 `20261106T130859Z` 的 21 项 checksum、独立 D1 `check`、21/21 长运行服务、运行镜像摘要，以及 `/workbench/assets/` 下版本化 CSS／JS 的交互标记均已复验；未确认或修改识别候选。[发布验证](./reports/oms-invoice-review-zoom-linkage-publication-20261106.md)
+
+## 图片发票位置识别与人工校对（2026-11-06，已发布）
+
+BF-309 必须验证 JPEG／PNG、PDF 首页面、本地 Evidence 签名 URL 内部 origin 改写、摘要／大小复验、Tesseract 字段与归一化区域、低置信度警告、无法可靠识别字段不猜值、原图标注与右侧字段联动、已有内部字段警告的人类可读兼容、无自动确认，以及 OFD／未支持格式失败关闭。实际样本测试只能通过显式环境变量启用，不得把样本内容或路径写进代码。
+
+```sh
+(cd backend/services/invoice-recognition && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/invoice-recognition && INVOICE_OCR_TEST_IMAGE=/absolute/path/to/redacted-invoice.jpeg GOWORK=off go test ./internal/provider -run ActualImage -count=1)
+node --test frontend/oms-workbench/internal/server/*.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server/... && GOWORK=off go vet ./...)
+deployments/d1/ops/test-release-bundle dist/omsbizfoundry-d1_v0.1.0-test.oms-v1.79_linux_amd64.tar.gz
+```
+
+公网最终使用 Invoice Recognition／Workbench v1.79。恢复点 `20261106T124214Z`、独立 D1 `check`、21/21 长运行服务 healthy、运行镜像摘要、Tesseract `chi_sim+eng`／Poppler、真实上传识别和旧候选中文警告兼容均已复验；线上样本只生成 `needs_review` 候选，未点击确认。[发布验证](./reports/oms-invoice-recognition-visual-review-publication-20261106.md)
+
+## 发票识别与考勤折算（2026-11-06，已发布）
+
+BF-307 必须验证 Evidence 精确版本／大小／摘要、20 MiB 限制、Provider 可替换、模型身份、金额等式、置信度、人工确认 revision 和双重复键；并验证 PostgreSQL 隔离、HTTP／IAM、XML Parser、AI Provider 未配置失败关闭、Workbench 上传校对、D1 路由和备份恢复。BF-308 必须验证自然日／显式排班、多任职区间与间隔、月中入离职、部分日与带薪比例、重复记录、单日扣减上限、月度单位等式、People 快照、Payroll 整数半入折算与工资 revision；并验证 PostgreSQL 隔离、HTTP／IAM、页面、D1 与恢复。
+
+```sh
+(cd packages/invoice-recognition-contract && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/invoice-recognition && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd packages/attendance-summary-contract && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/workforce-attendance && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/payroll && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/workforce-attendance && TEST_DATABASE_URL='postgres://…' GOWORK=off go test -tags=integration ./internal/attendance -run AttendanceLifecycleRevisionReplayAndCalculation -count=1)
+(cd backend/services/invoice-recognition && TEST_DATABASE_URL='postgres://…' GOWORK=off go test -tags=integration ./internal/recognition -run PostgresProposalConfirmationReplayAndImmutableHistory -count=1)
+(cd backend/services/payroll && TEST_DATABASE_URL='postgres://…' GOWORK=off go test -tags=integration ./internal/payroll -run AttendanceSummaryApplicationFreezesSourceAndSurvivesManualRevision -count=1)
+node --test frontend/oms-workbench/internal/server/*.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server/...)
+deployments/d1/ops/test-release-bundle
+git diff --check
+```
+
+[核心验证](./reports/oms-invoice-recognition-attendance-proration-core-validation-20261105.md)、[发布验证](./reports/oms-invoice-recognition-attendance-proration-publication-20261106.md)
+
+## 多组织本方主体与内部管理修复（2026-11-05，已发布）
+
+BF-305／BF-306 必须验证 Tenant→Party 映射格式、重复与缺失失败关闭、备份恢复连续性、两个可信 Tenant 渲染不同本方主体；财务操作人姓名解析及有界回退；工资默认排除 `voided` 但可显式查看；管理员动作在拒绝前刷新当前 Session。Workbench v1.75、恢复点 `20261105T145201Z`、19/19 healthy 与公网资源摘要已通过；发布验收没有执行业务写入。[报告](./reports/oms-multitenant-operating-party-and-operations-publication-20261105.md)
+
+## Feedback V2 提交后停留与长登录 CSRF 连续性（2026-11-05，已发布）
+
+BF-303 必须验证：新增 Feedback 被宿主检测到后停止提交轮询但不隐藏 iframe；宿主把 V2 SDK 切换到 `status` 模式，用户停留在“我的反馈”，且下次显式关闭后重新打开仍进入 `status`。流程不得打开 V3 智能客服，不改变 SDK／Gateway／Feedback 数据契约；只有 SDK 的显式关闭消息可以隐藏反馈层。Workbench HTML 必须引用新的 Feedback JS 资源版本，避免不可变缓存继续执行旧关闭逻辑。
+
+BF-304 必须验证：IAM Session 仍有效但 `oms_iam_csrf` Cookie 缺失时，Feedback 配置和提交快照先调用同源 Identity CSRF 端点，响应必须同时提供匹配 JSON 与 Cookie；并发入口只发一个刷新请求，刷新失败不得打开 SDK 或绕过 Session。已有 Cookie 继续直接复用，不延长 Session。
+
+2026-11-05 公网发布验证：Workbench `v0.1.0-test.oms-v1.74@sha256:632c975b434c6fe914e6ebf88cf64aa9fdde7446500b0d864ec526165e952807` 为 Linux AMD64；v1.72 候选环境只改变 Workbench 镜像，预检返回 `contracts-valid`，正式 upgrade 创建 `/var/backups/omsbizfoundry/20261105T112239Z`。独立 D1 `check`、19 项备份 checksum、19/19 长运行容器 healthy 与运行摘要通过。公网 Feedback JS `v20261104.2` 与本地 SHA-256 同为 `b3bd4a9fe3806ba0bd8df8c7fe40a8374bce0414476237f6c05b1d7b9bcf7fda`；CSRF 端点返回 200 与新 Cookie，匹配 CSRF 但无 Session 的快照调用返回 401。升级重启使原浏览器 Session 失效，未代填账号密码，故发布后登录态点击留待用户重新登录。[报告](./reports/oms-feedback-long-session-csrf-publication-20261105.md)
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_feedback.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_feedback.test.mjs
+(PLAYWRIGHT_MODULE_PATH=/absolute/path/to/playwright/index.mjs BROWSER_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' make p8-feedback-browser-test)
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server -run 'TestOMSPhase1FeedbackSDKHostIsFailClosedAndEphemeral|TestOMSPhase1IsAuthenticatedOwnerComposition' -count=1)
+```
+
+## 账号／成员资料编辑与组织就绪恢复（2026-11-01，已发布）
+
+BF-302 必须验证：普通用户和跨 Tenant 目标不能修改账号姓名；管理员修改当前 Tenant Subject 时必须带 expected revision，成功递增 revision、当前 Session 读到新姓名且只写一条 IAM 审计，过期 revision 冲突；People 员工姓名／部门／岗位仍走 `person.profile` 且不修改登录标识。组织加载只有在 Session、Tenant 和当前 Membership 一致时成功，短暂失败最多自动重试三次，耗尽后侧栏不得显示旧组织，页面必须显示“组织信息未就绪”并提供重新加载及整页刷新。
+
+2026-11-01 BF-302 公网发布验证：Identity `v0.1.0-test.oms-v1.70` 与 Workbench `v0.1.0-test.oms-v1.71` 的 `linux/amd64` 不可变镜像摘要分别为 `sha256:9611e9c9dde92969991d2b304851bcc49630b883715e6e254db300f9c094eed0` 与 `sha256:0ad1d1d9581fc5a673552ead9ed8a08fe17120f5def10e89afc98255caf9f171`。v1.70 首次发布只替换 Identity／Workbench 镜像；发现 Identity JS 仍复用旧不可变缓存参数后，v1.71 只替换 Workbench 并把资源版本更新为 `20261101.1`。最终 upgrade 创建恢复点 `/var/backups/omsbizfoundry/20261101T021911Z`，19 项 checksum 全部通过；独立 D1 `check`、Identity schema 12、19/19 长运行容器 healthy 和运行镜像摘要通过。公网根入口返回 303、工作台 200，新版本 Identity JS 与本地 SHA-256 同为 `51c7be4b327f2f9de03e074c393f0c522aeb6592912fc3a9dfc78763f702f0d1`，包含两个编辑入口和组织失败恢复状态；新增写接口未登录调用返回 401。发布验收没有执行真实改名、成员编辑或其他业务写入。[报告](./reports/oms-account-profile-organization-readiness-publication-20261101.md)
+
+```sh
+(cd backend/platform/identity-access && GOWORK=off go test ./... && GOWORK=off go vet ./...)
+(cd backend/services/people-groups && GOWORK=off go test ./...)
+node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_identity_profile.test.mjs frontend/oms-workbench/internal/server/oms_phase1_organization_switch.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server)
+git diff --check
+```
+
+## Feedback V2 提交终点（2026-11-02，已发布）
+
+BF-301 必须验证：宿主打开提交页前通过同源 Gateway 读取当前登录账号的 V2 Feedback ID／总数基线；Gateway 只接受有效 Session＋CSRF，以可信 Tenant＋Subject 派生稳定匿名 ID，并只返回字符串 ID／总数，不暴露 API Key、IAM ID 或 Feedback 内容。提交使总数增加后 iframe 自动收起并显示成功提示，“我的反馈”仍可查看记录；短暂依赖失败、401／403 和旧 ID 重排不得被误报为成功。SDK 源码与 V2 数据契约保持不变。
+
+2026-11-02 公网故障取证确认 Workbench 已请求 `/gateway/feedback/submission-snapshot`，旧 Gateway `v0.1.0-test.oms-v1.63` 对该端口返回 404；公网 SDK V2 页面与资源均正常。本地 Gateway 专项与全量 Go test、vet 通过后发布 `v0.1.0-test.oms-v1.72@sha256:f04f5b0eecb0180ffa0cfa03832c2f8fa20672b8ae019184e972df485d493b67`（Linux AMD64），未修改 SDK。候选配置除 Gateway 镜像外摘要一致；正式 upgrade 创建 `/var/backups/omsbizfoundry/20261102T123614Z`，独立 D1 `check`、19/19 长运行容器 healthy 与运行镜像复验通过。公网未登录 POST 由原 404 变为 Gateway `403 csrf_failed`；随后使用既有受保护测试管理员完成 CSRF 200、登录 303、令牌更新 200 和快照 200，响应包含预期 `feedback_ids` 与 `feedback_count`，且没有创建反馈。[报告](./reports/oms-feedback-submit-terminal-publication-20261102.md)
+
+```sh
+node frontend/oms-workbench/internal/server/oms_phase1_feedback.test.mjs
+(cd backend/platform/gateway && go test ./internal/gateway -run 'TestFeedback' -count=1)
+(cd frontend/oms-workbench && go test ./internal/server -run 'TestOMSPhase1FeedbackSDKHostIsFailClosedAndEphemeral|TestOMSPhase1IsAuthenticatedOwnerComposition' -count=1)
+```
+
+## Feedback 弹层关闭与恢复（2026-10-31，本地与公网 D1 通过）
+
+BF-300 必须验证：嵌入 iframe 后，反馈卡片外空白区域的 `pointerdown`／`click` 不得发出关闭消息；只有右上角关闭按钮可发出一次 `feedback-sdk:close`；宿主收到关闭后隐藏但不销毁已确认会话，再次点击任一 `data-oms-v1-nav="feedback"` 入口按上次模式打开；退出登录仍销毁 iframe 和内存配置。当前 SDK 38/38、V2 生产构建、Workbench 服务测试、P8 真实双来源 Chromium 3 场景 32 项断言、公网 SDK 假 Key 零写入浏览器验证、联合备份、正式 upgrade、D1 全栈检查、19 个健康容器、线上 Workbench 资源摘要一致性均通过。[发布记录](./reports/oms-feedback-dismiss-reopen-publication-20261031.md)
+
+## Feedback V2 API Key 宿主握手（2026-10-31，本地与公网 D1 通过）
+
+BF-299 必须验证：SDK 公网构建允许精确 `https://oatest.antuinfo.cn`；`configure` 只向精确宿主 origin 返回匹配 `request_id` 的 `configured`，且不回显 Key；Workbench 在确认前不得打开 submit／status 或读取未读；超时、错误来源、错误窗口和陈旧 ID 必须拒绝；刷新 Session 后重新配置，退出后配置不可复用；静态资源和证据不得包含 Key。当前 SDK 37/37、生产构建、Workbench test／vet、P8 真实双来源 Chromium、联合备份、正式 upgrade、独立 D1 `check`、19/19 健康、公网资源摘要、受保护配置形状和真实公网 SDK submit/status 只读验收均通过；公网验证没有提交反馈，Feedback 写请求为 0。[发布记录](./reports/oms-feedback-v2-api-key-publication-20261031.md)
+
+## OMS 登录／注册认证界面品牌清理（2026-10-30，本地与公网 D1 通过）
+
+BF-298 必须验证：OMS 未认证 HTML 的浏览器标题不含旧公司名称；登录与邀请注册共用 `login-page--oms`；输出不包含 `login-page__watermark`、认证标题中的“北京京宏”或 `assets/jinghong-logo.webp`；旧版工作台的明确客户资料不被本次清理静默改写；登录、邀请预览和注册契约保持不变。当前 Workbench `go test ./...`、`go vet ./...`、邀请注册 Node 专项 3/3、本地浏览器视觉检查、联合备份 19/19 校验、正式 upgrade、独立 D1 `check`、19/19 容器健康和公网 HTML 负例均已通过。[发布记录](./reports/oms-auth-surface-brand-cleanup-publication-20261030.md)
+
+## 受邀人自助注册邀请（2026-10-30，本地与公网 D1 通过）
+
+BF-297 必须验证：管理员创建邀请时请求体不含姓名、手机号或邮箱；预览只返回组织、级别和有效期；受邀人可分别选择手机号／邮箱，新账号完成注册后可登录；既有账号只有原密码正确时才加入第二组织且原密码不变；系统管理员账号、重复组织、用后／过期／重签旧 Token 拒绝；Token 不进入 URL 查询串；成员关联不在 IAM 邀请中预设。普通 Identity Go test／vet、Workbench Go test／vet、JavaScript 语法、两组 Node 专项 7/7，以及一次性 PostgreSQL 18.6 上 `go test -count=1 -tags=integration ./internal/httpserver` 已通过；真库覆盖新手机号注册、一次性消费、管理员级别和既有邮箱账号原密码加入第二组织。公网发布又通过联合备份 19/19 校验、独立 D1 `check`、19/19 容器健康、路由负例和静态资源摘要核对；为了不制造身份数据，公网只做无效 Token 负例，没有由测试脚本发出真实邀请。需要验证真实成功旅程时，应由管理员为实际收件人创建邀请并由其本人完成注册。[发布记录](./reports/oms-recipient-registration-invitation-publication-20261030.md)、[本地验证](./reports/oms-recipient-registration-invitation-local-validation-20261030.md)
+
+## 账号页下拉排版回归（2026-10-30，本地与公网 D1 通过）
+
+BF-296 必须验证：统一下拉增强后的包装层具有受控宽度；组织切换按钮不换行；桌面搜索与三级筛选不把页面撑出视口；1000px 以下搜索独占一行、筛选器弹性换行；720px 以下筛选器按两列／单列收纳；表格横向滚动不传导到页面。专项 Node 测试 4/4、Workbench Go test、`git diff --check` 与本地窄屏浏览器走查通过。公网发布进一步通过联合备份 `20261030T133848Z` 的 19 项 checksum、候选契约预检、正式 upgrade、独立 D1 `check`、19/19 长期容器健康、运行镜像 digest 与 CSS `v20261030.5` 摘要核对。[发布记录](./reports/oms-account-directory-select-layout-repair-publication-20261030.md)
+
+```sh
+node --test frontend/oms-workbench/internal/server/oms_phase1_organization_switch.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server)
+git diff --check
+```
+
+## 侧边栏组织切换（2026-10-30，本地与公网 D1 通过）
+
+BF-295 必须验证：侧边栏底部始终显示当前组织；只有一个启用组织时按钮不可交互；有多个启用组织时可向上展开、标识当前项与级别；切换只调用 IAM 组织切换契约并重载；点击外部或 Escape 关闭清单。Workbench Go test、Identity JS 语法、专项 Node 测试和 `git diff --check` 已通过。公网发布进一步通过联合备份 `20261030T132510Z` 的 19 项 checksum、候选契约预检、正式 upgrade、独立 D1 `check`、19/19 长期容器健康、运行镜像 digest 与版本化 CSS／JS 摘要核对。发布验证不切换真实用户 Session，不修改 IAM／People 事实。[发布记录](./reports/oms-sidebar-organization-switch-publication-20261030.md)、[本地验证](./reports/oms-sidebar-organization-switch-local-validation-20261030.md)
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_organization_switch.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server)
+git diff --check
+```
+
+## 多组织账号（2026-10-30，本地与公网 D1 通过）
+
+Identity、Gateway、Workbench、People 全量 Go 测试和两份 Workbench JS `node --check` 实际通过；临时 PostgreSQL 18 对 Identity schema 12 的 HTTP／API Key integration（含“既有账号创建第二组织→列组织→切换 Subject／Tenant”）以及 People `(tenant_id, iam_subject_id)` 同租户唯一／跨租户允许测试实际通过。Gateway 回归确认 `POST /api/v1/session/organization` 成功后删除旧应用 Capability Cookie。公网发布进一步通过候选契约预检、联合备份 `20261030T130723Z` 的 19 项 checksum、Identity schema 12、独立 D1 `check`、19/19 长期容器健康、运行镜像 digest 与公网 JS 摘要核对。发布验证未新增或改动线上账号、权限和成员关联。[发布记录](./reports/oms-multi-organization-account-publication-20261030.md)、[本地验证](./reports/oms-multi-organization-account-local-validation-20261030.md)
+
+## 账号目录排版（2026-10-30，公网 D1 通过）
+
+BF-293 必须验证：四块等权概览和常驻流程不再占据首屏；组织上下文、成员关联、当前账号、权限／状态可直接扫读；搜索与三级筛选不改写 Owner；行操作仍保留既有命令；窄屏不压缩字段到逐字换行。本地 Node 定向回归 9/9、Workbench Go test、Identity JS 语法与 `git diff --check` 通过，并以 1800×1000 和窄屏浏览器实际检查。公网发布进一步通过候选 IAM 契约预检、备份 `20261030T121617Z` 全项 checksum、正式 upgrade、独立 D1 `check`、19/19 healthy、运行 digest、版本化 CSS／JS 摘要和真实管理员页面搜索筛选。[发布记录](./reports/oms-account-directory-layout-publication-20261030.md)、[本地验证](./reports/oms-account-directory-layout-local-validation-20261030.md)
+
+```sh
+node --check frontend/oms-workbench/internal/server/oms_phase1_identity.js
+node --test frontend/oms-workbench/internal/server/oms_phase1_identity_account_link.test.mjs frontend/oms-workbench/internal/server/oms_phase1_member_profile.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server)
+git diff --check
+```
+
+## 账号与成员关联闭环（2026-10-30，公网 D1 通过）
+
+BF-292 要求分别验证账号邀请可独立成功、People 关联可续办、缺员工身份返回机器可读修复路径、管理员显式关联和无姓名自动匹配。源码与定向服务测试通过后，公网只发布 Gateway／Workbench `v0.1.0-test.oms-v1.61`；备份 `20261029T170347Z` 及 checksum、候选 IAM 契约预检、正式 upgrade、独立 D1 `check`、19/19 healthy、运行 digest、公网 OpenAPI 与四个版本化 JS 摘要均通过。发布验证没有创建邀请、修改关联或写入业务记录。[发布记录](./reports/oms-account-person-linking-publication-20261030.md)
+
+```sh
+node --test frontend/oms-workbench/internal/server/oms_phase1_member_profile.test.mjs frontend/oms-workbench/internal/server/oms_phase1_identity_account_link.test.mjs
+node frontend/oms-workbench/internal/server/oms_phase1_open_api.test.mjs
+node acceptance/open-api-live/oms-open-api-test.test.mjs
+(cd frontend/oms-workbench && GOWORK=off go test ./internal/server)
+(cd backend/platform/gateway && GOWORK=off go test ./internal/gateway)
+(cd backend/services/people-groups && GOWORK=off go test ./...)
+```
+
+## 开放 API 现场测试 CLI（2026-10-30，本地工具完成／公网安全冒烟通过）
+
+BF-291 的入口为 `acceptance/open-api-live/oms-open-api-test`。`check` 必须只读；默认 `smoke` 只可创建临时 Evidence 上传会话并用合法 `reason` 立即终止，不得上传字节或创建报销；`draft`／`submit` 必须显式确认真实业务写入，后者再独立确认提交。API Key 与完整账号只从 0600／0400 文件或环境变量读取，不能作为 CLI 参数；固定输出不得包含 Secret、Authorization、签名 URL、完整账号或请求正文。缺 Person 映射必须报告 `person_mapping=missing`，不能误报 Key 无效或绕过员工业务门禁。
+
+```sh
+sh -n acceptance/open-api-live/oms-open-api-test
+node acceptance/open-api-live/oms-open-api-test.test.mjs
+(cd backend/platform/gateway && GOWORK=off go test ./internal/gateway)
+```
+
+2026-10-30 上述本地门禁实际通过。真实 `oatest` Key 的默认 `smoke` 先实际得到通用 context／`me`／settings 200、报销 403 `PERSON_MAPPING_REQUIRED`、Evidence session 201 和带 `client_shutdown` 的 abort 204；最终 `business_write=false`。随后通过正式 People API 将当前账号显式关联既有测试成员，`check --expect-person active` 通过，再用双重写入确认执行 `submit`：Evidence create→upload→complete 后为 `available`，¥1.00 测试报销提交后为 `payable`，详情及本人列表回读通过，公网 Workbench 显示同一“待支付”记录与 1 份附件；没有登记实际付款。Secret、身份 ID、签名 URL、会话／文件／报销 ID 和完整账号未写入固定报告。[使用说明](../acceptance/open-api-live/README.md)、[验证记录](./reports/oms-open-api-live-cli-validation-20261030.md)
+
+## 开放 API 账号凭证与按业务成员校验（2026-10-29，公网 D1 通过）
+
+BF-290 必须验证：未关联 Person 的 active IAM Subject 在持有开放 API Grant 时可以创建、列出和撤销 Key，`/me`／settings 与 Evidence 动作不调用 People 且不返回虚构 Person；报销任一动作在缺关联或关联非 active 时返回非重试 `403 PERSON_MAPPING_REQUIRED`，关联有效后签发带当前 Person 引用的 Internal Finance 短期 Credential。People 服务不可用必须与缺关联区分为可重试认证依赖故障。Key 上限按 Tenant＋Subject 计算；旧 Key Person 快照可读，新 Key 的 Person 列为空；通用 usage 的 Person 为空且员工业务审计记录实际解析出的当前 Person。
+
+2026-10-29 实际证据：Identity 与 Gateway `go test ./...` 通过；Gateway 契约覆盖无 Person 的 `/me` 成功和报销缺关联 403；Workbench Open API 11 项、成员档案 4 项 Node 回归通过；OpenAPI 3.1 JSON 可解析且全部报销动作声明 403。一次性 PostgreSQL 18.6 从空库重放至 `000011_account_scoped_api_keys.sql`，`go test -count=1 -tags=integration ./internal/apikey ./internal/httpserver` 通过。公网发布只替换 Identity／Gateway／Workbench 为 `v0.1.0-test.oms-v1.60`；备份 `20261029T153931Z`、候选 IAM 契约预检、upgrade、独立 D1 `check`、schema 11、nullable 列、19/19 healthy、运行 digest、公网 OpenAPI 与版本化 JS 摘要一致均通过。公网验证没有创建 Key 或业务记录。[发布记录](./reports/oms-open-api-account-scoped-key-publication-20261029.md)、[本地验证](./reports/oms-open-api-account-scoped-key-local-validation-20261029.md)
+
+## 项目详情本地／线上一致性纠偏（2026-10-29，公网 D1 通过）
+
+BF-289 必须验证：候选与生产对照使用相同浏览器缩放、视口和详情标签；收付款工作面不在宽屏并列，收款在前、付款在后；施工方摘要可见但详细金额与合同入口默认折叠，并可由用户显式展开。四标签、完整侧栏、真实逐笔记录和业务动作不得回退。
+
+2026-10-29 实际证据：专项 Node 回归 16/16、Workbench server Go test、JS 语法和目标差异检查通过。公网 Workbench `v0.1.0-test.oms-v1.59@sha256:f1394ec26dbd3ba015be8c1241bf625ec56bcded7cac41cf3d81b2ddd146807b` 仅替换 Workbench；联合备份 `20261029T141518Z` checksum、IAM 契约预检、升级、独立 D1 `check`、19/19 正式容器 healthy、JS／CSS 摘要一致均通过。真实管理员 Chrome 统一为 125% 后验证“收付款”上下排列及施工方默认折叠，未执行业务写入。[发布记录](./reports/oms-project-detail-production-parity-publication-20261029.md)
+
+## 项目详情宽画布（2026-10-29，公网 D1 通过）
+
+BF-288 必须验证：桌面详情画布最大 1440px 且单侧至少保留 32px 留白；往来单位最大 980px；1100px 以下仍回到 920px 受控宽度，720px 以下仍为单列全宽。四标签、BF-281 明细、当前侧栏和六列项目列表不得因宽度调整回退。
+
+2026-10-29 实际证据：16 项相关 Node 回归、Workbench server Go test、JS 语法和目标差异检查通过。公网 Workbench `v0.1.0-test.oms-v1.58@sha256:7a6eb43929102d6c61af58904a41e4489b64c312696d9ef60ce349543a2e4a8a` 仅替换 Workbench；联合备份 `20261029T135027Z` checksum、IAM 契约预检、升级、独立 D1 `check`、19/19 healthy、运行摘要和公网 CSS `5696aabb…e0008` 与本地一致均通过。未使用用户凭据或执行业务写入。[发布记录](./reports/oms-project-detail-wide-canvas-publication-20261029.md)
+
+## 项目详情重点化排版（2026-10-29，公网 D1 通过）
+
+BF-286／BF-287 必须验证：四个详情标签及 BF-281 逐笔明细仍存在；详情内容区有受控宽度，往来单位和合同不再使用装饰性编号／徽标；概览与收付款以待回款／待支付为唯一主金额，已完成金额、总额、进度与票据状态保持可读。金额计算继续使用整数最小货币单位；空数据、结清和超额异常必须有独立状态。回归必须同时断言当前侧栏和六列项目列表未被回退。
+
+2026-10-29 实际证据：JS 语法、16 项专项 Node 回归、Workbench server Go test 和目标差异检查通过；本地候选经用户确认。公网 Workbench `v0.1.0-test.oms-v1.57@sha256:73288153191402cd94c49764d7f2208277793b0ff2660d9987730f1758fa260f` 只替换 Workbench；联合备份 `20261029T132726Z` checksum、候选 IAM 契约预检、升级、独立 D1 `check`、19/19 healthy、运行摘要和公网 `20261029.2` JS／CSS 资源核对通过。公网核对未使用用户凭据或执行业务写入。[发布记录](./reports/oms-project-detail-focus-layout-publication-20261029.md)
+
+## 内部管理操作人与批量发放入口（2026-10-28，公网 D1 通过）
+
+BF-285 必须验证：项目详情具有“概览／往来单位／合同／收付款”四个可键盘操作的标签，默认进入概览；收付款仍包含开票、回款、收票、支付逐笔入口。回归同时必须断言完整的八个产品级导航目标、公司内部管理三个入口、项目统计摘要、六列列表、排序、应收／应付状态和固定最右详情动作仍存在；还必须用真实浏览器从记录页项目标签进入详情并返回原记录页。发布构建应核对源目录和版本化资产，避免同名旧 Workbench 覆盖当前基线。
+
+BF-284 必须验证：People Person 当前 revision 的 actor ID／display name 能由列表 API 只读返回，成员页不得出现固定“Owner 服务”；Payroll 当前创建 Subject 与登录 Subject 相同时显示 IAM 姓名。待发放／部分发放记录勾选后批量入口可点击；若所选成员缺工资账户，入口必须列出姓名和补档／同步路径，且不得提交任何发放命令。
+
+2026-10-28 实际证据：10 项相关 Node 回归、People 全包 Go test、Workbench Go test、两组件 Go vet、JS `node --check` 和 `git diff --check` 通过。数据库只读复读确认现有员工 revision 的 actor 为 Subject `15f6c50c…`、显示名“戴鹏飞”。公网 People & Groups `v0.1.0-test.oms-v1.52@sha256:6276c50cb243d015c1b6f9464ba4430835aa94f8cac88d7dd6b507b79b6d7ede` 与 Workbench `v0.1.0-test.oms-v1.52@sha256:caa06d4bd1933b3b23c7ee8a89eb4902bb8c253d6a9486173d9d67775612373c` 发布前候选预检和联合备份 `20261028T125445Z` 完成；D1 `check` 和 19/19 healthy 通过。公网两个新 JS 资源与本地 SHA-256 完全一致；未执行工资发放或账户补写。[发布记录](./reports/oms-internal-operator-batch-payment-publication-20261028.md)
+
+## 工资表候选成员刷新（2026-10-28，公网 D1 通过）
+
+BF-283 必须验证：成员与薪酬档案在 Workbench 已打开后新增，点击“新建工资表”或“同步成员”仍会先读取最新 People／Payroll 事实；候选只要求在职和薪酬档案，不要求工资账户。缺薪酬档案的成员必须排除，缺工资账户的候选可以建表但不能实际发放。
+
+2026-10-28 实际证据：`node --check`、8 项相关 Node 回归、Workbench Go test／vet 和 `git diff --check` 通过。公网 Workbench `v0.1.0-test.oms-v1.51@sha256:0f5e681c1074950882548ed8a375cdf2e855ef0025e0e9f5fae943af057cca7e` 发布前候选预检与联合备份 `20261028T124216Z` 完成；D1 `check` 和 19/19 healthy 通过。真实管理员 Chrome 刷新后，成员页显示员工2已配置薪酬、员工1未配置；工资页点击“新建工资表”后表单正常出现且只列员工2。随后取消表单，未创建工资表、未写业务数据。[发布记录](./reports/oms-payroll-member-candidate-refresh-publication-20261028.md)
+
+## Payroll 授权回跳与可选工资账号（2026-10-28，公网 D1 通过）
+
+BF-282 必须验证：Workbench 程序化授权不跟随 Gateway 成功 303 到应用根页面，明确 3xx／浏览器 `opaqueredirect` 作为凭证已建立，非重定向 4xx／5xx 仍失败关闭。成员工资账号为空时不得调用 Payment Profile；People 已保存后的错误必须准确指出成员状态、薪酬档案或工资账户档案。验收不得自动重放此前失败的工资写入。
+
+2026-10-28 实际证据：主脚本与内部管理脚本 `node --check`、Workbench Go test／vet、13 项相关 Node 回归和 `git diff --check` 通过。公网 Workbench `v0.1.0-test.oms-v1.50@sha256:c990777ce60cc7cd94477de3eea4234ddc18ed06a37c0524a4eb445d5362edda` 发布前联合备份 `20261028T123049Z` 完成；候选 IAM 契约预检、D1 `check` 和 19/19 healthy 通过。公开资源包含 `redirect: manual`、成功重定向接受规则、`if(accountNumber)` 和精确阶段提示。真实管理员 Chrome 刷新后打开既有“员工1”编辑页，薪酬仍显示未配置，新工资账号提示“不填写表示不变”；随后取消，业务写入为 0。既有成员需要用户确认金额后显式续办。[发布记录](./reports/oms-payroll-authorization-optional-account-publication-20261028.md)
+
+## 项目票款明细与记录回跳（2026-10-28，公网 D1 通过）
+
+BF-281 必须验证：项目详情中的有效回款／支付逐笔数与 Money 汇总一致，记录至少显示日期、对手方、精确金额和备注；无记录时显示明确空状态。应收／应付六个记录子入口中的已归属项目名称必须为独立按钮，点击后打开该项目详情且不触发原记录弹窗；返回文案与来源子入口一致，关闭详情后原搜索、筛选、排序、分页和焦点不丢失。侧栏切页仍须按 BF-172 关闭详情。验收不得创建、修改或删除票款业务事实。
+
+2026-10-28 实际证据：`node --check`、Workbench Go test／vet、13 项相关 Node 回归和 `git diff --check` 通过；全量旧 Node 集合同时实际运行 261 项，其中 253 通过，剩余 8 项是 Feedback、Finance 旧版本断言及 D1 profile 测试夹具的既有失败，未计入通过且未扩大本项修复范围。公网 Workbench `v0.1.0-test.oms-v1.49@sha256:88b52d7f26ceee12bfbddbb39890c5c8b192da70b5b6f1f9b1ecf84857d48a1d` 发布前联合备份 `20261028T121152Z` 完成；候选 IAM 契约预检、D1 `check`、19/19 running、0 unhealthy 通过，除 Workbench 外 18 个容器 ID 摘要保持不变。真实管理员 Chrome 从“应收管理／开票管理／回款记录”逐项确认项目标签可点击，详情返回分别显示“返回应收记录／开票记录／回款记录”；项目“测试项目1”的回款明细实际显示 `2026/10/28 · 甲方1 · ¥300.00 · 项目回款`，并同时显示支付明细空状态。应付侧当前无记录，入口空状态与公共绑定代码由静态门禁覆盖。本轮公网验收业务写入为 0。[发布记录](./reports/oms-project-cash-detail-record-return-publication-20261028.md)
+
+## 当前租户 Party 运行时修复（2026-10-28，公网 D1 通过）
+
+BF-280 必须验证：准备脚本显式使用目标 Tenant，登录返回 Tenant 与期望值不一致时失败关闭；Contract／Money preflight、mapping 与 transition 的每次 ops 都覆盖同一 `IAM_TENANT_ID`。每个已引用本地主体必须按登记标识或唯一完全一致名称逐条映射，禁止模糊合并；两个 Owner 都必须返回 `party_runtime_mode=directory` 和 `directory_authority_established=true`。Operating Party 必须是当前 Tenant 的 active Party；真实浏览器重新打开“新建项目”时不得再出现“合同功能尚未准备完成”，且验收不得提交虚构项目。
+
+2026-10-28 实际证据：升级前 D1 联合备份 `20261028T114040Z` 成功；当前 Tenant 的 Contract／Money 各记录三条精确映射并执行 cutover，Workbench 重配当前 Tenant Operating Party 后 D1 `check` exit 0。真实管理员 Chrome 刷新后“新建项目”表单正常显示，红色断点提示消失，随后取消，项目数保持 0。`python3 -m unittest acceptance/oms-phase1-public/test_prepare_party_runtime.py` 10 项通过，覆盖显式 Tenant 注入和凭据文件 0600 门禁。[验证及修复记录](./reports/oms-party-runtime-current-tenant-repair-validation-20261028.md)
+
 ## 管理员默认全业务权限画像（2026-10-28，本地与公网发布门禁通过）
 
 BF-279 必须验证：IAM 实际装载的每个 Audience／Action 都被精确授予同 Tenant 启用管理员，重复启动／登录不重复有效 Grant；系统管理员、普通用户、其他 Tenant 零增量。提升启用用户后立即补齐画像并使旧 Session 失效；降级原子撤销 `administrator_profile` 来源 Grant 且保留 `manual` Grant。Capability Manifest 新增动作后重启可补齐缺项。管理员可签发 Party 新增和 Project 创建凭证，但目标应用的跨 Tenant、业务状态、revision 与历史不变量继续拒绝。
@@ -147,7 +516,7 @@ BROWSER_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 make p8-feedback-browser-test
 ```
 
-当前实际结果为 3 个场景、29 项断言通过：跨域单 iframe／精确消息来源／项目 115 配置形状／诊断 allowlist／提交／状态／未读与迟到响应／关闭／换票／退出清理，以及 403 不可发现、503 局部降级且 OMS 业务按钮仍可操作。测试 Key 明显无效，浏览器和两个临时服务在 `finally` 中关闭，不生成含配置的持久证据。该入口不连接真实 Feedback 项目，不替代通知、有效凭证、双账号／双租户、附件／回复／单条已读、生产 Origin 白名单和公网 Console 验收。[说明](../acceptance/p8-feedback-browser/README.md)
+当前实际结果为 3 个场景、34 项断言通过：跨域单 iframe／精确消息来源／项目 115 配置形状／诊断 allowlist／提交后保持 iframe 并切换“我的反馈”／显式关闭后按 status 恢复／未读与迟到响应／换票／退出清理，以及 401 会话失效、503 局部降级且 OMS 业务按钮仍可操作。测试 Key 明显无效，浏览器和两个临时服务在 `finally` 中关闭，不生成含配置的持久证据。该入口不连接真实 Feedback 项目，不替代通知、有效凭证、双账号／双租户、附件／回复／单条已读、生产 Origin 白名单和公网 Console 验收。[说明](../acceptance/p8-feedback-browser/README.md)
 
 ## 2026-10-26 OMS1 迭代 P9 D1 装配源码门禁
 
@@ -5886,3 +6255,5 @@ Source seed 的相邻引用为合成提供者，Evidence 为独立库 SQL 元数
 
 入口为[小系统边界演变账](./specs/assembly/small-system-boundary-evolution-ledger.md)。本轮只读核对三份 Capability Manifest 和 Workload Policy：Project／Production／Contract 分别有 25／13／9 项能力；Project 当前出站 10 个 audience、入站 6 个 workload，Production 为出站 3／入站 1，Contract 为出站 2／入站 5；Project 与 Approval、Billing、Business Engagement、Cost、Production 存在 5 组双向引用。`make architecture-boundary-static-audit` 实际通过 15 应用、0 跨应用 import、0 replace、0 跨库 SQL 机制。该结果只登记为最低隔离守卫，不是运行时边界、第二客户或完整 OA 通过。
 BF-279 必须验证：IAM 实际装载的每个 Audience／Action 都被精确授予同 Tenant 启用管理员，重复启动／登录不重复有效 Grant；系统管理员、普通用户、其他 Tenant 零增量。提升启用用户后立即补齐画像并使旧 Session 失效；降级原子撤销 `administrator_profile` 来源 Grant且保留 `manual` Grant。Capability Manifest 新增动作后重启可补齐缺项。管理员可签发 Party 新增和 Project 创建凭证，但目标应用的跨 Tenant、业务状态、revision 与历史不变量继续拒绝。Workbench 文案不得再声称管理员不会自动获得业务权限。[规格](./specs/identity/oms-administrator-access-profile-v1.md)
+2026-11-09 BF-323 本地与公网发布验证通过：Internal Finance Requests `go test -count=1 ./...`、`go vet ./...`，Unified Workbench `go test -count=1 ./...`、`go vet ./...`，临时 PostgreSQL 18.6 上 `go test -tags=integration -count=1 ./internal/finance`，Workbench `node --check` 与全量 301 项 `node --test *.test.mjs` 均通过。新增覆盖草稿强重复读取投影、稳定匹配引用、HTTP 409 结构化响应、`submit` 动作收回、Workbench 占用申请展示／查看和并发提交回退。公网 Finance／Workbench `v0.1.0-test.oms-v1.94`、备份 `20261109T122746Z`、独立 D1 检查、21/21 healthy、两项镜像摘要、公网三个资源同哈希和两条既有记录状态／revision 不变均通过；未执行线上业务写入。[报告](./reports/oms-finance-duplicate-occupancy-local-validation-20261109.md)
+2026-11-09 BF-324 本地与公网发布验证通过：Internal Finance Requests、Unified Workbench 与 Gateway 的 `go test -count=1 ./...`、`go vet ./...` 通过；临时 PostgreSQL 18.6 上 `go test -tags=integration -count=1 ./internal/finance` 覆盖软删除默认隐藏、审计包含、历史保留以及删除原因／Actor／Credential；Workbench `node --check` 与全量 302 项 Node 回归通过。公网最终 Suite v1.96、备份 `20261109T130558Z` 21 项 checksum、独立 D1 检查、21/21 healthy、精确镜像摘要、公网 JS／CSS／OpenAPI 同哈希通过。发布后现有两条目标申请状态／revision／`deleted_at` 不变，新增删除事件为 0。[报告](./reports/oms-finance-duplicate-resolution-soft-delete-publication-20261109.md)

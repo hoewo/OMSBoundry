@@ -13,7 +13,21 @@ test('formal payroll execution replaces browser persistence only when both owner
   assert.match(internal,/ownerPayroll\?\{payroll_periods:\[\]\}/);
   assert.match(internal,/renderMembers\(\);if\(!ownerPayroll\)renderPayroll\(\);if\(!ownerFinance\)renderFinance\(\)/);
   assert.ok(payroll.includes("if(!root||!model||!ownerAPI?.app?.('people-groups')||!ownerAPI?.app?.('payroll'))return"));
-  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261026\.1/);
+  assert.match(server,/oms-phase1-payroll-owner\.js\?v=20261105\.1/);
+});
+
+test('payroll hides voided records by default while keeping history reachable',()=>{
+  assert.match(html,/data-internal-payroll-status><option value="active" selected>有效记录<\/option><option value="">全部状态<\/option>/);
+  assert.match(html,/value="voided">已作废<\/option>/);
+  assert.match(payroll,/status==='active'\?item\.line\.status!=='voided'/);
+  assert.match(internal,/statusFilter==='active'\?item\.status!=='voided'/);
+});
+
+test('payroll refreshes owner facts before evaluating new and synced members',()=>{
+  assert.match(payroll,/data-internal-new-payroll.*addEventListener\('click',async\(\)=>\{await load\(\);openCreate\(\)\}\)/);
+  assert.match(payroll,/data-internal-payroll-sync.*addEventListener\('click',async\(\)=>\{await load\(\);openSync\(\)\}\)/);
+  assert.match(payroll,/item\.status==='active'&&compensationIDs\.has\(item\.id\)/);
+  assert.doesNotMatch(payroll,/eligibleMembers[\s\S]{0,500}payment/i);
 });
 
 test('payroll offers a visible Beijing reference and an editable tenant scheme journey',()=>{
@@ -63,6 +77,13 @@ test('payroll UI keeps preview, partial failure and overage recovery visible',()
   assert.match(payroll,/新建补发／扣回/);
   assert.match(payroll,/工资表生成后补入成员/);
   assert.match(html,/value="recovery_pending">待扣回/);
+});
+
+test('payroll resolves the current audit actor and explains missing accounts for batch payment',()=>{
+  assert.match(payroll,/id===String\(root\.dataset\.subjectId\|\|''\)&&root\.dataset\.displayName\?root\.dataset\.displayName/);
+  assert.match(payroll,/allPayable=sameRun&&rows\.every\(item=>paymentReady\(item\.line\)\)/);
+  assert.match(payroll,/title:'暂不能批量确认'/);
+  assert.match(payroll,/所选成员缺少工资账户/);
 });
 
 test('gateway API path validator admits versioned command suffixes used by payroll',()=>{

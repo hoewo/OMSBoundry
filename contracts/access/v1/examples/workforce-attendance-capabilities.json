@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "application_id": "workforce-attendance",
+  "application_version": "0.1.0",
+  "audience": "workforce-attendance",
+  "capabilities": [
+    { "id": "workforce-attendance.tenant.read", "description": "读取本租户考勤政策、考勤、请假和月度摘要", "risk": "privileged", "resource_types": ["person", "attendance_record", "leave_record", "monthly_summary"] },
+    { "id": "workforce-attendance.policy.manage", "description": "维护版本化考勤与折算政策", "risk": "privileged", "resource_types": ["attendance_policy"] },
+    { "id": "workforce-attendance.record.manage", "description": "登记考勤和请假事实", "risk": "write", "resource_types": ["person", "attendance_record", "leave_record"] },
+    { "id": "workforce-attendance.summary.calculate", "description": "根据任职、考勤、请假和政策计算月度摘要", "risk": "write", "resource_types": ["person", "monthly_summary"] },
+    { "id": "workforce-attendance.summary.read", "description": "读取不可变月度考勤折算摘要", "risk": "privileged", "resource_types": ["monthly_summary"] }
+  ]
+}

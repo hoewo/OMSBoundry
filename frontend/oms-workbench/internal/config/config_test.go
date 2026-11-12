@@ -54,9 +54,28 @@ func TestOMSOperatingPartyIDMustBeCanonicalAndLegacyAliasRemainsCompatible(t *te
 	}
 }
 
+func TestOMSOperatingPartyBindingsAreTenantScopedAndCanonical(t *testing.T) {
+	t.Setenv("SUITE_MANIFEST_PATH", "test.json")
+	t.Setenv("OMS_OPERATING_PARTY_BINDINGS", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb,cccccccc-cccc-4ccc-8ccc-cccccccccccc=dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	cfg, err := Load()
+	if err != nil || len(cfg.OMSOperatingPartyBindings) != 2 || cfg.OMSOperatingPartyBindings["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"] != "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" {
+		t.Fatalf("valid tenant bindings rejected: cfg=%+v err=%v", cfg, err)
+	}
+	for _, invalid := range []string{
+		"not-a-tenant=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa=not-a-party",
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb,aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa=dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+	} {
+		t.Setenv("OMS_OPERATING_PARTY_BINDINGS", invalid)
+		if _, err := Load(); err == nil {
+			t.Fatalf("invalid binding %q accepted", invalid)
+		}
+	}
+}
+
 func TestFeedbackSDKURLMustBeHTTPSOrLoopbackHTTP(t *testing.T) {
 	t.Setenv("SUITE_MANIFEST_PATH", "test.json")
-	for _, valid := range []string{"", "https://feedback.example.test/sdk-v2/index.html?embed=web", "http://127.0.0.1:4180/sdk"} {
+	for _, valid := range []string{"", "https://feedback.example.test/sdk-v3/index.html?embed=web", "http://127.0.0.1:4180/sdk"} {
 		t.Setenv("FEEDBACK_SDK_URL", valid)
 		cfg, err := Load()
 		if err != nil || cfg.FeedbackSDKURL != valid {

@@ -6,6 +6,7 @@ It verifies:
 
 - one reusable cross-origin iframe and the production postMessage bridge;
 - protected runtime configuration, project 115, submit/status opens and unread count;
+- submission creation keeps the iframe visible, switches to status and reopens on status after an explicit close;
 - rejection of a same-page forged SDK message;
 - validated close and session refresh messages;
 - logout cleanup;

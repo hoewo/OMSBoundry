@@ -67,8 +67,12 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 	mux.HandleFunc("POST /api/v1/service-credentials", server.issueServiceCredential)
 	mux.HandleFunc("GET /api/v1/references/subjects/{subjectID}", server.subjectReference)
 	mux.HandleFunc("POST /api/v1/activate", server.requireCSRF(server.activate))
+	mux.HandleFunc("POST /api/v1/invitations/preview", server.requireCSRF(server.previewRegistrationInvitation))
+	mux.HandleFunc("POST /api/v1/invitations/register", server.requireCSRF(server.completeRegistrationInvitation))
 	mux.HandleFunc("POST /api/v1/password-reset/complete", server.requireCSRF(server.completePasswordReset))
 	mux.Handle("GET /api/v1/session", server.authenticate(http.HandlerFunc(server.currentSession)))
+	mux.Handle("GET /api/v1/organizations", server.authenticate(http.HandlerFunc(server.listOrganizations)))
+	mux.Handle("POST /api/v1/session/organization", server.authenticate(http.HandlerFunc(server.requireCSRF(server.switchOrganization))))
 	mux.Handle("GET /api/v1/tenant", server.authenticate(http.HandlerFunc(server.currentTenant)))
 	mux.Handle("POST /api/v1/logout", server.authenticate(http.HandlerFunc(server.requireCSRF(server.logout))))
 	mux.Handle("POST /api/v1/credentials", server.authenticate(http.HandlerFunc(server.requireCSRF(server.issueCredential))))
@@ -81,6 +85,7 @@ func New(pool *pgxpool.Pool, identities *identity.Service, keys *signing.Store, 
 		mux.HandleFunc("POST /api/v1/internal/open-api/usage-result", server.completeAPIUsage)
 	}
 	mux.Handle("GET /api/v1/admin/subjects", server.authenticate(server.requireAdmin(http.HandlerFunc(server.listSubjects))))
+	mux.Handle("POST /api/v1/admin/subjects/{subjectID}/profile", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.updateSubjectProfile)))))
 	mux.Handle("POST /api/v1/admin/invitations", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.invite)))))
 	mux.Handle("POST /api/v1/admin/invitations/reissue", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.reissueInvitation)))))
 	mux.Handle("POST /api/v1/admin/password-resets", server.authenticate(server.requireAdmin(http.HandlerFunc(server.requireCSRF(server.createPasswordReset)))))
@@ -218,6 +223,37 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) currentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"principal": currentPrincipal(r.Context())})
 }
+func (s *Server) listOrganizations(w http.ResponseWriter, r *http.Request) {
+	values, err := s.identities.ListOrganizations(r.Context(), currentPrincipal(r.Context()))
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"organizations": values})
+}
+func (s *Server) switchOrganization(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		TenantID string `json:"tenant_id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		writeProblem(w, http.StatusUnauthorized, "authentication_required", "需要登录")
+		return
+	}
+	result, err := s.identities.SwitchOrganization(r.Context(), cookie.Value, currentPrincipal(r.Context()), input.TenantID)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	maxAge := int(time.Until(result.ExpiresAt).Seconds())
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: result.Token, Path: "/", Secure: s.secureCookie, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge, Expires: result.ExpiresAt})
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, result)
+}
 func (s *Server) currentTenant(w http.ResponseWriter, r *http.Request) {
 	principal := currentPrincipal(r.Context())
 	var value struct {
@@ -250,6 +286,39 @@ func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"subject": subject})
+}
+func (s *Server) previewRegistrationInvitation(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token string `json:"token"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.identities.PreviewRegistrationInvitation(r.Context(), input.Token)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"invitation": value})
+}
+func (s *Server) completeRegistrationInvitation(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token           string `json:"token"`
+		LoginIdentifier string `json:"login_identifier"`
+		DisplayName     string `json:"display_name"`
+		Password        string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.identities.CompleteRegistrationInvitation(r.Context(), input.Token, input.LoginIdentifier, input.DisplayName, input.Password)
+	if err != nil {
+		mapError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, value)
 }
 func (s *Server) completePasswordReset(w http.ResponseWriter, r *http.Request) {
 	var input struct {
@@ -397,6 +466,20 @@ func (s *Server) listSubjects(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"subjects": values})
 }
+func (s *Server) updateSubjectProfile(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ExpectedRevision int64  `json:"expected_revision"`
+		DisplayName      string `json:"display_name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.identities.UpdateSubjectDisplayName(r.Context(), currentPrincipal(r.Context()), strings.ToLower(strings.TrimSpace(r.PathValue("subjectID"))), input.ExpectedRevision, input.DisplayName); err != nil {
+		mapError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username        string `json:"username,omitempty"`
@@ -411,7 +494,13 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(identifier) == "" {
 		identifier = input.Username
 	}
-	result, err := s.identities.Invite(r.Context(), currentPrincipal(r.Context()), identifier, input.DisplayName, input.Administrator)
+	var result identity.TokenResult
+	var err error
+	if strings.TrimSpace(identifier) == "" {
+		result, err = s.identities.CreateRegistrationInvitation(r.Context(), currentPrincipal(r.Context()), input.Administrator)
+	} else {
+		result, err = s.identities.Invite(r.Context(), currentPrincipal(r.Context()), identifier, input.DisplayName, input.Administrator)
+	}
 	if err != nil {
 		mapError(w, err)
 		return

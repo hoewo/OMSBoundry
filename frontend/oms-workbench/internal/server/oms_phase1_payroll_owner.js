@@ -28,7 +28,7 @@
   const labels={review_pending:'待核对',ready_to_pay:'待发放',partially_paid:'部分发放',paid:'已发放',zero_pending:'待确认零发放',no_payment_required:'无需发放',recovery_pending:'待扣回',voided:'已作废'};
   const statusLabel=value=>labels[value]||value||'—';
   const statusTone=value=>value==='paid'||value==='no_payment_required'?'positive':value==='ready_to_pay'||value==='partially_paid'||value==='zero_pending'?'warning':value==='voided'?'muted':'';
-  const actorLabel=run=>run?.created_by_subject_id?'账号 '+String(run.created_by_subject_id).slice(0,8):'—';
+  const actorLabel=run=>{const id=String(run?.created_by_subject_id||'');if(!id)return '—';return id===String(root.dataset.subjectId||'')&&root.dataset.displayName?root.dataset.displayName:'账号 '+id.slice(0,8)};
   const runPath=run=>'/api/v1/payroll-periods/'+encodeURIComponent(run.id);
   const linePath=(run,line)=>runPath(run)+'/lines/'+encodeURIComponent(line.id);
   const remaining=line=>BigInt(String(line.net_payable_minor||0))-BigInt(String(line.allocated_paid_minor||0));
@@ -91,7 +91,7 @@
   }
   function syncBatchActions(items){
     const existing=new Set(items.map(item=>item.line.id));for(const id of state.selected)if(!existing.has(id))state.selected.delete(id);
-    const rows=items.filter(item=>state.selected.has(item.line.id)),sameRun=rows.length>0&&rows.every(item=>item.run.id===rows[0].run.id),allEditable=sameRun&&rows.every(item=>editable(item.line)),allPayable=sameRun&&rows.every(item=>paymentReady(item.line)&&!item.line.payment_account_missing);
+    const rows=items.filter(item=>state.selected.has(item.line.id)),sameRun=rows.length>0&&rows.every(item=>item.run.id===rows[0].run.id),allEditable=sameRun&&rows.every(item=>editable(item.line)),allPayable=sameRun&&rows.every(item=>paymentReady(item.line));
     const bar=root.querySelector('[data-internal-payroll-batch]');bar.querySelector('strong').textContent=String(rows.length);
     bar.querySelector('[data-internal-payroll-select-all]').disabled=!state.selectable.length;
     bar.querySelector('[data-internal-payroll-clear]').disabled=rows.length===0;
@@ -101,7 +101,7 @@
   function render(){
     renderSchemeState();
     const search=root.querySelector('[data-internal-payroll-search]').value.trim().toLowerCase(),status=root.querySelector('[data-internal-payroll-status]').value,month=root.querySelector('[data-internal-payroll-month]').value;
-    let items=payrollRows().filter(item=>(!search||[item.line.person_display_name,item.line.person_reference_code,item.department,item.run.period,item.run.label].some(value=>String(value||'').toLowerCase().includes(search)))&&(!status||item.line.status===status)&&(!month||item.run.period===month));
+    let items=payrollRows().filter(item=>(!search||[item.line.person_display_name,item.line.person_reference_code,item.department,item.run.period,item.run.label].some(value=>String(value||'').toLowerCase().includes(search)))&&(status==='active'?item.line.status!=='voided':!status||item.line.status===status)&&(!month||item.run.period===month));
     items=sorted(items);root.querySelector('[data-internal-payroll-total]').textContent=String(items.length);
     const range=renderPager(items.length),body=root.querySelector('[data-internal-payroll-body]');
     if(state.loading)body.innerHTML=emptyRow('正在读取工资记录','请稍候。');
@@ -241,7 +241,8 @@
     show({kicker:'工资导入预览',title:preview.confirmable?'预览校验通过':'预览存在问题',submit:'确认写入',enabled:Boolean(preview.confirmable),dismissOnly:!preview.confirmable,body:'<form><div class="oms-v1__table-wrap"><table class="oms-v1__table"><thead><tr><th>成员</th><th>匹配</th><th>变更字段</th><th>问题</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+field('提交原因 *','<input name="reason" required maxlength="500" value="批量录入绩效与个税">',true)+'<div class="oms-v1__form-note">预览有效期有限；确认时会再次核对工资表 revision，过期或被他人修改后必须重新预览。</div>'+formStatus('')+'</form>',onSubmit:preview.confirmable?async formData=>{await post(runPath(run)+'/imports:commit',{command_id:uuid(),preview_id:preview.id,preview_hash:preview.preview_hash,expected_run_revision:preview.payroll_run_revision,reason:String(formData.get('reason')||'').trim()});state.selected.clear();close();await load()}:null});
   }
   function openBatchPayment(){
-    let rows;try{rows=selectedRows()}catch(error){show({kicker:'工资发放',title:'批量确认',dismissOnly:true,body:'<div class="oms-v1__empty"><strong>无法批量发放</strong><span>'+safe(error.message)+'</span></div>'});return}if(!rows.every(item=>paymentReady(item.line)&&!item.line.payment_account_missing))return;
+    let rows;try{rows=selectedRows()}catch(error){show({kicker:'工资发放',title:'批量确认',dismissOnly:true,body:'<div class="oms-v1__empty"><strong>无法批量发放</strong><span>'+safe(error.message)+'</span></div>'});return}if(!rows.every(item=>paymentReady(item.line)))return;
+    const missing=rows.filter(item=>item.line.payment_account_missing);if(missing.length){show({kicker:'工资发放',title:'暂不能批量确认',dismissOnly:true,body:'<div class="oms-v1__empty"><strong>所选成员缺少工资账户</strong><span>'+safe(missing.map(item=>item.line.person_display_name).join('、'))+'：请先在成员管理中维护账户，再从工资详情执行“同步工资账户”。</span></div>'});return}
     const run=rows[0].run;
     show({kicker:'工资发放',title:'批量确认 '+rows.length+' 人',submit:'提交批量发放',enabled:true,body:'<form class="oms-v1__form-grid">'+field('实际发薪日期 *','<input name="occurred_on" type="date" required value="'+today()+'">')+field('统一备注','<input name="note" maxlength="500" value="工资实际发放确认">')+'<div class="oms-v1__batch-payment is-wide">'+rows.map(item=>'<section><header><strong>'+safe(item.line.person_display_name)+'</strong><span>未发 '+model.money(remaining(item.line))+'</span></header>'+paymentFields(item.line,item.line.id+'_')+'</section>').join('')+'</div><div class="oms-v1__form-note is-wide">批量操作逐人提交 Money；成功项不会因其他成员失败而回滚，结果未知项也不会自动重试。</div>'+formStatus('')+'</form>',onSubmit:async formData=>{
       const occurredOn=String(formData.get('occurred_on')),note=String(formData.get('note')||'').trim(),items=rows.map(item=>({line_id:item.line.id,input:paymentInput(formData,run,item.line,item.line.id+'_',occurredOn,note)})),result=await post(runPath(run)+'/payments:batch',{items});
@@ -249,8 +250,10 @@
     }});
   }
 
-  root.querySelector('[data-internal-new-payroll]').addEventListener('click',openCreate);
-  root.querySelector('[data-internal-payroll-sync]').addEventListener('click',openSync);
+  // Member and compensation facts can change while this single-page workbench stays open.
+  // Refresh the owners before deciding who is eligible instead of using the boot-time snapshot.
+  root.querySelector('[data-internal-new-payroll]').addEventListener('click',async()=>{await load();openCreate()});
+  root.querySelector('[data-internal-payroll-sync]').addEventListener('click',async()=>{await load();openSync()});
   root.querySelector('[data-internal-benefit-scheme]').addEventListener('click',openSchemes);
   root.querySelector('[data-internal-payroll-performance]').addEventListener('click',openBatchImport);
   root.querySelector('[data-internal-payroll-paid]').addEventListener('click',openBatchPayment);

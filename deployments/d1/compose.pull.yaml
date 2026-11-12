@@ -131,6 +131,24 @@ services:
   payroll-workload-keys:
     image: ${D1_PAYROLL_IMAGE:-omsbizfoundry/payroll:disabled}
 
+  workforce-attendance-migrate:
+    image: ${D1_WORKFORCE_ATTENDANCE_IMAGE:-omsbizfoundry/workforce-attendance:disabled}
+  workforce-attendance:
+    image: ${D1_WORKFORCE_ATTENDANCE_IMAGE:-omsbizfoundry/workforce-attendance:disabled}
+  workforce-attendance-workload-key-permissions:
+    image: ${D1_WORKFORCE_ATTENDANCE_IMAGE:-omsbizfoundry/workforce-attendance:disabled}
+  workforce-attendance-workload-keys:
+    image: ${D1_WORKFORCE_ATTENDANCE_IMAGE:-omsbizfoundry/workforce-attendance:disabled}
+
+  invoice-recognition-migrate:
+    image: ${D1_INVOICE_RECOGNITION_IMAGE:-omsbizfoundry/invoice-recognition:disabled}
+  invoice-recognition:
+    image: ${D1_INVOICE_RECOGNITION_IMAGE:-omsbizfoundry/invoice-recognition:disabled}
+  invoice-recognition-workload-key-permissions:
+    image: ${D1_INVOICE_RECOGNITION_IMAGE:-omsbizfoundry/invoice-recognition:disabled}
+  invoice-recognition-workload-keys:
+    image: ${D1_INVOICE_RECOGNITION_IMAGE:-omsbizfoundry/invoice-recognition:disabled}
+
   unified-workbench:
     image: ${D1_WORKBENCH_IMAGE:?set D1_WORKBENCH_IMAGE to a digest-pinned image}
   gateway:

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import http.cookiejar
 import json
+from pathlib import Path
 import re
 import subprocess
 import urllib.parse
@@ -93,15 +94,35 @@ def container_environment(container: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
 
 
-def run_ops(container: str, operation: str, body: dict | None = None) -> dict:
+def run_ops(container: str, operation: str, tenant_id: str, body: dict | None = None) -> dict:
+    tenant_environment = ["-e", f"IAM_TENANT_ID={tenant_id}"]
     if body is None:
         output = subprocess.check_output(
-            ["docker", "exec", container, "sh", "-c", '/app/ops party-migration-preflight --tenant-id "$IAM_TENANT_ID"'],
+            [
+                "docker",
+                "exec",
+                *tenant_environment,
+                container,
+                "/app/ops",
+                "party-migration-preflight",
+                "--tenant-id",
+                tenant_id,
+            ],
             text=True,
         )
     else:
         process = subprocess.run(
-            ["docker", "exec", "-i", container, "/app/ops", operation, "--input", "/dev/stdin"],
+            [
+                "docker",
+                "exec",
+                "-i",
+                *tenant_environment,
+                container,
+                "/app/ops",
+                operation,
+                "--input",
+                "/dev/stdin",
+            ],
             input=json.dumps(body, ensure_ascii=False),
             text=True,
             capture_output=True,
@@ -113,14 +134,42 @@ def run_ops(container: str, operation: str, body: dict | None = None) -> dict:
     return json.loads(output)
 
 
+def load_login_credentials(identity: dict[str, str], credentials_file: str | None) -> dict[str, str]:
+    if credentials_file is None:
+        return {
+            "username": identity["BOOTSTRAP_ADMIN_USERNAME"],
+            "password": identity["BOOTSTRAP_ADMIN_PASSWORD"],
+        }
+
+    path = Path(credentials_file)
+    mode = path.stat().st_mode
+    if not path.is_file() or mode & 0o077:
+        raise RuntimeError("login credentials file must be a regular file readable only by its owner")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    if not username or not password:
+        raise RuntimeError("login credentials file must contain non-empty username and password fields")
+    return {"username": username, "password": password}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:18184")
     parser.add_argument("--identity-container", required=True)
     parser.add_argument("--contract-container", required=True)
     parser.add_argument("--money-container", required=True)
-    parser.add_argument("--qualification-party-id", required=True)
+    parser.add_argument(
+        "--operating-party-id",
+        "--qualification-party-id",
+        dest="operating_party_id",
+        required=True,
+    )
+    parser.add_argument("--login-credentials-file")
+    parser.add_argument("--expected-tenant-id")
     args = parser.parse_args()
+    if args.login_credentials_file and not args.expected_tenant_id:
+        parser.error("--login-credentials-file requires --expected-tenant-id")
 
     identity = container_environment(args.identity_container)
     jar = http.cookiejar.CookieJar()
@@ -146,12 +195,7 @@ def main() -> None:
 
     _, raw, _ = request("/auth/api/v1/csrf")
     csrf = json.loads(raw)["csrf_token"]
-    login = json.dumps(
-        {
-            "username": identity["BOOTSTRAP_ADMIN_USERNAME"],
-            "password": identity["BOOTSTRAP_ADMIN_PASSWORD"],
-        }
-    ).encode()
+    login = json.dumps(load_login_credentials(identity, args.login_credentials_file)).encode()
     _, raw, _ = request(
         "/auth/api/v1/login",
         "POST",
@@ -162,6 +206,10 @@ def main() -> None:
     tenant_id = principal["tenant_id"]
     reviewer_id = principal["subject_id"]
     reviewer_name = principal["display_name"]
+    if args.expected_tenant_id and tenant_id != args.expected_tenant_id:
+        raise RuntimeError(
+            f"authenticated tenant {tenant_id} does not match expected tenant {args.expected_tenant_id}"
+        )
 
     def authorize(application: str) -> None:
         request(
@@ -172,10 +220,10 @@ def main() -> None:
         )
 
     authorize("party-directory")
-    _, raw, _ = request("/party/api/v1/parties/" + urllib.parse.quote(args.qualification_party_id))
-    qualification_target = json.loads(raw)
-    if qualification_target.get("status") != "active":
-        raise RuntimeError("qualification Party must be active")
+    _, raw, _ = request("/party/api/v1/parties/" + urllib.parse.quote(args.operating_party_id))
+    operating_target = json.loads(raw)
+    if operating_target.get("status") != "active":
+        raise RuntimeError("operating Party must be active")
 
     def load_directory_parties() -> list[dict]:
         parties: list[dict] = []
@@ -244,7 +292,9 @@ def main() -> None:
             results.append({"application": application["id"], "mode": "directory", "changed": False})
             continue
 
-        preflight = run_ops(application["container"], "party-migration-preflight")
+        preflight = run_ops(
+            application["container"], "party-migration-preflight", tenant_id
+        )
         items = preflight.get("items", [])
         if not preflight.get("ready_for_review") or not items:
             raise RuntimeError(f"{application['id']} Party preflight is not ready for explicit review")
@@ -290,7 +340,7 @@ def main() -> None:
             "reviewed_by_display_name": reviewer_name,
             "mappings": decisions,
         }
-        mapped = run_ops(application["container"], "party-migration-map", mapping)
+        mapped = run_ops(application["container"], "party-migration-map", tenant_id, mapping)
         transition = {
             "format": application["transition_format"],
             "tenant_id": tenant_id,
@@ -301,7 +351,9 @@ def main() -> None:
             "reviewed_by_display_name": reviewer_name,
             "reason": "OMS 一期使用 Party Directory 精确主体引用",
         }
-        cutover = run_ops(application["container"], "party-runtime-transition", transition)
+        cutover = run_ops(
+            application["container"], "party-runtime-transition", tenant_id, transition
+        )
         results.append(
             {
                 "application": application["id"],

@@ -9,9 +9,12 @@
   // owner script; only the unfinished finance-request screen remains local.
 
   const ownerAPI=globalThis.OMSPhase1OwnerAPI;
+  const ownerPeople=Boolean(ownerAPI?.app?.('people-groups'));
   const ownerMembers=Boolean(ownerAPI?.app?.('people-groups')&&ownerAPI?.app?.('payroll'));
   const ownerPayroll=Boolean(ownerAPI?.app?.('people-groups')&&ownerAPI?.app?.('payroll'));
   const ownerFinance=Boolean(ownerAPI?.app?.('internal-finance-requests'));
+	const identityRoute=String(root.dataset.identityRoutePrefix||'').replace(/\/$/,'');
+	let canManageAccounts=root.dataset.administrator==='true'&&Boolean(identityRoute);
 
   const safe=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const uuid=()=>globalThis.crypto?.randomUUID?.()||'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,value=>{const random=Math.random()*16|0,part=value==='x'?random:(random&3|8);return part.toString(16)});
@@ -47,6 +50,7 @@
     return emptyStore();
   }
   let data=readStore();
+	let identitySubjects=[];
   const view={pages:{members:1,payroll:1,finance:1},pageSize:{members:20,payroll:20,finance:20},sorts:{members:{key:'updated_at',direction:'desc'},payroll:{key:'pay_date',direction:'desc'},finance:{key:'created_at',direction:'desc'}},selectedPayroll:new Set(),selectedFinance:new Set(),selectablePayroll:[],selectableFinance:[]};
   const persist=()=>localStorage.setItem(storeKey,JSON.stringify({...data,...(ownerMembers?{members:[]}:{}),...(ownerPayroll?{payroll_periods:[]}: {}),...(ownerFinance?{finance_records:[]}: {})}));
   const show=detail=>root.dispatchEvent(new CustomEvent('oms-v1:show-dialog',{detail}));
@@ -78,20 +82,70 @@
   function financeStatusLabel(status){return {draft:'草稿',pending:'待支付',paid:'已支付'}[status]||status}
   function statusTone(status){return status==='paid'||status==='active'?'positive':status==='confirm'||status==='pending'||status==='partial'?'warning':status==='inactive'?'muted':''}
   function emptyRow(columns,title,copy){return '<tr><td colspan="'+columns+'"><div class="oms-v1__empty"><strong>'+safe(title)+'</strong><span>'+safe(copy)+'</span></div></td></tr>'}
+	async function refreshAccountManagementCapability(){
+		if(!identityRoute)return false;
+		try{
+			const response=await fetch(identityRoute+'/api/v1/session',{credentials:'same-origin',cache:'no-store',redirect:'manual',headers:{Accept:'application/json'}});
+			if(response.type==='opaqueredirect'||response.status===0)return false;
+			const value=await response.json().catch(()=>({}));
+			if(!response.ok)return false;
+			const principal=value?.principal||{};
+			if(String(principal.subject_id||'')!==String(root.dataset.subjectId||'')||String(principal.tenant_id||'')!==String(root.dataset.tenantId||''))return false;
+			canManageAccounts=principal.administrator===true;
+			root.dataset.administrator=String(canManageAccounts);
+			return canManageAccounts;
+		}catch{return false}
+	}
+	async function loadIdentitySubjects(){
+		if(!canManageAccounts)await refreshAccountManagementCapability();
+		if(!canManageAccounts)return [];
+		const response=await fetch(identityRoute+'/api/v1/admin/subjects',{credentials:'same-origin',cache:'no-store',redirect:'manual',headers:{Accept:'application/json'}});
+		if(response.type==='opaqueredirect'||response.status===0)throw new Error('登录状态已过期');
+		const value=await response.json().catch(()=>({}));
+		if(!response.ok)throw new Error(value?.error?.message||'账号列表暂不可用');
+		return Array.isArray(value.subjects)?value.subjects:[];
+	}
 
   async function loadOwnerMembers(){
     if(!ownerMembers)return;
     try{
-      const [people,compensations,payments]=await Promise.all([
+      const [people,compensations,payments,subjects]=await Promise.all([
         ownerAPI.api('people-groups','/api/v1/persons'),
         ownerAPI.api('payroll','/api/v1/compensation-profiles'),
         ownerAPI.api('payroll','/api/v1/payment-profiles'),
+		loadIdentitySubjects().catch(()=>[]),
       ]),compByPerson=new Map((Array.isArray(compensations)?compensations:[]).map(item=>[item.person_id,item])),paymentByPerson=new Map((Array.isArray(payments)?payments:[]).map(item=>[item.person_id,item]));
-      data.members=(Array.isArray(people)?people:[]).map(person=>{const comp=compByPerson.get(person.id),payment=paymentByPerson.get(person.id);return {id:person.id,name:person.display_name,reference_code:person.reference_code||'',department:person.department||'',position:person.position_title||'',joined_on:person.status_effective_date||'',status_effective_date:person.status_effective_date||'',status:person.status,person_revision:person.revision,fixed_salary_minor:String(comp?.fixed_salary_minor??0),social_base_minor:String(comp?.social_insurance_base_minor??0),housing_base_minor:String(comp?.housing_fund_base_minor??0),compensation_revision:Number(comp?.revision||0),compensation_effective_month:comp?.effective_month||currentMonth(),compensation_configured:Boolean(comp),payment_profile_id:payment?.id||'',payment_revision:Number(payment?.revision||0),payment_account_name:payment?.account_name||'',payment_bank_name:payment?.bank_name||'',payment_masked_account:payment?.masked_account_number||'',payment_status:payment?.status||'',payment_effective_month:payment?.effective_month||currentMonth(),operator:'Owner 服务',created_at:person.created_at,updated_at:[person.updated_at,comp?.updated_at,payment?.updated_at].filter(Boolean).sort().at(-1)||person.updated_at}});
+	  identitySubjects=subjects;
+      data.members=(Array.isArray(people)?people:[]).map(person=>{const comp=compByPerson.get(person.id),payment=paymentByPerson.get(person.id),actorID=String(person.last_actor_subject_id||''),operator=person.last_actor_display_name||(actorID&&actorID===root.dataset.subjectId?root.dataset.displayName:'')||(actorID?'账号 '+actorID.slice(0,8):'—');return {id:person.id,name:person.display_name,reference_code:person.reference_code||'',department:person.department||'',position:person.position_title||'',joined_on:person.status_effective_date||'',status_effective_date:person.status_effective_date||'',status:person.status,person_revision:person.revision,iam_subject_id:person.iam_subject_id||'',iam_subject_status:person.iam_subject_status||'',iam_subject_revision:Number(person.iam_subject_revision||0),fixed_salary_minor:String(comp?.fixed_salary_minor??0),social_base_minor:String(comp?.social_insurance_base_minor??0),housing_base_minor:String(comp?.housing_fund_base_minor??0),compensation_revision:Number(comp?.revision||0),compensation_effective_month:comp?.effective_month||currentMonth(),compensation_configured:Boolean(comp),payment_profile_id:payment?.id||'',payment_revision:Number(payment?.revision||0),payment_account_name:payment?.account_name||'',payment_bank_name:payment?.bank_name||'',payment_masked_account:payment?.masked_account_number||'',payment_status:payment?.status||'',payment_effective_month:payment?.effective_month||currentMonth(),operator,created_at:person.created_at,updated_at:[person.updated_at,comp?.updated_at,payment?.updated_at].filter(Boolean).sort().at(-1)||person.updated_at}});
       renderMembers();
     }catch(error){
-      data.members=[];renderMembers();const body=root.querySelector('[data-internal-member-body]');if(body)body.innerHTML=emptyRow(9,'成员数据暂不可用',error instanceof Error?error.message:'请稍后重试');
+      data.members=[];renderMembers();const body=root.querySelector('[data-internal-member-body]');if(body)body.innerHTML=emptyRow(10,'成员数据暂不可用',error instanceof Error?error.message:'请稍后重试');
     }
+  }
+	function memberAccountField(member){
+		if(!canManageAccounts)return '';
+		const current=String(member?.iam_subject_id||'');
+		if(!identitySubjects.length)return current?'<input type="hidden" name="iam_subject_id" value="'+safe(current)+'">'+field('登录账号','<select disabled><option>账号列表暂不可用，原关联保持不变</option></select>'):field('登录账号','<select disabled><option>账号列表暂不可用</option></select>');
+		const linked=new Map(data.members.filter(item=>item.iam_subject_id&&item.id!==member?.id).map(item=>[item.iam_subject_id,item.name]));
+		const options=['<option value="">不关联登录账号</option>',...identitySubjects.filter(item=>item.status==='active'||item.status==='pending'||item.id===current).map(item=>{const usedBy=linked.get(item.id),state=item.status==='pending'?' · 待激活':item.status==='disabled'?' · 已停用':'',label=item.display_name+' · '+item.username+state+(usedBy?'（已关联 '+usedBy+'）':'');return '<option value="'+safe(item.id)+'" '+(item.id===current?'selected':'')+' '+(usedBy?'disabled':'')+'>'+safe(label)+'</option>'})];
+		return field('登录账号','<select name="iam_subject_id">'+options.join('')+'</select>')
+	}
+
+  function clearAccountLinkHash(){
+    if(window.location.hash==='#member-account-link')history.replaceState(null,'',window.location.pathname+window.location.search);
+  }
+  async function openCurrentAccountLink(){
+    if(!ownerPeople){clearAccountLinkHash();show({kicker:'成员关联',title:'成员服务暂不可用',dismissOnly:true,body:'<section class="oms-v1__record-detail"><p>当前组合没有启用 People & Groups，无法建立登录账号与成员的正式关联。</p></section>'});return}
+    if(!canManageAccounts)await refreshAccountManagementCapability();
+    if(!canManageAccounts){clearAccountLinkHash();show({kicker:'成员关联',title:'请联系组织管理员',dismissOnly:true,body:'<section class="oms-v1__record-detail"><p>账号与成员关联会决定员工报销等本人业务的身份，不能由普通账号自行选择。请让组织管理员在“成员管理”中完成关联。</p></section>'});return}
+    let people;
+    try{people=await ownerAPI.api('people-groups','/api/v1/persons')}catch(error){clearAccountLinkHash();show({kicker:'成员关联',title:'暂时无法读取成员',dismissOnly:true,body:'<section class="oms-v1__record-detail"><p>'+safe(error instanceof Error?error.message:'请稍后重试')+'</p></section>'});return}
+    people=Array.isArray(people)?people:[];
+    const current=people.find(person=>person.iam_subject_id===root.dataset.subjectId);
+    if(current){const active=current.status==='active';clearAccountLinkHash();show({kicker:'成员关联',title:active?'当前账号已关联':'已关联，但成员当前不在职',dismissOnly:true,body:'<section class="oms-v1__record-detail"><dl class="oms-v1__record-facts"><div><dt>登录账号</dt><dd>'+safe(root.dataset.displayName||root.dataset.subjectId)+'</dd></div><div><dt>成员档案</dt><dd>'+safe(current.display_name)+'</dd></div><div><dt>成员状态</dt><dd>'+safe(statusLabel(current.status))+'</dd></div></dl>'+(active?'':'<p>员工业务只接受当前在职成员。请在成员编辑中核对并更新状态后再试。</p>')+'</section>'});return}
+    const candidates=people.filter(person=>person.status==='active'&&!person.iam_subject_id);
+    if(!candidates.length){clearAccountLinkHash();show({kicker:'成员关联',title:'没有可关联成员',dismissOnly:true,body:'<section class="oms-v1__record-detail"><p>请先新增在职成员，或解除错误的既有账号关联后再试。系统不会按姓名自动匹配。</p></section>'});return}
+    show({kicker:'成员关联',title:'关联当前登录账号',submit:'确认关联',enabled:true,body:'<form class="oms-v1__form-grid"><label class="oms-v1__form-field is-wide"><span>当前登录账号</span><input value="'+safe(root.dataset.displayName||root.dataset.subjectId)+'" disabled></label><label class="oms-v1__form-field is-wide"><span>选择成员 *</span><select name="person_id" required><option value="">请选择现有成员</option>'+candidates.map(person=>'<option value="'+safe(person.id)+'">'+safe(person.display_name+(person.department?' · '+person.department:''))+'</option>').join('')+'</select></label><div class="oms-v1__form-note is-wide">关联后，该账号会以所选成员身份使用报销等员工业务。一个账号只能关联一个成员，系统不会按姓名自动匹配。</div>'+formStatus('')+'</form>',onSubmit:async formData=>{const person=candidates.find(item=>item.id===String(formData.get('person_id')||''));if(!person)throw new Error('请选择有效成员');await ownerAPI.api('people-groups','/api/v1/persons/'+person.id+'/iam-subject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:person.revision,iam_subject_id:root.dataset.subjectId})});clearAccountLinkHash();close();const notice=root.querySelector('[data-internal-storage-notice]');if(notice)notice.textContent='当前登录账号已关联成员“'+person.display_name+'”。';void loadOwnerMembers()}});
   }
 
   function memberForm(member){
@@ -101,6 +155,7 @@
       field('状态','<select name="status">'+option('active','在职',value.status)+option('inactive','停用',value.status)+'</select>')+
       field('部门','<input name="department" maxlength="80" value="'+safe(value.department)+'" placeholder="选填">')+
       field('岗位','<input name="position" maxlength="80" value="'+safe(value.position)+'" placeholder="选填">')+
+	  memberAccountField(member)+
       field(member?'当前状态生效日期':'入职日期','<input name="status_effective_date" type="date" required value="'+safe(member?today():(value.joined_on||today()))+'">')+
       field('薪酬生效月份 *','<input name="compensation_effective_month" type="month" required value="'+safe(value.compensation_effective_month||currentMonth())+'">')+
       field('固定工资（元） *','<input name="fixed_salary" inputmode="decimal" required value="'+safe(minorInput(value.fixed_salary_minor))+'">')+
@@ -111,31 +166,33 @@
       field('开户行','<input name="bank_name" maxlength="160" value="'+safe(value.payment_bank_name||'')+'" placeholder="可稍后补充">')+
       field(member?'新工资账号':'工资账号','<input name="account_number" inputmode="numeric" autocomplete="off" value="" placeholder="'+(member?'不填写表示不变':'可稍后补充')+'">')+
       field('账户生效月份','<input name="payment_effective_month" type="month" value="'+safe(value.payment_effective_month||currentMonth())+'">')+
-      '<div class="oms-v1__form-note is-wide">成员资料由 People & Groups 保存；固定工资、缴费基数和收款账户由 Payroll 分别保存。提交是两个 Owner 的连续命令，若后一步失败，已成功的前一步不会被伪装回滚，可再次进入成员档案续办。</div>'+formStatus('')+'</form>';
+	  '<div class="oms-v1__form-note is-wide">登录账号关联用于本人报销等需要员工身份的业务，只能一人一账号；普通 API Key 创建不要求关联。成员资料由 People & Groups 保存，薪酬和收款账户由 Payroll 保存。连续命令若后一步失败，已成功的前一步不会被伪装回滚，可再次进入成员档案续办。</div>'+formStatus('')+'</form>';
   }
   function openMemberEditor(member=null){
     show({kicker:'公司成员',title:member?'编辑成员':'新增成员',submit:member?'保存修改':'保存成员',enabled:true,body:memberForm(member),onSubmit:async formData=>{
       const fixed=model.decimalMinor(formData.get('fixed_salary')),social=model.decimalMinor(formData.get('social_base')),housing=model.decimalMinor(formData.get('housing_base'));
       if(fixed===null||social===null||housing===null||BigInt(fixed)<0n||BigInt(social)<0n||BigInt(housing)<0n)throw new Error('工资和缴费基数必须是大于等于 0、最多两位小数的金额');
-      const name=String(formData.get('name')||'').trim(),department=String(formData.get('department')||'').trim(),position=String(formData.get('position')||'').trim(),status=String(formData.get('status')||'active'),effectiveDate=String(formData.get('status_effective_date')||today()),effectiveMonth=String(formData.get('compensation_effective_month')||currentMonth()),reason=String(formData.get('reason')||'').trim(),accountNumber=String(formData.get('account_number')||'').replace(/[\s-]+/g,''),accountName=String(formData.get('account_name')||'').trim(),bankName=String(formData.get('bank_name')||'').trim(),paymentMonth=String(formData.get('payment_effective_month')||currentMonth());
+      const name=String(formData.get('name')||'').trim(),department=String(formData.get('department')||'').trim(),position=String(formData.get('position')||'').trim(),status=String(formData.get('status')||'active'),effectiveDate=String(formData.get('status_effective_date')||today()),effectiveMonth=String(formData.get('compensation_effective_month')||currentMonth()),reason=String(formData.get('reason')||'').trim(),accountNumber=String(formData.get('account_number')||'').replace(/[\s-]+/g,''),accountName=String(formData.get('account_name')||'').trim(),bankName=String(formData.get('bank_name')||'').trim(),paymentMonth=String(formData.get('payment_effective_month')||currentMonth()),iamSubjectID=formData.has('iam_subject_id')?String(formData.get('iam_subject_id')||''):String(member?.iam_subject_id||'');
       if(ownerMembers){
-        let person=member?{...member,revision:member.person_revision}:null,peopleSaved=false;
+        let person=member?{...member,revision:member.person_revision}:null,peopleSaved=false,pendingStage='成员状态';
         try{
-          if(!member){person=await ownerAPI.api('people-groups','/api/v1/persons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),display_name:name,department,position_title:position,employment_start_date:effectiveDate})});peopleSaved=true}
+		  if(!member){person=await ownerAPI.api('people-groups','/api/v1/persons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),display_name:name,department,position_title:position,employment_start_date:effectiveDate,iam_subject_id:iamSubjectID})});peopleSaved=true}
           else if(name!==member.name||department!==member.department||position!==member.position){person=await ownerAPI.api('people-groups','/api/v1/persons/'+member.id+'/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:member.person_revision,reference_code:member.reference_code||'',display_name:name,department,position_title:position})});peopleSaved=true}
-          if(status!==person.status){person=await ownerAPI.api('people-groups','/api/v1/persons/'+person.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:person.revision,status,effective_date:effectiveDate,reason})});peopleSaved=true}
+          if(status!==person.status){pendingStage='成员状态';person=await ownerAPI.api('people-groups','/api/v1/persons/'+person.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:person.revision,status,effective_date:effectiveDate,reason})});peopleSaved=true}
+		  if(member&&iamSubjectID!==String(member.iam_subject_id||'')){pendingStage='登录账号关联';person=await ownerAPI.api('people-groups','/api/v1/persons/'+person.id+'/iam-subject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:person.revision,iam_subject_id:iamSubjectID})});peopleSaved=true}
           const compensationChanged=!member||fixed!==String(member.fixed_salary_minor)||social!==String(member.social_base_minor)||housing!==String(member.housing_base_minor)||effectiveMonth!==member.compensation_effective_month;
-          if(compensationChanged)await ownerAPI.api('payroll','/api/v1/compensation-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.compensation_revision||0),person_id:person.id,effective_month:effectiveMonth,fixed_salary_minor:minorJSON(fixed),social_insurance_base_minor:minorJSON(social),housing_fund_base_minor:minorJSON(housing),reason})});
-          if(accountNumber){if(!accountName||!bankName)throw new Error('填写工资账号时，账户名和开户行必须同时填写');await ownerAPI.api('payroll','/api/v1/payment-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.payment_revision||0),person_id:person.id,account_name:accountName,bank_name:bankName,account_number:accountNumber,status:'active',effective_month:paymentMonth,reason,confirmed:true})})}
+          if(compensationChanged){pendingStage='薪酬档案';await ownerAPI.api('payroll','/api/v1/compensation-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.compensation_revision||0),person_id:person.id,effective_month:effectiveMonth,fixed_salary_minor:minorJSON(fixed),social_insurance_base_minor:minorJSON(social),housing_fund_base_minor:minorJSON(housing),reason})})}
+          if(accountNumber){pendingStage='工资账户档案';if(!accountName||!bankName)throw new Error('填写工资账号时，账户名和开户行必须同时填写');await ownerAPI.api('payroll','/api/v1/payment-profiles/'+person.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:uuid(),expected_revision:Number(member?.payment_revision||0),person_id:person.id,account_name:accountName,bank_name:bankName,account_number:accountNumber,status:'active',effective_month:paymentMonth,reason,confirmed:true})})}
           await loadOwnerMembers();close();
-        }catch(error){await loadOwnerMembers();if(peopleSaved)throw new Error('成员基础资料已保存，但薪酬或账户档案未全部完成：'+(error instanceof Error?error.message:'请稍后续办'));throw error}
+        }catch(error){await loadOwnerMembers();if(peopleSaved)throw new Error('成员基础资料已保存，但'+pendingStage+'未完成：'+(error instanceof Error?error.message:'请稍后续办'));throw error}
         return;
       }
       const record={id:member?.id||uuid(),name,department,position,joined_on:effectiveDate,fixed_salary_minor:fixed,social_base_minor:social,housing_base_minor:housing,status,operator:'本地操作人',created_at:member?.created_at||now(),updated_at:now()};if(member)data.members=data.members.map(item=>item.id===member.id?record:item);else data.members.push(record);persist();close();renderMembers();
     }});
   }
   function openMemberDetail(member){
-    show({kicker:'成员详情',title:member.name,dismissOnly:true,body:'<section class="oms-v1__record-detail"><div class="oms-v1__record-status"><span>当前状态</span><strong>'+safe(statusLabel(member.status))+'</strong></div><div class="oms-v1__record-metrics"><article><span>固定工资</span><strong>'+(member.compensation_configured?model.money(member.fixed_salary_minor):'未配置')+'</strong></article><article><span>社保基数</span><strong>'+(member.compensation_configured?model.money(member.social_base_minor):'未配置')+'</strong></article><article><span>公积金基数</span><strong>'+(member.compensation_configured?model.money(member.housing_base_minor):'未配置')+'</strong></article></div><h3 class="oms-v1__record-subtitle">People & Groups 成员事实</h3><dl class="oms-v1__record-facts"><div><dt>部门</dt><dd>'+safe(member.department||'—')+'</dd></div><div><dt>岗位</dt><dd>'+safe(member.position||'—')+'</dd></div><div><dt>状态生效日期</dt><dd>'+date(member.status_effective_date||member.joined_on)+'</dd></div><div><dt>Person revision</dt><dd>'+safe(member.person_revision||'本地演示')+'</dd></div></dl><h3 class="oms-v1__record-subtitle">Payroll 薪酬与支付档案</h3><dl class="oms-v1__record-facts"><div><dt>薪酬生效月份</dt><dd>'+safe(member.compensation_configured?member.compensation_effective_month:'未配置')+'</dd></div><div><dt>工资账户</dt><dd>'+safe(member.payment_masked_account||'未配置')+'</dd></div><div><dt>开户行</dt><dd>'+safe(member.payment_bank_name||'—')+'</dd></div><div><dt>Payroll revision</dt><dd>'+safe(member.compensation_revision||'—')+'</dd></div><div><dt>更新时间</dt><dd>'+dateTime(member.updated_at)+'</dd></div></dl></section>'});
+	const account=identitySubjects.find(item=>item.id===member.iam_subject_id),accountLabel=account?account.display_name+' · '+account.username:(member.iam_subject_id?'账号 '+member.iam_subject_id.slice(0,8):'未关联');
+	show({kicker:'成员详情',title:member.name,dismissOnly:true,body:'<section class="oms-v1__record-detail"><div class="oms-v1__record-status"><span>当前状态</span><strong>'+safe(statusLabel(member.status))+'</strong></div><div class="oms-v1__record-metrics"><article><span>固定工资</span><strong>'+(member.compensation_configured?model.money(member.fixed_salary_minor):'未配置')+'</strong></article><article><span>社保基数</span><strong>'+(member.compensation_configured?model.money(member.social_base_minor):'未配置')+'</strong></article><article><span>公积金基数</span><strong>'+(member.compensation_configured?model.money(member.housing_base_minor):'未配置')+'</strong></article></div><h3 class="oms-v1__record-subtitle">People & Groups 成员事实</h3><dl class="oms-v1__record-facts"><div><dt>部门</dt><dd>'+safe(member.department||'—')+'</dd></div><div><dt>岗位</dt><dd>'+safe(member.position||'—')+'</dd></div><div><dt>登录账号</dt><dd>'+safe(accountLabel)+'</dd></div><div><dt>状态生效日期</dt><dd>'+date(member.status_effective_date||member.joined_on)+'</dd></div><div><dt>Person revision</dt><dd>'+safe(member.person_revision||'本地演示')+'</dd></div></dl><h3 class="oms-v1__record-subtitle">Payroll 薪酬与支付档案</h3><dl class="oms-v1__record-facts"><div><dt>薪酬生效月份</dt><dd>'+safe(member.compensation_configured?member.compensation_effective_month:'未配置')+'</dd></div><div><dt>工资账户</dt><dd>'+safe(member.payment_masked_account||'未配置')+'</dd></div><div><dt>开户行</dt><dd>'+safe(member.payment_bank_name||'—')+'</dd></div><div><dt>Payroll revision</dt><dd>'+safe(member.compensation_revision||'—')+'</dd></div><div><dt>更新时间</dt><dd>'+dateTime(member.updated_at)+'</dd></div></dl></section>'});
   }
   function renderMembers(){
     const search=root.querySelector('[data-internal-member-search]').value.trim().toLowerCase(),status=root.querySelector('[data-internal-member-status]').value;
@@ -143,7 +200,7 @@
     items=sorted(items,'members',(item,key)=>key==='fixed_salary'?BigInt(item.fixed_salary_minor):item[key]);
     const range=pager('members',items.length,renderMembers),body=root.querySelector('[data-internal-member-body]');
     root.querySelector('[data-internal-member-total]').textContent=String(items.length);
-    body.innerHTML=items.length?items.slice(range.start,range.end).map(item=>{const salary=item.compensation_configured===false?'未配置':model.money(item.fixed_salary_minor),social=item.compensation_configured===false?'未配置':model.money(item.social_base_minor),housing=item.compensation_configured===false?'未配置':model.money(item.housing_base_minor);return '<tr><td><strong title="'+safe(item.name)+'">'+safe(item.name)+'</strong></td><td>'+safe(item.department||'—')+'</td><td>'+safe(item.position||'—')+'</td><td class="is-number is-money">'+salary+'</td><td class="is-number is-money">'+social+'</td><td class="is-number is-money">'+housing+'</td><td>'+tag(statusLabel(item.status),statusTone(item.status))+'</td><td>'+safe(item.operator||'—')+'</td><td><span class="oms-v1__row-actions"><button type="button" data-detail="'+item.id+'">详情</button><button type="button" data-edit="'+item.id+'">编辑</button></span></td></tr>'}).join(''):emptyRow(9,'暂无公司成员','新增成员后可生成工资表。');
+    body.innerHTML=items.length?items.slice(range.start,range.end).map(item=>{const salary=item.compensation_configured===false?'未配置':model.money(item.fixed_salary_minor),social=item.compensation_configured===false?'未配置':model.money(item.social_base_minor),housing=item.compensation_configured===false?'未配置':model.money(item.housing_base_minor),account=identitySubjects.find(subject=>subject.id===item.iam_subject_id),accountLabel=account?account.display_name+(account.status==='pending'?' · 待激活':''):item.iam_subject_id?'已关联':'未关联';return '<tr><td><strong title="'+safe(item.name)+'">'+safe(item.name)+'</strong></td><td>'+safe(item.department||'—')+'</td><td>'+safe(item.position||'—')+'</td><td class="is-number is-money">'+salary+'</td><td class="is-number is-money">'+social+'</td><td class="is-number is-money">'+housing+'</td><td>'+tag(statusLabel(item.status),statusTone(item.status))+'</td><td>'+safe(accountLabel)+'</td><td>'+safe(item.operator||'—')+'</td><td><span class="oms-v1__row-actions"><button type="button" data-detail="'+item.id+'">详情</button><button type="button" data-edit="'+item.id+'">编辑</button></span></td></tr>'}).join(''):emptyRow(10,'暂无公司成员','新增成员后可生成工资表。');
     for(const button of body.querySelectorAll('[data-detail]'))button.addEventListener('click',()=>openMemberDetail(data.members.find(item=>item.id===button.dataset.detail)));
     for(const button of body.querySelectorAll('[data-edit]'))button.addEventListener('click',()=>openMemberEditor(data.members.find(item=>item.id===button.dataset.edit)));
     bindSort('members',renderMembers);
@@ -194,7 +251,7 @@
   function openPayrollPaidBatch(){const rows=payrollRows().filter(item=>view.selectedPayroll.has(item.line.id)&&!item.line.paid_at);if(!rows.length)return;show({kicker:'工资管理',title:'确认已发放 '+rows.length+' 人',submit:'确认已发放',enabled:true,body:'<form class="oms-v1__form-grid">'+field('实际发薪日期 *','<input name="payment_date" type="date" required value="'+today()+'">')+field('操作人 *','<input name="operator" required maxlength="80" value="本地操作人">')+field('备注','<textarea name="remark" maxlength="500" placeholder="选填"></textarea>',true)+'<div class="oms-v1__form-note is-wide">此操作表示工资已经在系统外实际发放；确认后保留操作人和时间，不会发起银行付款。</div>'+formStatus('')+'</form>',onSubmit:async formData=>{const at=now();for(const item of rows){item.line.paid_at=at;item.line.payment_date=String(formData.get('payment_date')||today());item.line.paid_operator=String(formData.get('operator')||'').trim();item.line.payment_remark=String(formData.get('remark')||'').trim();item.period.updated_at=at}persist();view.selectedPayroll.clear();close();renderPayroll()}})}
   function renderPayroll(){
     const search=root.querySelector('[data-internal-payroll-search]').value.trim().toLowerCase(),statusFilter=root.querySelector('[data-internal-payroll-status]').value,month=root.querySelector('[data-internal-payroll-month]').value;
-    let items=payrollRows().filter(item=>(!search||[item.line.member_name,item.line.department,item.period.month,item.period.operator].some(value=>String(value||'').toLowerCase().includes(search)))&&(!statusFilter||item.status===statusFilter)&&(!month||item.period.month===month));
+    let items=payrollRows().filter(item=>(!search||[item.line.member_name,item.line.department,item.period.month,item.period.operator].some(value=>String(value||'').toLowerCase().includes(search)))&&(statusFilter==='active'?item.status!=='voided':!statusFilter||item.status===statusFilter)&&(!month||item.period.month===month));
     items=sorted(items,'payroll',(item,key)=>key==='payable'?BigInt(item.line.payable_minor):key==='member'?item.line.member_name:key==='status'?item.status:item.period[key]||item.line[key]);
     view.selectablePayroll=items.filter(item=>!item.line.paid_at).map(item=>item.line.id);
     const range=pager('payroll',items.length,renderPayroll),body=root.querySelector('[data-internal-payroll-body]'),schemeState=root.querySelector('[data-internal-scheme-state]');
@@ -225,6 +282,8 @@
   function syncFinanceActions(){const selectable=new Set(view.selectableFinance);for(const id of view.selectedFinance)if(!selectable.has(id))view.selectedFinance.delete(id);const count=view.selectedFinance.size,bar=root.querySelector('[data-internal-finance-batch]');bar.querySelector('strong').textContent=String(count);bar.querySelector('[data-internal-finance-select-all]').disabled=!view.selectableFinance.some(id=>!view.selectedFinance.has(id));bar.querySelector('[data-internal-finance-clear]').disabled=count===0;bar.querySelector('[data-internal-finance-paid]').disabled=count===0}
 
   root.querySelector('[data-internal-new-member]').addEventListener('click',()=>openMemberEditor());
+  root.querySelector('[data-internal-link-current-account]')?.addEventListener('click',openCurrentAccountLink);
+  root.addEventListener('oms-v1:open-current-account-link',openCurrentAccountLink);
   if(!ownerPayroll){
     root.querySelector('[data-internal-new-payroll]').addEventListener('click',openPayrollCreate);
     root.querySelector('[data-internal-payroll-sync]').addEventListener('click',openPayrollSync);

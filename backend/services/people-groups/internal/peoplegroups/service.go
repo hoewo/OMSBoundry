@@ -1204,7 +1204,7 @@ func (s *Service) GetSnapshot(ctx context.Context, tenantID, groupID string, rev
 	return scanSnapshot(s.pool.QueryRow(ctx, `SELECT id::text,tenant_id::text,group_id::text,group_revision,payload,sha256,created_at FROM roster_snapshots WHERE tenant_id=$1 AND group_id=$2 AND group_revision=$3`, tenantID, groupID, revision))
 }
 
-const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,department,position_title,status,status_effective_date::text,COALESCE(iam_subject_id::text,''),COALESCE(iam_subject_status,''),COALESCE(iam_subject_revision,0),revision,created_at,updated_at FROM persons`
+const personSelect = `SELECT id::text,tenant_id::text,COALESCE(reference_code,''),display_name,department,position_title,status,status_effective_date::text,COALESCE(iam_subject_id::text,''),COALESCE(iam_subject_status,''),COALESCE(iam_subject_revision,0),COALESCE((SELECT actor_id::text FROM person_revisions WHERE tenant_id=persons.tenant_id AND person_id=persons.id AND revision=persons.revision),''),COALESCE((SELECT actor_display_name FROM person_revisions WHERE tenant_id=persons.tenant_id AND person_id=persons.id AND revision=persons.revision),''),revision,created_at,updated_at FROM persons`
 const definitionSelect = `SELECT kind,key,display_name,description,status,revision,created_at,updated_at FROM definitions`
 const groupSelect = `SELECT id::text,tenant_id::text,group_type_key,name,purpose,status,revision,created_at,updated_at FROM groups`
 
@@ -1216,7 +1216,7 @@ func (s *Service) lockPerson(ctx context.Context, tx pgx.Tx, tenantID, id string
 }
 func scanPerson(row pgx.Row) (Person, error) {
 	var p Person
-	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Department, &p.PositionTitle, &p.Status, &p.StatusEffectiveDate, &p.IAMSubjectID, &p.IAMSubjectStatus, &p.IAMSubjectRevision, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.TenantID, &p.ReferenceCode, &p.DisplayName, &p.Department, &p.PositionTitle, &p.Status, &p.StatusEffectiveDate, &p.IAMSubjectID, &p.IAMSubjectStatus, &p.IAMSubjectRevision, &p.LastActorSubjectID, &p.LastActorDisplayName, &p.Revision, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return Person{}, translateReadError(err)
 	}
 	return p, nil

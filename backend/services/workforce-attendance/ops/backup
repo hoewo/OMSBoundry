@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+database_url=${1:?usage: backup DATABASE_URL OUTPUT}
+output=${2:?usage: backup DATABASE_URL OUTPUT}
+case "$output" in /*) ;; *) echo 'OUTPUT must be absolute' >&2; exit 2;; esac
+[ ! -e "$output" ] || { echo 'backup output already exists' >&2; exit 1; }
+umask 077
+pg_dump --dbname "$database_url" --format=custom --no-owner --no-privileges --file "$output"

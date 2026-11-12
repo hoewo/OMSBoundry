@@ -206,6 +206,7 @@ type RestoreInput struct {
 type DeleteDraftInput struct {
 	CommandID    string `json:"command_id"`
 	Confirmation string `json:"confirmation"`
+	Reason       string `json:"reason"`
 }
 
 type ConfirmPaymentInput struct {

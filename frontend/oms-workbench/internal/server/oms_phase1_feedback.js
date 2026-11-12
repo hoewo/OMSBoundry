@@ -21,12 +21,21 @@
   var layer = null;
   var frame = null;
   var ready = false;
+  var readyFailure = null;
+  var requiredSDKContract = 'v3';
   var readyWaiters = [];
   var runtimeConfig = null;
   var configRequest = null;
+  var csrfRequest = null;
+  var configuredConfig = null;
+  var configurationRequest = null;
   var identityKey = currentIdentityKey();
   var unreadRequestID = '';
   var toastTimer = 0;
+  var lastOpenedMode = 'submit';
+  var dismissedBySDK = false;
+  var submissionWatchGeneration = 0;
+  var submissionWatchTimer = 0;
 
   function currentIdentityKey() {
     return String(root.dataset.tenantId || '') + '\u0000' + String(root.dataset.subjectId || '');
@@ -39,9 +48,38 @@
     return Array.prototype.map.call(bytes, function (value) { return value.toString(16).padStart(2, '0'); }).join('');
   }
 
-  function csrfToken() {
+  function currentCSRFToken() {
     var match = document.cookie.match(/(?:^|;\s*)oms_iam_csrf=([A-Za-z0-9_-]{16,256})(?:;|$)/);
     return match ? match[1] : '';
+  }
+
+  function csrfToken() {
+    var current = currentCSRFToken();
+    if (current) return Promise.resolve(current);
+    if (csrfRequest) return csrfRequest;
+    var route = String(root.dataset.identityRoutePrefix || '').replace(/\/$/, '');
+    if (!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(route)) return Promise.reject(new Error('invalid identity route'));
+    csrfRequest = fetch(route + '/api/v1/csrf', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      if (!response.ok || response.redirected) {
+        var error = new Error('csrf unavailable');
+        error.status = response.status;
+        throw error;
+      }
+      return response.json();
+    }).then(function (payload) {
+      var refreshed = currentCSRFToken();
+      if (!refreshed || !payload || payload.csrf_token !== refreshed) throw new Error('invalid csrf response');
+      return refreshed;
+    }).finally(function () {
+      csrfRequest = null;
+    });
+    return csrfRequest;
   }
 
   function isLoopbackURL(value) {
@@ -80,7 +118,7 @@
   }
 
   function setEntryVisible(visible) {
-    if (notice) notice.textContent = visible ? '反馈服务已连接；当前登录账号可直接使用。' : '反馈服务暂时不可用，OMS 其他功能不受影响。';
+    if (notice) notice.textContent = visible ? '智能客服与反馈服务已连接；当前登录账号可直接使用。' : '智能客服与反馈服务暂时不可用，OMS 其他功能不受影响。';
   }
 
   function buildHostContext() {
@@ -93,7 +131,7 @@
     }
     return {
       release: 'oms1',
-      build: '20261026.1',
+      build: '20261111.2',
       module: 'workbench',
       route: route,
       browser: browser,
@@ -108,14 +146,14 @@
     if (currentIdentityKey() !== identityKey) clearRuntime();
     if (!force && runtimeConfig) return runtimeConfig;
     if (!force && configRequest) return configRequest;
-    var csrf = csrfToken();
-    if (!csrf) throw new Error('missing csrf');
-    configRequest = fetch('/gateway/feedback/config', {
-      method: 'POST',
-      credentials: 'same-origin',
-      cache: 'no-store',
-      redirect: 'error',
-      headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }
+    configRequest = csrfToken().then(function (csrf) {
+      return fetch('/gateway/feedback/config', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
+        headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }
+      });
     }).then(function (response) {
       if (!response.ok) {
         var error = new Error('feedback config unavailable');
@@ -145,9 +183,9 @@
     layer.setAttribute('data-feedback-layer', '');
     frame = document.createElement('iframe');
     frame.className = 'oms-v1__feedback-frame';
-    frame.title = '产品反馈';
+    frame.title = '智能客服与产品反馈';
     frame.referrerPolicy = 'no-referrer';
-    frame.setAttribute('allow', 'clipboard-read; clipboard-write');
+    frame.setAttribute('allow', 'microphone; clipboard-read; clipboard-write');
     frame.src = sdkURL;
     layer.appendChild(frame);
     document.body.appendChild(layer);
@@ -156,6 +194,7 @@
 
   function awaitReady() {
     if (ready) return Promise.resolve();
+    if (readyFailure) return Promise.reject(readyFailure);
     return new Promise(function (resolve, reject) {
       var waiter = { resolve: resolve, reject: reject, timer: 0 };
       waiter.timer = window.setTimeout(function () {
@@ -168,9 +207,19 @@
 
   function resolveReady() {
     ready = true;
+    readyFailure = null;
     var waiters = readyWaiters.slice();
     readyWaiters = [];
     waiters.forEach(function (waiter) { window.clearTimeout(waiter.timer); waiter.resolve(); });
+  }
+
+  function rejectReady(message) {
+    ready = false;
+    readyFailure = new Error(message);
+    var waiters = readyWaiters.slice();
+    readyWaiters = [];
+    waiters.forEach(function (waiter) { window.clearTimeout(waiter.timer); waiter.reject(readyFailure); });
+    if (notice) notice.textContent = '反馈 V3 资源校验失败，请稍后重试；OMS 其他功能不受影响。';
   }
 
   function post(type, extra) {
@@ -178,8 +227,43 @@
     frame.contentWindow.postMessage(Object.assign({ source: 'feedback-sdk-host', type: type }, extra || {}), sdkOrigin);
   }
 
-  function sendConfiguration(config) {
-    post('feedback-sdk:configure', { config: config });
+  function configureFrame(config) {
+    if (configuredConfig === config) return Promise.resolve();
+    if (configurationRequest && configurationRequest.config === config) return configurationRequest.promise;
+    if (configurationRequest) {
+      window.clearTimeout(configurationRequest.timer);
+      configurationRequest.reject(new Error('feedback configuration superseded'));
+    }
+    var requestID = randomID();
+    var resolveRequest;
+    var rejectRequest;
+    var promise = new Promise(function (resolve, reject) {
+      resolveRequest = resolve;
+      rejectRequest = reject;
+    });
+    configurationRequest = {
+      config: config,
+      requestID: requestID,
+      promise: promise,
+      resolve: resolveRequest,
+      reject: rejectRequest,
+      timer: window.setTimeout(function () {
+        if (!configurationRequest || configurationRequest.requestID !== requestID) return;
+        configurationRequest = null;
+        rejectRequest(new Error('feedback configuration timeout'));
+      }, 10000)
+    };
+    post('feedback-sdk:configure', { config: config, request_id: requestID });
+    return promise;
+  }
+
+  function acceptConfiguration(requestID) {
+    if (!configurationRequest || configurationRequest.requestID !== requestID) return;
+    var accepted = configurationRequest;
+    window.clearTimeout(accepted.timer);
+    configurationRequest = null;
+    configuredConfig = accepted.config;
+    accepted.resolve();
   }
 
   function setUnread(value) {
@@ -196,28 +280,116 @@
     post('feedback-sdk:get-unread-count', { request_id: unreadRequestID });
   }
 
-  function showFailure() {
+  function showToast(message, successful) {
     var old = document.querySelector('[data-feedback-toast]');
     if (old) old.remove();
     var toast = document.createElement('div');
-    toast.className = 'oms-v1__feedback-toast';
+    toast.className = 'oms-v1__feedback-toast' + (successful ? ' is-success' : '');
     toast.setAttribute('data-feedback-toast', '');
     toast.setAttribute('role', 'status');
-    toast.textContent = '产品反馈暂时不可用，OMS 其他功能不受影响。';
+    toast.textContent = message;
     document.body.appendChild(toast);
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(function () { toast.remove(); }, 4200);
   }
 
+  function showFailure() {
+    showToast('产品反馈暂时不可用，OMS 其他功能不受影响。', false);
+  }
+
+  async function fetchSubmissionSnapshot() {
+    var csrf = await csrfToken();
+    var response = await fetch('/gateway/feedback/submission-snapshot', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      headers: { Accept: 'application/json', 'X-CSRF-Token': csrf }
+    });
+    if (!response.ok) {
+      var error = new Error('feedback snapshot unavailable');
+      error.status = response.status;
+      throw error;
+    }
+    var payload = await response.json();
+    if (!payload || !Array.isArray(payload.feedback_ids) || !/^[0-9]+$/.test(String(payload.feedback_count || ''))) throw new Error('invalid feedback snapshot');
+    return {
+      ids: new Set(payload.feedback_ids.map(function (id) { return String(id); }).filter(Boolean)),
+      count: String(payload.feedback_count).replace(/^0+(?=\d)/, '')
+    };
+  }
+
+  function decimalGreater(left, right) {
+    if (left.length !== right.length) return left.length > right.length;
+    return left > right;
+  }
+
+  function stopSubmissionWatch() {
+    submissionWatchGeneration += 1;
+    window.clearTimeout(submissionWatchTimer);
+    submissionWatchTimer = 0;
+  }
+
+  function completeFeedbackSubmission() {
+    stopSubmissionWatch();
+    lastOpenedMode = 'status';
+    dismissedBySDK = false;
+    post('feedback-sdk:open', { mode: 'status' });
+    requestUnread();
+    showToast('反馈已提交，已进入“我的反馈”查看处理进度。', true);
+  }
+
+  function startSubmissionWatch(baseline) {
+    stopSubmissionWatch();
+    var generation = submissionWatchGeneration;
+    var deadline = Date.now() + 5 * 60 * 1000;
+    var poll = async function () {
+      if (generation !== submissionWatchGeneration || !layer || layer.hidden || lastOpenedMode !== 'submit') return;
+      var delay = 1200;
+      try {
+        var current = await fetchSubmissionSnapshot();
+        var created = decimalGreater(current.count, baseline.count);
+        if (created) {
+          completeFeedbackSubmission();
+          return;
+        }
+      } catch (error) {
+        delay = 2600;
+        if (error && (error.status === 401 || error.status === 403)) {
+          stopSubmissionWatch();
+          return;
+        }
+      }
+      if (generation !== submissionWatchGeneration || Date.now() >= deadline) return;
+      submissionWatchTimer = window.setTimeout(poll, delay);
+    };
+    submissionWatchTimer = window.setTimeout(poll, 900);
+  }
+
   async function openFeedback(mode) {
     if (!sdkURL || (mode !== 'submit' && mode !== 'status')) return showFailure();
+    stopSubmissionWatch();
     try {
       var config = await fetchRuntimeConfig(false);
+      // The snapshot only improves the post-submit transition. A cold or
+      // temporarily slow Feedback API must never prevent the V3 SDK itself
+      // from opening; the SDK remains the authority for the submit journey.
+      var submissionBaselineRequest = mode === 'submit'
+        ? fetchSubmissionSnapshot().catch(function () { return null; })
+        : Promise.resolve(null);
       ensureFrame();
       await awaitReady();
-      sendConfiguration(config);
+      await configureFrame(config);
       post('feedback-sdk:open', { mode: mode });
+      lastOpenedMode = mode;
+      dismissedBySDK = false;
       layer.hidden = false;
+      if (mode === 'submit') {
+        void submissionBaselineRequest.then(function (submissionBaseline) {
+          if (!submissionBaseline || !layer || layer.hidden || lastOpenedMode !== 'submit') return;
+          startSubmissionWatch(submissionBaseline);
+        });
+      }
     } catch (_) {
       if (layer) layer.hidden = true;
       showFailure();
@@ -234,7 +406,7 @@
       var config = await fetchRuntimeConfig(false);
       ensureFrame();
       await awaitReady();
-      sendConfiguration(config);
+      await configureFrame(config);
       requestUnread();
     } catch (_) {
       // Feedback is auxiliary. Preparation failure must never affect OMS.
@@ -242,13 +414,22 @@
   }
 
   function clearRuntime() {
+    stopSubmissionWatch();
     identityKey = currentIdentityKey();
     if (notice) notice.textContent = '反馈会话已结束。';
     runtimeConfig = null;
     configRequest = null;
+    configuredConfig = null;
+    if (configurationRequest) {
+      window.clearTimeout(configurationRequest.timer);
+      configurationRequest.reject(new Error('feedback configuration cleared'));
+      configurationRequest = null;
+    }
     unreadRequestID = '';
+    dismissedBySDK = false;
     setUnread(0);
     ready = false;
+    readyFailure = null;
     readyWaiters.forEach(function (waiter) { window.clearTimeout(waiter.timer); waiter.reject(new Error('feedback cleared')); });
     readyWaiters = [];
     if (frame) frame.src = 'about:blank';
@@ -262,17 +443,27 @@
     var message = event.data;
     if (!message || message.source !== 'feedback-sdk-web' || typeof message.type !== 'string') return;
     if (message.type === 'feedback-sdk:ready') {
+      if (!Array.isArray(message.supported_contracts) || message.supported_contracts.indexOf(requiredSDKContract) < 0) {
+        rejectReady('feedback sdk does not support ' + requiredSDKContract);
+        return;
+      }
       resolveReady();
-      if (runtimeConfig) sendConfiguration(runtimeConfig);
+      return;
+    }
+    if (message.type === 'feedback-sdk:configured' && typeof message.request_id === 'string') {
+      acceptConfiguration(message.request_id);
       return;
     }
     if (message.type === 'feedback-sdk:close') {
+      stopSubmissionWatch();
       if (layer) layer.hidden = true;
+      dismissedBySDK = true;
       return;
     }
     if (message.type === 'feedback-sdk:refresh-session') {
       runtimeConfig = null;
-      void fetchRuntimeConfig(true).then(sendConfiguration).catch(showFailure);
+      configuredConfig = null;
+      void fetchRuntimeConfig(true).then(configureFrame).catch(showFailure);
       return;
     }
     if (message.type === 'feedback-sdk:unread-changed') {
@@ -289,6 +480,10 @@
     var button = event.target.closest('[data-feedback-mode]');
     if (button) void openFeedback(button.dataset.feedbackMode);
   });
+  document.addEventListener('click', function (event) {
+    if (!dismissedBySDK || !event.target.closest('[data-oms-v1-nav="feedback"]')) return;
+    void openFeedback(lastOpenedMode);
+  }, true);
   Array.prototype.forEach.call(document.querySelectorAll('form[action="/gateway/logout"]'), function (form) {
     form.addEventListener('submit', clearRuntime);
   });

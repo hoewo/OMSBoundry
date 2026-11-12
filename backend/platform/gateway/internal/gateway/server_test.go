@@ -78,6 +78,13 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 		case "/api/v1/logout":
 			http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
 			w.WriteHeader(204)
+		case "/api/v1/session/organization":
+			cookie, err := r.Cookie(sessionCookieName)
+			if err != nil || cookie.Value != "session-good" {
+				writeProblem(w, 401, "auth", "bad")
+				return
+			}
+			writeJSON(w, 200, map[string]any{"principal": map[string]string{"subject_id": testSubject, "tenant_id": sessionTenant}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -154,6 +161,17 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	_ = response.Body.Close()
 	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) != "" {
 		t.Fatal("successful direct IAM login retained the previous account capability")
+	}
+	form = url.Values{"csrf_token": {csrf}}
+	response = postForm(t, client, gateway.URL+"/gateway/authorize/contract-ledger", form, http.StatusSeeOther)
+	_ = response.Body.Close()
+	switchRequest, _ := http.NewRequest(http.MethodPost, gateway.URL+"/auth/api/v1/session/organization", strings.NewReader(`{"tenant_id":"`+sessionTenant+`"}`))
+	switchRequest.Header.Set("Content-Type", "application/json")
+	switchRequest.Header.Set("X-CSRF-Token", csrf)
+	response = do(t, client, switchRequest, http.StatusOK)
+	_ = response.Body.Close()
+	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) != "" {
+		t.Fatal("organization switch retained the previous tenant capability")
 	}
 	issuedToken = signToken(t, privateKey, map[string]any{"ver": "1", "iss": "https://oms.example.test/auth", "sub": testSubject, "tid": sessionTenant, "aud": "contract-ledger", "name": "系统管理员", "actions": []string{"contract-ledger.view"}, "scope": map[string]any{"kind": "resources", "resources": []map[string]string{{"type": "contract", "id": "55555555-5555-4555-8555-555555555555"}}}, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "auth_time": now.Add(-time.Minute).Unix(), "jti": "55555555-5555-4555-8555-555555555555"})
 	form = url.Values{"csrf_token": {csrf}, "resource_type": {"contract"}, "resource_id": {"55555555-5555-4555-8555-555555555555"}}

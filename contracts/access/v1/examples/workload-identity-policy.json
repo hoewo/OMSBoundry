@@ -326,6 +326,42 @@
           "audience": "money-flow-ledger",
           "action": "money-flow-ledger.payroll-payment.record",
           "resource_types": ["payroll_payment"]
+        },
+        {
+          "audience": "workforce-attendance",
+          "action": "workforce-attendance.summary.read",
+          "resource_types": ["monthly_summary"]
+        }
+      ]
+    },
+    {
+      "id": "workforce-attendance",
+      "subject_id": "12121212-1212-4121-8121-121212121212",
+      "display_name": "Workforce Attendance",
+      "public_keys_path": "/workload-public/workforce-attendance.json",
+      "permissions": [
+        {
+          "audience": "people-groups",
+          "action": "people-groups.person.reference.read",
+          "resource_types": ["person"]
+        }
+      ]
+    },
+    {
+      "id": "invoice-recognition",
+      "subject_id": "13131313-1313-4131-8131-131313131313",
+      "display_name": "Invoice Recognition",
+      "public_keys_path": "/workload-public/invoice-recognition.json",
+      "permissions": [
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.metadata.read",
+          "resource_types": ["file"]
+        },
+        {
+          "audience": "evidence-service",
+          "action": "evidence-service.download",
+          "resource_types": ["file"]
         }
       ]
     },

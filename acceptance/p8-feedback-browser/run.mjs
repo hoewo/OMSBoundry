@@ -45,7 +45,7 @@ function send(response, status, type, body) {
 function sdkDocument() {
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>Feedback fixture</title></head>
-<body data-config-count="0" data-open-mode="" data-last-project="" data-last-user="" data-parent-origin="" data-host-module="" data-host-route="">
+<body data-config-count="0" data-open-count="0" data-open-mode="" data-last-project="" data-last-user="" data-parent-origin="" data-host-module="" data-host-route="">
 <button id="sdk-control" type="button">SDK fixture alive</button>
 <script>
 (() => {
@@ -66,16 +66,20 @@ function sdkDocument() {
       state.parentOrigin = String(message.config && message.config.parentOrigins && message.config.parentOrigins[0] || '');
       state.hostModule = String(message.config && message.config.hostContext && message.config.hostContext.module || '');
       state.hostRoute = String(message.config && message.config.hostContext && message.config.hostContext.route || '');
+      send('feedback-sdk:configured', {request_id: message.request_id});
       return;
     }
     if (message.type === 'feedback-sdk:get-unread-count') {
       send('feedback-sdk:unread-count', {request_id: message.request_id, unread_count: 3});
       return;
     }
-    if (message.type === 'feedback-sdk:open') state.openMode = String(message.mode || '');
+    if (message.type === 'feedback-sdk:open') {
+      state.openCount = String(Number(state.openCount || 0) + 1);
+      state.openMode = String(message.mode || '');
+    }
   });
   window.fixtureSend = send;
-  send('feedback-sdk:ready');
+  send('feedback-sdk:ready', { supported_contracts: ['v3'], sdk_version: '3.0.1', build_id: 'acceptance' });
 })();
 </script></body></html>`;
 }
@@ -86,6 +90,7 @@ function hostDocument(sdkURL) {
 <style>[hidden]{display:none!important}.oms-v1__feedback-layer{position:fixed;inset:0}.oms-v1__feedback-frame{width:100%;height:100%;border:0}.oms-v1__feedback-toast{position:fixed;right:8px;bottom:8px}</style></head>
 <body>
 <main data-oms-v1 data-feedback-sdk-url="${sdkURL}" data-tenant-id="tenant-fixture" data-subject-id="subject-fixture">
+  <button type="button" data-oms-v1-nav="feedback">产品反馈</button>
   <section class="is-active" data-oms-v1-page="internal"><button id="business-button" type="button">业务页面</button><output id="business-state">0</output></section>
   <section data-oms-v1-page="feedback" data-feedback-page>
     <div data-feedback-notice><p>正在连接产品反馈。</p></div>
@@ -101,6 +106,10 @@ function hostDocument(sdkURL) {
 
 let configMode = 'ok';
 let configHits = 0;
+let snapshotMode = 'ok';
+let snapshotHits = 0;
+let submissionCount = 0;
+let submissionIDs = [];
 let hostOrigin = '';
 let sdkOrigin = '';
 const fakeKey = 'ak_fixture_0123456789abcdef0123456789abcdef';
@@ -144,6 +153,18 @@ const hostServer = createServer((request, response) => {
       },
     }));
   }
+  if (url.pathname === '/gateway/feedback/submission-snapshot') {
+    snapshotHits += 1;
+    if (request.method !== 'POST') return send(response, 405, 'application/json', '{"error":"method"}');
+    if (!/(?:^|;\s*)oms_iam_csrf=fixture_csrf_token_123456(?:;|$)/.test(request.headers.cookie || '') || request.headers['x-csrf-token'] !== 'fixture_csrf_token_123456') {
+      return send(response, 403, 'application/json', '{"error":"csrf"}');
+    }
+    if (snapshotMode === 'unavailable') return send(response, 502, 'application/json', '{"error":"unavailable"}');
+    return send(response, 200, 'application/json', JSON.stringify({
+      feedback_ids: submissionIDs,
+      feedback_count: String(submissionCount),
+    }));
+  }
   send(response, 404, 'text/plain; charset=utf-8', 'not found');
 });
 
@@ -166,9 +187,13 @@ try {
   if (process.env.BROWSER_EXECUTABLE) launchOptions.executablePath = process.env.BROWSER_EXECUTABLE;
   browser = await chromium.launch(launchOptions);
 
-  async function newPage(mode) {
+  async function newPage(mode, nextSnapshotMode = 'ok') {
     configMode = mode;
     configHits = 0;
+    snapshotMode = nextSnapshotMode;
+    snapshotHits = 0;
+    submissionCount = 0;
+    submissionIDs = [];
     const context = await browser.newContext();
     await context.addCookies([{ name: 'oms_iam_csrf', value: 'fixture_csrf_token_123456', url: hostOrigin, sameSite: 'Lax' }]);
     const page = await context.newPage();
@@ -176,6 +201,29 @@ try {
     page.on('pageerror', error => errors.push(error.name));
     await page.goto(hostOrigin, { waitUntil: 'domcontentloaded' });
     return { context, page, errors };
+  }
+
+  {
+    const { context, page, errors } = await newPage('ok', 'unavailable');
+    try {
+      await page.waitForFunction(() => document.querySelector('[data-feedback-notice] p')?.textContent.includes('已连接'));
+      await page.locator('[data-feedback-mode="submit"]').first().click();
+      const layer = page.locator('[data-feedback-layer]');
+      await layer.waitFor({ state: 'visible' });
+      const frame = page.frames().find(candidate => candidate.url().startsWith(`${sdkOrigin}/embed`));
+      assert(frame, 'snapshot failure must still leave the cross-origin SDK available');
+      await frame.waitForFunction(() => document.body.dataset.openMode === 'submit');
+      assert.equal(await layer.isVisible(), true, 'snapshot failure must not hide the SDK layer');
+      assert.equal(snapshotHits > 0, true, 'the optional snapshot path must still be attempted');
+      await frame.evaluate(() => window.fixtureSend('feedback-sdk:close'));
+      await page.waitForFunction(() => document.querySelector('[data-feedback-layer]').hidden === true);
+      await page.locator('#business-button').click();
+      assert.equal(await page.locator('#business-state').textContent(), '1');
+      assert.equal(errors.length, 0);
+      result.scenarios.push({ name: 'snapshot-outage-nonblocking', passed: true, assertions: 5 });
+    } finally {
+      await context.close();
+    }
   }
 
   {
@@ -203,6 +251,12 @@ try {
       assert.equal(await frame.locator('body').getAttribute('data-host-route'), 'internal');
       assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length]), [0, 0]);
 
+      submissionCount = 1;
+      submissionIDs = ['feedback-fixture-1'];
+      await frame.waitForFunction(() => document.body.dataset.openMode === 'status');
+      assert.equal(await layer.isVisible(), true, 'submission completion must keep the feedback layer visible');
+      assert.equal(await frame.locator('body').getAttribute('data-open-count'), '2', 'submission completion must open status in the existing iframe');
+
       await page.evaluate(() => window.postMessage({ source: 'feedback-sdk-web', type: 'feedback-sdk:unread-changed', unread_count: 99 }, location.origin));
       await page.waitForTimeout(80);
       assert.equal(await page.locator('[data-feedback-unread]').first().textContent(), '3', 'same-page spoof must be ignored');
@@ -212,6 +266,11 @@ try {
       await frame.evaluate(() => window.fixtureSend('feedback-sdk:unread-count', { request_id: 'stale-fixture-request', unread_count: 88 }));
       await page.waitForTimeout(80);
       assert.equal(await page.locator('[data-feedback-unread]').first().textContent(), '7', 'stale unread reply must be ignored');
+      await frame.evaluate(() => window.fixtureSend('feedback-sdk:close'));
+      await page.waitForFunction(() => document.querySelector('[data-feedback-layer]').hidden === true);
+      await page.locator('[data-oms-v1-nav="feedback"]').click();
+      await page.waitForFunction(() => document.querySelector('[data-feedback-layer]').hidden === false);
+      await frame.waitForFunction(() => document.body.dataset.openCount === '3' && document.body.dataset.openMode === 'status');
       await frame.evaluate(() => window.fixtureSend('feedback-sdk:close'));
       await page.waitForFunction(() => document.querySelector('[data-feedback-layer]').hidden === true);
 
@@ -230,7 +289,7 @@ try {
       });
       await page.waitForFunction(() => !document.querySelector('[data-feedback-layer]') && document.querySelector('[data-feedback-notice] p')?.textContent.includes('已结束'));
       assert.equal(errors.length, 0);
-      result.scenarios.push({ name: 'cross-origin-bridge', passed: true, assertions: 19 });
+      result.scenarios.push({ name: 'cross-origin-bridge', passed: true, assertions: 24 });
     } finally {
       await context.close();
     }

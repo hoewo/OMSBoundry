@@ -1,14 +1,14 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OMS1 Employee Invoice Reimbursement API",
+    "title": "OMS1 Organization Account API",
     "version": "1.0.0",
-    "description": "Employee-bound invoice Evidence upload and self-service reimbursement API. Every write requires Idempotency-Key; Tenant and employee identity are always derived from the API Key."
+    "description": "Organization-account-bound Evidence upload and self-service reimbursement API. Every write requires Idempotency-Key. Tenant and account identity are derived from the API Key; reimbursement routes additionally require a current active Person mapping and return PERSON_MAPPING_REQUIRED when it is absent."
   },
   "servers": [{"url": "/open-api/v1"}],
   "components": {
     "securitySchemes": {
-      "employeeApiKey": {"type": "apiKey", "in": "header", "name": "Authorization", "description": "ApiKey <one-time-secret>"}
+      "accountApiKey": {"type": "apiKey", "in": "header", "name": "Authorization", "description": "ApiKey <one-time-secret>"}
     },
     "schemas": {
       "Error": {
@@ -19,7 +19,17 @@
           "message": {"type": "string"},
           "request_id": {"type": "string"},
           "retryable": {"type": "boolean"},
-          "field_errors": {"type": "array", "items": {"type": "object"}}
+          "field_errors": {"type": "array", "items": {"type": "object"}},
+          "recovery": {"$ref": "#/components/schemas/Recovery"}
+        }
+      },
+      "Recovery": {
+        "type": "object",
+        "required": ["kind", "method", "path"],
+        "properties": {
+          "kind": {"const": "member_account_link"},
+          "method": {"const": "GET"},
+          "path": {"const": "/workbench/?view=oms-v1#member-account-link"}
         }
       },
       "EvidenceRef": {
@@ -44,34 +54,40 @@
       },
       "Reimbursement": {"type": "object", "required": ["id", "revision", "status", "amount_minor", "updated_at"], "additionalProperties": true},
       "ReimbursementPage": {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Reimbursement"}}, "next_cursor": {"type": "string"}}}
+    },
+    "responses": {
+      "PersonMappingRequired": {
+        "description": "The account must be linked to a current active Person before this employee business action can run; the problem includes a machine-readable member_account_link recovery path",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+      }
     }
   },
   "paths": {
     "/": {
       "get": {
-        "summary": "Validate the employee API credential and return its bounded context",
-        "security": [{"employeeApiKey": []}],
+        "summary": "Validate the organization account API credential and return its bounded context",
+        "security": [{"accountApiKey": []}],
         "responses": {"200": {"description": "Current API context"}, "401": {"description": "Invalid credential", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "429": {"description": "Rate limited"}}
       }
     },
     "/me": {
       "get": {
-        "summary": "Return the current Tenant, Subject, Person and Key references",
-        "security": [{"employeeApiKey": []}],
+        "summary": "Return the current Tenant, Subject and Key references",
+        "security": [{"accountApiKey": []}],
         "responses": {"200": {"description": "Current API context"}, "401": {"description": "Invalid credential"}}
       }
     },
     "/settings": {
       "get": {
         "summary": "Return versioned feature availability; Webhook remains unavailable in V1",
-        "security": [{"employeeApiKey": []}],
+        "security": [{"accountApiKey": []}],
         "responses": {"200": {"description": "Open API feature settings"}}
       }
     },
     "/evidence/upload-sessions": {
       "post": {
         "summary": "Create a 15-minute invoice upload authorization",
-        "security": [{"employeeApiKey": []}],
+        "security": [{"accountApiKey": []}],
         "parameters": [{"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 128}}],
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["file_name", "size_bytes", "sha256", "client_context"], "properties": {"file_name": {"type": "string"}, "size_bytes": {"type": "integer", "maximum": 20971520}, "media_type": {"type": "string"}, "sha256": {"type": "string"}, "client_context": {"type": "object", "properties": {"purpose": {"const": "invoice"}}}}}}}},
         "responses": {"201": {"description": "Upload session and bounded upload authorization"}, "422": {"description": "Unsupported or invalid invoice file"}}
@@ -80,31 +96,31 @@
     "/evidence/upload-sessions/{session_id}/complete": {
       "post": {
         "summary": "Complete and validate an invoice upload",
-        "security": [{"employeeApiKey": []}],
+        "security": [{"accountApiKey": []}],
         "parameters": [{"name": "session_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "Immutable File ID and Version"}, "422": {"description": "Hash, structure or security validation failed"}}
       }
     },
     "/evidence/upload-sessions/{session_id}/abort": {
-      "post": {"summary": "Abort an invoice upload", "security": [{"employeeApiKey": []}], "parameters": [{"name": "session_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "Upload aborted"}}}
+      "post": {"summary": "Abort an invoice upload", "security": [{"accountApiKey": []}], "parameters": [{"name": "session_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "enum": ["user_cancelled", "transfer_failed", "client_shutdown"]}}}}}}, "responses": {"204": {"description": "Upload aborted"}}}
     },
     "/reimbursements": {
-      "post": {"summary": "Create the current employee's reimbursement draft", "security": [{"employeeApiKey": []}], "parameters": [{"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementWrite"}}}}, "responses": {"201": {"description": "Draft created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Reimbursement"}}}}}},
-      "get": {"summary": "List only the current employee's submissions", "security": [{"employeeApiKey": []}], "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "archived", "in": "query", "schema": {"type": "string", "enum": ["include"]}}, {"name": "submitted_from", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "submitted_to", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "updated_since", "in": "query", "schema": {"type": "string", "format": "date-time"}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}], "responses": {"200": {"description": "Stable cursor page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementPage"}}}}, "304": {"description": "Unchanged for If-None-Match"}}}
+      "post": {"summary": "Create the current employee's reimbursement draft", "security": [{"accountApiKey": []}], "parameters": [{"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementWrite"}}}}, "responses": {"201": {"description": "Draft created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Reimbursement"}}}}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}}},
+      "get": {"summary": "List only the current employee's submissions", "security": [{"accountApiKey": []}], "parameters": [{"name": "status", "in": "query", "schema": {"type": "string"}}, {"name": "archived", "in": "query", "schema": {"type": "string", "enum": ["include"]}}, {"name": "submitted_from", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "submitted_to", "in": "query", "schema": {"type": "string", "format": "date"}}, {"name": "updated_since", "in": "query", "schema": {"type": "string", "format": "date-time"}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}], "responses": {"200": {"description": "Stable cursor page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementPage"}}}}, "304": {"description": "Unchanged for If-None-Match"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}}}
     },
     "/reimbursements/{request_id}": {
-      "get": {"summary": "Read one current-employee reimbursement", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "Reimbursement detail"}, "304": {"description": "Unchanged for If-None-Match"}, "404": {"description": "Not found or not owned by the employee"}}},
-      "put": {"summary": "Replace an editable reimbursement draft", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementWrite"}}}}, "responses": {"200": {"description": "Draft revision updated"}}},
-      "delete": {"summary": "Mark a never-submitted draft as deleted", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["confirmation"], "properties": {"confirmation": {"const": "DELETE"}}}}}}, "responses": {"200": {"description": "Draft deletion marker recorded"}, "409": {"description": "Draft was submitted or payment activity exists"}}}
+      "get": {"summary": "Read one current-employee reimbursement", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "Reimbursement detail"}, "304": {"description": "Unchanged for If-None-Match"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}, "404": {"description": "Not found or not owned by the employee"}}},
+      "put": {"summary": "Replace an editable reimbursement draft", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReimbursementWrite"}}}}, "responses": {"200": {"description": "Draft revision updated"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}}},
+      "delete": {"summary": "Mark a never-submitted draft as deleted with an audited reason", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["confirmation", "reason"], "properties": {"confirmation": {"const": "DELETE"}, "reason": {"type": "string", "minLength": 1, "maxLength": 1000}}}}}}, "responses": {"200": {"description": "Draft hidden from default lists and an immutable deletion event recorded"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}, "409": {"description": "Draft was submitted or payment activity exists"}, "422": {"description": "Deletion confirmation or reason is invalid"}}}
     },
     "/reimbursements/{request_id}/submit": {
-      "post": {"summary": "Submit and freeze an invoice reimbursement", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["expected_revision"], "properties": {"expected_revision": {"type": "integer"}, "suspected_duplicate_acknowledged": {"type": "boolean"}}}}}}, "responses": {"200": {"description": "Payable reimbursement"}, "409": {"description": "Revision, idempotency or invoice duplicate conflict"}}}
+      "post": {"summary": "Submit and freeze an invoice reimbursement", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["expected_revision"], "properties": {"expected_revision": {"type": "integer"}, "suspected_duplicate_acknowledged": {"type": "boolean"}}}}}}, "responses": {"200": {"description": "Payable reimbursement"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}, "409": {"description": "Revision, idempotency or invoice duplicate conflict"}}}
     },
     "/reimbursements/{request_id}/withdraw": {
-      "post": {"summary": "Withdraw before any successful or unknown payment", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Withdrawn revision"}, "409": {"description": "Payment already started"}}}
+      "post": {"summary": "Withdraw before any successful or unknown payment", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Withdrawn revision"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}, "409": {"description": "Payment already started"}}}
     },
     "/reimbursements/{request_id}/restore": {
-      "post": {"summary": "Restore an archived draft as a new revision", "security": [{"employeeApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Draft restored"}, "409": {"description": "Draft is not restorable"}}}
+      "post": {"summary": "Restore an archived draft as a new revision", "security": [{"accountApiKey": []}], "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Draft restored"}, "403": {"$ref": "#/components/responses/PersonMappingRequired"}, "409": {"description": "Draft is not restorable"}}}
     }
   }
 }

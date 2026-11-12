@@ -188,14 +188,14 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 }
 
 func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (DuplicateAssessment, error) {
-	now := time.Now().UTC()
-	result := DuplicateAssessment{Status: "clear", CheckedAt: now}
-	if value.RequestType != "reimbursement" {
-		return result, nil
-	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "invoice-duplicates:"+value.TenantID); err != nil {
 		return DuplicateAssessment{}, err
 	}
+	return findInvoiceDuplicates(ctx, tx, value, time.Now().UTC())
+}
+
+func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checkedAt time.Time) (DuplicateAssessment, error) {
+	result := DuplicateAssessment{Status: "clear", CheckedAt: checkedAt}
 	strong, suspected := map[string]bool{}, map[string]bool{}
 	for _, line := range value.Details.Lines {
 		if line.Invoice == nil {
@@ -205,7 +205,7 @@ func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (Dup
 			if evidence.SHA256 == "" {
 				continue
 			}
-			rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND evidence_sha256=$3`, value.TenantID, value.ID, evidence.SHA256)
+			rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND evidence_sha256=$3`, value.TenantID, value.ID, evidence.SHA256)
 			if err != nil {
 				return DuplicateAssessment{}, err
 			}
@@ -214,8 +214,8 @@ func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (Dup
 			}
 		}
 		invoice := line.Invoice
-		if invoice.Code != "" && invoice.Number != "" {
-			rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND invoice_code=$3 AND invoice_number=$4`, value.TenantID, value.ID, invoice.Code, invoice.Number)
+		if invoice.Number != "" {
+			rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND invoice_code=$3 AND invoice_number=$4`, value.TenantID, value.ID, invoice.Code, invoice.Number)
 			if err != nil {
 				return DuplicateAssessment{}, err
 			}
@@ -223,7 +223,7 @@ func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (Dup
 				return DuplicateAssessment{}, err
 			}
 		}
-		rows, err := tx.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND issuer_name=$3 AND invoice_date=$4::date AND amount_minor=$5`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
+		rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND issuer_name=$3 AND invoice_date=$4::date AND amount_minor=$5`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
 		if err != nil {
 			return DuplicateAssessment{}, err
 		}
@@ -239,6 +239,18 @@ func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (Dup
 		result.Status, result.MatchedRequestIDs = "suspected", sortedKeys(suspected)
 	}
 	return result, nil
+}
+
+func projectInvoiceDuplicates(ctx context.Context, q querier, value *Request) error {
+	if value.Status != "draft" && value.Status != "withdrawn" {
+		return nil
+	}
+	assessment, err := findInvoiceDuplicates(ctx, q, *value, time.Time{})
+	if err != nil {
+		return err
+	}
+	value.Details.Duplicate = assessment
+	return nil
 }
 
 func collectRequestIDs(rows pgx.Rows, target map[string]bool) error {
@@ -263,9 +275,6 @@ func sortedKeys(values map[string]bool) []string {
 }
 
 func insertInvoiceFingerprints(ctx context.Context, tx pgx.Tx, value Request) error {
-	if value.RequestType != "reimbursement" {
-		return nil
-	}
 	for _, line := range value.Details.Lines {
 		if line.Invoice == nil {
 			continue
@@ -420,7 +429,11 @@ func (s *PostgresStore) DeleteDraft(ctx context.Context, actor Actor, id string,
 	if _, err = tx.Exec(ctx, `UPDATE finance_requests SET deleted_at=$3,updated_at=$3 WHERE tenant_id=$1 AND id=$2`, value.TenantID, value.ID, now); err != nil {
 		return Request{}, err
 	}
-	if err = insertRetentionEvent(ctx, tx, value, actor, input.CommandID, "deleted", `{"confirmed":true}`); err != nil {
+	details, err := json.Marshal(map[string]any{"confirmed": true, "reason": input.Reason})
+	if err != nil {
+		return Request{}, err
+	}
+	if err = insertRetentionEvent(ctx, tx, value, actor, input.CommandID, "deleted", string(details)); err != nil {
 		return Request{}, err
 	}
 	if err = record(ctx, tx, actor, input.CommandID, requestHash, value); err != nil {
@@ -687,6 +700,9 @@ func (s *PostgresStore) Get(ctx context.Context, tenant, id string) (Request, er
 	if err == nil && value.DeletedAt != nil {
 		return Request{}, ErrNotFound
 	}
+	if err == nil {
+		err = projectInvoiceDuplicates(ctx, s.pool, &value)
+	}
 	return value, err
 }
 func (s *PostgresStore) List(ctx context.Context, tenant string, filter ListFilter) ([]Request, error) {
@@ -716,6 +732,9 @@ func (s *PostgresStore) List(ctx context.Context, tenant string, filter ListFilt
 			return nil, scanErr
 		}
 		if scanErr = loadPayments(ctx, s.pool, &value); scanErr != nil {
+			return nil, scanErr
+		}
+		if scanErr = projectInvoiceDuplicates(ctx, s.pool, &value); scanErr != nil {
 			return nil, scanErr
 		}
 		values = append(values, value)

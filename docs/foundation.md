@@ -1,8 +1,92 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-11 Feedback API Key 并发校验基线（BF-329，已发布）：一期仍使用 BF-299 明确接受的 `apiKey` 装配，不借故障修复静默切换鉴权模式。Feedback auth-server 必须合并同一 Key 的并发 bcrypt 冷校验，并仅短缓存成功结果；无效 Key 不得进入缓存，Key 新建／删除必须使成功缓存失效。V3 首屏的能力、会话和通知读取不得再因同 Key 并发把单次约 3 秒校验放大到 20 秒以上。该修复不改变 Feedback 事实、OMS 身份派生、网关超时或 OpenHands 模型配置。
+
+2026-11-11 Feedback V3 产品面验收基线（BF-328，已发布）：产品版本以用户最终看到的界面和行为为准；URL、channel manifest、ready contract 与 configured ACK 都只是必要条件。V3 必须呈现“帮助与反馈”统一面板及“智能客服／我的反馈”，不能落入独立“反馈建议”表单。SDK 初始化必须兼容宿主在 React 订阅前已完成配置的时序。正式稳定版本现为 3.0.4；已加载旧 iframe 的浏览器需刷新页面取得新制品。
+
+2026-11-11 Feedback V3 可用性基线（BF-327，已发布）：OMS 网站内嵌 V3 SDK 是反馈主产品面；宿主提交前快照只帮助识别“本账号新增反馈”并在提交后切换状态，不拥有 SDK 打开资格。快照不可用时继续完成 V3 握手和打开，且 OMS 业务页面保持可操作；只有成功取得基线时才启动有界轮询。本条不改变 Feedback 事实所有权、HTTP V2、API Key 风险、CSRF／Session 或跨域校验。公网 v1.98 已按此运行。
+
+2026-11-11 Feedback V3 与项目／合同顺序共识（BF-325／BF-326，已发布）：Feedback 的 V3 是宿主与 SDK 的产品契约升级，稳定别名指向 3.0.2，HTTP API 仍是 V2；宿主必须验证 V3 ready／configured，不能以 iframe 已加载代替配置成功。Project 与 Contract 是两个独立 Owner，项目创建不应等待合同运行时；合同未就绪时先保存项目且不收集应收金额，待 Contract 权限、Directory authority、本方主体和关联能力齐备后，再从项目合同页补录合同与金额。该顺序不共享表、不自动推断经营主体、不写入临时合同字段，也不放宽 Contract 最终门禁。公网 v1.97 已按此运行，当前新组织 Contract runtime 未自动修复。
+
+2026-11-09 BF-324 重复发票处置与审计删除（已发布）：重复发票不是可覆盖冲突；已提交申请保持不可变，当前草稿只能查看原申请、修改／更换发票或在满足资格时审计删除。删除必须由本人提供原因，Finance 以 `deleted_at` 从默认列表隐藏并向不可变保留事件记录可信操作人、凭证、命令和时间，不清除申请、revision 或 Evidence。公网最终 Suite v1.96、备份、D1、21/21 healthy、Workbench 资源和 OpenAPI 同哈希通过；现有“1245123”仍未删除。[发布验证](./reports/oms-finance-duplicate-resolution-soft-delete-publication-20261109.md)
+
+2026-11-09 BF-323 财务发票占用投影（已发布）：申请处于草稿只说明自身尚未提交，不等于其发票仍可被提交。Internal Finance Requests 以已提交指纹为事实来源，对草稿／撤回记录实时投影强重复阻断并收回 `submit` 动作；Workbench 显示当前账号可读的占用申请，正式提交仍在事务内最终复验。该投影不改变草稿状态、不预占发票、不复制 Evidence 字节，也不把失败提交写成业务 revision。线上“1245123”与“4·14·12”已只读确认是同号码、同原件哈希；公网 Finance／Workbench v1.94、备份、D1、21/21 healthy 与资源同哈希通过，未修改业务数据。[修复与发布验证](./reports/oms-finance-duplicate-occupancy-local-validation-20261109.md)
+
+2026-11-09 BF-321 财务批量动作基线（已发布）：草稿申请的下一步是提交，不是确认支付；只有提交后进入待支付／部分支付的记录才能登记实际付款。Workbench 根据 `allowed_actions`、状态、付款未知结果和报销凭证决定当前批量动作，禁止提交与付款混选，并保留 Finance 的 revision、Evidence 和缺凭证确认门禁。该编排已随公网 Workbench v1.92 发布；Owner 与业务门禁未变。
+
+2026-11-08 BF-320 发票优先录入基线（已发布）：新增报销与新增付款申请的顶部先呈现同一“上传发票并识别”主入口，再呈现基本信息；点击入口切换识别方式并复用既有校对、草稿恢复与票面回填链。暂不录入和直接录入仍保留，但不能与主入口争夺第一视觉层级。该调整只属于 Workbench 表现，不改变 BF-316 的 Owner 与保存边界。公网 Workbench v1.91、恢复点、D1 检查、21/21 healthy 与资源同哈希已复验。
+
+2026-11-08 BF-319 开票日期识别基线（已发布）：整页 OCR 不能形成完整日期时，只允许在标准发票头部的受限区域做一次局部放大复读；值必须来自带日期标签的同一行并通过真实日历校验。缺数字、无标签或非法日期继续留空，人工确认仍是唯一生效入口。公网 Invoice Recognition v1.90、恢复点、D1 检查和 21/21 healthy 已复验。
+
+2026-11-08 BF-318 已发布：识别原票与直接上传原票共享 Evidence 的规范 `invoice` 用途和 `invoice-v1/passed` 门禁。组合层不得自创用途字符串绕开或破坏发票校验；Finance 仍复验精确版本。历史错误版本保持不可变，重新识别生成新 Evidence。公网 Workbench v1.88、恢复点、独立 D1 检查、21/21 healthy 与资源同哈希通过。[发布验证](./reports/oms-recognized-invoice-evidence-validation-publication-20261108.md)
+
+2026-11-08 BF-317 全电发票兼容基线（已发布）：发票号码必填，旧版发票代码选填；直接录入与识别校对使用同一字段规则。Finance 对有代码票据按代码＋号码强查重，对无代码全电发票按号码强查重，Evidence 摘要和销售方＋日期＋金额仍是独立重复线索。公网 Finance／Workbench 为 v1.87，D1 与公网静态资源已复验；真实登录写旅程仍待专门测试数据验收。
+
+2026-11-08 BF-316 新增报销／付款申请发票消费基线（已发布）：新增报销与新增付款申请共用申请内发票录入旅程，上传原票后直接进入识别和人工确认，确认只恢复并填充当前申请草稿；用户保存后才由 Finance 持有票面快照和精确 Evidence 引用。报销提交继续强制至少一份已完成 Evidence，识别候选本身不等于报销事实。识别列表不开放公司外部 Billing 关联，既有申请补票／换票暂不开放。公网 Workbench 为 v1.86，D1 与公网静态资源已复验；真实登录写旅程仍待专门测试数据验收。
+
+2026-11-08 BF-315 财务表面与附件契约基线（已发布）：费用类别采用紧凑清单并区分平台预置与租户自定义；报销附件在 Workbench 组合层由 Evidence 上传回执显式转换为 Finance 严格 `EvidenceRef`，保存成功后才关闭弹窗并刷新申请列表。考勤和请假入口保留，折算政策及无政策时的摘要生成暂不对用户开放。公网 Workbench `v0.1.0-test.oms-v1.85` 已发布；该变更不改变任何 Owner 的事实边界，未执行线上业务写入。
+
+2026-11-08 BF-314 发票识别授权失败基线（已发布）：组合 UI 在调用受保护 Owner 前先验证当前 Tenant Capability；授权失败属于权限问题，不是下游服务不可达。识别窗口不得在已知 403 后进入无限加载，运行中失败必须停止 spinner 并给出真实原因。多组织账号的业务权限按组织隔离，不跨 Tenant 自动提升。公网 Workbench v1.84 已按此运行；本次未改变 IAM Grant、管理员身份或业务数据。
+
+2026-11-08 BF-313 内部付款发票消费基线（已发布）：发票识别仅作为公司内部新增付款申请的可选录入方式；用户也可直接录入或暂不录入。识别确认后，Workbench 恢复原申请草稿并回填金额、日期、销售方和票号，Finance 保存确认票面与精确 Evidence 引用并执行自身校验／重复判断。识别列表不再展示外部 Billing 关联，既有付款申请不允许补票或换票。本条只改变当前产品入口和 Finance 对付款发票的消费，不合并 Invoice Recognition、Evidence、Finance 或 Billing 所有权。公网 Finance／Workbench 为 v1.83，D1 与公网静态资源已复验；真实登录写旅程仍待使用专门测试数据验收。
+
+2026-11-06 BF-312 识别结果处置与交付基线（已发布）：待确认候选可审计删除，删除只追加 `discarded` revision 并保留 Evidence 引用、历史与幂等记录；已确认候选不得在识别域删除。确认结果既可导出 CSV／结构化 JSON，也可在用户明确选择业务方向、项目和往来单位后登记为 Billing 正式发票；Workbench 只编排版本化 Owner 端口，不能自动入账、按名称猜测关联或把两个 Owner 伪装成一个事务。公网 Invoice Recognition／Workbench 为 v1.82，恢复点 `20261106T142017Z`，21/21 正式服务健康；真实登录下的删除／登记写旅程仍待单独验收。
+
+2026-11-06 BF-311 校对窗口尺寸基线（已发布）：识别状态类实际位于对话框遮罩层，桌面宽屏样式必须从遮罩层定位内容框。校对窗口在可用视口内接近全屏，原图与字段区各自获得稳定工作面积，固定页脚保持可见；窄屏继续按 BF-310 回落单列。本条不改变识别候选、人工确认或 Owner 边界。公网 Workbench 为 v1.81，恢复点 `20261106T133027Z`，21/21 长运行服务健康，125% Chrome 实机已复验。
+
+2026-11-06 BF-310 人工校对交互基线（已发布）：图片发票原图在 Workbench 中必须可适应窗口、缩放和拖动；归一化识别区域随图片变换，字段卡片与标注双向定位，金额等表单字段必须显式映射到识别 key。该交互不改变候选、确认 revision、Evidence 所有权或正式业务事实。公网 Workbench 为 v1.80，Invoice Recognition 保持 v1.79，恢复点 `20261106T130859Z`，21/21 长运行服务健康。
+
+2026-11-06 BF-309 图片识别基线（已发布）：JPEG／PNG 与 PDF 首页面由 Invoice Recognition 容器内的 Tesseract／Poppler 离线识别，返回带置信度和归一化票面区域的候选；Workbench 必须把原图、标注、字段和警告放在同一人工校对工作面。识别不可靠的字段保持空白，候选不会自动确认或进入发票／报销／付款。Evidence 继续拥有原始文件，OFD 继续通过可替换外部 Provider。公网 Invoice Recognition／Workbench 为 v1.79，恢复点 `20261106T124214Z`，21/21 长运行服务健康。
+
+2026-11-06 BF-307／BF-308 新能力基线（已发布）：Invoice Recognition 已以独立数据库、HTTP／IAM、Evidence 精确版本校验、XML 本地解析、可替换 AI Provider 和人工确认页面运行；识别结果仍只是候选，正式发票／报销／付款继续由各自 Owner 拥有。Workforce Attendance 已以独立数据库保存政策、缺勤、请假和不可变月度摘要，通过 People 任职快照计算月中入离职范围，并由 Payroll 显式应用后形成工资 revision。首发公网 Owner 为 v1.76、Workbench 为 v1.77，D1 备份恢复覆盖两个新库；图片／PDF 的后续当前能力以 BF-309 为准。
+
+2026-11-05 BF-305／BF-306 多组织与内部管理基线（已发布）：本方经营主体按可信 Tenant→Party 映射选择，缺项失败关闭；财务操作人优先显示当前组织 IAM 姓名，工资列表默认隐藏已作废记录，管理员动作拒绝前刷新 IAM Session。公网 Workbench v1.75 和两个 Tenant 映射已复验，Owner 与历史事实未改变。
+
+2026-11-04 BF-303 Feedback 提交后停留基线（本地修订待发布）：BF-301 的“提交后不进入智能客服”保持不变，但创建成功后不应关闭反馈层。宿主停止本次提交观察后，必须保持 iframe 可见、把 SDK 切换到 `status` 模式并将上次打开模式更新为 `status`，使用户停留在“我的反馈”；只有用户显式点击关闭按钮时才隐藏反馈层。本次修订只改变 OMS Workbench 宿主行为，不修改 SDK、Gateway、Feedback 事实或 V3。
+
+2026-11-02 BF-301 Feedback 提交终点基线（已发布）：OMS 只把 SDK V2 用作反馈提交与状态查看表面；提交创建后宿主应结束本次提交旅程，不进入智能客服。由于 SDK 当前没有可信提交完成事件，宿主通过 Gateway 受 Session＋CSRF 保护的只读快照端口做五分钟有界观察，新增 Feedback 出现后关闭 iframe并显示成功；读取失败不得伪造成功。Gateway 只返回当前 Tenant＋Subject 匿名身份下的 ID／总数，不拥有反馈事实或泄露 API Key。本次发布只把遗漏的 Gateway 端口补到线上 `v0.1.0-test.oms-v1.72`，没有修改 SDK。
+
+2026-11-01 BF-302 账号资料与组织就绪基线（已发布）：IAM Subject 的组织内账号姓名和 People Person 的员工姓名／部门／岗位分别由各自 Owner 更新；管理员入口必须明确区分，均保留 revision 与审计／历史，不能自动互相覆盖。登录或组织切换后的 Session、Tenant 与组织清单必须一致；有界重试失败后页面失败关闭并明确提示重新加载或刷新，不得继续展示旧组织上下文。公网 Identity 为 `v0.1.0-test.oms-v1.70`，Workbench 为带缓存隔离资源版本的 `v0.1.0-test.oms-v1.71`，未修改 Owner 边界或真实账号／成员事实。
+
+2026-10-31 BF-300 Feedback 显式关闭基线（已发布）：嵌入式反馈卡片外的 iframe 空白区域是惰性区域，不得关闭弹窗；仅右上角关闭按钮可发送关闭请求。宿主隐藏弹层后仍保留已确认配置和上次模式，再次点击“产品反馈”导航即可重新打开，不依赖刷新页面；退出登录仍清除运行时状态。公网 SDK V2 与 Workbench `v0.1.0-test.oms-v1.69` 已按此运行。[发布记录](./reports/oms-feedback-dismiss-reopen-publication-20261031.md)
+
+2026-10-31 BF-299 Feedback V2 宿主握手基线（已发布）：项目 115 的 API Key 模式继续通过登录后受保护配置注入，Workbench 不在静态页面持有 Secret。跨域 SDK 加载完成与配置接受必须分开表达；只有精确 `feedback-sdk:configured` 确认后，提交、状态和未读入口才可使用。稳定身份继续由 Tenant＋Subject 脱敏派生，Feedback 继续独占反馈事实。公网 SDK V2 与 Workbench `v0.1.0-test.oms-v1.68` 已按此基线运行。[发布记录](./reports/oms-feedback-v2-api-key-publication-20261031.md)
+
+2026-10-30 BF-298 OMS 认证表面基线（已发布）：登录与邀请注册页面采用中性 OMS 产品识别，不再显示旧客户“京宏”文字、公司标题、建筑或 Logo 水印；旧客户资料仍只存在于其明确的旧版工作台和业务演示范围。该清理不改变认证、邀请、账号、组织、成员或业务事实。公网 Unified Workbench `v0.1.0-test.oms-v1.67` 已按此运行。[发布记录](./reports/oms-auth-surface-brand-cleanup-publication-20261030.md)
+
+2026-10-30 BF-297 受邀人自助注册基线（已发布）：管理员创建组织邀请时只固定 Tenant、普通用户／管理员级别、有效期和一次性凭证，不收集他人的姓名或登录账号。受邀人通过链接自行选择手机号或邮箱并设置本人资料；新账号原子注册，既有账号必须用原密码验证后加入组织且不得改密。邀请不是公开注册入口，Token 不进查询串，过期／用后／重签前凭证拒绝。成员关联仍归 People，并在注册完成后由本组织管理员显式处理；IAM 不保存 Person ID。公网 Identity／Workbench `v0.1.0-test.oms-v1.66` 已按此运行。[发布记录](./reports/oms-recipient-registration-invitation-publication-20261030.md)、[本地验证](./reports/oms-recipient-registration-invitation-local-validation-20261030.md)
+
+2026-10-30 BF-296 账号页布局基线（已发布）：统一下拉增强后的 `.oms-v1__select` 是布局中的实际元素，页面级样式必须约束该包装层。账号页不得因筛选器或组织切换控件产生页面横向滚动；窄屏优先保持搜索、筛选和主操作的可读性，表格滚动与页面布局隔离。公网 Unified Workbench `v0.1.0-test.oms-v1.65` 已按此基线运行。[发布记录](./reports/oms-account-directory-select-layout-repair-publication-20261030.md)
+
+2026-10-30 BF-295 工作台组织上下文基线（已发布）：桌面工作台在侧边栏底部直接显示当前组织；多组织账号在此切换，单组织账号只读显示。组织列表和切换事实仍完全来自 IAM，Workbench 不保存组织或权限副本；切换后必须以新 Session 重新读取所有 Owner 投影。公网 Unified Workbench `v0.1.0-test.oms-v1.64` 已按此基线运行。[发布记录](./reports/oms-sidebar-organization-switch-publication-20261030.md)
+
+2026-10-30 BF-294 多组织身份基线（已发布）：认证账号是全局对象，Tenant Subject 是组织内安全主体；二者通过稳定 `account_id` 一对多关联。每个 `(tenant_id, account_id)` 只能有一个 Subject，同账号跨组织使用不同 Subject ID。密码与锁定归账号，状态／管理员／Grant／Session／审计归组织 Subject；切换组织必须换 Session 和清除旧 Capability。Person 仍归 People，一个 Subject 在同 Tenant 最多关联一个 Person，跨 Tenant 各自关联。本基线不允许系统管理员进入业务组织，也不开放账号自助加入组织。公网 Identity schema 12 与 v1.63 三个装配镜像已按本基线运行。[发布记录](./reports/oms-multi-organization-account-publication-20261030.md)
+
+2026-10-30 账号目录阅读基线（BF-293，已发布）：账号管理页优先回答“账号是谁、关联哪个成员、具有什么级别、当前能否使用”，组织元数据和开户说明不得与名单争夺首屏。操作入口可收纳，但状态和关联必须直接可扫读；浏览器筛选不拥有或持久化 IAM／People 事实。公网 Unified Workbench `v0.1.0-test.oms-v1.62` 已按此基线运行。[发布记录](./reports/oms-account-directory-layout-publication-20261030.md)
+
+2026-10-30 账号与成员关联基线（BF-292，已发布；邀请入口由已发布 BF-297 取代）：账号合法性来自 IAM 的 Tenant 归属、状态和认证，成员身份来自 People 的显式关联，两者不按姓名推断。管理员仍可在成员维护或缺关联恢复入口选择关联；BF-297 起不再在邀请时预设成员，受邀人注册完成后才由本组织管理员显式关联。员工业务缺关联时必须给出稳定机器码和可达修复入口，普通用户不能自行选择他人成员。组织级功能与 API Key 不受该关联门禁影响。[BF-297 发布记录](./reports/oms-recipient-registration-invitation-publication-20261030.md)、[BF-292 发布记录](./reports/oms-account-person-linking-publication-20261030.md)
+
+2026-10-29 开放 API 身份基线（BF-290，已发布）：能在某 Tenant 正常登录且持有开放 API 能力的 IAM 用户，可以创建该组织账号自己的 API Key；“是否已关联员工”不是登录合法性或通用 Key 的判断条件。只有报销等必须确定本人 Person 的业务接口在调用时校验关联，并给出 `PERSON_MAPPING_REQUIRED` 与成员管理修复路径。成员管理当前提供显式关联；个人设置／邀请关联属于可追加体验入口，不是创建 Key 的隐藏前置条件。公网 `v0.1.0-test.oms-v1.60` 已按此基线运行。[发布记录](./reports/oms-open-api-account-scoped-key-publication-20261029.md)
+
+2026-10-29 项目详情视觉验收基线（BF-289）：本地候选与公网生产页必须统一浏览器缩放、视口和当前标签后再比较。收付款工作面以纵向业务顺序表达，上游收款在前、下游付款在后；施工方逐项详情默认折叠但不得删除。静态资源发布成功不等于真实装配视觉通过。[发布记录](./reports/oms-project-detail-production-parity-publication-20261029.md)
+
+2026-10-29 项目详情宽屏基线（BF-288）：详情画布在桌面宽屏最大为 1440px，并保留安全留白；往来单位工作面最大为 980px。中屏保持受控宽度、手机保持单列全宽。空间利用率调整不能重新引入等权大数字、冗余说明或装饰性卡片。[发布记录](./reports/oms-project-detail-wide-canvas-publication-20261029.md)
+
+2026-10-29 项目详情阅读基线（BF-286／BF-287）：详情页的目标是让用户先判断尚未完成的经营缺口，再读取总额和逐笔事实。四标签继续保留；内容宽度、行高和说明文案应按任务密度收敛，往来单位与合同使用紧凑清单，收付款以待回款／待支付为视觉重点，进度、已完成金额、总额和票据状态作为上下文。该基线只约束 Workbench 投影和排版，不改变任何事实 Owner。[发布记录](./reports/oms-project-detail-focus-layout-publication-20261029.md)
+
+2026-10-28 项目详情与产品壳层基线（BF-285）：项目详情标签是详情内部的信息架构，不是替换整个 OMS 页面结构的授权。完整侧栏和项目列表是当前产品基线；详情改版必须在它们之上增量实施并对 BF-281 的六个记录入口、来源返回及逐笔票款明细做回归。发布源固定为 OMSBoundry 的活动 Workbench，不得从同名旧实现构建。[故障修复及发布记录](./reports/oms-project-detail-tabs-regression-repair-publication-20261028.md)
+
+2026-10-28 内部管理审计显示基线（BF-284）：页面“操作人”必须投影 Owner 已保存的审计主体；People 显示最近 Person revision 的 actor display name，Payroll 显示工资表创建主体并可将当前 Subject 映射为当前 IAM 姓名。批量发放和单条发放共享可进入条件与账户缺失提示；工资账户仍可晚于建表补充，但实际发放继续失败关闭。[发布记录](./reports/oms-internal-operator-batch-payment-publication-20261028.md)
+
+2026-10-28 工资表候选刷新基线（BF-283）：成员／薪酬档案可在同一 Workbench 会话内发生变化，因此工资表动作不能依赖页面启动时缓存。新建工资表和同步成员在打开表单前重新读取 Owner 最新事实；在职且已有薪酬档案即可进入候选，工资账户缺失只限制实际发放，不限制建表。[发布记录](./reports/oms-payroll-member-candidate-refresh-publication-20261028.md)
+
+2026-10-28 Payroll 授权与成员续办基线（BF-282）：工资账号是可选档案，空账号不得阻断固定工资、社保基数和公积金基数的薪酬档案；只有显式填写账号时才要求账户名、开户行并写 Payment Profile。Gateway 授权成功重定向与 Owner API 请求是两个不同步骤，Workbench 不得因 API-only Owner 没有根页面而否定已成功签发的 Capability。People 已保存后的后续失败必须保留成员并准确提示待续办阶段，不自动重放或伪装回滚。[发布记录](./reports/oms-payroll-authorization-optional-account-publication-20261028.md)
+
+2026-10-28 项目票款明细与记录回跳基线（BF-281）：项目详情必须并列展示开／收票和实际回款／支付的逐笔有效记录，不能出现汇总显示“1 笔实际回款”但页面只有开票记录。应收管理、开票管理、回款记录、应付管理、支付记录、发票管理中的项目名称都是进入同一项目详情的上下文入口，返回动作必须恢复原记录页及其浏览状态；原记录详情仍由整行和最右操作列承载。该基线只约束 Workbench 只读组合与交互，不改变票款事实 Owner。[发布记录](./reports/oms-project-cash-detail-record-return-publication-20261028.md)
+
 2026-10-27 组织设置基线（BF-277）：IAM Tenant 名称是可由本组织管理员维护的显示资料，不是不可变标识，也不是 Party Directory 的企业法定名称。改名保持 Tenant ID、账号归属和业务事实引用不变，使用可信 Session Tenant 限定并写 IAM 审计；普通用户无权修改，系统管理员继续只使用隔离的系统管理面。企业证照与法定主体字段不得因此进入 IAM。[验证记录](./reports/oms-v1-tenant-display-name-settings-validation-20261027.md)
 
-2026-10-27 既有用户管理员挂载基线（BF-276）：管理员只是同组织 IAM 用户上的级别；系统管理员选择既有组织并输入已存在的同组织启用账号时，应原地提升该用户而不是再次创建账号。提升递增 revision 和 Session Generation、使旧会话失效并写不可变审计；重复设置幂等。只有标识不存在时才创建待激活管理员和链接，跨组织、系统管理员及非启用账号拒绝。页面必须说明最终动作并呈现真实业务错误。本条不把 IAM 用户变成 People 成员，也不自动授予业务 Capability。[验证记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
+2026-10-27 既有用户管理员挂载基线（BF-276，跨组织限制已由 BF-294 取代）：管理员是目标组织 IAM Subject 上的级别。目标组织内已存在的启用 Subject 应原地提升而不是重复创建，提升递增 revision 和 Session Generation、使该组织旧会话失效并写不可变审计；重复设置幂等。只有登录账号不存在时才创建待激活账号和链接。账号已属于其他组织时，按 BF-294 为目标组织建立独立 Subject 后再设置管理员，不再以跨组织为由拒绝；系统管理员账号及非启用目标 Subject 仍拒绝。本条不把 IAM Subject 变成 People 成员，也不自动授予业务 Capability。[验证记录](./reports/oms-v1-existing-user-administrator-assignment-validation-20261027.md)
 
 2026-10-27 用户与成员基线（BF-275，管理员授权部分由 BF-279 修订）：账号系统中的对象统一称“用户”，分为系统管理员、管理员、普通用户；成员是 People & Groups 拥有的业务人员档案，职位、部门、业务角色和职责只挂在成员上。用户可以不关联成员，成员也可以没有登录用户；需要本人业务能力时以稳定引用关联，不能把密码、账号状态或管理员级别复制到成员档案。系统管理员只在独立平台管理面创建组织和查看服务器上的组织信息，默认不进入业务；管理员管理本组织用户，并按 BF-279 自动挂载本组织已安装功能的全业务权限画像；普通用户只使用显式授权能力。公开创建组织入口关闭，一个用户首版只属于一个组织。[账号规格](./specs/identity/oms-v1-account-onboarding-v1.md)、[管理员权限画像](./specs/identity/oms-administrator-access-profile-v1.md)
 
@@ -890,3 +974,4 @@ C8 的个人工作身份边界也已固定：Project Assignment 引用 People Pe
 
 详细推进顺序和阶段验收标准见 [`development-plan.md`](./development-plan.md)。
 2026-10-27 管理员权限基线（BF-279）：组织内管理员的产品默认值是本 Tenant 当前已安装功能的全部业务权限。IAM 通过锁定的 `oms-administrator-full-access-v1` 画像精确展开已装 Capability Catalog，并在启动、登录和提升时幂等对齐；不是通配符、前端按钮放行或目标应用管理员旁路。降级只撤销画像来源 Grant，人工 Grant 保持。系统管理员仍不参与组织业务，普通用户仍按显式授权；People 职位不直接产生权限。[规格](./specs/identity/oms-administrator-access-profile-v1.md)
+2026-10-28 Party 运行时多租户基线（BF-280）：Party Directory 拥有每个 Tenant 的主体当前档案；Contract／Money 各自按同一可信 Tenant 保存本地旧主体到 Directory Party 的受审阅映射和 runtime transition。Suite 默认 Tenant 只是部署／迁移锚点，不得替代登录 Session Tenant。OMS 本方经营主体必须解析到当前 Tenant 的 active Party；单个全局 Party ID 不等于跨租户身份。当前公网只修复活跃 OMS 租户，多活跃租户的 Tenant→Operating Party 配置仍是明确后续项。[验证记录](./reports/oms-party-runtime-current-tenant-repair-validation-20261028.md)

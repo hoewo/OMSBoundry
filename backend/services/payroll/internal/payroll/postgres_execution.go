@@ -13,7 +13,7 @@ import (
 
 const executionRunSelect = `SELECT id::text,tenant_id::text,period,label,status,revision,created_by_subject_id::text,created_at,updated_at,run_kind,COALESCE(replaces_run_id::text,''),planned_pay_date::text,approval_policy_snapshot,approval_status,COALESCE(contribution_scheme_id::text,''),COALESCE(contribution_scheme_revision,0),contribution_scheme_snapshot,void_reason FROM payroll_runs`
 
-const executionLineSelect = `SELECT id::text,tenant_id::text,payroll_run_id::text,person_id::text,person_reference_code,person_display_name,person_source_revision,person_source_digest,person_status_snapshot,COALESCE(compensation_profile_id::text,''),COALESCE(compensation_profile_revision,0),COALESCE(payment_profile_id::text,''),COALESCE(payment_profile_revision,0),payment_account_name,payment_bank_name,payment_account_number,payment_account_missing,fixed_salary_minor,social_insurance_base_minor,housing_fund_base_minor,performance_minor,adjustments,gross_minor,employee_contributions,employer_contributions,employee_contribution_minor,employer_contribution_minor,tax_minor,tax_source_kind,tax_source_note,pre_tax_payable_minor,net_payable_minor,employer_cost_minor,actual_paid_minor,allocated_paid_minor,overage_minor,status,revision,line_kind,COALESCE(source_payroll_line_id::text,''),COALESCE(source_payroll_line_revision,0),adjustment_reason,created_at,updated_at FROM payroll_lines`
+const executionLineSelect = `SELECT id::text,tenant_id::text,payroll_run_id::text,person_id::text,person_reference_code,person_display_name,person_source_revision,person_source_digest,person_status_snapshot,COALESCE(compensation_profile_id::text,''),COALESCE(compensation_profile_revision,0),COALESCE(payment_profile_id::text,''),COALESCE(payment_profile_revision,0),payment_account_name,payment_bank_name,payment_account_number,payment_account_missing,fixed_salary_minor,attendance_summary_snapshot,attendance_proration_minor,social_insurance_base_minor,housing_fund_base_minor,performance_minor,adjustments,gross_minor,employee_contributions,employer_contributions,employee_contribution_minor,employer_contribution_minor,tax_minor,tax_source_kind,tax_source_note,pre_tax_payable_minor,net_payable_minor,employer_cost_minor,actual_paid_minor,allocated_paid_minor,overage_minor,status,revision,line_kind,COALESCE(source_payroll_line_id::text,''),COALESCE(source_payroll_line_revision,0),adjustment_reason,created_at,updated_at FROM payroll_lines`
 
 func (s *PostgresStore) CreateRegularRun(ctx context.Context, actor Actor, in CreateRegularRunInput, people []PersonReference, requestHash string) (ExecutionRun, error) {
 	tx, err := s.begin(ctx, actor.TenantID, in.CommandID)
@@ -217,8 +217,12 @@ func loadPaymentForPeriod(ctx context.Context, q interface {
 
 func insertPayrollLine(ctx context.Context, tx pgx.Tx, v PayrollLine) error {
 	adjustments, _ := json.Marshal(v.Adjustments)
+	attendance, _ := json.Marshal(v.AttendanceSummary)
+	if v.AttendanceSummary == nil {
+		attendance = nil
+	}
 	employee, employer := contributionJSON(v.Contributions)
-	_, e := tx.Exec(ctx, `INSERT INTO payroll_lines(id,tenant_id,payroll_run_id,person_id,person_display_name,person_source_revision,person_status_snapshot,compensation_profile_id,compensation_profile_revision,payment_profile_id,payment_profile_revision,payment_account_name,payment_bank_name,payment_account_number,payment_account_missing,fixed_salary_minor,social_insurance_base_minor,housing_fund_base_minor,performance_minor,adjustments,gross_minor,employee_contributions,employer_contributions,employee_contribution_minor,employer_contribution_minor,tax_minor,tax_source_kind,tax_source_note,pre_tax_payable_minor,net_payable_minor,employer_cost_minor,actual_paid_minor,allocated_paid_minor,overage_minor,status,revision,line_kind,source_payroll_line_id,source_payroll_line_revision,adjustment_reason,created_at,updated_at,person_reference_code,person_source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,NULLIF($9,0),NULLIF($10,'')::uuid,NULLIF($11,0),$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,NULLIF($38,'')::uuid,NULLIF($39,0),$40,$41,$41,$42,$43)`, v.ID, v.TenantID, v.PayrollRunID, v.PersonID, v.PersonDisplayName, v.PersonSourceRevision, v.PersonStatusSnapshot, v.CompensationProfileID, v.CompensationProfileRevision, v.PaymentProfileID, v.PaymentProfileRevision, v.PaymentAccountName, v.PaymentBankName, v.paymentAccountNumber, v.PaymentAccountMissing, v.FixedSalaryMinor, v.SocialInsuranceBaseMinor, v.HousingFundBaseMinor, v.PerformanceMinor, adjustments, v.GrossMinor, employee, employer, v.EmployeeContributionMinor, v.EmployerContributionMinor, v.TaxMinor, v.TaxSourceKind, v.TaxSourceNote, v.PreTaxPayableMinor, v.NetPayableMinor, v.EmployerCostMinor, v.ActualPaidMinor, v.AllocatedPaidMinor, v.OverageMinor, v.Status, v.Revision, v.LineKind, v.SourcePayrollLineID, v.SourcePayrollLineRevision, v.AdjustmentReason, v.CreatedAt, v.PersonReferenceCode, v.PersonSourceDigest)
+	_, e := tx.Exec(ctx, `INSERT INTO payroll_lines(id,tenant_id,payroll_run_id,person_id,person_display_name,person_source_revision,person_status_snapshot,compensation_profile_id,compensation_profile_revision,payment_profile_id,payment_profile_revision,payment_account_name,payment_bank_name,payment_account_number,payment_account_missing,fixed_salary_minor,attendance_summary_snapshot,attendance_proration_minor,social_insurance_base_minor,housing_fund_base_minor,performance_minor,adjustments,gross_minor,employee_contributions,employer_contributions,employee_contribution_minor,employer_contribution_minor,tax_minor,tax_source_kind,tax_source_note,pre_tax_payable_minor,net_payable_minor,employer_cost_minor,actual_paid_minor,allocated_paid_minor,overage_minor,status,revision,line_kind,source_payroll_line_id,source_payroll_line_revision,adjustment_reason,created_at,updated_at,person_reference_code,person_source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,NULLIF($9,0),NULLIF($10,'')::uuid,NULLIF($11,0),$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,NULLIF($40,'')::uuid,NULLIF($41,0),$42,$43,$43,$44,$45)`, v.ID, v.TenantID, v.PayrollRunID, v.PersonID, v.PersonDisplayName, v.PersonSourceRevision, v.PersonStatusSnapshot, v.CompensationProfileID, v.CompensationProfileRevision, v.PaymentProfileID, v.PaymentProfileRevision, v.PaymentAccountName, v.PaymentBankName, v.paymentAccountNumber, v.PaymentAccountMissing, v.FixedSalaryMinor, attendance, v.AttendanceProrationMinor, v.SocialInsuranceBaseMinor, v.HousingFundBaseMinor, v.PerformanceMinor, adjustments, v.GrossMinor, employee, employer, v.EmployeeContributionMinor, v.EmployerContributionMinor, v.TaxMinor, v.TaxSourceKind, v.TaxSourceNote, v.PreTaxPayableMinor, v.NetPayableMinor, v.EmployerCostMinor, v.ActualPaidMinor, v.AllocatedPaidMinor, v.OverageMinor, v.Status, v.Revision, v.LineKind, v.SourcePayrollLineID, v.SourcePayrollLineRevision, v.AdjustmentReason, v.CreatedAt, v.PersonReferenceCode, v.PersonSourceDigest)
 	return e
 }
 func contributionJSON(values []ContributionAmount) ([]byte, []byte) {
@@ -340,7 +344,12 @@ func compensationSyncPreview(ctx context.Context, q queryRows, run ExecutionRun,
 	after.FixedSalaryMinor = comp.FixedSalaryMinor
 	after.SocialInsuranceBaseMinor = comp.SocialInsuranceBaseMinor
 	after.HousingFundBaseMinor = comp.HousingFundBaseMinor
-	after.GrossMinor, after.Contributions, after.EmployeeContributionMinor, after.EmployerContributionMinor, after.PreTaxPayableMinor, after.NetPayableMinor, after.EmployerCostMinor, err = CalculatePayrollLine(after.FixedSalaryMinor, after.SocialInsuranceBaseMinor, after.HousingFundBaseMinor, after.PerformanceMinor, after.TaxMinor, after.Adjustments, run.ContributionSchemeSnapshot.Components)
+	var proration AttendanceProration
+	after.Adjustments, proration, err = withAttendanceAdjustment(after.Adjustments, after.FixedSalaryMinor, after.AttendanceSummary)
+	after.AttendanceProrationMinor = proration.AdjustmentMinor
+	if err == nil {
+		after.GrossMinor, after.Contributions, after.EmployeeContributionMinor, after.EmployerContributionMinor, after.PreTaxPayableMinor, after.NetPayableMinor, after.EmployerCostMinor, err = CalculatePayrollLine(after.FixedSalaryMinor, after.SocialInsuranceBaseMinor, after.HousingFundBaseMinor, after.PerformanceMinor, after.TaxMinor, after.Adjustments, run.ContributionSchemeSnapshot.Components)
+	}
 	if err != nil {
 		return SnapshotSyncPreview{}, err
 	}
@@ -550,12 +559,17 @@ func loadExecutionLines(ctx context.Context, q interface {
 }
 func scanExecutionLine(row scanner) (PayrollLine, error) {
 	var v PayrollLine
-	var adjustmentsRaw, employeeRaw, employerRaw []byte
-	e := row.Scan(&v.ID, &v.TenantID, &v.PayrollRunID, &v.PersonID, &v.PersonReferenceCode, &v.PersonDisplayName, &v.PersonSourceRevision, &v.PersonSourceDigest, &v.PersonStatusSnapshot, &v.CompensationProfileID, &v.CompensationProfileRevision, &v.PaymentProfileID, &v.PaymentProfileRevision, &v.PaymentAccountName, &v.PaymentBankName, &v.paymentAccountNumber, &v.PaymentAccountMissing, &v.FixedSalaryMinor, &v.SocialInsuranceBaseMinor, &v.HousingFundBaseMinor, &v.PerformanceMinor, &adjustmentsRaw, &v.GrossMinor, &employeeRaw, &employerRaw, &v.EmployeeContributionMinor, &v.EmployerContributionMinor, &v.TaxMinor, &v.TaxSourceKind, &v.TaxSourceNote, &v.PreTaxPayableMinor, &v.NetPayableMinor, &v.EmployerCostMinor, &v.ActualPaidMinor, &v.AllocatedPaidMinor, &v.OverageMinor, &v.Status, &v.Revision, &v.LineKind, &v.SourcePayrollLineID, &v.SourcePayrollLineRevision, &v.AdjustmentReason, &v.CreatedAt, &v.UpdatedAt)
+	var attendanceRaw, adjustmentsRaw, employeeRaw, employerRaw []byte
+	e := row.Scan(&v.ID, &v.TenantID, &v.PayrollRunID, &v.PersonID, &v.PersonReferenceCode, &v.PersonDisplayName, &v.PersonSourceRevision, &v.PersonSourceDigest, &v.PersonStatusSnapshot, &v.CompensationProfileID, &v.CompensationProfileRevision, &v.PaymentProfileID, &v.PaymentProfileRevision, &v.PaymentAccountName, &v.PaymentBankName, &v.paymentAccountNumber, &v.PaymentAccountMissing, &v.FixedSalaryMinor, &attendanceRaw, &v.AttendanceProrationMinor, &v.SocialInsuranceBaseMinor, &v.HousingFundBaseMinor, &v.PerformanceMinor, &adjustmentsRaw, &v.GrossMinor, &employeeRaw, &employerRaw, &v.EmployeeContributionMinor, &v.EmployerContributionMinor, &v.TaxMinor, &v.TaxSourceKind, &v.TaxSourceNote, &v.PreTaxPayableMinor, &v.NetPayableMinor, &v.EmployerCostMinor, &v.ActualPaidMinor, &v.AllocatedPaidMinor, &v.OverageMinor, &v.Status, &v.Revision, &v.LineKind, &v.SourcePayrollLineID, &v.SourcePayrollLineRevision, &v.AdjustmentReason, &v.CreatedAt, &v.UpdatedAt)
 	if e != nil {
 		return v, e
 	}
 	v.MaskedPaymentAccount = maskOptionalAccount(v.paymentAccountNumber)
+	if len(attendanceRaw) != 0 {
+		if e = json.Unmarshal(attendanceRaw, &v.AttendanceSummary); e != nil {
+			return v, e
+		}
+	}
 	if e = json.Unmarshal(adjustmentsRaw, &v.Adjustments); e != nil {
 		return v, e
 	}
@@ -613,7 +627,11 @@ func (s *PostgresStore) RevisePayrollLine(ctx context.Context, actor Actor, runI
 	if line.Revision != in.ExpectedLineRevision {
 		return ExecutionRun{}, ErrRevisionConflict
 	}
-	gross, contrib, employee, employer, preTax, net, cost, e := CalculatePayrollLine(line.FixedSalaryMinor, line.SocialInsuranceBaseMinor, line.HousingFundBaseMinor, in.PerformanceMinor, in.TaxMinor, in.Adjustments, run.ContributionSchemeSnapshot.Components)
+	effectiveAdjustments, proration, e := withAttendanceAdjustment(in.Adjustments, line.FixedSalaryMinor, line.AttendanceSummary)
+	if e != nil {
+		return ExecutionRun{}, e
+	}
+	gross, contrib, employee, employer, preTax, net, cost, e := CalculatePayrollLine(line.FixedSalaryMinor, line.SocialInsuranceBaseMinor, line.HousingFundBaseMinor, in.PerformanceMinor, in.TaxMinor, effectiveAdjustments, run.ContributionSchemeSnapshot.Components)
 	if e != nil {
 		return ExecutionRun{}, e
 	}
@@ -621,7 +639,8 @@ func (s *PostgresStore) RevisePayrollLine(ctx context.Context, actor Actor, runI
 	line.TaxMinor = in.TaxMinor
 	line.TaxSourceKind = in.TaxSourceKind
 	line.TaxSourceNote = in.TaxSourceNote
-	line.Adjustments = in.Adjustments
+	line.Adjustments = effectiveAdjustments
+	line.AttendanceProrationMinor = proration.AdjustmentMinor
 	line.GrossMinor = gross
 	line.Contributions = contrib
 	line.EmployeeContributionMinor = employee
@@ -1109,8 +1128,12 @@ func updateExecutionRun(ctx context.Context, tx pgx.Tx, v ExecutionRun) error {
 }
 func updatePayrollLine(ctx context.Context, tx pgx.Tx, v PayrollLine) error {
 	adjustments, _ := json.Marshal(v.Adjustments)
+	attendance, _ := json.Marshal(v.AttendanceSummary)
+	if v.AttendanceSummary == nil {
+		attendance = nil
+	}
 	employee, employer := contributionJSON(v.Contributions)
-	_, e := tx.Exec(ctx, `UPDATE payroll_lines SET compensation_profile_id=NULLIF($3,'')::uuid,compensation_profile_revision=NULLIF($4,0),payment_profile_id=NULLIF($5,'')::uuid,payment_profile_revision=NULLIF($6,0),payment_account_name=$7,payment_bank_name=$8,payment_account_number=$9,payment_account_missing=$10,fixed_salary_minor=$11,social_insurance_base_minor=$12,housing_fund_base_minor=$13,performance_minor=$14,adjustments=$15,gross_minor=$16,employee_contributions=$17,employer_contributions=$18,employee_contribution_minor=$19,employer_contribution_minor=$20,tax_minor=$21,tax_source_kind=$22,tax_source_note=$23,pre_tax_payable_minor=$24,net_payable_minor=$25,employer_cost_minor=$26,actual_paid_minor=$27,allocated_paid_minor=$28,overage_minor=$29,status=$30,revision=$31,updated_at=$32 WHERE tenant_id=$1 AND id=$2`, v.TenantID, v.ID, v.CompensationProfileID, v.CompensationProfileRevision, v.PaymentProfileID, v.PaymentProfileRevision, v.PaymentAccountName, v.PaymentBankName, v.paymentAccountNumber, v.PaymentAccountMissing, v.FixedSalaryMinor, v.SocialInsuranceBaseMinor, v.HousingFundBaseMinor, v.PerformanceMinor, adjustments, v.GrossMinor, employee, employer, v.EmployeeContributionMinor, v.EmployerContributionMinor, v.TaxMinor, v.TaxSourceKind, v.TaxSourceNote, v.PreTaxPayableMinor, v.NetPayableMinor, v.EmployerCostMinor, v.ActualPaidMinor, v.AllocatedPaidMinor, v.OverageMinor, v.Status, v.Revision, v.UpdatedAt)
+	_, e := tx.Exec(ctx, `UPDATE payroll_lines SET compensation_profile_id=NULLIF($3,'')::uuid,compensation_profile_revision=NULLIF($4,0),payment_profile_id=NULLIF($5,'')::uuid,payment_profile_revision=NULLIF($6,0),payment_account_name=$7,payment_bank_name=$8,payment_account_number=$9,payment_account_missing=$10,fixed_salary_minor=$11,attendance_summary_snapshot=$12,attendance_proration_minor=$13,social_insurance_base_minor=$14,housing_fund_base_minor=$15,performance_minor=$16,adjustments=$17,gross_minor=$18,employee_contributions=$19,employer_contributions=$20,employee_contribution_minor=$21,employer_contribution_minor=$22,tax_minor=$23,tax_source_kind=$24,tax_source_note=$25,pre_tax_payable_minor=$26,net_payable_minor=$27,employer_cost_minor=$28,actual_paid_minor=$29,allocated_paid_minor=$30,overage_minor=$31,status=$32,revision=$33,updated_at=$34 WHERE tenant_id=$1 AND id=$2`, v.TenantID, v.ID, v.CompensationProfileID, v.CompensationProfileRevision, v.PaymentProfileID, v.PaymentProfileRevision, v.PaymentAccountName, v.PaymentBankName, v.paymentAccountNumber, v.PaymentAccountMissing, v.FixedSalaryMinor, attendance, v.AttendanceProrationMinor, v.SocialInsuranceBaseMinor, v.HousingFundBaseMinor, v.PerformanceMinor, adjustments, v.GrossMinor, employee, employer, v.EmployeeContributionMinor, v.EmployerContributionMinor, v.TaxMinor, v.TaxSourceKind, v.TaxSourceNote, v.PreTaxPayableMinor, v.NetPayableMinor, v.EmployerCostMinor, v.ActualPaidMinor, v.AllocatedPaidMinor, v.OverageMinor, v.Status, v.Revision, v.UpdatedAt)
 	return e
 }
 func insertExecutionRunRevision(ctx context.Context, tx pgx.Tx, v ExecutionRun, actor Actor, command, event string) error {

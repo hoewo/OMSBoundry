@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	attendancecontract "omsbizfoundry/attendance-summary-contract"
 )
 
 var (
@@ -40,49 +42,51 @@ type ContributionAmount struct {
 }
 
 type PayrollLine struct {
-	ID                          string               `json:"id"`
-	TenantID                    string               `json:"tenant_id"`
-	PayrollRunID                string               `json:"payroll_run_id"`
-	PersonID                    string               `json:"person_id"`
-	PersonReferenceCode         string               `json:"person_reference_code,omitempty"`
-	PersonDisplayName           string               `json:"person_display_name"`
-	PersonSourceRevision        int64                `json:"person_source_revision"`
-	PersonSourceDigest          string               `json:"person_source_digest"`
-	PersonStatusSnapshot        string               `json:"person_status_snapshot"`
-	CompensationProfileID       string               `json:"compensation_profile_id,omitempty"`
-	CompensationProfileRevision int64                `json:"compensation_profile_revision,omitempty"`
-	PaymentProfileID            string               `json:"payment_profile_id,omitempty"`
-	PaymentProfileRevision      int64                `json:"payment_profile_revision,omitempty"`
-	PaymentAccountName          string               `json:"payment_account_name,omitempty"`
-	PaymentBankName             string               `json:"payment_bank_name,omitempty"`
-	MaskedPaymentAccount        string               `json:"masked_payment_account,omitempty"`
-	PaymentAccountMissing       bool                 `json:"payment_account_missing"`
-	FixedSalaryMinor            int64                `json:"fixed_salary_minor"`
-	SocialInsuranceBaseMinor    int64                `json:"social_insurance_base_minor"`
-	HousingFundBaseMinor        int64                `json:"housing_fund_base_minor"`
-	PerformanceMinor            int64                `json:"performance_minor"`
-	Adjustments                 []Adjustment         `json:"adjustments"`
-	GrossMinor                  int64                `json:"gross_minor"`
-	Contributions               []ContributionAmount `json:"contributions"`
-	EmployeeContributionMinor   int64                `json:"employee_contribution_minor"`
-	EmployerContributionMinor   int64                `json:"employer_contribution_minor"`
-	TaxMinor                    int64                `json:"tax_minor"`
-	TaxSourceKind               string               `json:"tax_source_kind"`
-	TaxSourceNote               string               `json:"tax_source_note,omitempty"`
-	PreTaxPayableMinor          int64                `json:"pre_tax_payable_minor"`
-	NetPayableMinor             int64                `json:"net_payable_minor"`
-	EmployerCostMinor           int64                `json:"employer_cost_minor"`
-	ActualPaidMinor             int64                `json:"actual_paid_minor"`
-	AllocatedPaidMinor          int64                `json:"allocated_paid_minor"`
-	OverageMinor                int64                `json:"overage_minor"`
-	Status                      string               `json:"status"`
-	Revision                    int64                `json:"revision"`
-	LineKind                    string               `json:"line_kind"`
-	SourcePayrollLineID         string               `json:"source_payroll_line_id,omitempty"`
-	SourcePayrollLineRevision   int64                `json:"source_payroll_line_revision,omitempty"`
-	AdjustmentReason            string               `json:"adjustment_reason,omitempty"`
-	CreatedAt                   time.Time            `json:"created_at"`
-	UpdatedAt                   time.Time            `json:"updated_at"`
+	ID                          string                             `json:"id"`
+	TenantID                    string                             `json:"tenant_id"`
+	PayrollRunID                string                             `json:"payroll_run_id"`
+	PersonID                    string                             `json:"person_id"`
+	PersonReferenceCode         string                             `json:"person_reference_code,omitempty"`
+	PersonDisplayName           string                             `json:"person_display_name"`
+	PersonSourceRevision        int64                              `json:"person_source_revision"`
+	PersonSourceDigest          string                             `json:"person_source_digest"`
+	PersonStatusSnapshot        string                             `json:"person_status_snapshot"`
+	CompensationProfileID       string                             `json:"compensation_profile_id,omitempty"`
+	CompensationProfileRevision int64                              `json:"compensation_profile_revision,omitempty"`
+	PaymentProfileID            string                             `json:"payment_profile_id,omitempty"`
+	PaymentProfileRevision      int64                              `json:"payment_profile_revision,omitempty"`
+	PaymentAccountName          string                             `json:"payment_account_name,omitempty"`
+	PaymentBankName             string                             `json:"payment_bank_name,omitempty"`
+	MaskedPaymentAccount        string                             `json:"masked_payment_account,omitempty"`
+	PaymentAccountMissing       bool                               `json:"payment_account_missing"`
+	FixedSalaryMinor            int64                              `json:"fixed_salary_minor"`
+	AttendanceSummary           *attendancecontract.MonthlySummary `json:"attendance_summary,omitempty"`
+	AttendanceProrationMinor    int64                              `json:"attendance_proration_minor"`
+	SocialInsuranceBaseMinor    int64                              `json:"social_insurance_base_minor"`
+	HousingFundBaseMinor        int64                              `json:"housing_fund_base_minor"`
+	PerformanceMinor            int64                              `json:"performance_minor"`
+	Adjustments                 []Adjustment                       `json:"adjustments"`
+	GrossMinor                  int64                              `json:"gross_minor"`
+	Contributions               []ContributionAmount               `json:"contributions"`
+	EmployeeContributionMinor   int64                              `json:"employee_contribution_minor"`
+	EmployerContributionMinor   int64                              `json:"employer_contribution_minor"`
+	TaxMinor                    int64                              `json:"tax_minor"`
+	TaxSourceKind               string                             `json:"tax_source_kind"`
+	TaxSourceNote               string                             `json:"tax_source_note,omitempty"`
+	PreTaxPayableMinor          int64                              `json:"pre_tax_payable_minor"`
+	NetPayableMinor             int64                              `json:"net_payable_minor"`
+	EmployerCostMinor           int64                              `json:"employer_cost_minor"`
+	ActualPaidMinor             int64                              `json:"actual_paid_minor"`
+	AllocatedPaidMinor          int64                              `json:"allocated_paid_minor"`
+	OverageMinor                int64                              `json:"overage_minor"`
+	Status                      string                             `json:"status"`
+	Revision                    int64                              `json:"revision"`
+	LineKind                    string                             `json:"line_kind"`
+	SourcePayrollLineID         string                             `json:"source_payroll_line_id,omitempty"`
+	SourcePayrollLineRevision   int64                              `json:"source_payroll_line_revision,omitempty"`
+	AdjustmentReason            string                             `json:"adjustment_reason,omitempty"`
+	CreatedAt                   time.Time                          `json:"created_at"`
+	UpdatedAt                   time.Time                          `json:"updated_at"`
 	paymentAccountNumber        string
 }
 
@@ -138,6 +142,14 @@ type ReviseLineInput struct {
 	TaxSourceNote        string       `json:"tax_source_note"`
 	Adjustments          []Adjustment `json:"adjustments"`
 	Reason               string       `json:"reason"`
+}
+
+type ApplyAttendanceSummaryInput struct {
+	CommandID            string `json:"command_id"`
+	ExpectedRunRevision  int64  `json:"expected_run_revision"`
+	ExpectedLineRevision int64  `json:"expected_line_revision"`
+	SummaryID            string `json:"summary_id"`
+	Reason               string `json:"reason"`
 }
 
 type RunCommandInput struct {
@@ -256,6 +268,7 @@ type ExecutionStore interface {
 	GetExecutionRun(context.Context, string, string) (ExecutionRun, error)
 	ListExecutionRuns(context.Context, string) ([]ExecutionRun, error)
 	RevisePayrollLine(context.Context, Actor, string, string, ReviseLineInput, string) (ExecutionRun, error)
+	ApplyAttendanceSummary(context.Context, Actor, string, string, ApplyAttendanceSummaryInput, attendancecontract.MonthlySummary, string) (ExecutionRun, error)
 	ReviewPayrollRun(context.Context, Actor, string, RunCommandInput, string) (ExecutionRun, error)
 	ConfirmZeroLine(context.Context, Actor, string, string, LineCommandInput, string) (ExecutionRun, error)
 	VoidPayrollRun(context.Context, Actor, string, RunCommandInput, string) (ExecutionRun, error)
@@ -266,6 +279,10 @@ type ExecutionStore interface {
 	ConfirmCompensationSync(context.Context, Actor, string, string, ConfirmSnapshotSyncInput, string) (ExecutionRun, error)
 	PreviewPaymentProfileSync(context.Context, string, string, string) (SnapshotSyncPreview, error)
 	ConfirmPaymentProfileSync(context.Context, Actor, string, string, ConfirmSnapshotSyncInput, string) (ExecutionRun, error)
+}
+
+type AttendanceSummaryPort interface {
+	GetMonthlySummary(context.Context, string, string) (attendancecontract.MonthlySummary, error)
 }
 
 func (s *Service) executionStore() (ExecutionStore, error) {
@@ -502,6 +519,33 @@ func (s *Service) RevisePayrollLine(ctx context.Context, actor Actor, runID, lin
 		RunID, LineID string
 		Input         ReviseLineInput
 	}{runID, lineID, in}))
+}
+
+func (s *Service) ApplyAttendanceSummary(ctx context.Context, actor Actor, runID, lineID string, in ApplyAttendanceSummaryInput) (ExecutionRun, error) {
+	if err := validateActor(actor); err != nil {
+		return ExecutionRun{}, err
+	}
+	runID, lineID = strings.ToLower(strings.TrimSpace(runID)), strings.ToLower(strings.TrimSpace(lineID))
+	in.CommandID, in.SummaryID, in.Reason = strings.ToLower(strings.TrimSpace(in.CommandID)), strings.ToLower(strings.TrimSpace(in.SummaryID)), strings.TrimSpace(in.Reason)
+	if !uuidPattern.MatchString(runID) || !uuidPattern.MatchString(lineID) || !uuidPattern.MatchString(in.CommandID) || !uuidPattern.MatchString(in.SummaryID) || in.ExpectedRunRevision < 1 || in.ExpectedLineRevision < 1 || in.Reason == "" || len([]rune(in.Reason)) > 500 || s.attendance == nil {
+		return ExecutionRun{}, fmt.Errorf("invalid attendance summary application")
+	}
+	summary, err := s.attendance.GetMonthlySummary(ctx, actor.TenantID, in.SummaryID)
+	if err != nil {
+		return ExecutionRun{}, err
+	}
+	if err = attendancecontract.Validate(summary); err != nil || summary.TenantID != actor.TenantID {
+		return ExecutionRun{}, fmt.Errorf("invalid attendance summary")
+	}
+	store, err := s.executionStore()
+	if err != nil {
+		return ExecutionRun{}, err
+	}
+	return store.ApplyAttendanceSummary(ctx, actor, runID, lineID, in, summary, hash(struct {
+		RunID, LineID string
+		Input         ApplyAttendanceSummaryInput
+		Summary       attendancecontract.MonthlySummary
+	}{runID, lineID, in, summary}))
 }
 
 func normalizeRunCommand(in RunCommandInput) (RunCommandInput, error) {

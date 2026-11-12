@@ -41,21 +41,23 @@ type Actor struct {
 }
 
 type Person struct {
-	ID                  string    `json:"id"`
-	TenantID            string    `json:"tenant_id"`
-	ReferenceCode       string    `json:"reference_code,omitempty"`
-	DisplayName         string    `json:"display_name"`
-	Department          string    `json:"department,omitempty"`
-	PositionTitle       string    `json:"position_title,omitempty"`
-	Status              string    `json:"status"`
-	StatusEffectiveDate string    `json:"status_effective_date"`
-	IAMSubjectID        string    `json:"iam_subject_id,omitempty"`
-	IAMSubjectStatus    string    `json:"iam_subject_status,omitempty"`
-	IAMSubjectRevision  int64     `json:"iam_subject_revision,omitempty"`
-	Revision            int64     `json:"revision"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
-	employmentReason    string
+	ID                   string    `json:"id"`
+	TenantID             string    `json:"tenant_id"`
+	ReferenceCode        string    `json:"reference_code,omitempty"`
+	DisplayName          string    `json:"display_name"`
+	Department           string    `json:"department,omitempty"`
+	PositionTitle        string    `json:"position_title,omitempty"`
+	Status               string    `json:"status"`
+	StatusEffectiveDate  string    `json:"status_effective_date"`
+	IAMSubjectID         string    `json:"iam_subject_id,omitempty"`
+	IAMSubjectStatus     string    `json:"iam_subject_status,omitempty"`
+	IAMSubjectRevision   int64     `json:"iam_subject_revision,omitempty"`
+	LastActorSubjectID   string    `json:"last_actor_subject_id,omitempty"`
+	LastActorDisplayName string    `json:"last_actor_display_name,omitempty"`
+	Revision             int64     `json:"revision"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+	employmentReason     string
 }
 
 type EmploymentEvent struct {

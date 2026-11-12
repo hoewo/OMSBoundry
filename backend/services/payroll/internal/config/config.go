@@ -10,17 +10,17 @@ import (
 )
 
 type Config struct {
-	HTTPAddress, DatabaseURL                                                                                                                                  string
-	ShutdownTimeout                                                                                                                                           time.Duration
-	MigrationMode, IdentityProvider, IAMIssuer, IAMTenantID, IAMPublicKeysPath, TemplateTenantID, TemplateSubjectID, TemplateDisplayName, TemplateAccessToken string
-	PeopleBaseURL, PeopleAccessToken, MoneyBaseURL, MoneyAccessToken, IAMServiceCredentialURL, WorkloadID, WorkloadSubjectID, WorkloadKeyFile                 string
-	ReferenceTimeout, WorkloadRefreshBefore                                                                                                                   time.Duration
+	HTTPAddress, DatabaseURL                                                                                                                                                            string
+	ShutdownTimeout                                                                                                                                                                     time.Duration
+	MigrationMode, IdentityProvider, IAMIssuer, IAMTenantID, IAMPublicKeysPath, TemplateTenantID, TemplateSubjectID, TemplateDisplayName, TemplateAccessToken                           string
+	PeopleBaseURL, PeopleAccessToken, MoneyBaseURL, MoneyAccessToken, AttendanceBaseURL, AttendanceAccessToken, IAMServiceCredentialURL, WorkloadID, WorkloadSubjectID, WorkloadKeyFile string
+	ReferenceTimeout, WorkloadRefreshBefore                                                                                                                                             time.Duration
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 func Load() (Config, error) {
-	c := Config{HTTPAddress: env("HTTP_ADDR", ":8093"), DatabaseURL: env("DATABASE_URL", "postgres://payroll:payroll_dev@127.0.0.1:55443/payroll?sslmode=disable"), ShutdownTimeout: 10 * time.Second, ReferenceTimeout: 3 * time.Second, WorkloadRefreshBefore: 15 * time.Second, MigrationMode: strings.ToLower(env("MIGRATION_MODE", "auto")), IdentityProvider: strings.ToLower(env("IDENTITY_PROVIDER", "template")), IAMIssuer: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_ISSUER")), "/"), IAMTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("IAM_TENANT_ID"))), IAMPublicKeysPath: strings.TrimSpace(os.Getenv("IAM_PUBLIC_KEYS_PATH")), TemplateTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_TENANT_ID"))), TemplateSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_SUBJECT_ID"))), TemplateDisplayName: strings.TrimSpace(os.Getenv("TEMPLATE_DISPLAY_NAME")), TemplateAccessToken: os.Getenv("TEMPLATE_ACCESS_TOKEN"), PeopleBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("PEOPLE_BASE_URL")), "/"), PeopleAccessToken: os.Getenv("PEOPLE_ACCESS_TOKEN"), MoneyBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("MONEY_BASE_URL")), "/"), MoneyAccessToken: os.Getenv("MONEY_ACCESS_TOKEN"), IAMServiceCredentialURL: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_SERVICE_CREDENTIAL_URL")), "/"), WorkloadID: strings.TrimSpace(os.Getenv("WORKLOAD_ID")), WorkloadSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("WORKLOAD_SUBJECT_ID"))), WorkloadKeyFile: strings.TrimSpace(os.Getenv("WORKLOAD_KEY_FILE"))}
+	c := Config{HTTPAddress: env("HTTP_ADDR", ":8093"), DatabaseURL: env("DATABASE_URL", "postgres://payroll:payroll_dev@127.0.0.1:55443/payroll?sslmode=disable"), ShutdownTimeout: 10 * time.Second, ReferenceTimeout: 3 * time.Second, WorkloadRefreshBefore: 15 * time.Second, MigrationMode: strings.ToLower(env("MIGRATION_MODE", "auto")), IdentityProvider: strings.ToLower(env("IDENTITY_PROVIDER", "template")), IAMIssuer: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_ISSUER")), "/"), IAMTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("IAM_TENANT_ID"))), IAMPublicKeysPath: strings.TrimSpace(os.Getenv("IAM_PUBLIC_KEYS_PATH")), TemplateTenantID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_TENANT_ID"))), TemplateSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("TEMPLATE_SUBJECT_ID"))), TemplateDisplayName: strings.TrimSpace(os.Getenv("TEMPLATE_DISPLAY_NAME")), TemplateAccessToken: os.Getenv("TEMPLATE_ACCESS_TOKEN"), PeopleBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("PEOPLE_BASE_URL")), "/"), PeopleAccessToken: os.Getenv("PEOPLE_ACCESS_TOKEN"), MoneyBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("MONEY_BASE_URL")), "/"), MoneyAccessToken: os.Getenv("MONEY_ACCESS_TOKEN"), AttendanceBaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("ATTENDANCE_BASE_URL")), "/"), AttendanceAccessToken: os.Getenv("ATTENDANCE_ACCESS_TOKEN"), IAMServiceCredentialURL: strings.TrimRight(strings.TrimSpace(os.Getenv("IAM_SERVICE_CREDENTIAL_URL")), "/"), WorkloadID: strings.TrimSpace(os.Getenv("WORKLOAD_ID")), WorkloadSubjectID: strings.ToLower(strings.TrimSpace(os.Getenv("WORKLOAD_SUBJECT_ID"))), WorkloadKeyFile: strings.TrimSpace(os.Getenv("WORKLOAD_KEY_FILE"))}
 	for name, item := range map[string]struct {
 		value *time.Duration
 		max   time.Duration
@@ -46,6 +46,9 @@ func Load() (Config, error) {
 		if err := validateStaticEndpoint("Money payment", c.MoneyBaseURL, c.MoneyAccessToken); err != nil {
 			return Config{}, err
 		}
+		if err := validateStaticEndpoint("attendance summary", c.AttendanceBaseURL, c.AttendanceAccessToken); err != nil {
+			return Config{}, err
+		}
 		return c, nil
 	}
 	if c.IdentityProvider != "iam" {
@@ -55,12 +58,12 @@ func Load() (Config, error) {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || !uuidPattern.MatchString(c.IAMTenantID) || c.IAMPublicKeysPath == "" {
 		return Config{}, fmt.Errorf("iam mode requires HTTPS issuer, tenant and public keys")
 	}
-	if c.PeopleAccessToken != "" || c.MoneyAccessToken != "" {
+	if c.PeopleAccessToken != "" || c.MoneyAccessToken != "" || c.AttendanceAccessToken != "" {
 		return Config{}, fmt.Errorf("IAM mode does not accept static downstream tokens")
 	}
-	downstreamConfigured := c.PeopleBaseURL != "" || c.MoneyBaseURL != ""
+	downstreamConfigured := c.PeopleBaseURL != "" || c.MoneyBaseURL != "" || c.AttendanceBaseURL != ""
 	credentialConfigured := c.IAMServiceCredentialURL != "" || c.WorkloadID != "" || c.WorkloadSubjectID != "" || c.WorkloadKeyFile != ""
-	if downstreamConfigured != credentialConfigured || (downstreamConfigured && ((!validOptionalURL(c.PeopleBaseURL)) || (!validOptionalURL(c.MoneyBaseURL)) || !validURL(c.IAMServiceCredentialURL) || c.WorkloadID != "payroll" || !uuidPattern.MatchString(c.WorkloadSubjectID) || c.WorkloadKeyFile == "")) {
+	if downstreamConfigured != credentialConfigured || (downstreamConfigured && ((!validOptionalURL(c.PeopleBaseURL)) || (!validOptionalURL(c.MoneyBaseURL)) || (!validOptionalURL(c.AttendanceBaseURL)) || !validURL(c.IAMServiceCredentialURL) || c.WorkloadID != "payroll" || !uuidPattern.MatchString(c.WorkloadSubjectID) || c.WorkloadKeyFile == "")) {
 		return Config{}, fmt.Errorf("IAM downstream reference and payment settings must be complete")
 	}
 	return c, nil

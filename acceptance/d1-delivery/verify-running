@@ -43,6 +43,10 @@ enable_production=$(env_value ENABLE_PRODUCTION false)
 enable_approval_audit_results=$(env_value ENABLE_APPROVAL_AUDIT_RESULTS false)
 enable_cost_outsourcing=$(env_value ENABLE_COST_OUTSOURCING false)
 enable_bonus_distribution=$(env_value ENABLE_BONUS_DISTRIBUTION false)
+enable_internal_finance_requests=$(env_value ENABLE_INTERNAL_FINANCE_REQUESTS false)
+enable_payroll=$(env_value ENABLE_PAYROLL false)
+enable_workforce_attendance=$(env_value ENABLE_WORKFORCE_ATTENDANCE false)
+enable_invoice_recognition=$(env_value ENABLE_INVOICE_RECOGNITION false)
 tenant_id=$(env_value TENANT_ID)
 compose_file="$d1_dir/compose.yaml"
 pull_compose_file="$d1_dir/compose.pull.yaml"
@@ -50,7 +54,7 @@ https_compose_file="$d1_dir/compose.https.yaml"
 compose_override_file=${D1_COMPOSE_OVERRIDE_FILE:-}
 
 compose() {
-  set -- --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution "$@"
+  set -- --profile contract --profile money --profile people --profile party --profile project --profile evidence --profile business-engagement --profile billing --profile production --profile approval-audit-results --profile cost-outsourcing --profile bonus-distribution --profile internal-finance-requests --profile payroll --profile workforce-attendance --profile invoice-recognition "$@"
   [ -z "$compose_override_file" ] || set -- --file "$compose_override_file" "$@"
   [ "$ingress_mode" != https ] || set -- --file "$https_compose_file" "$@"
   [ "$image_mode" != pull ] || set -- --file "$pull_compose_file" "$@"
@@ -163,6 +167,36 @@ if [ "$enable_bonus_distribution" = true ]; then
 else
   expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
     --cookie "$cookies" "$base_url/bonus/")" "disabled Bonus Distribution route"
+fi
+
+if [ "$enable_workforce_attendance" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/workforce-attendance")" "authorize Workforce Attendance"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/attendance-policies.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/attendance/v1/api/v1/policies")" "list Workforce Attendance policies"
+  jq -e 'type == "array" or (.items | type == "array")' "$workspace/attendance-policies.json" >/dev/null || {
+    echo "Workforce Attendance policy collection is invalid" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/attendance/v1/api/v1/policies")" "disabled Workforce Attendance route"
+fi
+
+if [ "$enable_invoice_recognition" = true ]; then
+  expect_status 303 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" --cookie-jar "$cookies" --data-urlencode "csrf_token=$csrf" \
+    "$base_url/gateway/authorize/invoice-recognition")" "authorize Invoice Recognition"
+  expect_status 200 "$(curl --silent --show-error --output "$workspace/invoice-proposals.json" --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/invoice-recognition/v1/api/v1/proposals")" "list Invoice Recognition proposals"
+  jq -e 'type == "array" or (.items | type == "array")' "$workspace/invoice-proposals.json" >/dev/null || {
+    echo "Invoice Recognition proposal collection is invalid" >&2
+    exit 1
+  }
+else
+  expect_status 404 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --cookie "$cookies" "$base_url/invoice-recognition/v1/api/v1/proposals")" "disabled Invoice Recognition route"
 fi
 
 stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$(openssl rand -hex 4)"

@@ -17,13 +17,15 @@ enable_cost_outsourcing="${ENABLE_COST_OUTSOURCING:-false}"
 enable_bonus_distribution="${ENABLE_BONUS_DISTRIBUTION:-false}"
 enable_internal_finance_requests="${ENABLE_INTERNAL_FINANCE_REQUESTS:-false}"
 enable_payroll="${ENABLE_PAYROLL:-false}"
+enable_workforce_attendance="${ENABLE_WORKFORCE_ATTENDANCE:-false}"
+enable_invoice_recognition="${ENABLE_INVOICE_RECOGNITION:-false}"
 bonus_profile="${REFERENCE_OA_BONUS_PROFILE:-}"
 case "$bonus_profile" in
   '') bonus_admission='"capability_namespace": "bonus-pool", "entry_action": "bonus-pool.read"' ;;
   reference-oa-bonus-v2|reference-oa-bonus-v3) bonus_admission='"capability_namespaces": ["bonus-pool", "bonus-manual-allocation"], "entry_actions": ["bonus-pool.read", "bonus-manual-allocation.read"]' ;;
   *) echo "unsupported REFERENCE_OA_BONUS_PROFILE" >&2; exit 2 ;;
 esac
-for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll"; do
+for value in "$enable_contract" "$enable_money" "$enable_people" "$enable_party" "$enable_project" "$enable_evidence" "$enable_business_engagement" "$enable_billing" "$enable_production" "$enable_approval_audit_results" "$enable_cost_outsourcing" "$enable_bonus_distribution" "$enable_internal_finance_requests" "$enable_payroll" "$enable_workforce_attendance" "$enable_invoice_recognition"; do
   case "$value" in true|false) ;; *) echo "application enable flags must be true or false" >&2; exit 2 ;; esac
 done
 
@@ -236,6 +238,30 @@ cat >"$temporary" <<JSON
       "audience": "payroll",
       "entry_actions": ["payroll.self.read", "payroll.tenant.read"],
       "capability_manifest": "/config/payroll-capabilities.json"
+    },
+    {
+      "id": "workforce-attendance",
+      "version": "0.1.0",
+      "enabled": $enable_workforce_attendance,
+      "required": false,
+      "route_prefix": "/attendance/v1",
+      "upstream": "http://workforce-attendance:8096",
+      "readiness_path": "/health/ready",
+      "audience": "workforce-attendance",
+      "entry_action": "workforce-attendance.tenant.read",
+      "capability_manifest": "/config/workforce-attendance-capabilities.json"
+    },
+    {
+      "id": "invoice-recognition",
+      "version": "0.1.0",
+      "enabled": $enable_invoice_recognition,
+      "required": false,
+      "route_prefix": "/invoice-recognition/v1",
+      "upstream": "http://invoice-recognition:8097",
+      "readiness_path": "/health/ready",
+      "audience": "invoice-recognition",
+      "entry_action": "invoice-recognition.tenant.read",
+      "capability_manifest": "/config/invoice-recognition-capabilities.json"
     }
   ]
 }

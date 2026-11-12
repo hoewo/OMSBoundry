@@ -6,6 +6,7 @@ ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
 COPY packages/workload-identity ./packages/workload-identity
+COPY packages/attendance-summary-contract ./packages/attendance-summary-contract
 COPY backend/services/payroll/go.mod backend/services/payroll/go.sum ./backend/services/payroll/
 RUN --mount=type=cache,id=oms-go-mod,target=/go/pkg/mod,sharing=locked cd backend/services/payroll && GOWORK=off go mod download
 COPY backend/services/payroll/ ./backend/services/payroll/

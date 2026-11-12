@@ -612,6 +612,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 - Feedback 平台继续独占反馈、消息、附件、通知、未读和处理状态；OMS 不复制这些事实、不建立反馈业务表，也不把 Feedback 附件写入 OMS Evidence Service；
 - OMS 只拥有入口选择、当前账号权限判断、稳定匿名身份派生和 iframe bridge 装配状态；Feedback 不反向成为 OMS 登录、租户、人员或业务事实 Owner；
 - SDK 未就绪、凭证无效、项目成员关系失效、跨域白名单错误或 Feedback 服务不可用时，OMS 显示独立错误和重试入口，不得阻塞 OMS 其他业务页面，也不得把空响应解释为“没有反馈”；
+- iframe 的 `ready` 只证明 SDK 页面加载完成，不证明运行时凭证已应用。宿主发送配置时必须携带一次性 `request_id`，收到 SDK 同源、同 iframe、同 `request_id` 的 `feedback-sdk:configured` 回执后，才能发送打开页面或读取未读数命令；超时按反馈服务不可用降级，不能继续打开一个缺少 Key 的假成功弹窗；
 - 当前代码的 V2 Session 模式支持 WebSocket 实时消息，`apiKey` 模式在当前 SDK 中退化为轮询；两种传输差异不得改变反馈、消息和已读事实的含义。
 
 #### 已确认：通知与未读角标

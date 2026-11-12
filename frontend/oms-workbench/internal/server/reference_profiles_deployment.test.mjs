@@ -10,7 +10,7 @@ const source=readFileSync(new URL('../../../../deployments/d1/ops/d1',import.met
 const start=source.indexOf('validate_env() {\n');
 const end=source.indexOf('  for value in ',start);
 assert(start>=0&&end>start);
-const guard=source.slice(start,end)+'}\nvalidate_env\n';
+const guard='validate_feedback_config(){ :; }\nvalidate_oms_operating_party_bindings(){ :; }\n'+source.slice(start,end)+'}\nvalidate_env\n';
 const cases=[
  ['default off',{},true],
  ['legacy v2 without professional selection',{bonus:'reference-oa-bonus-v2'},true],
@@ -30,7 +30,7 @@ const cases=[
  ['stage without People',{stage:'reference-oa-stage-materials-v1',enablePeople:'false'},false],
 ];
 for(const [name,v,expected] of cases)test('D1 explicit profile guard: '+name,()=>{
- const result=spawnSync('sh',['-c',guard],{encoding:'utf8',env:{PATH:process.env.PATH,reference_oa_bonus_profile:v.bonus||'',reference_oa_personnel_profile:v.personnel||'',reference_oa_stage_profile:v.stage||'',enable_project:v.enableProject||'true',enable_people:v.enablePeople||'true',enable_production:v.enableProduction||'true',enable_evidence:v.enableEvidence||'true',enable_bonus_distribution:v.enableBonus||'true'}});
+ const result=spawnSync('sh',['-c',guard],{encoding:'utf8',env:{PATH:process.env.PATH,backup_drain_seconds:'5',oms_operating_party_bindings:'',oms_operating_party_id:'',reference_oa_bonus_profile:v.bonus||'',reference_oa_personnel_profile:v.personnel||'',reference_oa_stage_profile:v.stage||'',enable_project:v.enableProject||'true',enable_people:v.enablePeople||'true',enable_production:v.enableProduction||'true',enable_evidence:v.enableEvidence||'true',enable_bonus_distribution:v.enableBonus||'true'}});
  assert.equal(result.status,expected?0:2,result.stderr);
 });
 
@@ -38,7 +38,7 @@ const backupStart=source.indexOf('verify_backup_selection_value() {');
 const backupEnd=source.indexOf('\nrestore_backup() {',backupStart);
 assert(backupStart>=0&&backupEnd>backupStart);
 const backupGuards=source.slice(backupStart,backupEnd);
-const flags=['CONTRACT','MONEY','PEOPLE','PARTY','PROJECT','EVIDENCE','BUSINESS_ENGAGEMENT','BILLING','PRODUCTION','APPROVAL_AUDIT_RESULTS','COST_OUTSOURCING','BONUS_DISTRIBUTION','INTERNAL_FINANCE_REQUESTS','PAYROLL'];
+const flags=['CONTRACT','MONEY','PEOPLE','PARTY','PROJECT','EVIDENCE','BUSINESS_ENGAGEMENT','BILLING','PRODUCTION','APPROVAL_AUDIT_RESULTS','COST_OUTSOURCING','BONUS_DISTRIBUTION','INTERNAL_FINANCE_REQUESTS','PAYROLL','WORKFORCE_ATTENDANCE','INVOICE_RECOGNITION'];
 const selection=flags.map(f=>'ENABLE_'+f+'=true').join('\n')+'\n';
 const profileLines=(bonus='',personnel='',stage='')=>'REFERENCE_OA_BONUS_PROFILE='+bonus+'\nREFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE='+personnel+'\nREFERENCE_OA_PRODUCTION_STAGE_PROFILE='+stage+'\n';
 const native='reference-oa-production-personnel-v1';
@@ -68,7 +68,7 @@ for(const [name,fields,v,expected] of backupCases)test('D1 pre-destructive resto
  const directory=mkdtempSync(join(tmpdir(),'oms-profile-guard-'));
  try{
   const path=join(directory,'suite-selection.env');if(fields!==null)writeFileSync(path,selection+fields);
-  const env={PATH:process.env.PATH,reference_oa_bonus_profile:v.bonus||'',reference_oa_personnel_profile:v.personnel||'',reference_oa_stage_profile:v.stage||''};for(const f of flags)env['enable_'+f.toLowerCase()]='true';
+  const env={PATH:process.env.PATH,oms_operating_party_id:'',oms_operating_party_bindings:'',reference_oa_bonus_profile:v.bonus||'',reference_oa_personnel_profile:v.personnel||'',reference_oa_stage_profile:v.stage||''};for(const f of flags)env['enable_'+f.toLowerCase()]='true';
   const result=spawnSync('sh',['-c',backupGuards+'\nverify_backup_selection "$1"','guard',path],{encoding:'utf8',env});assert.equal(result.status,expected,result.stderr);
  }finally{rmSync(directory,{recursive:true})}
 });

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "application_id": "invoice-recognition",
+  "application_version": "0.1.0",
+  "audience": "invoice-recognition",
+  "capabilities": [
+    { "id": "invoice-recognition.tenant.read", "description": "读取本租户发票识别建议与复核状态", "risk": "privileged", "resource_types": ["proposal"] },
+    { "id": "invoice-recognition.start", "description": "对一个可信文件版本发起发票识别", "risk": "write", "resource_types": ["file"] },
+    { "id": "invoice-recognition.confirm", "description": "人工复核并确认发票识别结果", "risk": "privileged", "resource_types": ["proposal"] },
+    { "id": "invoice-recognition.discard", "description": "删除待确认识别候选并保留审计 revision", "risk": "privileged", "resource_types": ["proposal"] }
+  ]
+}

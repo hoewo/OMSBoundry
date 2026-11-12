@@ -27,12 +27,16 @@ use (
 	./backend/services/design-operations
 	./backend/services/evidence-service
 	./backend/services/internal-finance-requests
+	./backend/services/invoice-recognition
 	./backend/services/money-flow-ledger
 	./backend/services/party-directory
 	./backend/services/payroll
 	./backend/services/people-groups
 	./backend/services/project-workspace
+	./backend/services/workforce-attendance
 	./frontend/oms-workbench
+	./packages/attendance-summary-contract
+	./packages/invoice-recognition-contract
 	./packages/payable-suggestion-contract
 	./packages/workload-identity
 )

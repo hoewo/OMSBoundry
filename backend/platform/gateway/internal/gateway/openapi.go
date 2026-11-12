@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +19,8 @@ import (
 
 const openAPIUseAction = "open-api.invoice-reimbursement.use"
 
+var errOpenAPIPersonMappingRequired = errors.New("open API action requires a Person mapping")
+
 //go:embed openapi.v1.json
 var openAPISpec []byte
 
@@ -30,7 +33,7 @@ type openAPIIdentity struct {
 	ExpiresAt       time.Time `json:"expires_at"`
 	TenantID        string    `json:"tenant_id"`
 	SubjectID       string    `json:"subject_id"`
-	PersonID        string    `json:"person_id"`
+	PersonID        string    `json:"person_id,omitempty"`
 	KeyID           string    `json:"key_id"`
 	KeyPrefix       string    `json:"key_prefix"`
 	RequestID       string    `json:"request_id"`
@@ -85,7 +88,13 @@ func (s *Server) openAPI(next http.Handler) http.Handler {
 		action := openAPIAction(r)
 		identity, status, err := s.exchangeAPIKey(r.Context(), secret, requestID, action, maskedClientIP(r, s.trustProxyClientIP))
 		if err != nil {
-			if status == http.StatusServiceUnavailable {
+			if errors.Is(err, errOpenAPIPersonMappingRequired) {
+				openAPIProblemWithRecovery(w, http.StatusForbidden, "PERSON_MAPPING_REQUIRED", "该业务需要先关联成员档案；请在成员管理中完成关联后重试", requestID, false, nil, map[string]string{
+					"kind":   "member_account_link",
+					"method": http.MethodGet,
+					"path":   "/workbench/?view=oms-v1#member-account-link",
+				})
+			} else if status == http.StatusServiceUnavailable {
 				openAPIProblem(w, status, "AUTHENTICATION_UNAVAILABLE", "API Key 验证服务暂不可用", requestID, true, nil)
 			} else {
 				openAPIProblem(w, http.StatusUnauthorized, "INVALID_API_KEY", "API Key 缺失、无效或不可用", requestID, false, nil)
@@ -114,7 +123,7 @@ func (s *Server) openAPI(next http.Handler) http.Handler {
 				return
 			}
 		}
-		// Never let the employee credential continue as an upstream Authorization
+		// Never let the account credential continue as an upstream Authorization
 		// header. Only the short-lived IAM credential may cross the Gateway edge.
 		r.Header.Del("Authorization")
 		r = r.WithContext(context.WithValue(r.Context(), openAPIContextKey{}, identity))
@@ -152,7 +161,16 @@ func (s *Server) exchangeAPIKey(ctx context.Context, secret, requestID, action, 
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		var value struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal(body, &value)
+		if response.StatusCode == http.StatusForbidden && value.Error.Code == "person_mapping_required" {
+			return openAPIIdentity{}, http.StatusForbidden, errOpenAPIPersonMappingRequired
+		}
 		if response.StatusCode >= 500 {
 			return openAPIIdentity{}, http.StatusServiceUnavailable, fmt.Errorf("IAM returned HTTP %d", response.StatusCode)
 		}
@@ -161,7 +179,7 @@ func (s *Server) exchangeAPIKey(ctx context.Context, secret, requestID, action, 
 	var value openAPIIdentity
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 64<<10))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil || value.Credential == "" || (ownerForAction(action) != "" && (value.OwnerCredential == "" || value.OwnerAudience != ownerForAction(action))) || value.RequestID != requestID || value.KeyID == "" || value.TenantID == "" || value.SubjectID == "" || value.PersonID == "" || !value.ExpiresAt.After(time.Now()) {
+	if err := decoder.Decode(&value); err != nil || value.Credential == "" || (ownerForAction(action) != "" && (value.OwnerCredential == "" || value.OwnerAudience != ownerForAction(action))) || value.RequestID != requestID || value.KeyID == "" || value.TenantID == "" || value.SubjectID == "" || (openAPIActionRequiresPerson(action) && value.PersonID == "") || !value.ExpiresAt.After(time.Now()) {
 		return openAPIIdentity{}, http.StatusServiceUnavailable, fmt.Errorf("IAM returned an invalid API key context")
 	}
 	var trailing any
@@ -214,10 +232,10 @@ func (s *Server) serveOpenAPI(w http.ResponseWriter, r *http.Request) bool {
 		_, _ = w.Write(openAPISpec)
 	case r.Method == http.MethodGet && r.URL.Path == "/open-api/v1/docs":
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "OMS1 开放 API V1\n\n认证：Authorization: ApiKey <secret>\n支持发票 Evidence 上传、本人报销草稿／提交／撤回／归档恢复／草稿删除和本人列表／详情查询。所有写请求必须提供 Idempotency-Key。Webhook 仅预留设置，当前不启用。\n\n验证示例（请从安全环境变量读取 Key）：\n  curl --fail --silent --show-error \\\n    -H \"Authorization: ApiKey $OMS_API_KEY\" \\\n    https://<your-oms-host>/open-api/v1/me\n\nOpenAPI：/open-api/v1/openapi.json\n")
+		_, _ = io.WriteString(w, "OMS1 开放 API V1\n\n认证：Authorization: ApiKey <secret>\nAPI Key 绑定当前组织与登录账号，创建不要求关联成员。发票 Evidence 上传可直接使用；本人报销草稿／提交／撤回／归档恢复／草稿删除和本人列表／详情查询需要当前账号已关联有效成员，否则返回 PERSON_MAPPING_REQUIRED。所有写请求必须提供 Idempotency-Key。Webhook 仅预留设置，当前不启用。\n\n验证示例（请从安全环境变量读取 Key）：\n  curl --fail --silent --show-error \\\n    -H \"Authorization: ApiKey $OMS_API_KEY\" \\\n    https://<your-oms-host>/open-api/v1/me\n\nOpenAPI：/open-api/v1/openapi.json\n")
 	case r.Method == http.MethodGet && (r.URL.Path == "/open-api/v1/" || r.URL.Path == "/open-api/v1/me"):
 		identity, _ := r.Context().Value(openAPIContextKey{}).(openAPIIdentity)
-		writeJSON(w, http.StatusOK, map[string]any{"version": "v1", "tenant_id": identity.TenantID, "subject_id": identity.SubjectID, "person_id": identity.PersonID, "key_id": identity.KeyID, "key_prefix": identity.KeyPrefix, "capabilities": []string{openAPIUseAction}})
+		writeJSON(w, http.StatusOK, map[string]any{"version": "v1", "tenant_id": identity.TenantID, "subject_id": identity.SubjectID, "key_id": identity.KeyID, "key_prefix": identity.KeyPrefix, "capabilities": []string{openAPIUseAction}})
 	case r.Method == http.MethodGet && r.URL.Path == "/open-api/v1/settings":
 		writeJSON(w, http.StatusOK, map[string]any{"webhook": map[string]any{"available": false, "status": "not_available", "callback_url_editable": false}})
 	default:
@@ -312,6 +330,10 @@ func ownerForAction(action string) string {
 		return "internal-finance-requests"
 	}
 	return ""
+}
+
+func openAPIActionRequiresPerson(action string) bool {
+	return strings.HasPrefix(action, "open-api.reimbursement.")
 }
 
 func validOpenAPIUUID(value string) bool {
@@ -441,8 +463,16 @@ func maskedClientIP(r *http.Request, trustProxy bool) string {
 }
 
 func openAPIProblem(w http.ResponseWriter, status int, code, message, requestID string, retryable bool, fields []map[string]string) {
+	openAPIProblemWithRecovery(w, status, code, message, requestID, retryable, fields, nil)
+}
+
+func openAPIProblemWithRecovery(w http.ResponseWriter, status int, code, message, requestID string, retryable bool, fields []map[string]string, recovery map[string]string) {
 	if fields == nil {
 		fields = []map[string]string{}
 	}
-	writeJSON(w, status, map[string]any{"code": code, "message": message, "request_id": requestID, "retryable": retryable, "field_errors": fields})
+	problem := map[string]any{"code": code, "message": message, "request_id": requestID, "retryable": retryable, "field_errors": fields}
+	if recovery != nil {
+		problem["recovery"] = recovery
+	}
+	writeJSON(w, status, problem)
 }

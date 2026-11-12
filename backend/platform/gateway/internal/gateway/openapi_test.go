@@ -48,10 +48,17 @@ func TestOpenAPIBoundaryAuthenticationRateLimitAndAudit(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 				t.Fatal(err)
 			}
-			if input["action"] != "open-api.profile.read" || input["source_ip_masked"] != "198.51.100.0/24" {
+			if input["source_ip_masked"] != "198.51.100.0/24" {
 				t.Errorf("authentication input = %#v", input)
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"credential": credentialToken, "expires_at": now.Add(5 * time.Minute), "tenant_id": testTenant, "subject_id": testSubject, "person_id": "55555555-5555-4555-8555-555555555555", "key_id": testKeyID, "key_prefix": "bfk_example000", "request_id": input["request_id"]})
+			if input["action"] == "open-api.reimbursement.list" {
+				writeProblem(w, http.StatusForbidden, "person_mapping_required", "mapping required")
+				return
+			}
+			if input["action"] != "open-api.profile.read" {
+				t.Errorf("authentication input = %#v", input)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"credential": credentialToken, "expires_at": now.Add(5 * time.Minute), "tenant_id": testTenant, "subject_id": testSubject, "key_id": testKeyID, "key_prefix": "bfk_example000", "request_id": input["request_id"]})
 		case "/api/v1/internal/open-api/usage-result":
 			if r.Header.Get("Authorization") != "Bearer "+credentialToken {
 				t.Errorf("usage completion credential was not bounded")
@@ -102,6 +109,9 @@ func TestOpenAPIBoundaryAuthenticationRateLimitAndAudit(t *testing.T) {
 	if err := json.Unmarshal(validResponse.Body.Bytes(), &profile); err != nil || profile["tenant_id"] != testTenant || profile["key_id"] != testKeyID {
 		t.Fatalf("profile = %#v, %v", profile, err)
 	}
+	if _, found := profile["person_id"]; found {
+		t.Fatalf("generic account context leaked a Person dependency: %#v", profile)
+	}
 
 	limited := openAPIRequest(http.MethodGet, "/open-api/v1/me", "bfk_example000_secret-value-for-test", true)
 	limitedResponse := httptest.NewRecorder()
@@ -117,12 +127,30 @@ func TestOpenAPIBoundaryAuthenticationRateLimitAndAudit(t *testing.T) {
 	}
 	mutex.Unlock()
 
+	mappingRequired := openAPIRequest(http.MethodGet, "/open-api/v1/reimbursements", "bfk_example000_secret-value-for-test", true)
+	mappingRequiredResponse := httptest.NewRecorder()
+	SecurityHeaders(handler).ServeHTTP(mappingRequiredResponse, mappingRequired)
+	assertOpenAPIProblem(t, mappingRequiredResponse, http.StatusForbidden, "PERSON_MAPPING_REQUIRED")
+	var mappingProblem struct {
+		Recovery struct {
+			Kind   string `json:"kind"`
+			Method string `json:"method"`
+			Path   string `json:"path"`
+		} `json:"recovery"`
+	}
+	if err := json.Unmarshal(mappingRequiredResponse.Body.Bytes(), &mappingProblem); err != nil {
+		t.Fatal(err)
+	}
+	if mappingProblem.Recovery.Kind != "member_account_link" || mappingProblem.Recovery.Method != http.MethodGet || mappingProblem.Recovery.Path != "/workbench/?view=oms-v1#member-account-link" {
+		t.Fatalf("mapping recovery = %#v", mappingProblem.Recovery)
+	}
+
 	unknown := openAPIRequest(http.MethodPost, "/open-api/v1/not-enabled", "bfk_example000_secret-value-for-test", true)
 	unknownResponse := httptest.NewRecorder()
 	SecurityHeaders(handler).ServeHTTP(unknownResponse, unknown)
 	assertOpenAPIProblem(t, unknownResponse, http.StatusNotFound, "ROUTE_NOT_FOUND")
 	mutex.Lock()
-	if authCalls != 2 {
+	if authCalls != 3 {
 		t.Fatalf("unknown route reached API key verifier: %d", authCalls)
 	}
 	mutex.Unlock()
@@ -157,8 +185,12 @@ func TestOpenAPIBoundaryAuthenticationRateLimitAndAudit(t *testing.T) {
 
 func TestOpenAPISpecIsValidAndMatchesRuntimeRoutes(t *testing.T) {
 	var document struct {
-		OpenAPI string                     `json:"openapi"`
-		Paths   map[string]json.RawMessage `json:"paths"`
+		OpenAPI    string                       `json:"openapi"`
+		Info       struct{ Description string } `json:"info"`
+		Paths      map[string]json.RawMessage   `json:"paths"`
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
 	}
 	if err := json.Unmarshal(openAPISpec, &document); err != nil {
 		t.Fatal(err)
@@ -166,10 +198,92 @@ func TestOpenAPISpecIsValidAndMatchesRuntimeRoutes(t *testing.T) {
 	if document.OpenAPI != "3.1.0" {
 		t.Fatalf("OpenAPI version = %q", document.OpenAPI)
 	}
+	if !strings.Contains(document.Info.Description, "PERSON_MAPPING_REQUIRED") {
+		t.Fatalf("OpenAPI description does not declare conditional Person mapping: %q", document.Info.Description)
+	}
+	var errorSchema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(document.Components.Schemas["Error"], &errorSchema); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := errorSchema.Properties["recovery"]; !found {
+		t.Fatal("OpenAPI Error schema does not expose the optional recovery instruction")
+	}
+	if recovery := string(document.Components.Schemas["Recovery"]); !strings.Contains(recovery, "member_account_link") || !strings.Contains(recovery, "#member-account-link") {
+		t.Fatalf("OpenAPI Recovery schema = %s", recovery)
+	}
 	for _, path := range []string{"/", "/me", "/settings", "/evidence/upload-sessions", "/evidence/upload-sessions/{session_id}/complete", "/evidence/upload-sessions/{session_id}/abort", "/reimbursements", "/reimbursements/{request_id}", "/reimbursements/{request_id}/submit", "/reimbursements/{request_id}/withdraw", "/reimbursements/{request_id}/restore"} {
 		if _, found := document.Paths[path]; !found {
 			t.Fatalf("OpenAPI path %q is missing", path)
 		}
+	}
+	for path, raw := range document.Paths {
+		if !strings.HasPrefix(path, "/reimbursements") {
+			continue
+		}
+		var operations map[string]struct {
+			Responses map[string]json.RawMessage `json:"responses"`
+		}
+		if err := json.Unmarshal(raw, &operations); err != nil {
+			t.Fatal(err)
+		}
+		for method, operation := range operations {
+			if _, found := operation.Responses["403"]; !found {
+				t.Fatalf("OpenAPI %s %s does not document PERSON_MAPPING_REQUIRED", method, path)
+			}
+		}
+	}
+	var abortPath struct {
+		Post struct {
+			RequestBody struct {
+				Required bool `json:"required"`
+				Content  map[string]struct {
+					Schema struct {
+						Required   []string `json:"required"`
+						Properties map[string]struct {
+							Enum []string `json:"enum"`
+						} `json:"properties"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"requestBody"`
+		} `json:"post"`
+	}
+	if err := json.Unmarshal(document.Paths["/evidence/upload-sessions/{session_id}/abort"], &abortPath); err != nil {
+		t.Fatal(err)
+	}
+	abortSchema := abortPath.Post.RequestBody.Content["application/json"].Schema
+	if !abortPath.Post.RequestBody.Required || len(abortSchema.Required) != 1 || abortSchema.Required[0] != "reason" {
+		t.Fatalf("OpenAPI abort request body does not require reason: %#v", abortPath.Post.RequestBody)
+	}
+	if reasons := abortSchema.Properties["reason"].Enum; len(reasons) != 3 || reasons[0] != "user_cancelled" || reasons[1] != "transfer_failed" || reasons[2] != "client_shutdown" {
+		t.Fatalf("OpenAPI abort reason enum = %#v", reasons)
+	}
+	var reimbursementPath struct {
+		Delete struct {
+			RequestBody struct {
+				Required bool `json:"required"`
+				Content  map[string]struct {
+					Schema struct {
+						Required   []string `json:"required"`
+						Properties map[string]struct {
+							MinLength int `json:"minLength"`
+							MaxLength int `json:"maxLength"`
+						} `json:"properties"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"requestBody"`
+		} `json:"delete"`
+	}
+	if err := json.Unmarshal(document.Paths["/reimbursements/{request_id}"], &reimbursementPath); err != nil {
+		t.Fatal(err)
+	}
+	deletionSchema := reimbursementPath.Delete.RequestBody.Content["application/json"].Schema
+	if !reimbursementPath.Delete.RequestBody.Required || len(deletionSchema.Required) != 2 || deletionSchema.Required[0] != "confirmation" || deletionSchema.Required[1] != "reason" {
+		t.Fatalf("OpenAPI reimbursement deletion must require confirmation and reason: %#v", reimbursementPath.Delete.RequestBody)
+	}
+	if reason := deletionSchema.Properties["reason"]; reason.MinLength != 1 || reason.MaxLength != 1000 {
+		t.Fatalf("OpenAPI reimbursement deletion reason bounds = %#v", reason)
 	}
 }
 

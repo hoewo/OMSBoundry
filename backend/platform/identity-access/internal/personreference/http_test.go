@@ -3,11 +3,13 @@ package personreference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"omsbizfoundry/identity-access/internal/apikey"
 	"omsbizfoundry/identity-access/internal/identity"
 )
 
@@ -62,5 +64,33 @@ func TestResolverRejectsInconsistentReference(t *testing.T) {
 	}
 	if _, err := resolver.ResolveBySubject(context.Background(), tenantID, subjectID); err == nil {
 		t.Fatal("cross-tenant Person reference was accepted")
+	}
+}
+
+func TestResolverDistinguishesMissingPersonMapping(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"code":"person_not_found"}}`))
+	}))
+	defer server.Close()
+	resolver, err := New(server.URL, subjectID, "https://oms.example.test/auth", &captureSigner{}, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.ResolveBySubject(context.Background(), tenantID, subjectID); !errors.Is(err, apikey.ErrPersonMappingRequired) {
+		t.Fatalf("missing mapping error = %v", err)
+	}
+}
+
+func TestResolverDoesNotTreatUnknown404AsMissingMapping(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	resolver, err := New(server.URL, subjectID, "https://oms.example.test/auth", &captureSigner{}, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.ResolveBySubject(context.Background(), tenantID, subjectID); err == nil || errors.Is(err, apikey.ErrPersonMappingRequired) {
+		t.Fatalf("unknown 404 error = %v", err)
 	}
 }

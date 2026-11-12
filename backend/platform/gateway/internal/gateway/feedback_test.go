@@ -121,6 +121,75 @@ func TestFeedbackConfigRequiresOnlyActiveSessionAndReturnsPseudonymousScope(t *t
 	}
 }
 
+func TestFeedbackSubmissionSnapshotIsScopedAndDoesNotExposeCredentials(t *testing.T) {
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := writeKeys(t, publicKey)
+	now := time.Now().UTC()
+	iam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie(sessionCookieName); err != nil || cookie.Value != "session-good" {
+			writeProblem(w, http.StatusUnauthorized, "session", "bad")
+			return
+		}
+		if r.URL.Path == "/api/v1/session" {
+			writeJSON(w, http.StatusOK, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": testTenant, "username": "tester", "display_name": "体验账号", "administrator": false, "auth_time": now}})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer iam.Close()
+
+	identitySecret := []byte("0123456789abcdef0123456789abcdef")
+	expectedCustomUserID := deriveFeedbackUserID(identitySecret, "v1", testTenant, testSubject)
+	feedbackAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/workshop/v2/apikey/feedbacks" {
+			t.Fatalf("unexpected Feedback request %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer ak_0123456789abcdef" {
+			t.Fatalf("missing server-held Feedback credential: %q", r.Header.Get("Authorization"))
+		}
+		query := r.URL.Query()
+		if query.Get("project_id") != "115" || query.Get("custom_user_id") != expectedCustomUserID || query.Get("page") != "1" || query.Get("page_size") != "20" {
+			t.Fatalf("unexpected Feedback scope: %s", r.URL.RawQuery)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"code": "OK", "data": []map[string]any{{"id": 9007199254740993}, {"id": 42}}, "meta": map[string]any{"total": 27}})
+	}))
+	defer feedbackAPI.Close()
+
+	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "feedback-snapshot-test", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, ReadinessPath: "/health/ready", Audience: "identity-access"}}}
+	server, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, Feedback: FeedbackOptions{AuthMode: "apiKey", GatewayURL: feedbackAPI.URL, ProjectID: 115, APIKeys: []string{"ak_0123456789abcdef"}, IdentityHMACKey: identitySecret, IdentityVersion: "v1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "https://oms.example.test/gateway/feedback/submission-snapshot", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-good"})
+	request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token-0123456789"})
+	request.Header.Set("X-CSRF-Token", "csrf-token-0123456789")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("feedback snapshot response = %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		FeedbackIDs   []string `json:"feedback_ids"`
+		FeedbackCount string   `json:"feedback_count"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.FeedbackIDs) != 2 || body.FeedbackIDs[0] != "9007199254740993" || body.FeedbackIDs[1] != "42" || body.FeedbackCount != "27" {
+		t.Fatalf("unexpected feedback snapshot: ids=%#v count=%q", body.FeedbackIDs, body.FeedbackCount)
+	}
+	encoded := response.Body.String()
+	for _, forbidden := range []string{"ak_0123456789abcdef", testTenant, testSubject, expectedCustomUserID, "session-good"} {
+		if strings.Contains(encoded, forbidden) {
+			t.Fatalf("feedback snapshot leaked %q: %s", forbidden, encoded)
+		}
+	}
+}
+
 func TestFeedbackSessionExchangeUsesBoundedRotationFallback(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

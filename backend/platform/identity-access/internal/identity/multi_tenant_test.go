@@ -26,17 +26,27 @@ type multiTenantRepository struct {
 	listedTenant     string
 	tokenTenant      string
 	createdToken     ActivationToken
+	registration     RegistrationInvitation
+	registrationDone RegistrationResult
+	registrationUser string
+	registrationName string
+	registrationHash string
+	registrationOld  *Credential
 	invitedSubject   Subject
 	adminTenant      string
 	adminSubject     string
 	adminValue       bool
 	updatedTenant    string
 	updatedName      string
+	updatedSubject   string
+	updatedDisplay   string
+	updatedRevision  int64
 	tenants          []TenantSummary
 	subjects         map[string][]Subject
 	provisionTenant  string
 	provisionName    string
 	provisionSubject Subject
+	memberships      []OrganizationMembership
 	audits           []AuditEntry
 }
 
@@ -48,10 +58,28 @@ func (r *multiTenantRepository) TenantExists(context.Context, string) (bool, err
 	return r.tenantExists, nil
 }
 func (r *multiTenantRepository) FindSubject(_ context.Context, tenantID, subjectID string) (Subject, bool, error) {
+	for _, values := range r.subjects {
+		for _, subject := range values {
+			if subject.TenantID == tenantID && subject.ID == subjectID {
+				return subject, true, nil
+			}
+		}
+	}
 	if r.credential.TenantID != tenantID || r.credential.ID != subjectID {
 		return Subject{}, false, nil
 	}
 	return r.credential.Subject, true, nil
+}
+func (r *multiTenantRepository) FindAccountSubject(_ context.Context, tenantID, accountID string) (Subject, bool, error) {
+	for _, subject := range r.subjects[tenantID] {
+		if subject.AccountID == accountID {
+			return subject, true, nil
+		}
+	}
+	if r.credential.TenantID == tenantID && r.credential.AccountID == accountID {
+		return r.credential.Subject, true, nil
+	}
+	return Subject{}, false, nil
 }
 func (r *multiTenantRepository) FindCredential(context.Context, string) (Credential, bool, error) {
 	return r.credential, r.credential.ID != "", nil
@@ -66,6 +94,15 @@ func (r *multiTenantRepository) CreateSession(_ context.Context, _ []byte, subje
 	r.createdSessionID = subjectID
 	return nil
 }
+func (r *multiTenantRepository) RotateSession(_ context.Context, _, _ []byte, subjectID string, _ int64, authTime, _ time.Time) (Principal, error) {
+	r.createdSessionID = subjectID
+	for _, membership := range r.memberships {
+		if membership.SubjectID == subjectID {
+			return Principal{SubjectID: subjectID, AccountID: r.credential.AccountID, TenantID: membership.TenantID, DisplayName: membership.DisplayName, Administrator: membership.Administrator, AuthTime: authTime}, nil
+		}
+	}
+	return Principal{}, &AuthenticationError{}
+}
 func (r *multiTenantRepository) ResolveSession(context.Context, []byte, time.Time) (Principal, bool, error) {
 	return r.resolved, r.resolved.SubjectID != "", nil
 }
@@ -75,8 +112,25 @@ func (r *multiTenantRepository) Invite(_ context.Context, subject Subject, _ Act
 	r.audits = append(r.audits, entry)
 	return nil
 }
+func (r *multiTenantRepository) JoinAccount(_ context.Context, subject Subject, entry AuditEntry) error {
+	r.invitedSubject = subject
+	if r.subjects == nil {
+		r.subjects = map[string][]Subject{}
+	}
+	r.subjects[subject.TenantID] = append(r.subjects[subject.TenantID], subject)
+	r.audits = append(r.audits, entry)
+	return nil
+}
 func (r *multiTenantRepository) Activate(context.Context, []byte, TokenKind, string, time.Time, AuditEntry) (Subject, error) {
 	return Subject{}, nil
+}
+func (r *multiTenantRepository) PreviewRegistrationInvitation(context.Context, []byte, time.Time) (RegistrationInvitation, error) {
+	return r.registration, nil
+}
+func (r *multiTenantRepository) CompleteRegistrationInvitation(_ context.Context, _ []byte, username, displayName, passwordHash string, existing *Credential, _ time.Time, entry AuditEntry) (RegistrationResult, error) {
+	r.registrationUser, r.registrationName, r.registrationHash, r.registrationOld = username, displayName, passwordHash, existing
+	r.audits = append(r.audits, entry)
+	return r.registrationDone, nil
 }
 func (r *multiTenantRepository) CreateActivationToken(_ context.Context, tenantID string, token ActivationToken, entry AuditEntry) error {
 	r.tokenTenant = tenantID
@@ -113,6 +167,11 @@ func (r *multiTenantRepository) RecordAudit(_ context.Context, entry AuditEntry)
 func (r *multiTenantRepository) ListSubjects(_ context.Context, tenantID string) ([]Subject, error) {
 	return append([]Subject(nil), r.subjects[tenantID]...), nil
 }
+func (r *multiTenantRepository) UpdateSubjectDisplayName(_ context.Context, tenantID, subjectID string, expectedRevision int64, displayName string, entry AuditEntry) error {
+	r.updatedTenant, r.updatedSubject, r.updatedRevision, r.updatedDisplay = tenantID, subjectID, expectedRevision, displayName
+	r.audits = append(r.audits, entry)
+	return nil
+}
 func (r *multiTenantRepository) ChangeStatus(context.Context, string, string, Status, AuditEntry) error {
 	return nil
 }
@@ -136,6 +195,14 @@ func (r *multiTenantRepository) ProvisionTenantInvitation(_ context.Context, ten
 	r.provisionTenant, r.provisionName, r.provisionSubject = tenantID, name, subject
 	r.audits = append(r.audits, entry)
 	return nil
+}
+func (r *multiTenantRepository) ProvisionTenantMembership(_ context.Context, tenantID, name string, subject Subject, entry AuditEntry) error {
+	r.provisionTenant, r.provisionName, r.provisionSubject = tenantID, name, subject
+	r.audits = append(r.audits, entry)
+	return nil
+}
+func (r *multiTenantRepository) ListAccountMemberships(context.Context, string) ([]OrganizationMembership, error) {
+	return append([]OrganizationMembership(nil), r.memberships...), nil
 }
 
 type captureSigner struct{ value any }
@@ -268,6 +335,52 @@ func TestInviteCanCreatePendingTenantAdministrator(t *testing.T) {
 	}
 }
 
+func TestRegistrationInvitationDefersIdentityToRecipient(t *testing.T) {
+	repository := &multiTenantRepository{}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
+	result, err := service.CreateRegistrationInvitation(context.Background(), actor, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Action != "registration_invited" || result.Token == "" || !repository.invitedSubject.Administrator || repository.invitedSubject.Status != StatusPending || !isRegistrationPlaceholder(repository.invitedSubject.Username) {
+		t.Fatalf("result=%#v invited=%#v", result, repository.invitedSubject)
+	}
+	if repository.invitedSubject.DisplayName != "待受邀人注册" || repository.audits[0].Action != "iam_registration_invitation_created" {
+		t.Fatalf("invited=%#v audits=%#v", repository.invitedSubject, repository.audits)
+	}
+}
+
+func TestRecipientChoosesPhoneOrEmailDuringRegistration(t *testing.T) {
+	repository := &multiTenantRepository{registrationDone: RegistrationResult{Action: "registered", Subject: Subject{ID: testSubject, Username: "member@example.com", Status: StatusActive}}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	result, err := service.CompleteRegistrationInvitation(context.Background(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "Member@Example.COM", "受邀用户", "correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Action != "registered" || repository.registrationUser != "member@example.com" || repository.registrationName != "受邀用户" || repository.registrationHash == "correct horse battery staple" || repository.registrationOld != nil {
+		t.Fatalf("result=%#v repository=%#v", result, repository)
+	}
+}
+
+func TestExistingAccountMustVerifyOriginalPasswordToAcceptInvitation(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct horse battery staple"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &multiTenantRepository{credential: Credential{Subject: Subject{ID: testSubject, AccountID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", Status: StatusActive}, PasswordHash: string(hash)}, registrationDone: RegistrationResult{Action: "joined"}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	if _, err := service.CompleteRegistrationInvitation(context.Background(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "member@example.com", "受邀用户", "wrong password value"); err == nil {
+		t.Fatal("existing account accepted invitation with the wrong password")
+	}
+	if _, err := service.CompleteRegistrationInvitation(context.Background(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "member@example.com", "受邀用户", "correct horse battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if repository.registrationOld == nil || repository.registrationOld.AccountID != testSubject || repository.registrationHash != string(hash) {
+		t.Fatalf("existing=%#v hash=%q", repository.registrationOld, repository.registrationHash)
+	}
+}
+
 func TestChangeAdministratorUsesAuthenticatedTenantAndRejectsSelfDemotion(t *testing.T) {
 	repository := &multiTenantRepository{credential: Credential{Subject: Subject{ID: testSubject, TenantID: secondTenant, DisplayName: "待提升用户", Status: StatusActive}}}
 	service := newMultiTenantService(t, repository, &captureSigner{})
@@ -301,6 +414,24 @@ func TestAdministratorUpdatesOwnTenantName(t *testing.T) {
 	}
 }
 
+func TestAdministratorUpdatesSubjectDisplayNameWithinCurrentTenant(t *testing.T) {
+	repository := &multiTenantRepository{}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	actor := Principal{SubjectID: testActor, TenantID: secondTenant, DisplayName: "第二租户管理员", Administrator: true}
+	if err := service.UpdateSubjectDisplayName(context.Background(), actor, testSubject, 4, "  新员工姓名  "); err != nil {
+		t.Fatal(err)
+	}
+	if repository.updatedTenant != secondTenant || repository.updatedSubject != testSubject || repository.updatedRevision != 4 || repository.updatedDisplay != "新员工姓名" || len(repository.audits) != 1 || repository.audits[0].Action != "iam_subject_display_name_changed" {
+		t.Fatalf("tenant=%q subject=%q revision=%d display=%q audits=%#v", repository.updatedTenant, repository.updatedSubject, repository.updatedRevision, repository.updatedDisplay, repository.audits)
+	}
+	if err := service.UpdateSubjectDisplayName(context.Background(), Principal{SubjectID: testActor, TenantID: secondTenant}, testSubject, 4, "越权修改"); err == nil {
+		t.Fatal("ordinary user updated subject display name")
+	}
+	if err := service.UpdateSubjectDisplayName(context.Background(), actor, testSubject, 4, "   "); err == nil {
+		t.Fatal("blank display name accepted")
+	}
+}
+
 func TestSystemAdministratorCreatesTenantWithoutBusinessAuthority(t *testing.T) {
 	repository := &multiTenantRepository{tenants: []TenantSummary{{ID: secondTenant, Name: "既有组织", Status: "active"}}}
 	service := newMultiTenantService(t, repository, &captureSigner{})
@@ -324,6 +455,24 @@ func TestSystemAdministratorCreatesTenantWithoutBusinessAuthority(t *testing.T) 
 	organizationAdmin := Principal{SubjectID: testActor, TenantID: secondTenant, Administrator: true}
 	if _, _, err := service.CreateTenant(context.Background(), organizationAdmin, SystemTenantInput{Name: "越权组织", AdminUsername: "other@example.com"}); err == nil {
 		t.Fatal("organization administrator created a tenant")
+	}
+}
+
+func TestSystemAdministratorCreatesTenantWithExistingAccount(t *testing.T) {
+	repository := &multiTenantRepository{credential: Credential{Subject: Subject{
+		ID: testSubject, AccountID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", DisplayName: "既有账号",
+		Status: StatusActive, Revision: 2, SessionGeneration: 1,
+	}}}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	ids := []string{secondTenant, "77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+	service.newID = func() (string, error) { value := ids[0]; ids = ids[1:]; return value, nil }
+	actor := Principal{SubjectID: testActor, TenantID: bootstrapTenant, DisplayName: "系统管理员", SystemAdministrator: true}
+	result, tenant, err := service.CreateTenant(context.Background(), actor, SystemTenantInput{Name: "第二组织", AdminUsername: "member@example.com", AdminDisplayName: "第二组织管理员"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Action != "joined" || result.Token != "" || result.Subject.AccountID != testSubject || result.Subject.TenantID != secondTenant || !result.Subject.Administrator || tenant.ID != secondTenant || repository.provisionSubject.ID != result.Subject.ID || len(repository.grants) != 2 {
+		t.Fatalf("result=%#v tenant=%#v provision=%#v grants=%#v", result, tenant, repository.provisionSubject, repository.grants)
 	}
 }
 
@@ -370,17 +519,43 @@ func TestAdministratorProfileStartupReconcilesAndCleansOnlyProfileSource(t *test
 	}
 }
 
-func TestSystemAdministratorCannotMoveAccountBetweenTenants(t *testing.T) {
+func TestSystemAdministratorAddsExistingAccountToAnotherTenant(t *testing.T) {
 	repository := &multiTenantRepository{tenantExists: true, credential: Credential{Subject: Subject{
-		ID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", Status: StatusActive,
+		ID: testSubject, AccountID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", Status: StatusActive,
 	}}}
 	service := newMultiTenantService(t, repository, &captureSigner{})
 	actor := Principal{SubjectID: testActor, TenantID: bootstrapTenant, DisplayName: "系统管理员", SystemAdministrator: true}
-	if _, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "member@example.com", "跨组织用户"); err == nil {
-		t.Fatal("cross-tenant account was assigned as administrator")
+	result, err := service.AssignTenantAdministrator(context.Background(), actor, secondTenant, "member@example.com", "跨组织用户")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if repository.invitedSubject.ID != "" || repository.adminSubject != "" || len(repository.audits) != 0 {
-		t.Fatalf("unexpected writes: invite=%#v admin=%q audits=%#v", repository.invitedSubject, repository.adminSubject, repository.audits)
+	if result.Action != "joined" || result.Subject.AccountID != testSubject || result.Subject.TenantID != secondTenant || !result.Subject.Administrator || len(repository.grants) != 2 || len(repository.audits) != 3 {
+		t.Fatalf("result=%#v grants=%#v audits=%#v", result, repository.grants, repository.audits)
+	}
+}
+
+func TestAccountSwitchesOrganizationWithIndependentSubject(t *testing.T) {
+	targetSubject := "77777777-7777-4777-8777-777777777777"
+	repository := &multiTenantRepository{
+		credential: Credential{Subject: Subject{ID: testSubject, AccountID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", Status: StatusActive}},
+		memberships: []OrganizationMembership{
+			{TenantID: bootstrapTenant, TenantName: "第一组织", SubjectID: testSubject, Status: StatusActive, Current: true},
+			{TenantID: secondTenant, TenantName: "第二组织", SubjectID: targetSubject, DisplayName: "第二组织成员", Status: StatusActive},
+		},
+		subjects: map[string][]Subject{secondTenant: {{ID: targetSubject, AccountID: testSubject, TenantID: secondTenant, Username: "member@example.com", DisplayName: "第二组织成员", Status: StatusActive, SessionGeneration: 1}}},
+	}
+	service := newMultiTenantService(t, repository, &captureSigner{})
+	raw, _, err := randomToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := Principal{SubjectID: testSubject, AccountID: testSubject, TenantID: bootstrapTenant, Username: "member@example.com", AuthTime: service.now()}
+	result, err := service.SwitchOrganization(context.Background(), raw, actor, secondTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Principal.SubjectID != targetSubject || result.Principal.TenantID != secondTenant || result.Token == "" || repository.createdSessionID != targetSubject {
+		t.Fatalf("result=%#v created=%q", result, repository.createdSessionID)
 	}
 }
 

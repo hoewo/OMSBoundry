@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const subjectColumns = `id::text, tenant_id::text, username, display_name, status, administrator, system_administrator, revision, session_generation, failed_login_attempts, locked_until, password_changed_at, created_at, updated_at`
+const subjectColumns = `id::text, account_id::text, tenant_id::text, username, display_name, status, administrator, system_administrator, revision, session_generation, failed_login_attempts, locked_until, password_changed_at, created_at, updated_at`
 
 type PostgresRepository struct{ pool *pgxpool.Pool }
 
@@ -47,6 +47,9 @@ func (r *PostgresRepository) Bootstrap(ctx context.Context, tenantID, tenantName
 	if _, err := tx.Exec(ctx, `INSERT INTO tenants(id,name,created_at) VALUES($1,$2,$3)`, tenantID, tenantName, subject.CreatedAt); err != nil {
 		return false, fmt.Errorf("insert tenant: %w", err)
 	}
+	if err := insertAccount(ctx, tx, subject, &passwordHash); err != nil {
+		return false, err
+	}
 	if err := insertSubject(ctx, tx, subject, &passwordHash); err != nil {
 		return false, err
 	}
@@ -74,6 +77,9 @@ func (r *PostgresRepository) ProvisionTenant(ctx context.Context, tenantID, tena
 		}
 		return fmt.Errorf("insert tenant: %w", err)
 	}
+	if err := insertAccount(ctx, tx, subject, &passwordHash); err != nil {
+		return err
+	}
 	if err := insertSubject(ctx, tx, subject, &passwordHash); err != nil {
 		return err
 	}
@@ -97,6 +103,9 @@ func (r *PostgresRepository) ProvisionTenantInvitation(ctx context.Context, tena
 			return &ConflictError{Message: "组织已存在"}
 		}
 		return fmt.Errorf("insert tenant: %w", err)
+	}
+	if err := insertAccount(ctx, tx, subject, nil); err != nil {
+		return err
 	}
 	if err := insertSubject(ctx, tx, subject, nil); err != nil {
 		return err
@@ -129,11 +138,29 @@ func (r *PostgresRepository) FindSubject(ctx context.Context, tenantID, subjectI
 	return value, true, nil
 }
 
+func (r *PostgresRepository) FindAccountSubject(ctx context.Context, tenantID, accountID string) (Subject, bool, error) {
+	value, err := scanSubject(r.pool.QueryRow(ctx, `SELECT `+subjectColumns+` FROM subjects WHERE tenant_id=$1 AND account_id=$2`, tenantID, accountID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Subject{}, false, nil
+	}
+	if err != nil {
+		return Subject{}, false, err
+	}
+	return value, true, nil
+}
+
 func (r *PostgresRepository) FindCredential(ctx context.Context, username string) (Credential, bool, error) {
-	row := r.pool.QueryRow(ctx, `SELECT `+subjectColumns+`, password_hash FROM subjects WHERE username=$1`, username)
+	row := r.pool.QueryRow(ctx, `SELECT s.id::text,s.account_id::text,s.tenant_id::text,s.username,s.display_name,s.status,s.administrator,s.system_administrator,s.revision,s.session_generation,a.failed_login_attempts,a.locked_until,a.password_changed_at,s.created_at,s.updated_at,a.password_hash
+FROM login_accounts a
+JOIN LATERAL (
+    SELECT s.* FROM subjects s WHERE s.account_id=a.id
+    ORDER BY (s.status='active') DESC, (s.id=a.primary_subject_id) DESC, s.created_at, s.id
+    LIMIT 1
+) s ON true
+WHERE a.login_identifier=$1`, username)
 	var value Credential
 	var lockedUntil, passwordChangedAt *time.Time
-	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SystemAdministrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &lockedUntil, &passwordChangedAt, &value.CreatedAt, &value.UpdatedAt, &value.PasswordHash)
+	err := row.Scan(&value.ID, &value.AccountID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SystemAdministrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &lockedUntil, &passwordChangedAt, &value.CreatedAt, &value.UpdatedAt, &value.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Credential{}, false, nil
 	}
@@ -150,12 +177,12 @@ func (r *PostgresRepository) FindCredential(ctx context.Context, username string
 }
 
 func (r *PostgresRepository) RecordLoginFailure(ctx context.Context, subjectID string, now time.Time, maximum int, duration time.Duration) error {
-	_, err := r.pool.Exec(ctx, `UPDATE subjects SET failed_login_attempts=failed_login_attempts+1, locked_until=CASE WHEN failed_login_attempts+1 >= $3 THEN $2::timestamptz + $4::interval ELSE locked_until END, updated_at=$2 WHERE id=$1`, subjectID, now, maximum, duration.String())
+	_, err := r.pool.Exec(ctx, `UPDATE login_accounts a SET failed_login_attempts=a.failed_login_attempts+1, locked_until=CASE WHEN a.failed_login_attempts+1 >= $3 THEN $2::timestamptz + $4::interval ELSE a.locked_until END, updated_at=$2 FROM subjects s WHERE s.id=$1 AND a.id=s.account_id`, subjectID, now, maximum, duration.String())
 	return err
 }
 
 func (r *PostgresRepository) ResetLoginFailures(ctx context.Context, subjectID string, now time.Time) error {
-	_, err := r.pool.Exec(ctx, `UPDATE subjects SET failed_login_attempts=0, locked_until=NULL, updated_at=GREATEST(updated_at,$2) WHERE id=$1`, subjectID, now)
+	_, err := r.pool.Exec(ctx, `UPDATE login_accounts a SET failed_login_attempts=0,locked_until=NULL,updated_at=GREATEST(a.updated_at,$2) FROM subjects s WHERE s.id=$1 AND a.id=s.account_id`, subjectID, now)
 	return err
 }
 
@@ -170,9 +197,40 @@ func (r *PostgresRepository) CreateSession(ctx context.Context, tokenHash []byte
 	return nil
 }
 
+func (r *PostgresRepository) RotateSession(ctx context.Context, oldTokenHash, newTokenHash []byte, subjectID string, generation int64, authTime, expiresAt time.Time) (Principal, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Principal{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	result, err := tx.Exec(ctx, `UPDATE suite_sessions SET revoked_at=$2 WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>$2`, oldTokenHash, authTime)
+	if err != nil {
+		return Principal{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return Principal{}, &AuthenticationError{}
+	}
+	result, err = tx.Exec(ctx, `INSERT INTO suite_sessions(token_hash,subject_id,session_generation,auth_time,expires_at) SELECT $1,id,session_generation,$4,$5 FROM subjects WHERE id=$2 AND session_generation=$3 AND status='active'`, newTokenHash, subjectID, generation, authTime, expiresAt)
+	if err != nil {
+		return Principal{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return Principal{}, &AuthenticationError{}
+	}
+	var value Principal
+	err = tx.QueryRow(ctx, `SELECT id::text,account_id::text,tenant_id::text,username,display_name,administrator,system_administrator,session_generation,$2::timestamptz FROM subjects WHERE id=$1 AND status='active'`, subjectID, authTime).Scan(&value.SubjectID, &value.AccountID, &value.TenantID, &value.Username, &value.DisplayName, &value.Administrator, &value.SystemAdministrator, &value.SessionGeneration, &value.AuthTime)
+	if err != nil {
+		return Principal{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Principal{}, err
+	}
+	return value, nil
+}
+
 func (r *PostgresRepository) ResolveSession(ctx context.Context, tokenHash []byte, now time.Time) (Principal, bool, error) {
 	var value Principal
-	err := r.pool.QueryRow(ctx, `SELECT u.id::text,u.tenant_id::text,u.username,u.display_name,u.administrator,u.system_administrator,u.session_generation,s.auth_time FROM suite_sessions s JOIN subjects u ON u.id=s.subject_id WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>$2 AND u.status='active' AND u.session_generation=s.session_generation`, tokenHash, now).Scan(&value.SubjectID, &value.TenantID, &value.Username, &value.DisplayName, &value.Administrator, &value.SystemAdministrator, &value.SessionGeneration, &value.AuthTime)
+	err := r.pool.QueryRow(ctx, `SELECT u.id::text,u.account_id::text,u.tenant_id::text,u.username,u.display_name,u.administrator,u.system_administrator,u.session_generation,s.auth_time FROM suite_sessions s JOIN subjects u ON u.id=s.subject_id WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>$2 AND u.status='active' AND u.session_generation=s.session_generation`, tokenHash, now).Scan(&value.SubjectID, &value.AccountID, &value.TenantID, &value.Username, &value.DisplayName, &value.Administrator, &value.SystemAdministrator, &value.SessionGeneration, &value.AuthTime)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, false, nil
 	}
@@ -193,6 +251,9 @@ func (r *PostgresRepository) Invite(ctx context.Context, subject Subject, token 
 		return err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := insertAccount(ctx, tx, subject, nil); err != nil {
+		return err
+	}
 	if err := insertSubject(ctx, tx, subject, nil); err != nil {
 		return err
 	}
@@ -205,14 +266,76 @@ func (r *PostgresRepository) Invite(ctx context.Context, subject Subject, token 
 	return tx.Commit(ctx)
 }
 
+func (r *PostgresRepository) JoinAccount(ctx context.Context, subject Subject, entry AuditEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := insertAccountSubject(ctx, tx, subject); err != nil {
+		return err
+	}
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PostgresRepository) ProvisionTenantMembership(ctx context.Context, tenantID, tenantName string, subject Subject, entry AuditEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('omsbizfoundry:identity-access:tenant-provisioning'))`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO tenants(id,name,created_at) VALUES($1,$2,$3)`, tenantID, tenantName, subject.CreatedAt); err != nil {
+		if isUnique(err) {
+			return &ConflictError{Message: "组织已存在"}
+		}
+		return fmt.Errorf("insert tenant: %w", err)
+	}
+	if err := insertAccountSubject(ctx, tx, subject); err != nil {
+		return err
+	}
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PostgresRepository) ListAccountMemberships(ctx context.Context, subjectID string) ([]OrganizationMembership, error) {
+	rows, err := r.pool.Query(ctx, `SELECT s.tenant_id::text,t.name,s.id::text,s.display_name,s.status,s.administrator,s.created_at
+FROM subjects current
+JOIN subjects s ON s.account_id=current.account_id
+JOIN tenants t ON t.id=s.tenant_id
+WHERE current.id=$1 AND NOT s.system_administrator
+ORDER BY (s.id=current.id) DESC,t.name,s.created_at,s.id`, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := make([]OrganizationMembership, 0)
+	for rows.Next() {
+		var value OrganizationMembership
+		if err := rows.Scan(&value.TenantID, &value.TenantName, &value.SubjectID, &value.DisplayName, &value.Status, &value.Administrator, &value.CreatedAt); err != nil {
+			return nil, err
+		}
+		value.Current = value.SubjectID == subjectID
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
 func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kind TokenKind, passwordHash string, now time.Time, entry AuditEntry) (Subject, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return Subject{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	var tokenID, subjectID, tenantID string
-	err = tx.QueryRow(ctx, `SELECT t.id::text,t.subject_id::text,s.tenant_id::text FROM activation_tokens t JOIN subjects s ON s.id=t.subject_id WHERE t.token_hash=$1 AND t.kind=$2 AND t.used_at IS NULL AND t.expires_at>$3 FOR UPDATE OF t,s`, tokenHash, kind, now).Scan(&tokenID, &subjectID, &tenantID)
+	var tokenID, subjectID, accountID, tenantID string
+	err = tx.QueryRow(ctx, `SELECT t.id::text,t.subject_id::text,s.account_id::text,s.tenant_id::text FROM activation_tokens t JOIN subjects s ON s.id=t.subject_id WHERE t.token_hash=$1 AND t.kind=$2 AND t.used_at IS NULL AND t.expires_at>$3 FOR UPDATE OF t,s`, tokenHash, kind, now).Scan(&tokenID, &subjectID, &accountID, &tenantID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Subject{}, &AuthenticationError{}
 	}
@@ -222,13 +345,19 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 	var result pgconn.CommandTag
 	if kind == TokenInvitation {
 		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,status='active',revision=revision+1,password_changed_at=$3,updated_at=$3 WHERE id=$1 AND status='pending'`, subjectID, passwordHash, now)
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE login_accounts SET password_hash=$2,password_changed_at=$3,failed_login_attempts=0,locked_until=NULL,updated_at=$3 WHERE id=$1 AND password_hash IS NULL`, accountID, passwordHash, now)
+		}
 	} else {
-		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,session_generation=session_generation+1,failed_login_attempts=0,locked_until=NULL,password_changed_at=$3,updated_at=$3 WHERE id=$1 AND status='active'`, subjectID, passwordHash, now)
+		result, err = tx.Exec(ctx, `UPDATE subjects SET password_hash=$2,session_generation=session_generation+1,failed_login_attempts=0,locked_until=NULL,password_changed_at=$3,updated_at=$3 WHERE account_id=$1 AND status IN ('active','disabled')`, accountID, passwordHash, now)
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE login_accounts SET password_hash=$2,password_changed_at=$3,failed_login_attempts=0,locked_until=NULL,updated_at=$3 WHERE id=$1`, accountID, passwordHash, now)
+		}
 	}
 	if err != nil {
 		return Subject{}, err
 	}
-	if result.RowsAffected() != 1 {
+	if (kind == TokenInvitation && result.RowsAffected() != 1) || (kind == TokenPasswordReset && result.RowsAffected() < 1) {
 		return Subject{}, &ConflictError{Message: "账号状态不允许使用该凭据"}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE activation_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
@@ -248,6 +377,117 @@ func (r *PostgresRepository) Activate(ctx context.Context, tokenHash []byte, kin
 		return Subject{}, err
 	}
 	return subject, nil
+}
+
+func (r *PostgresRepository) PreviewRegistrationInvitation(ctx context.Context, tokenHash []byte, now time.Time) (RegistrationInvitation, error) {
+	var value RegistrationInvitation
+	err := r.pool.QueryRow(ctx, `SELECT s.tenant_id::text,t.name,s.administrator,a.expires_at
+FROM activation_tokens a
+JOIN subjects s ON s.id=a.subject_id
+JOIN tenants t ON t.id=s.tenant_id
+WHERE a.token_hash=$1 AND a.kind='invitation' AND a.used_at IS NULL AND a.expires_at>$2
+  AND s.status='pending' AND s.username LIKE 'invite-%'`, tokenHash, now).Scan(&value.TenantID, &value.TenantName, &value.Administrator, &value.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RegistrationInvitation{}, &AuthenticationError{}
+	}
+	if err != nil {
+		return RegistrationInvitation{}, err
+	}
+	return value, nil
+}
+
+func (r *PostgresRepository) CompleteRegistrationInvitation(ctx context.Context, tokenHash []byte, username, displayName, passwordHash string, existing *Credential, now time.Time, entry AuditEntry) (RegistrationResult, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	var tokenID, subjectID, placeholderAccountID, tenantID string
+	var administrator bool
+	err = tx.QueryRow(ctx, `SELECT a.id::text,s.id::text,s.account_id::text,s.tenant_id::text,s.administrator
+FROM activation_tokens a
+JOIN subjects s ON s.id=a.subject_id
+WHERE a.token_hash=$1 AND a.kind='invitation' AND a.used_at IS NULL AND a.expires_at>$2
+  AND s.status='pending' AND s.username LIKE 'invite-%'
+FOR UPDATE OF a,s`, tokenHash, now).Scan(&tokenID, &subjectID, &placeholderAccountID, &tenantID, &administrator)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RegistrationResult{}, &AuthenticationError{}
+	}
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	action := "registered"
+	accountID := placeholderAccountID
+	passwordChangedAt := now
+	if existing != nil {
+		accountID = existing.AccountID
+		if accountID == "" || accountID == placeholderAccountID || existing.Status != StatusActive || existing.SystemAdministrator {
+			return RegistrationResult{}, &ConflictError{Message: "该登录账号不能接受当前邀请"}
+		}
+		var currentHash string
+		if err := tx.QueryRow(ctx, `SELECT password_hash FROM login_accounts WHERE id=$1 FOR UPDATE`, accountID).Scan(&currentHash); errors.Is(err, pgx.ErrNoRows) {
+			return RegistrationResult{}, &ConflictError{Message: "登录账号不存在"}
+		} else if err != nil {
+			return RegistrationResult{}, err
+		}
+		if currentHash != passwordHash {
+			return RegistrationResult{}, &AuthenticationError{}
+		}
+		var joined bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM subjects WHERE tenant_id=$1 AND account_id=$2 AND id<>$3)`, tenantID, accountID, subjectID).Scan(&joined); err != nil {
+			return RegistrationResult{}, err
+		}
+		if joined {
+			return RegistrationResult{}, &ConflictError{Message: "该账号已经加入当前组织"}
+		}
+		passwordChangedAt = existing.PasswordChangedAt
+		action = "joined"
+	} else {
+		result, err := tx.Exec(ctx, `UPDATE login_accounts SET login_identifier=$2,password_hash=$3,password_changed_at=$4,failed_login_attempts=0,locked_until=NULL,updated_at=$4 WHERE id=$1 AND password_hash IS NULL`, placeholderAccountID, username, passwordHash, now)
+		if err != nil {
+			if isUnique(err) {
+				return RegistrationResult{}, &ConflictError{Message: "该手机号或邮箱已注册，请使用原密码接受邀请"}
+			}
+			return RegistrationResult{}, err
+		}
+		if result.RowsAffected() != 1 {
+			return RegistrationResult{}, &ConflictError{Message: "邀请状态已经变化，请重新打开链接"}
+		}
+	}
+	result, err := tx.Exec(ctx, `UPDATE subjects SET account_id=$2,username=$3,display_name=$4,password_hash=$5,status='active',revision=revision+1,password_changed_at=$6,updated_at=$7 WHERE id=$1 AND status='pending'`, subjectID, accountID, username, displayName, passwordHash, passwordChangedAt, now)
+	if err != nil {
+		if isUnique(err) {
+			return RegistrationResult{}, &ConflictError{Message: "该账号已经加入当前组织"}
+		}
+		return RegistrationResult{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return RegistrationResult{}, &ConflictError{Message: "邀请状态已经变化，请重新打开链接"}
+	}
+	if existing != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM login_accounts WHERE id=$1`, placeholderAccountID); err != nil {
+			return RegistrationResult{}, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE activation_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
+		return RegistrationResult{}, err
+	}
+	entry.ObjectID = subjectID
+	entry.TenantID = tenantID
+	entry.Actor.ID = tokenID
+	entry.Details["administrator"] = administrator
+	entry.Details["action"] = action
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return RegistrationResult{}, err
+	}
+	subject, err := scanSubject(tx.QueryRow(ctx, `SELECT `+subjectColumns+` FROM subjects WHERE id=$1`, subjectID))
+	if err != nil {
+		return RegistrationResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return RegistrationResult{}, err
+	}
+	return RegistrationResult{Action: action, Subject: subject}, nil
 }
 
 func (r *PostgresRepository) CreateActivationToken(ctx context.Context, tenantID string, token ActivationToken, entry AuditEntry) error {
@@ -458,6 +698,44 @@ func (r *PostgresRepository) ListSubjects(ctx context.Context, tenantID string) 
 	return values, rows.Err()
 }
 
+func (r *PostgresRepository) UpdateSubjectDisplayName(ctx context.Context, tenantID, subjectID string, expectedRevision int64, displayName string, entry AuditEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	var previous string
+	var currentRevision int64
+	if err := tx.QueryRow(ctx, `SELECT display_name,revision FROM subjects WHERE tenant_id=$1 AND id=$2 AND NOT system_administrator FOR UPDATE`, tenantID, subjectID).Scan(&previous, &currentRevision); errors.Is(err, pgx.ErrNoRows) {
+		return &NotFoundError{Message: "用户不存在"}
+	} else if err != nil {
+		return err
+	}
+	if currentRevision != expectedRevision {
+		return &ConflictError{Message: "账号资料已被更新，请刷新后重试"}
+	}
+	if previous == displayName {
+		return nil
+	}
+	result, err := tx.Exec(ctx, `UPDATE subjects SET display_name=$3,revision=revision+1,updated_at=$4 WHERE tenant_id=$1 AND id=$2 AND revision=$5`, tenantID, subjectID, displayName, entry.OccurredAt, expectedRevision)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return &ConflictError{Message: "账号资料已被更新，请刷新后重试"}
+	}
+	if entry.Details == nil {
+		entry.Details = map[string]any{}
+	}
+	entry.Details["previous_display_name"] = previous
+	entry.Details["display_name"] = displayName
+	entry.Details["revision"] = expectedRevision + 1
+	if err := insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *PostgresRepository) ListTenants(ctx context.Context) ([]TenantSummary, error) {
 	rows, err := r.pool.Query(ctx, `SELECT t.id::text,t.name,t.created_at,count(s.id) FILTER (WHERE NOT s.system_administrator)::int,count(s.id) FILTER (WHERE s.administrator AND s.status='active' AND NOT s.system_administrator)::int FROM tenants t LEFT JOIN subjects s ON s.tenant_id=t.id GROUP BY t.id,t.name,t.created_at ORDER BY t.created_at,t.id`)
 	if err != nil {
@@ -600,7 +878,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanSubject(row rowScanner) (Subject, error) {
 	var value Subject
 	var locked, passwordChanged *time.Time
-	err := row.Scan(&value.ID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SystemAdministrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &locked, &passwordChanged, &value.CreatedAt, &value.UpdatedAt)
+	err := row.Scan(&value.ID, &value.AccountID, &value.TenantID, &value.Username, &value.DisplayName, &value.Status, &value.Administrator, &value.SystemAdministrator, &value.Revision, &value.SessionGeneration, &value.FailedLoginAttempts, &locked, &passwordChanged, &value.CreatedAt, &value.UpdatedAt)
 	if locked != nil {
 		value.LockedUntil = *locked
 	}
@@ -610,8 +888,12 @@ func scanSubject(row rowScanner) (Subject, error) {
 	return value, err
 }
 
-func insertSubject(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash *string) error {
-	_, err := tx.Exec(ctx, `INSERT INTO subjects(id,tenant_id,username,display_name,password_hash,status,administrator,system_administrator,revision,session_generation,failed_login_attempts,locked_until,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,NULL,$11,$12,$13)`, subject.ID, subject.TenantID, subject.Username, subject.DisplayName, passwordHash, subject.Status, subject.Administrator, subject.SystemAdministrator, subject.Revision, subject.SessionGeneration, nullableTime(subject.PasswordChangedAt), subject.CreatedAt, subject.UpdatedAt)
+func insertAccount(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash *string) error {
+	accountID := subject.AccountID
+	if accountID == "" {
+		accountID = subject.ID
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO login_accounts(id,login_identifier,password_hash,failed_login_attempts,locked_until,password_changed_at,primary_subject_id,created_at,updated_at) VALUES($1,$2,$3,0,NULL,$4,$5,$6,$7)`, accountID, subject.Username, passwordHash, nullableTime(subject.PasswordChangedAt), subject.ID, subject.CreatedAt, subject.UpdatedAt)
 	if err != nil {
 		if isUnique(err) {
 			return &ConflictError{Message: "手机号、邮箱或用户名已被使用"}
@@ -619,6 +901,37 @@ func insertSubject(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash
 		return err
 	}
 	return nil
+}
+
+func insertSubject(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash *string) error {
+	accountID := subject.AccountID
+	if accountID == "" {
+		accountID = subject.ID
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO subjects(id,account_id,tenant_id,username,display_name,password_hash,status,administrator,system_administrator,revision,session_generation,failed_login_attempts,locked_until,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,NULL,$12,$13,$14)`, subject.ID, accountID, subject.TenantID, subject.Username, subject.DisplayName, passwordHash, subject.Status, subject.Administrator, subject.SystemAdministrator, subject.Revision, subject.SessionGeneration, nullableTime(subject.PasswordChangedAt), subject.CreatedAt, subject.UpdatedAt)
+	if err != nil {
+		if isUnique(err) {
+			return &ConflictError{Message: "该账号已经加入当前组织"}
+		}
+		return err
+	}
+	return nil
+}
+
+func insertAccountSubject(ctx context.Context, tx pgx.Tx, subject Subject) error {
+	var username string
+	var passwordHash *string
+	var passwordChangedAt *time.Time
+	if err := tx.QueryRow(ctx, `SELECT login_identifier,password_hash,password_changed_at FROM login_accounts WHERE id=$1 FOR UPDATE`, subject.AccountID).Scan(&username, &passwordHash, &passwordChangedAt); errors.Is(err, pgx.ErrNoRows) {
+		return &NotFoundError{Message: "登录账号不存在"}
+	} else if err != nil {
+		return err
+	}
+	subject.Username = username
+	if passwordChangedAt != nil {
+		subject.PasswordChangedAt = *passwordChangedAt
+	}
+	return insertSubject(ctx, tx, subject, passwordHash)
 }
 func insertToken(ctx context.Context, tx pgx.Tx, token ActivationToken) error {
 	_, err := tx.Exec(ctx, `INSERT INTO activation_tokens(id,subject_id,kind,token_hash,expires_at,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, token.ID, token.SubjectID, token.Kind, token.TokenHash, token.ExpiresAt, token.CreatedBy, token.CreatedAt)

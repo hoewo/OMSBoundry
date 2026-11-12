@@ -20,6 +20,8 @@ services:
       BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
       INTERNAL_FINANCE_REQUESTS_DB_PASSWORD: ${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD:?set INTERNAL_FINANCE_REQUESTS_DB_PASSWORD}
       PAYROLL_DB_PASSWORD: ${PAYROLL_DB_PASSWORD:?set PAYROLL_DB_PASSWORD}
+      WORKFORCE_ATTENDANCE_DB_PASSWORD: ${WORKFORCE_ATTENDANCE_DB_PASSWORD:?set WORKFORCE_ATTENDANCE_DB_PASSWORD}
+      INVOICE_RECOGNITION_DB_PASSWORD: ${INVOICE_RECOGNITION_DB_PASSWORD:?set INVOICE_RECOGNITION_DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
       interval: 2s
@@ -52,6 +54,8 @@ services:
       BONUS_DISTRIBUTION_DB_PASSWORD: ${BONUS_DISTRIBUTION_DB_PASSWORD:?set BONUS_DISTRIBUTION_DB_PASSWORD}
       INTERNAL_FINANCE_REQUESTS_DB_PASSWORD: ${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD:?set INTERNAL_FINANCE_REQUESTS_DB_PASSWORD}
       PAYROLL_DB_PASSWORD: ${PAYROLL_DB_PASSWORD:?set PAYROLL_DB_PASSWORD}
+      WORKFORCE_ATTENDANCE_DB_PASSWORD: ${WORKFORCE_ATTENDANCE_DB_PASSWORD:?set WORKFORCE_ATTENDANCE_DB_PASSWORD}
+      INVOICE_RECOGNITION_DB_PASSWORD: ${INVOICE_RECOGNITION_DB_PASSWORD:?set INVOICE_RECOGNITION_DB_PASSWORD}
     command: ["/provision.sh"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -317,7 +321,7 @@ services:
       TENANT_NAME: ${TENANT_NAME:-OMSBizFoundry}
       PUBLIC_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
       SIGNING_KEY_FILE: /data/iam/signing-keys.json
-      CAPABILITY_MANIFEST_PATHS: /config/identity-access-capabilities.json,/config/internal-finance-requests-capabilities.json,/config/payroll-capabilities.json,/config/open-api-capabilities.json,/config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
+      CAPABILITY_MANIFEST_PATHS: /config/identity-access-capabilities.json,/config/internal-finance-requests-capabilities.json,/config/payroll-capabilities.json,/config/workforce-attendance-capabilities.json,/config/invoice-recognition-capabilities.json,/config/open-api-capabilities.json,/config/contract-ledger-capabilities.json,/config/money-flow-ledger-capabilities.json,/config/people-groups-capabilities.json,/config/party-directory-capabilities.json,/config/project-workspace-capabilities.json,/config/evidence-service-capabilities.json,/config/business-engagement-capabilities.json,/config/billing-invoice-capabilities.json,/config/production-operations-capabilities.json,/config/approval-audit-results-capabilities.json,/config/cost-outsourcing-capabilities.json,/config/bonus-distribution-capabilities.json
       SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-false}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
       BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-系统管理员}
@@ -338,6 +342,8 @@ services:
       - ../../contracts/access/v1/examples/identity-access-capabilities.json:/config/identity-access-capabilities.json:ro
       - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
       - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
+      - ../../contracts/access/v1/examples/workforce-attendance-capabilities.json:/config/workforce-attendance-capabilities.json:ro
+      - ../../contracts/access/v1/examples/invoice-recognition-capabilities.json:/config/invoice-recognition-capabilities.json:ro
       - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
@@ -375,6 +381,8 @@ services:
       - ../../contracts/access/v1/examples/identity-access-capabilities.json:/config/identity-access-capabilities.json:ro
       - ../../contracts/access/v1/examples/internal-finance-requests-capabilities.json:/config/internal-finance-requests-capabilities.json:ro
       - ../../contracts/access/v1/examples/payroll-capabilities.json:/config/payroll-capabilities.json:ro
+      - ../../contracts/access/v1/examples/workforce-attendance-capabilities.json:/config/workforce-attendance-capabilities.json:ro
+      - ../../contracts/access/v1/examples/invoice-recognition-capabilities.json:/config/invoice-recognition-capabilities.json:ro
       - ../../contracts/access/v1/examples/open-api-capabilities.json:/config/open-api-capabilities.json:ro
       - ../../contracts/access/v1/examples/contract-ledger-capabilities.json:/config/contract-ledger-capabilities.json:ro
       - ../../contracts/access/v1/examples/money-flow-ledger-capabilities.json:/config/money-flow-ledger-capabilities.json:ro
@@ -614,6 +622,60 @@ services:
       payroll-workload-key-permissions: {condition: service_completed_successfully}
     volumes:
       - payroll-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  workforce-attendance-workload-key-permissions:
+    profiles: [workforce-attendance]
+    image: omsbizfoundry/workforce-attendance:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - workforce-attendance-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  workforce-attendance-workload-keys:
+    profiles: [workforce-attendance]
+    image: omsbizfoundry/workforce-attendance:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: workforce-attendance
+      WORKLOAD_SUBJECT_ID: ${WORKFORCE_ATTENDANCE_WORKLOAD_SUBJECT_ID:-12121212-1212-4121-8121-121212121212}
+      WORKLOAD_KEY_FILE: /workload-private/workforce-attendance.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/workforce-attendance.json
+    depends_on:
+      workforce-attendance-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - workforce-attendance-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  invoice-recognition-workload-key-permissions:
+    profiles: [invoice-recognition]
+    image: omsbizfoundry/invoice-recognition:${SUITE_VERSION:-dev}
+    user: "0:0"
+    command: ["sh", "-eu", "-c", "chown postgres:postgres /workload-private /workload-public && chmod 0700 /workload-private && chmod 0755 /workload-public"]
+    volumes:
+      - invoice-recognition-workload-private:/workload-private
+      - iam-workload-public:/workload-public
+    restart: "no"
+
+  invoice-recognition-workload-keys:
+    profiles: [invoice-recognition]
+    image: omsbizfoundry/invoice-recognition:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/workload-keyctl", "init"]
+    environment:
+      WORKLOAD_ID: invoice-recognition
+      WORKLOAD_SUBJECT_ID: ${INVOICE_RECOGNITION_WORKLOAD_SUBJECT_ID:-13131313-1313-4131-8131-131313131313}
+      WORKLOAD_KEY_FILE: /workload-private/invoice-recognition.json
+      WORKLOAD_PUBLIC_KEY_FILE: /workload-public/invoice-recognition.json
+    depends_on:
+      invoice-recognition-workload-key-permissions: {condition: service_completed_successfully}
+    volumes:
+      - invoice-recognition-workload-private:/workload-private
       - iam-workload-public:/workload-public
     restart: "no"
 
@@ -1187,6 +1249,7 @@ services:
       IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
       PEOPLE_BASE_URL: ${PAYROLL_PEOPLE_BASE_URL:-http://people-groups:8084}
       MONEY_BASE_URL: http://money-flow-ledger:8083
+      ATTENDANCE_BASE_URL: http://workforce-attendance:8096
       IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
       WORKLOAD_ID: payroll
       WORKLOAD_SUBJECT_ID: ${PAYROLL_WORKLOAD_SUBJECT_ID:-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee}
@@ -1212,6 +1275,7 @@ services:
       payroll-workload-keys: {condition: service_completed_successfully}
       people-groups: {condition: service_healthy}
       money-flow-ledger: {condition: service_healthy}
+      workforce-attendance: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8093/health/ready >/dev/null"]
       interval: 2s
@@ -1220,6 +1284,123 @@ services:
     volumes:
       - iam-public-keys:/public:ro
       - payroll-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  workforce-attendance-migrate:
+    profiles: [workforce-attendance]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.workforce-attendance
+    image: omsbizfoundry/workforce-attendance:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &workforce-attendance-environment
+      HTTP_ADDR: :8096
+      DATABASE_URL: postgres://workforce_attendance:${WORKFORCE_ATTENDANCE_DB_PASSWORD}@postgres:5432/workforce_attendance?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      PEOPLE_BASE_URL: http://people-groups:8084
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: workforce-attendance
+      WORKLOAD_SUBJECT_ID: ${WORKFORCE_ATTENDANCE_WORKLOAD_SUBJECT_ID:-12121212-1212-4121-8121-121212121212}
+      WORKLOAD_KEY_FILE: /workload-private/workforce-attendance.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      REFERENCE_TIMEOUT: ${REFERENCE_TIMEOUT:-3s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+      workforce-attendance-workload-keys: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - workforce-attendance-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  workforce-attendance:
+    profiles: [workforce-attendance]
+    image: omsbizfoundry/workforce-attendance:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *workforce-attendance-environment
+    depends_on:
+      workforce-attendance-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      identity-access: {condition: service_healthy}
+      workforce-attendance-workload-keys: {condition: service_completed_successfully}
+      people-groups: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8096/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - workforce-attendance-workload-private:/workload-private:ro
+      - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
+    networks: [app, data]
+    restart: unless-stopped
+
+  invoice-recognition-migrate:
+    profiles: [invoice-recognition]
+    build:
+      context: ../..
+      dockerfile: deployments/d1/docker/Dockerfile.invoice-recognition
+    image: omsbizfoundry/invoice-recognition:${SUITE_VERSION:-dev}
+    command: ["/app/ops", "migrate"]
+    environment: &invoice-recognition-environment
+      HTTP_ADDR: :8097
+      DATABASE_URL: postgres://invoice_recognition:${INVOICE_RECOGNITION_DB_PASSWORD}@postgres:5432/invoice_recognition?sslmode=disable
+      MIGRATION_MODE: verify
+      IDENTITY_PROVIDER: iam
+      IAM_ISSUER: ${PUBLIC_ISSUER:-https://oms.example.test/auth}
+      IAM_TENANT_ID: ${TENANT_ID:?set TENANT_ID}
+      IAM_PUBLIC_KEYS_PATH: /public/public-keys.json
+      EVIDENCE_BASE_URL: http://evidence-service:8085
+      IAM_SERVICE_CREDENTIAL_URL: http://identity-access:8080/api/v1/service-credentials
+      WORKLOAD_ID: invoice-recognition
+      WORKLOAD_SUBJECT_ID: ${INVOICE_RECOGNITION_WORKLOAD_SUBJECT_ID:-13131313-1313-4131-8131-131313131313}
+      WORKLOAD_KEY_FILE: /workload-private/invoice-recognition.json
+      WORKLOAD_REFRESH_BEFORE: ${WORKLOAD_REFRESH_BEFORE:-15s}
+      REFERENCE_TIMEOUT: ${REFERENCE_TIMEOUT:-3s}
+      INVOICE_AI_PROVIDER_URL: ${INVOICE_AI_PROVIDER_URL:-}
+      INVOICE_AI_PROVIDER_API_KEY: ${INVOICE_AI_PROVIDER_API_KEY:-}
+      INVOICE_AI_PROVIDER_MODEL: ${INVOICE_AI_PROVIDER_MODEL:-}
+      INVOICE_LOCAL_OCR_ENABLED: ${INVOICE_LOCAL_OCR_ENABLED:-true}
+      INVOICE_LOCAL_OCR_COMMAND: ${INVOICE_LOCAL_OCR_COMMAND:-tesseract}
+      INVOICE_PDF_RASTERIZER_COMMAND: ${INVOICE_PDF_RASTERIZER_COMMAND:-pdftoppm}
+      INVOICE_LOCAL_OCR_TIMEOUT: ${INVOICE_LOCAL_OCR_TIMEOUT:-90s}
+    depends_on:
+      postgres-provision: {condition: service_completed_successfully}
+      invoice-recognition-workload-keys: {condition: service_completed_successfully}
+    volumes:
+      - iam-public-keys:/public:ro
+      - invoice-recognition-workload-private:/workload-private:ro
+    networks: [data]
+    restart: "no"
+
+  invoice-recognition:
+    profiles: [invoice-recognition]
+    image: omsbizfoundry/invoice-recognition:${SUITE_VERSION:-dev}
+    pull_policy: never
+    command: ["/app/server"]
+    environment: *invoice-recognition-environment
+    depends_on:
+      invoice-recognition-migrate: {condition: service_completed_successfully}
+      public-keys: {condition: service_completed_successfully}
+      identity-access: {condition: service_healthy}
+      invoice-recognition-workload-keys: {condition: service_completed_successfully}
+      evidence-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8097/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - iam-public-keys:/public:ro
+      - invoice-recognition-workload-private:/workload-private:ro
       - ${D1_BACKUP_DIR:-./.runtime/backups}:/backups
     networks: [app, data]
     restart: unless-stopped
@@ -1299,6 +1480,7 @@ services:
       REFERENCE_OA_PRODUCTION_STAGE_PROFILE: ${REFERENCE_OA_PRODUCTION_STAGE_PROFILE:-}
       OMS_OPERATING_PARTY_ID: ${OMS_OPERATING_PARTY_ID:-}
       OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}
+      OMS_OPERATING_PARTY_BINDINGS: ${OMS_OPERATING_PARTY_BINDINGS:-}
       FEEDBACK_SDK_URL: ${FEEDBACK_SDK_URL:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/health/ready >/dev/null"]
@@ -1390,5 +1572,7 @@ volumes:
   people-workload-private:
   internal-finance-requests-workload-private:
   payroll-workload-private:
+  workforce-attendance-workload-private:
+  invoice-recognition-workload-private:
   contract-evidence:
   evidence-data:

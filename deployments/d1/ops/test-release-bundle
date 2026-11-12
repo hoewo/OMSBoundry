@@ -8,7 +8,7 @@ trap cleanup EXIT HUP INT TERM
 
 digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 manifest="$test_root/images.env"
-for name in POSTGRES IDENTITY CONTRACT MONEY PEOPLE PARTY PROJECT EVIDENCE BUSINESS_ENGAGEMENT BILLING PRODUCTION APPROVAL_AUDIT_RESULTS COST_OUTSOURCING BONUS_DISTRIBUTION INTERNAL_FINANCE_REQUESTS PAYROLL WORKBENCH GATEWAY NGINX; do
+for name in POSTGRES IDENTITY CONTRACT MONEY PEOPLE PARTY PROJECT EVIDENCE BUSINESS_ENGAGEMENT BILLING PRODUCTION APPROVAL_AUDIT_RESULTS COST_OUTSOURCING BONUS_DISTRIBUTION INTERNAL_FINANCE_REQUESTS PAYROLL WORKFORCE_ATTENDANCE INVOICE_RECOGNITION WORKBENCH GATEWAY NGINX; do
   lower=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')
   printf 'D1_%s_IMAGE=registry.example/omsbizfoundry/%s@sha256:%s\n' "$name" "$lower" "$digest" >> "$manifest"
 done
@@ -53,6 +53,8 @@ for path in \
   contracts/access/v1/examples/bonus-distribution-capabilities.json \
   contracts/access/v1/examples/internal-finance-requests-capabilities.json \
   contracts/access/v1/examples/payroll-capabilities.json \
+  contracts/access/v1/examples/workforce-attendance-capabilities.json \
+  contracts/access/v1/examples/invoice-recognition-capabilities.json \
   contracts/access/v1/examples/production-operations-project-assignment-policy.json \
   acceptance/d1-delivery/verify-running \
   acceptance/d1-full-oa-journey/scenario-v1.json \
@@ -189,6 +191,10 @@ grep -Fq 'BUSINESS_ENGAGEMENT_BASE_URL: http://business-engagement:8089' "$root/
   echo 'D1 runtime does not receive the explicit OMS operating Party identity' >&2
   exit 1
 }
+[ "$(grep -Fc 'OMS_OPERATING_PARTY_BINDINGS: ${OMS_OPERATING_PARTY_BINDINGS:-}' "$root/deployments/d1/compose.yaml")" -eq 1 ] || {
+  echo 'D1 Workbench does not receive tenant-scoped OMS operating Party bindings' >&2
+  exit 1
+}
 [ "$(grep -Fc 'OMS_QUALIFICATION_PARTY_ID: ${OMS_QUALIFICATION_PARTY_ID:-}' "$root/deployments/d1/compose.yaml")" -eq 2 ] || {
   echo 'D1 runtime dropped the legacy OMS operating Party compatibility alias' >&2
   exit 1
@@ -204,8 +210,8 @@ grep -qx 'PROJECT_PRODUCTION_BASE_URL=' "$env_example" || {
   exit 1
 }
 grep -qx 'D1_IMAGE_MODE=pull' "$env_example"
-[ "$(grep -Ec '^D1_[A-Z_]+_IMAGE=.*@sha256:[a-f0-9]{64}$' "$env_example")" -eq 19 ] || {
-  echo 'D1 release environment does not contain nineteen digest-pinned images' >&2
+[ "$(grep -Ec '^D1_[A-Z_]+_IMAGE=.*@sha256:[a-f0-9]{64}$' "$env_example")" -eq 21 ] || {
+  echo 'D1 release environment does not contain twenty-one digest-pinned images' >&2
   exit 1
 }
 
@@ -244,6 +250,8 @@ sed \
   -e 's/^BONUS_DISTRIBUTION_DB_PASSWORD=.*/BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123/' \
   -e 's/^INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=.*/INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=InternalFinancePassword_123/' \
   -e 's/^PAYROLL_DB_PASSWORD=.*/PAYROLL_DB_PASSWORD=PayrollPassword_123/' \
+  -e 's/^WORKFORCE_ATTENDANCE_DB_PASSWORD=.*/WORKFORCE_ATTENDANCE_DB_PASSWORD=WorkforceAttendancePassword_123/' \
+  -e 's/^INVOICE_RECOGNITION_DB_PASSWORD=.*/INVOICE_RECOGNITION_DB_PASSWORD=InvoiceRecognitionPassword_123/' \
   -e 's/^BOOTSTRAP_ADMIN_PASSWORD=.*/BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123/' \
   -e 's/^PARTY_CURSOR_HMAC_KEY=.*/PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456/' \
   -e 's/^EVIDENCE_LOCAL_SIGNING_KEY=.*/EVIDENCE_LOCAL_SIGNING_KEY=YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE/' \

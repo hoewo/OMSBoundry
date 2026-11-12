@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"omsbizfoundry/payroll/internal/attendancereference"
 	"omsbizfoundry/payroll/internal/auth"
 	"omsbizfoundry/payroll/internal/config"
 	"omsbizfoundry/payroll/internal/database"
@@ -49,7 +50,7 @@ func run() error {
 		return err
 	}
 	var credentials *workloadidentity.TokenSource
-	if (cfg.PeopleBaseURL != "" || cfg.MoneyBaseURL != "") && cfg.IdentityProvider == "iam" {
+	if (cfg.PeopleBaseURL != "" || cfg.MoneyBaseURL != "" || cfg.AttendanceBaseURL != "") && cfg.IdentityProvider == "iam" {
 		credentials, err = workloadidentity.NewTokenSource(cfg.IAMServiceCredentialURL, cfg.IAMTenantID, cfg.WorkloadID, cfg.WorkloadSubjectID, cfg.WorkloadKeyFile, cfg.ReferenceTimeout, cfg.WorkloadRefreshBefore)
 		if err != nil {
 			return err
@@ -73,12 +74,24 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	dependencies := make([]any, 0, 2)
+	var attendanceReferences domain.AttendanceSummaryPort
+	if cfg.AttendanceBaseURL != "" && cfg.IdentityProvider == "iam" {
+		attendanceReferences, err = attendancereference.NewHTTPClient(cfg.AttendanceBaseURL, "", credentials, cfg.ReferenceTimeout)
+	} else if cfg.AttendanceBaseURL != "" {
+		attendanceReferences, err = attendancereference.NewHTTPClient(cfg.AttendanceBaseURL, cfg.AttendanceAccessToken, nil, cfg.ReferenceTimeout)
+	}
+	if err != nil {
+		return err
+	}
+	dependencies := make([]any, 0, 3)
 	if personReferences != nil {
 		dependencies = append(dependencies, personReferences)
 	}
 	if paymentDelivery != nil {
 		dependencies = append(dependencies, paymentDelivery)
+	}
+	if attendanceReferences != nil {
+		dependencies = append(dependencies, attendanceReferences)
 	}
 	service, err := domain.NewService(store, dependencies...)
 	if err != nil {

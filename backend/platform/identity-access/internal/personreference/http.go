@@ -71,6 +71,18 @@ func (r *Resolver) ResolveBySubject(ctx context.Context, tenantID, subjectID str
 		return apikey.PersonReference{}, fmt.Errorf("read Person reference: %w", err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotFound {
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
+		var problem struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if readErr == nil && json.Unmarshal(body, &problem) == nil && problem.Error.Code == "person_not_found" {
+			return apikey.PersonReference{}, apikey.ErrPersonMappingRequired
+		}
+		return apikey.PersonReference{}, fmt.Errorf("Person reference returned HTTP %d", response.StatusCode)
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return apikey.PersonReference{}, fmt.Errorf("Person reference returned HTTP %d", response.StatusCode)

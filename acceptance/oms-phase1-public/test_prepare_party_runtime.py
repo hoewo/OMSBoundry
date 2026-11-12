@@ -1,6 +1,11 @@
 import importlib.util
+import json
 from pathlib import Path
+import stat
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("prepare-party-runtime.py")
@@ -61,6 +66,68 @@ class PartyRuntimePlannerTests(unittest.TestCase):
     def test_inactive_exact_match_is_not_reused(self):
         local = {"registration_identifier": "REG-1", "legal_name": "甲", "kind": "organization"}
         self.assertIsNone(MODULE.select_directory_party(local, [party("REG-1", status="inactive")]))
+
+    @mock.patch.object(MODULE.subprocess, "check_output")
+    def test_preflight_overrides_container_tenant(self, check_output):
+        check_output.return_value = '{"items": []}'
+        result = MODULE.run_ops(
+            "contract-container", "party-migration-preflight", "tenant-current"
+        )
+        self.assertEqual(result, {"items": []})
+        check_output.assert_called_once_with(
+            [
+                "docker",
+                "exec",
+                "-e",
+                "IAM_TENANT_ID=tenant-current",
+                "contract-container",
+                "/app/ops",
+                "party-migration-preflight",
+                "--tenant-id",
+                "tenant-current",
+            ],
+            text=True,
+        )
+
+    @mock.patch.object(MODULE.subprocess, "run")
+    def test_mapping_overrides_container_tenant(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout='{"recorded": 1}', stderr=""
+        )
+        result = MODULE.run_ops(
+            "money-container", "party-migration-map", "tenant-current", {"value": 1}
+        )
+        self.assertEqual(result, {"recorded": 1})
+        self.assertEqual(
+            run.call_args.args[0][:7],
+            [
+                "docker",
+                "exec",
+                "-i",
+                "-e",
+                "IAM_TENANT_ID=tenant-current",
+                "money-container",
+                "/app/ops",
+            ],
+        )
+
+    def test_login_credentials_file_must_be_owner_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "login.json")
+            path.write_text(json.dumps({"username": "admin", "password": "secret"}))
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
+            with self.assertRaisesRegex(RuntimeError, "readable only by its owner"):
+                MODULE.load_login_credentials({}, str(path))
+
+    def test_login_credentials_file_is_loaded_without_echoing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "login.json")
+            path.write_text(json.dumps({"username": "admin", "password": "secret"}))
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            self.assertEqual(
+                MODULE.load_login_credentials({}, str(path)),
+                {"username": "admin", "password": "secret"},
+            )
 
 
 if __name__ == "__main__":

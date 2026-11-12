@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+database_url=${1:?usage: restore-empty DATABASE_URL INPUT}
+input=${2:?usage: restore-empty DATABASE_URL INPUT}
+[ -f "$input" ] || { echo 'backup input is missing' >&2; exit 1; }
+relations=$(psql "$database_url" -Atqc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname !~ '^pg_toast' AND c.relkind IN ('r','p','v','m','S','f')")
+[ "$relations" = 0 ] || { echo 'restore target database is not empty' >&2; exit 1; }
+pg_restore --dbname "$database_url" --single-transaction --exit-on-error --no-owner --no-privileges "$input"

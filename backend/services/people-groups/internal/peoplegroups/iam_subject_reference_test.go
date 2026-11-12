@@ -21,13 +21,18 @@ func (s subjectReferenceStub) ValidateIAMSubject(context.Context, string, string
 }
 
 func TestValidateIAMSubjectKeepsSourceStatusAndRevision(t *testing.T) {
-	service := &Service{iamSubjectRefs: subjectReferenceStub{value: IAMSubjectReference{
-		SchemaVersion: "1", SourceApplication: "identity-access", ID: referenceSubject, TenantID: referenceTenant,
-		Status: "disabled", Revision: 4,
-	}}}
-	status, revision, err := service.validateIAMSubject(t.Context(), referenceTenant, referenceSubject)
-	if err != nil || status != "disabled" || revision != 4 {
-		t.Fatalf("status=%q revision=%d err=%v", status, revision, err)
+	for _, testCase := range []struct {
+		status   string
+		revision int64
+	}{{status: "pending", revision: 1}, {status: "active", revision: 3}, {status: "disabled", revision: 4}} {
+		service := &Service{iamSubjectRefs: subjectReferenceStub{value: IAMSubjectReference{
+			SchemaVersion: "1", SourceApplication: "identity-access", ID: referenceSubject, TenantID: referenceTenant,
+			Status: testCase.status, Revision: testCase.revision,
+		}}}
+		status, revision, err := service.validateIAMSubject(t.Context(), referenceTenant, referenceSubject)
+		if err != nil || status != testCase.status || revision != testCase.revision {
+			t.Fatalf("status=%q revision=%d err=%v", status, revision, err)
+		}
 	}
 }
 

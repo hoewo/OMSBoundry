@@ -52,7 +52,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000010_administrator_profile_grants.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000012_multi_organization_accounts.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
@@ -123,6 +123,20 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if principal := currentSession(t, createdAdmin, server.URL, http.StatusOK); principal["administrator"] != true || principal["system_administrator"] != false || stringField(t, principal, "tenant_id") != stringField(t, createdTenantObject, "id") {
 		t.Fatalf("created tenant administrator principal = %#v", principal)
 	}
+	secondMembershipTenant := postJSON(t, systemAdmin, server.URL+"/api/v1/system/tenants", systemAdminCSRF, map[string]any{"name": "同账号第二组织", "admin_login_identifier": "created-admin@example.com", "admin_display_name": "第二组织管理员"}, http.StatusCreated)
+	secondMembershipTenantObject := objectField(t, secondMembershipTenant, "tenant")
+	secondMembershipAdministrator := objectField(t, secondMembershipTenant, "administrator")
+	if secondMembershipAdministrator["action"] != "joined" || secondMembershipAdministrator["token"] != nil || stringField(t, objectField(t, secondMembershipAdministrator, "subject"), "id") == stringField(t, objectField(t, createdAdministrator, "subject"), "id") {
+		t.Fatalf("second organization membership = %#v", secondMembershipAdministrator)
+	}
+	organizations := getJSON(t, createdAdmin, server.URL+"/api/v1/organizations", http.StatusOK)
+	if items, ok := organizations["organizations"].([]any); !ok || len(items) != 2 {
+		t.Fatalf("account organizations = %#v", organizations)
+	}
+	postJSON(t, createdAdmin, server.URL+"/api/v1/session/organization", createdAdminCSRF, map[string]any{"tenant_id": stringField(t, secondMembershipTenantObject, "id")}, http.StatusOK)
+	if principal := currentSession(t, createdAdmin, server.URL, http.StatusOK); stringField(t, principal, "tenant_id") != stringField(t, secondMembershipTenantObject, "id") || stringField(t, principal, "subject_id") == stringField(t, objectField(t, createdAdministrator, "subject"), "id") {
+		t.Fatalf("switched organization principal = %#v", principal)
+	}
 	adminInvitation := postJSON(t, systemAdmin, server.URL+"/api/v1/system/administrators", systemAdminCSRF, map[string]any{"tenant_id": testTenantID, "login_identifier": "tenant-admin@example.com", "display_name": "测试企业管理员"}, http.StatusCreated)
 	admin := newClient(t)
 	adminCSRF := fetchCSRF(t, admin, server.URL)
@@ -162,6 +176,20 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM iam_audit_entries WHERE tenant_id=$1 AND action='iam_tenant_name_changed'`, testTenantID).Scan(&tenantRenameAudits); err != nil || tenantRenameAudits != 1 {
 		t.Fatalf("tenant rename audits = %d, %v", tenantRenameAudits, err)
 	}
+	adminSubjectID := stringField(t, adminPrincipal, "subject_id")
+	var adminRevision int64
+	if err := pool.QueryRow(context.Background(), `SELECT revision FROM subjects WHERE tenant_id=$1 AND id=$2`, testTenantID, adminSubjectID).Scan(&adminRevision); err != nil {
+		t.Fatal(err)
+	}
+	postJSON(t, admin, server.URL+"/api/v1/admin/subjects/"+adminSubjectID+"/profile", adminCSRF, map[string]any{"expected_revision": adminRevision, "display_name": "  新管理员姓名  "}, http.StatusNoContent)
+	if principal := currentSession(t, admin, server.URL, http.StatusOK); stringField(t, principal, "display_name") != "新管理员姓名" {
+		t.Fatalf("renamed principal = %#v", principal)
+	}
+	postJSON(t, admin, server.URL+"/api/v1/admin/subjects/"+adminSubjectID+"/profile", adminCSRF, map[string]any{"expected_revision": adminRevision, "display_name": "过期 revision"}, http.StatusConflict)
+	var subjectRenameAudits int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM iam_audit_entries WHERE tenant_id=$1 AND object_id=$2 AND action='iam_subject_display_name_changed'`, testTenantID, adminSubjectID).Scan(&subjectRenameAudits); err != nil || subjectRenameAudits != 1 {
+		t.Fatalf("subject rename audits = %d, %v", subjectRenameAudits, err)
+	}
 
 	otherAdmin := newClient(t)
 	otherAdminCSRF := fetchCSRF(t, otherAdmin, server.URL)
@@ -174,6 +202,31 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	otherTenantObject := objectField(t, otherTenantResponse, "tenant")
 	if stringField(t, otherTenantObject, "id") != otherTenantID || stringField(t, otherTenantObject, "name") != "第二测试企业" {
 		t.Fatalf("second tenant = %#v", otherTenantObject)
+	}
+
+	registrationInvitation := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"administrator": true}, http.StatusCreated)
+	if registrationInvitation["action"] != "registration_invited" || stringField(t, registrationInvitation, "token") == "" {
+		t.Fatalf("registration invitation = %#v", registrationInvitation)
+	}
+	registrationSubject := objectField(t, registrationInvitation, "subject")
+	if !strings.HasPrefix(stringField(t, registrationSubject, "username"), "invite-") || registrationSubject["administrator"] != true {
+		t.Fatalf("registration placeholder = %#v", registrationSubject)
+	}
+	registrationClient := newClient(t)
+	registrationCSRF := fetchCSRF(t, registrationClient, server.URL)
+	preview := postJSON(t, registrationClient, server.URL+"/api/v1/invitations/preview", registrationCSRF, map[string]any{"token": stringField(t, registrationInvitation, "token")}, http.StatusOK)
+	previewInvitation := objectField(t, preview, "invitation")
+	if stringField(t, previewInvitation, "tenant_name") != "测试企业新名称" || previewInvitation["administrator"] != true {
+		t.Fatalf("registration preview = %#v", preview)
+	}
+	registered := postJSON(t, registrationClient, server.URL+"/api/v1/invitations/register", registrationCSRF, map[string]any{"token": stringField(t, registrationInvitation, "token"), "login_identifier": "+86 139-0013-8000", "display_name": "本人填写姓名", "password": "recipient chosen password 123"}, http.StatusOK)
+	if registered["action"] != "registered" || stringField(t, objectField(t, registered, "subject"), "username") != "13900138000" {
+		t.Fatalf("registration result = %#v", registered)
+	}
+	postJSON(t, registrationClient, server.URL+"/api/v1/invitations/preview", registrationCSRF, map[string]any{"token": stringField(t, registrationInvitation, "token")}, http.StatusUnauthorized)
+	login(t, registrationClient, server.URL, registrationCSRF, "13900138000", "recipient chosen password 123", http.StatusOK)
+	if principal := currentSession(t, registrationClient, server.URL, http.StatusOK); principal["administrator"] != true || stringField(t, principal, "tenant_id") != testTenantID {
+		t.Fatalf("registered principal = %#v", principal)
 	}
 
 	inviteResponse := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"login_identifier": "+86 138-0013-8000", "display_name": "业务操作员", "administrator": false}, http.StatusCreated)
@@ -198,6 +251,17 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	otherOperatorCSRF := fetchCSRF(t, otherOperator, server.URL)
 	postJSON(t, otherOperator, server.URL+"/api/v1/activate", otherOperatorCSRF, map[string]any{"token": stringField(t, otherInvite, "token"), "password": "second operator password 123"}, http.StatusOK)
 	login(t, otherOperator, server.URL, otherOperatorCSRF, "Operator.B@Example.COM", "second operator password 123", http.StatusOK)
+	crossTenantInvitation := postJSON(t, admin, server.URL+"/api/v1/admin/invitations", adminCSRF, map[string]any{"administrator": false}, http.StatusCreated)
+	crossTenantRecipient := newClient(t)
+	crossTenantCSRF := fetchCSRF(t, crossTenantRecipient, server.URL)
+	crossTenantJoin := postJSON(t, crossTenantRecipient, server.URL+"/api/v1/invitations/register", crossTenantCSRF, map[string]any{"token": stringField(t, crossTenantInvitation, "token"), "login_identifier": "Operator.B@Example.COM", "display_name": "第二组织账号加入", "password": "second operator password 123"}, http.StatusOK)
+	if crossTenantJoin["action"] != "joined" || stringField(t, objectField(t, crossTenantJoin, "subject"), "tenant_id") != testTenantID {
+		t.Fatalf("existing account invitation acceptance = %#v", crossTenantJoin)
+	}
+	login(t, crossTenantRecipient, server.URL, crossTenantCSRF, "operator.b@example.com", "second operator password 123", http.StatusOK)
+	if items, ok := getJSON(t, crossTenantRecipient, server.URL+"/api/v1/organizations", http.StatusOK)["organizations"].([]any); !ok || len(items) != 2 {
+		t.Fatalf("existing account organizations = %#v", items)
+	}
 	postJSON(t, otherAdmin, server.URL+"/api/v1/admin/grants", otherAdminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNoContent)
 	otherCredential := postJSON(t, otherOperator, server.URL+"/api/v1/credentials", otherOperatorCSRF, map[string]any{"audience": "contract-ledger"}, http.StatusOK)
 	otherClaims := verifyCredential(t, stringField(t, otherCredential, "token"), keys)
@@ -230,7 +294,8 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, admin, server.URL+"/api/v1/admin/grants", adminCSRF, map[string]any{"subject_id": otherOperatorID, "audience": "contract-ledger", "action": "contract-ledger.view"}, http.StatusNotFound)
 	postJSON(t, admin, server.URL+"/api/v1/admin/status", adminCSRF, map[string]any{"subject_id": otherOperatorID, "status": "disabled"}, http.StatusNotFound)
 	postJSON(t, admin, server.URL+"/api/v1/admin/administrator", adminCSRF, map[string]any{"subject_id": otherOperatorID, "administrator": true}, http.StatusNotFound)
-	assertSubjectList(t, getJSON(t, admin, server.URL+"/api/v1/admin/subjects", http.StatusOK), testTenantID, 2)
+	postJSON(t, admin, server.URL+"/api/v1/admin/subjects/"+otherOperatorID+"/profile", adminCSRF, map[string]any{"expected_revision": 1, "display_name": "跨组织修改"}, http.StatusNotFound)
+	assertSubjectList(t, getJSON(t, admin, server.URL+"/api/v1/admin/subjects", http.StatusOK), testTenantID, 4)
 	assertSubjectList(t, getJSON(t, otherAdmin, server.URL+"/api/v1/admin/subjects", http.StatusOK), otherTenantID, 2)
 
 	operator := newClient(t)

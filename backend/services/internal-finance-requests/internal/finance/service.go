@@ -149,6 +149,10 @@ func (s *Service) Submit(ctx context.Context, actor Actor, id string, input Subm
 	if !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.ExpectedRevision < 1 {
 		return Request{}, fmt.Errorf("invalid submit")
 	}
+	// Hash the caller's command before attaching server-validated details. The
+	// same command may be replayed after the first response is lost, and its
+	// idempotency identity must not depend on data derived during this call.
+	requestHash := hash(input)
 	value, err := s.store.Get(ctx, actor.TenantID, id)
 	if err != nil {
 		return Request{}, err
@@ -156,24 +160,24 @@ func (s *Service) Submit(ctx context.Context, actor Actor, id string, input Subm
 	if value.ApplicantSubjectID != actor.ID {
 		return Request{}, ErrNotFound
 	}
-	if value.Revision != input.ExpectedRevision {
-		return Request{}, ErrRevisionConflict
+	// Only perform first-execution validation while the request is still at the
+	// revision the caller observed. When it has already advanced, delegate to
+	// the store first: it can return an idempotent replay before applying normal
+	// revision/state conflict checks to a genuinely different command.
+	if value.Revision == input.ExpectedRevision && (value.Status == "draft" || value.Status == "withdrawn") {
+		value.Details.MissingEvidenceAcknowledged = input.MissingEvidenceAcknowledged
+		if err = normalizeDetails(value.RequestType, &value.Details, true); err != nil {
+			return Request{}, err
+		}
+		if err = s.resolveEvidence(ctx, actor.TenantID, &value.Details); err != nil {
+			return Request{}, err
+		}
+		input.ValidatedDetails = &value.Details
+		if value.RequestType == "payment" && !hasEvidence(value.Details) && !input.MissingEvidenceAcknowledged {
+			return Request{}, fmt.Errorf("invalid submit: payment without Evidence requires acknowledgement")
+		}
 	}
-	if value.Status != "draft" && value.Status != "withdrawn" {
-		return Request{}, ErrStateConflict
-	}
-	value.Details.MissingEvidenceAcknowledged = input.MissingEvidenceAcknowledged
-	if err = normalizeDetails(value.RequestType, &value.Details, true); err != nil {
-		return Request{}, err
-	}
-	if err = s.resolveEvidence(ctx, actor.TenantID, &value.Details); err != nil {
-		return Request{}, err
-	}
-	input.ValidatedDetails = &value.Details
-	if value.RequestType == "payment" && !hasEvidence(value.Details) && !input.MissingEvidenceAcknowledged {
-		return Request{}, fmt.Errorf("invalid submit: payment without Evidence requires acknowledgement")
-	}
-	value, err = s.store.Submit(ctx, actor, id, input, hash(input))
+	value, err = s.store.Submit(ctx, actor, id, input, requestHash)
 	return redactRequest(value, false), err
 }
 
@@ -199,8 +203,8 @@ func (s *Service) Restore(ctx context.Context, actor Actor, id string, input Res
 }
 
 func (s *Service) DeleteDraft(ctx context.Context, actor Actor, id string, input DeleteDraftInput) (Request, error) {
-	id, input.CommandID, input.Confirmation = normalizeID(id), normalizeID(input.CommandID), strings.TrimSpace(input.Confirmation)
-	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.Confirmation != "DELETE" {
+	id, input.CommandID, input.Confirmation, input.Reason = normalizeID(id), normalizeID(input.CommandID), strings.TrimSpace(input.Confirmation), strings.TrimSpace(input.Reason)
+	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.Confirmation != "DELETE" || input.Reason == "" || len([]rune(input.Reason)) > 1000 {
 		return Request{}, fmt.Errorf("invalid draft deletion confirmation")
 	}
 	value, err := s.store.DeleteDraft(ctx, actor, id, input, hash(input))
@@ -457,14 +461,14 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 		if err := normalizeEvidence(line.Evidence); err != nil {
 			return err
 		}
-		if requestType == "reimbursement" && line.Invoice != nil {
+		if line.Invoice != nil {
 			line.Invoice.Code = normalizeInvoiceIdentifier(line.Invoice.Code)
 			line.Invoice.Number = normalizeInvoiceIdentifier(line.Invoice.Number)
 			line.Invoice.IssuerName = strings.TrimSpace(line.Invoice.IssuerName)
 			line.Invoice.InvoiceDate = strings.TrimSpace(line.Invoice.InvoiceDate)
 			parsed, dateErr := time.Parse("2006-01-02", line.Invoice.InvoiceDate)
-			if dateErr != nil || parsed.Format("2006-01-02") != line.Invoice.InvoiceDate || line.Invoice.IssuerName == "" || len([]rune(line.Invoice.IssuerName)) > 200 || line.Invoice.AmountMinor != line.AmountMinor || (line.Invoice.Code == "") != (line.Invoice.Number == "") {
-				return fmt.Errorf("invalid reimbursement invoice snapshot")
+			if dateErr != nil || parsed.Format("2006-01-02") != line.Invoice.InvoiceDate || line.Invoice.IssuerName == "" || len([]rune(line.Invoice.IssuerName)) > 200 || line.Invoice.AmountMinor != line.AmountMinor || line.Invoice.Number == "" {
+				return fmt.Errorf("invalid invoice snapshot")
 			}
 		}
 	}

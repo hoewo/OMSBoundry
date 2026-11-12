@@ -30,10 +30,15 @@ type staticSigner struct{}
 
 func (staticSigner) Sign(any) (string, error) { return "signed-open-api-context", nil }
 
-type mutablePeople struct{ value PersonReference }
+type mutablePeople struct {
+	value PersonReference
+	err   error
+	calls int
+}
 
 func (m *mutablePeople) ResolveBySubject(context.Context, string, string) (PersonReference, error) {
-	return m.value, nil
+	m.calls++
+	return m.value, m.err
 }
 
 func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
@@ -46,7 +51,17 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO tenants(id,name,created_at) VALUES($1,'API 测试租户',$2)`, testTenant, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO subjects(id,tenant_id,username,display_name,password_hash,status,password_changed_at,created_at,updated_at) VALUES($1,$2,'api-user','API 用户','not-used','active',$3,$3,$3)`, testSubject, testTenant, now); err != nil {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO login_accounts(id,login_identifier,password_hash,password_changed_at,primary_subject_id,created_at,updated_at) VALUES($1,'api-user','not-used',$2,$1,$2,$2)`, testSubject, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO subjects(id,account_id,tenant_id,username,display_name,password_hash,status,password_changed_at,created_at,updated_at) VALUES($1,$1,$2,'api-user','API 用户','not-used','active',$3,$3,$3)`, testSubject, testTenant, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for _, action := range []string{ActionUse, ActionKeyManage, ActionSelfAudit} {
@@ -54,7 +69,7 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	people := &mutablePeople{value: PersonReference{ID: testPerson, TenantID: testTenant, Status: "active", Revision: 4}}
+	people := &mutablePeople{err: ErrPersonMappingRequired}
 	service, err := New(pool, staticSigner{}, people, "https://oms.example.test/auth")
 	if err != nil {
 		t.Fatal(err)
@@ -67,8 +82,11 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !secretPattern.MatchString(created.Secret) || created.Prefix == "" || created.PersonID != testPerson || !created.ExpiresAt.Equal(now.AddDate(0, 0, 180)) {
+	if !secretPattern.MatchString(created.Secret) || created.Prefix == "" || created.PersonID != "" || !created.ExpiresAt.Equal(now.AddDate(0, 0, 180)) {
 		t.Fatalf("created key = %#v", created)
+	}
+	if people.calls != 0 {
+		t.Fatalf("account-scoped key creation resolved Person %d times", people.calls)
 	}
 	var verifier string
 	if err := pool.QueryRow(ctx, `SELECT secret_verifier FROM api_keys WHERE id=$1`, created.ID).Scan(&verifier); err != nil {
@@ -83,15 +101,50 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 	}
 
 	authenticated, err := service.Authenticate(ctx, created.Secret, "request-00000001", "open-api.profile.read", "203.0.113.0/24")
-	if err != nil || authenticated.Credential == "" || authenticated.PersonID != testPerson || authenticated.KeyID != created.ID {
+	if err != nil || authenticated.Credential == "" || authenticated.PersonID != "" || authenticated.KeyID != created.ID {
 		t.Fatalf("authentication = %#v, %v", authenticated, err)
+	}
+	if people.calls != 0 {
+		t.Fatalf("generic API authentication resolved Person %d times", people.calls)
+	}
+	evidenceAuth, err := service.Authenticate(ctx, created.Secret, "request-evidence-01", "open-api.evidence.upload.create", "203.0.113.0/24")
+	if err != nil || evidenceAuth.PersonID != "" || evidenceAuth.OwnerAudience != "evidence-service" || evidenceAuth.OwnerCredential == "" {
+		t.Fatalf("Person-independent Evidence authentication = %#v, %v", evidenceAuth, err)
+	}
+	if people.calls != 0 {
+		t.Fatalf("Evidence authentication resolved Person %d times", people.calls)
 	}
 	if err := service.CompleteUsage(ctx, testTenant, testSubject, created.ID, "request-00000001", "OK", 200); err != nil {
 		t.Fatal(err)
 	}
+	if err := service.CompleteUsage(ctx, testTenant, testSubject, created.ID, "request-evidence-01", "OK", 201); err != nil {
+		t.Fatal(err)
+	}
 	page, err := service.ListUsage(ctx, actor, false, "", 20)
-	if err != nil || len(page.Items) != 1 || page.Items[0].SourceIPMasked != "203.0.113.0/24" || page.Items[0].HTTPStatus != 200 {
+	if err != nil || len(page.Items) != 2 {
 		t.Fatalf("usage page = %#v, %v", page, err)
+	}
+	profileUsageFound := false
+	for _, usage := range page.Items {
+		if usage.PersonID != "" || usage.SourceIPMasked != "203.0.113.0/24" {
+			t.Fatalf("Person-independent usage = %#v", usage)
+		}
+		if usage.RequestID == "request-00000001" && usage.HTTPStatus == 200 {
+			profileUsageFound = true
+		}
+	}
+	if !profileUsageFound {
+		t.Fatalf("completed profile usage missing: %#v", page.Items)
+	}
+
+	if _, err := service.Authenticate(ctx, created.Secret, "request-employee-01", "open-api.reimbursement.list", "203.0.113.0/24"); errorCode(err) != "person_mapping_required" {
+		t.Fatalf("missing Person mapping error = %v", err)
+	}
+	people.err = nil
+	people.value = PersonReference{ID: testPerson, TenantID: testTenant, Status: "active", Revision: 4, DisplayName: "测试员工"}
+	employeeAuth, err := service.Authenticate(ctx, created.Secret, "request-employee-02", "open-api.reimbursement.list", "203.0.113.0/24")
+	if err != nil || employeeAuth.PersonID != testPerson || employeeAuth.OwnerAudience != "internal-finance-requests" || employeeAuth.OwnerCredential == "" {
+		t.Fatalf("employee-bound authentication = %#v, %v", employeeAuth, err)
 	}
 
 	oldUsageID := "44444444-4444-4444-8444-444444444444"
@@ -104,7 +157,7 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 		t.Fatalf("purge = %#v, %v", purge, err)
 	}
 	var usageCount int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM open_api_usage_records`).Scan(&usageCount); err != nil || usageCount != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM open_api_usage_records`).Scan(&usageCount); err != nil || usageCount != 3 {
 		t.Fatalf("retained usage count = %d, %v", usageCount, err)
 	}
 	_, err = pool.Exec(ctx, `UPDATE open_api_usage_cleanup_runs SET operator_id='tampered' WHERE id=$1`, purge.RunID)
@@ -132,8 +185,11 @@ func TestAPIKeyLifecycleAuditAndRetention(t *testing.T) {
 	}
 
 	people.value.Status = "inactive"
-	if _, err := service.Authenticate(ctx, activeSecrets[0], "request-00000003", "open-api.profile.read", "203.0.113.0/24"); errorCode(err) != "invalid_api_key" {
-		t.Fatalf("inactive Person authentication error = %v", err)
+	if authenticated, err := service.Authenticate(ctx, activeSecrets[0], "request-00000003", "open-api.profile.read", "203.0.113.0/24"); err != nil || authenticated.PersonID != "" {
+		t.Fatalf("generic authentication must ignore inactive Person: %#v, %v", authenticated, err)
+	}
+	if _, err := service.Authenticate(ctx, activeSecrets[0], "request-employee-03", "open-api.reimbursement.read", "203.0.113.0/24"); errorCode(err) != "person_mapping_required" {
+		t.Fatalf("inactive Person reimbursement error = %v", err)
 	}
 	people.value.Status = "active"
 	if _, err := pool.Exec(ctx, `UPDATE capability_grants SET revoked_at=$3,revoked_by=$2 WHERE subject_id=$1 AND audience='open-api' AND action=$4`, testSubject, testSubject, now, ActionUse); err != nil {

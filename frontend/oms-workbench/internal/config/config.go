@@ -17,7 +17,27 @@ type Config struct {
 	BonusProfile               string
 	ProductionStageProfile     string
 	OMSOperatingPartyID        string
+	OMSOperatingPartyBindings  map[string]string
 	FeedbackSDKURL             string
+}
+
+func parseOperatingPartyBindings(raw string) (map[string]string, error) {
+	bindings := map[string]string{}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return bindings, nil
+	}
+	for _, entry := range strings.Split(raw, ",") {
+		parts := strings.Split(strings.TrimSpace(entry), "=")
+		if len(parts) != 2 || !canonicalUUIDPattern.MatchString(parts[0]) || !canonicalUUIDPattern.MatchString(parts[1]) {
+			return nil, fmt.Errorf("OMS_OPERATING_PARTY_BINDINGS must contain tenant_uuid=party_uuid pairs")
+		}
+		if _, exists := bindings[parts[0]]; exists {
+			return nil, fmt.Errorf("OMS_OPERATING_PARTY_BINDINGS contains a duplicate tenant")
+		}
+		bindings[parts[0]] = parts[1]
+	}
+	return bindings, nil
 }
 
 func Load() (Config, error) {
@@ -29,7 +49,11 @@ func Load() (Config, error) {
 	if operatingPartyID == "" {
 		operatingPartyID = legacyPartyID
 	}
-	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSOperatingPartyID: operatingPartyID, FeedbackSDKURL: strings.TrimSpace(os.Getenv("FEEDBACK_SDK_URL"))}
+	bindings, err := parseOperatingPartyBindings(os.Getenv("OMS_OPERATING_PARTY_BINDINGS"))
+	if err != nil {
+		return Config{}, err
+	}
+	value := Config{HTTPAddress: os.Getenv("HTTP_ADDR"), SuiteManifestPath: strings.TrimSpace(os.Getenv("SUITE_MANIFEST_PATH")), ProductionPersonnelProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_PERSONNEL_PROFILE")), BonusProfile: strings.TrimSpace(os.Getenv("REFERENCE_OA_BONUS_PROFILE")), OMSOperatingPartyID: operatingPartyID, OMSOperatingPartyBindings: bindings, FeedbackSDKURL: strings.TrimSpace(os.Getenv("FEEDBACK_SDK_URL"))}
 	value.ProductionStageProfile = strings.TrimSpace(os.Getenv("REFERENCE_OA_PRODUCTION_STAGE_PROFILE"))
 	if value.HTTPAddress == "" {
 		value.HTTPAddress = ":8082"

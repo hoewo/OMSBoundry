@@ -25,7 +25,7 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	handler, err := server.NewWithProfiles(cfg.SuiteManifestPath, server.ReferenceOAProfiles{ProductionPersonnel: cfg.ProductionPersonnelProfile, Bonus: cfg.BonusProfile, ProductionStage: cfg.ProductionStageProfile, OMSOperatingPartyID: cfg.OMSOperatingPartyID, FeedbackSDKURL: cfg.FeedbackSDKURL})
+	handler, err := server.NewWithProfiles(cfg.SuiteManifestPath, server.ReferenceOAProfiles{ProductionPersonnel: cfg.ProductionPersonnelProfile, Bonus: cfg.BonusProfile, ProductionStage: cfg.ProductionStageProfile, OMSOperatingPartyID: cfg.OMSOperatingPartyID, OMSOperatingPartyBindings: cfg.OMSOperatingPartyBindings, FeedbackSDKURL: cfg.FeedbackSDKURL})
 	if err != nil {
 		return err
 	}

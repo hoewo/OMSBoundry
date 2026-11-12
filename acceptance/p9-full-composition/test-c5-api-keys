@@ -46,8 +46,6 @@ status=200
 path=$(printf '%s' "$url" | sed -E 's#^https?://[^/]+##')
 primary_key_id=aaaaaaaa-8888-4888-8888-aaaaaaaaaaaa
 secondary_key_id=bbbbbbbb-8888-4888-8888-bbbbbbbbbbbb
-primary_person_id=aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa
-secondary_person_id=bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb
 primary_subject_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
 secondary_subject_id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
 primary_tenant_id=11111111-1111-4111-8111-111111111111
@@ -68,31 +66,31 @@ case "$method $path" in
     jq -e '.ttl_days==180 and (.label|length)>0' "$data_file" >/dev/null || exit 2
     status=201
     if [ "$actor" = primary ]; then
-      printf '{"id":"%s","person_id":"%s","person_revision":1,"label":"P9 C5 primary 连续验收","prefix":"bfk_primary000","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z","secret":"bfk_primary000_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}\n' "$primary_key_id" "$primary_person_id" >"$output"
+      printf '{"id":"%s","label":"P9 C5 primary 连续验收","prefix":"bfk_primary000","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z","secret":"bfk_primary000_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}\n' "$primary_key_id" >"$output"
     else
-      printf '{"id":"%s","person_id":"%s","person_revision":1,"label":"P9 C5 secondary 连续验收","prefix":"bfk_secondar00","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z","secret":"bfk_secondar00_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}\n' "$secondary_key_id" "$secondary_person_id" >"$output"
+      printf '{"id":"%s","label":"P9 C5 secondary 连续验收","prefix":"bfk_secondar00","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z","secret":"bfk_secondar00_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}\n' "$secondary_key_id" >"$output"
     fi
     ;;
   'GET /auth/api/v1/api-keys')
-    if [ "$actor" = primary ]; then printf '{"items":[{"id":"%s","person_id":"%s","person_revision":1,"label":"P9 C5 primary 连续验收","prefix":"bfk_primary000","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z"}]}\n' "$primary_key_id" "$primary_person_id" >"$output"
-    else printf '{"items":[{"id":"%s","person_id":"%s","person_revision":1,"label":"P9 C5 secondary 连续验收","prefix":"bfk_secondar00","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z"}]}\n' "$secondary_key_id" "$secondary_person_id" >"$output"; fi
+    if [ "$actor" = primary ]; then printf '{"items":[{"id":"%s","label":"P9 C5 primary 连续验收","prefix":"bfk_primary000","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z"}]}\n' "$primary_key_id" >"$output"
+    else printf '{"items":[{"id":"%s","label":"P9 C5 secondary 连续验收","prefix":"bfk_secondar00","status":"active","created_at":"2026-10-26T00:00:00Z","expires_at":"2027-04-24T00:00:00Z"}]}\n' "$secondary_key_id" >"$output"; fi
     ;;
   'GET /open-api/v1/me')
     [ -f "$config" ] || exit 2
     if [ "$actor" = primary ]; then
       grep -Fq 'Authorization: ApiKey bfk_primary000_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' "$config" || exit 2
-      printf '{"version":"v1","tenant_id":"%s","subject_id":"%s","person_id":"%s","key_id":"%s","key_prefix":"bfk_primary000","capabilities":["open-api.invoice-reimbursement.use"]}\n' "$primary_tenant_id" "$primary_subject_id" "$primary_person_id" "$primary_key_id" >"$output"
+      printf '{"version":"v1","tenant_id":"%s","subject_id":"%s","key_id":"%s","key_prefix":"bfk_primary000","capabilities":["open-api.invoice-reimbursement.use"]}\n' "$primary_tenant_id" "$primary_subject_id" "$primary_key_id" >"$output"
     else
       grep -Fq 'Authorization: ApiKey bfk_secondar00_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' "$config" || exit 2
-      printf '{"version":"v1","tenant_id":"%s","subject_id":"%s","person_id":"%s","key_id":"%s","key_prefix":"bfk_secondar00","capabilities":["open-api.invoice-reimbursement.use"]}\n' "$secondary_tenant_id" "$secondary_subject_id" "$secondary_person_id" "$secondary_key_id" >"$output"
+      printf '{"version":"v1","tenant_id":"%s","subject_id":"%s","key_id":"%s","key_prefix":"bfk_secondar00","capabilities":["open-api.invoice-reimbursement.use"]}\n' "$secondary_tenant_id" "$secondary_subject_id" "$secondary_key_id" >"$output"
     fi
     ;;
   'GET /open-api/v1/settings') printf '{"webhook":{"available":false,"status":"not_available","callback_url_editable":false}}\n' >"$output" ;;
   'GET /auth/api/v1/open-api-usage?limit=20')
     if [ "$actor" = primary ]; then
-      printf '{"items":[{"id":"aaaaaaaa-9991-4991-8991-aaaaaaaaaaaa","key_id":"%s","key_prefix":"bfk_primary000","subject_id":"%s","person_id":"%s","action":"open-api.settings.read","request_id":"request-primary-settings","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:02:00Z"},{"id":"aaaaaaaa-9992-4992-8992-aaaaaaaaaaaa","key_id":"%s","key_prefix":"bfk_primary000","subject_id":"%s","person_id":"%s","action":"open-api.profile.read","request_id":"request-primary-profile","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:01:00Z"}]}\n' "$primary_key_id" "$primary_subject_id" "$primary_person_id" "$primary_key_id" "$primary_subject_id" "$primary_person_id" >"$output"
+      printf '{"items":[{"id":"aaaaaaaa-9991-4991-8991-aaaaaaaaaaaa","key_id":"%s","key_prefix":"bfk_primary000","subject_id":"%s","action":"open-api.settings.read","request_id":"request-primary-settings","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:02:00Z"},{"id":"aaaaaaaa-9992-4992-8992-aaaaaaaaaaaa","key_id":"%s","key_prefix":"bfk_primary000","subject_id":"%s","action":"open-api.profile.read","request_id":"request-primary-profile","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:01:00Z"}]}\n' "$primary_key_id" "$primary_subject_id" "$primary_key_id" "$primary_subject_id" >"$output"
     else
-      printf '{"items":[{"id":"bbbbbbbb-9991-4991-8991-bbbbbbbbbbbb","key_id":"%s","key_prefix":"bfk_secondar00","subject_id":"%s","person_id":"%s","action":"open-api.settings.read","request_id":"request-secondary-settings","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:02:00Z"},{"id":"bbbbbbbb-9992-4992-8992-bbbbbbbbbbbb","key_id":"%s","key_prefix":"bfk_secondar00","subject_id":"%s","person_id":"%s","action":"open-api.profile.read","request_id":"request-secondary-profile","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:01:00Z"}]}\n' "$secondary_key_id" "$secondary_subject_id" "$secondary_person_id" "$secondary_key_id" "$secondary_subject_id" "$secondary_person_id" >"$output"
+      printf '{"items":[{"id":"bbbbbbbb-9991-4991-8991-bbbbbbbbbbbb","key_id":"%s","key_prefix":"bfk_secondar00","subject_id":"%s","action":"open-api.settings.read","request_id":"request-secondary-settings","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:02:00Z"},{"id":"bbbbbbbb-9992-4992-8992-bbbbbbbbbbbb","key_id":"%s","key_prefix":"bfk_secondar00","subject_id":"%s","action":"open-api.profile.read","request_id":"request-secondary-profile","source_ip_masked":"127.0.0.0/24","result_code":"OK","http_status":200,"occurred_at":"2026-10-26T00:01:00Z"}]}\n' "$secondary_key_id" "$secondary_subject_id" "$secondary_key_id" "$secondary_subject_id" >"$output"
     fi
     ;;
   *) echo "unexpected mock curl request: $method $path" >&2; exit 2 ;;
@@ -160,4 +158,4 @@ if [ -n "$artifact_dir" ]; then
   chmod 0600 "$artifact_dir/primary.password" "$artifact_dir/secondary.password" "$artifact_dir/secrets/"*
 fi
 
-echo 'PASS P9 C5 offline employee API Key driver, rerun and evidence regression'
+echo 'PASS P9 C5 offline organization account API Key driver, rerun and evidence regression'

@@ -162,6 +162,10 @@ func TestFormalSubmitPartialAndOverpaymentLifecycle(t *testing.T) {
 	if submitted.Details.Payee.AccountNumber != "" || submitted.Details.Payee.AccountLast4 != "7890" {
 		t.Fatalf("submit response must be masked: %#v", submitted.Details.Payee)
 	}
+	submitReplay, err := service.Submit(ctx, actor, created.ID, SubmitInput{CommandID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", ExpectedRevision: 1})
+	if err != nil || submitReplay.Status != "payable" || submitReplay.Revision != submitted.Revision {
+		t.Fatalf("submit replay=%#v err=%v", submitReplay, err)
+	}
 	partial, err := service.ConfirmPayment(ctx, actor, created.ID, ConfirmPaymentInput{CommandID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", ExpectedRevision: 2, ActualAmountMinor: 6000, OccurredOn: "2026-10-25", Note: "首笔"})
 	if err != nil || partial.Status != "partially_paid" || partial.AllocatedMinor != 6000 || partial.Revision != 3 {
 		t.Fatalf("partial=%#v err=%v", partial, err)
@@ -247,7 +251,9 @@ func TestInvoiceStrongAndSuspectedDuplicateRules(t *testing.T) {
 		person := ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: digest, DisplayName: "申请人"}
 		return DetailSnapshot{Applicant: person, Payee: PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人", BankName: "测试银行", AccountNumber: "6222021234567890"}, Lines: []Line{{ID: lineID, BusinessDate: "2026-10-25", CategoryKey: "travel", CategoryName: "差旅费", CategoryRev: 1, Purpose: "差旅", AmountMinor: 10000, Evidence: []EvidenceRef{{FileID: fileID, Version: 1, Purpose: "发票"}}, Invoice: &InvoiceSnapshot{Code: code, Number: number, IssuerName: "测试开票方", InvoiceDate: "2026-10-24", AmountMinor: 10000}}}}
 	}
-	first, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000001", RequestType: "reimbursement", Title: "首单", AmountMinor: 1, Currency: "CNY", Details: makeDetails("20000000-0000-4000-8000-000000000001", "60000000-0000-4000-8000-000000000001", "A001", "N001")})
+	firstDetails := makeDetails("20000000-0000-4000-8000-000000000001", "60000000-0000-4000-8000-000000000001", "A001", "N001")
+	firstDetails.Payee = PayeeSnapshot{Kind: "one_time", EntityKind: "organization", DisplayName: "测试开票方", PaymentMethod: "cash"}
+	first, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000001", RequestType: "payment", Title: "首单付款", AmountMinor: 1, Currency: "CNY", Details: firstDetails})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,8 +264,16 @@ func TestInvoiceStrongAndSuspectedDuplicateRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	projected, err := service.Get(ctx, actor.TenantID, strong.ID)
+	if err != nil || projected.Details.Duplicate.Status != "strong" || len(projected.Details.Duplicate.MatchedRequestIDs) != 1 || projected.Details.Duplicate.MatchedRequestIDs[0] != first.ID {
+		t.Fatalf("draft duplicate projection=%#v err=%v", projected.Details.Duplicate, err)
+	}
 	if _, err = service.Submit(ctx, actor, strong.ID, SubmitInput{CommandID: "10000000-0000-4000-8000-000000000004", ExpectedRevision: strong.Revision}); !errors.Is(err, ErrStrongDuplicate) {
 		t.Fatalf("expected strong duplicate, got %v", err)
+	}
+	var duplicate *DuplicateError
+	if !errors.As(err, &duplicate) || len(duplicate.MatchedRequestIDs) != 1 || duplicate.MatchedRequestIDs[0] != first.ID {
+		t.Fatalf("strong duplicate reference=%#v err=%v", duplicate, err)
 	}
 	suspected, err := service.Create(ctx, actor, CreateInput{CommandID: "10000000-0000-4000-8000-000000000005", RequestType: "reimbursement", Title: "疑似重复", AmountMinor: 1, Currency: "CNY", Details: makeDetails("20000000-0000-4000-8000-000000000003", "80000000-0000-4000-8000-000000000001", "A002", "N002")})
 	if err != nil {
@@ -273,6 +287,34 @@ func TestInvoiceStrongAndSuspectedDuplicateRules(t *testing.T) {
 	accepted, err := service.Submit(ctx, actor, suspected.ID, submit)
 	if err != nil || accepted.Details.Duplicate.Status != "suspected" {
 		t.Fatalf("accepted=%#v err=%v", accepted, err)
+	}
+}
+
+func TestFullyDigitalInvoiceNumberIsStrongDuplicateWithoutLegacyCode(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	service, _ := NewServiceWithDependencies(store, nil, fingerprintEvidence{})
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	makeDetails := func(lineID, fileID string) DetailSnapshot {
+		person := ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: digest, DisplayName: "申请人"}
+		return DetailSnapshot{Applicant: person, Payee: PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人"}, Lines: []Line{{ID: lineID, BusinessDate: "2026-11-08", CategoryKey: "travel", CategoryName: "差旅费", CategoryRev: 1, Purpose: "全电发票报销", AmountMinor: 268000, Evidence: []EvidenceRef{{FileID: fileID, Version: 1, Purpose: "发票"}}, Invoice: &InvoiceSnapshot{Number: "24932000000038888512", IssuerName: "全电发票销售方", InvoiceDate: "2026-11-08", AmountMinor: 268000}}}}
+	}
+	first, err := service.Create(ctx, actor, CreateInput{CommandID: "11000000-0000-4000-8000-000000000001", RequestType: "reimbursement", Title: "首张全电发票", AmountMinor: 268000, Currency: "CNY", Details: makeDetails("21000000-0000-4000-8000-000000000001", "61000000-0000-4000-8000-000000000001")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Submit(ctx, actor, first.ID, SubmitInput{CommandID: "11000000-0000-4000-8000-000000000002", ExpectedRevision: first.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := service.Create(ctx, actor, CreateInput{CommandID: "11000000-0000-4000-8000-000000000003", RequestType: "reimbursement", Title: "重复全电发票", AmountMinor: 268000, Currency: "CNY", Details: makeDetails("21000000-0000-4000-8000-000000000002", "71000000-0000-4000-8000-000000000001")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Submit(ctx, actor, duplicate.ID, SubmitInput{CommandID: "11000000-0000-4000-8000-000000000004", ExpectedRevision: duplicate.Revision}); !errors.Is(err, ErrStrongDuplicate) {
+		t.Fatalf("expected strong duplicate for fully digital invoice number, got %v", err)
 	}
 }
 
@@ -307,7 +349,7 @@ func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
 	if err != nil || restored.Revision != 2 || restored.ArchivedAt != nil {
 		t.Fatalf("restore=%#v err=%v", restored, err)
 	}
-	deleted, err := service.DeleteDraft(ctx, actor, created.ID, DeleteDraftInput{CommandID: "90000000-0000-4000-8000-000000000003", Confirmation: "DELETE"})
+	deleted, err := service.DeleteDraft(ctx, actor, created.ID, DeleteDraftInput{CommandID: "90000000-0000-4000-8000-000000000003", Confirmation: "DELETE", Reason: "重复发票草稿"})
 	if err != nil || deleted.DeletedAt == nil {
 		t.Fatalf("delete=%#v err=%v", deleted, err)
 	}
@@ -324,6 +366,13 @@ func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
 	}
 	if revisions != 2 || retentionEvents != 3 {
 		t.Fatalf("revisions=%d retention_events=%d", revisions, retentionEvents)
+	}
+	var deletionReason, deletionActor, deletionCredential string
+	if err = pool.QueryRow(ctx, `SELECT details->>'reason',actor_subject_id::text,credential_id FROM finance_request_retention_events WHERE request_id=$1 AND action='deleted'`, created.ID).Scan(&deletionReason, &deletionActor, &deletionCredential); err != nil {
+		t.Fatal(err)
+	}
+	if deletionReason != "重复发票草稿" || deletionActor != actor.ID || deletionCredential != actor.CredentialID {
+		t.Fatalf("deletion log reason=%q actor=%q credential=%q", deletionReason, deletionActor, deletionCredential)
 	}
 }
 

@@ -137,12 +137,24 @@ func TestOpenAPIRestoreAndDeleteUseStableCommandsAndConfirmation(t *testing.T) {
 	if restoreResult.Code != http.StatusOK || cases.restoreInput.CommandID == "" {
 		t.Fatalf("restore status=%d input=%#v body=%s", restoreResult.Code, cases.restoreInput, restoreResult.Body.String())
 	}
-	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/open-api/reimbursements/"+testRequest, bytes.NewBufferString(`{"confirmation":"DELETE"}`))
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/open-api/reimbursements/"+testRequest, bytes.NewBufferString(`{"confirmation":"DELETE","reason":"重复草稿"}`))
 	deleteRequest.Header.Set("Idempotency-Key", "delete-draft-0001")
 	deleteResult := httptest.NewRecorder()
 	server.ServeHTTP(deleteResult, deleteRequest)
-	if deleteResult.Code != http.StatusOK || cases.deleteInput.CommandID == "" || cases.deleteInput.Confirmation != "DELETE" {
+	if deleteResult.Code != http.StatusOK || cases.deleteInput.CommandID == "" || cases.deleteInput.Confirmation != "DELETE" || cases.deleteInput.Reason != "重复草稿" {
 		t.Fatalf("delete status=%d input=%#v body=%s", deleteResult.Code, cases.deleteInput, deleteResult.Body.String())
+	}
+}
+
+func TestInternalDeleteDraftPassesRequiredReason(t *testing.T) {
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "draft", Revision: 1}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, Provider: "iam", CredentialID: "44444444-4444-4444-8444-444444444444", ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionSelfManage: true}}}
+	server, _ := New(cases, a)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/finance-requests/"+testRequest, bytes.NewBufferString(`{"command_id":"55555555-5555-4555-8555-555555555555","confirmation":"DELETE","reason":"发票已在另一申请中提交"}`))
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || cases.deleteInput.CommandID == "" || cases.deleteInput.Confirmation != "DELETE" || cases.deleteInput.Reason != "发票已在另一申请中提交" {
+		t.Fatalf("delete status=%d input=%#v body=%s", response.Code, cases.deleteInput, response.Body.String())
 	}
 }
 
@@ -211,6 +223,31 @@ func TestCreateRequiresTenantScope(t *testing.T) {
 	server.ServeHTTP(res, httptest.NewRequest(http.MethodPost, "/api/v1/finance-requests", body))
 	if res.Code != 403 {
 		t.Fatalf("expected scope 403, got %d", res.Code)
+	}
+}
+
+func TestStrongDuplicateResponseReturnsStableMatchedRequestReferences(t *testing.T) {
+	matched := "44444444-4444-4444-8444-444444444444"
+	cases := &fakeCases{err: &finance.DuplicateError{Strong: true, MatchedRequestIDs: []string{matched}}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionSelfManage: true}}}
+	server, _ := New(cases, a)
+	body := bytes.NewBufferString(`{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","expected_revision":1}`)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/finance-requests/"+testRequest+"/submit", body))
+	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"INVOICE_STRONG_DUPLICATE"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"matched_request_ids":["`+matched+`"]`)) || !bytes.Contains(response.Body.Bytes(), []byte(`发票已在其他财务申请中提交`)) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestStrongDuplicateDraftIsNotAdvertisedAsSubmittable(t *testing.T) {
+	matched := "44444444-4444-4444-8444-444444444444"
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "draft", Revision: 1, Details: finance.DetailSnapshot{Duplicate: finance.DuplicateAssessment{Status: "strong", MatchedRequestIDs: []string{matched}}}}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionSelfRead: true, auth.ActionSelfManage: true}}}
+	server, _ := New(cases, a)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/finance-requests", nil))
+	if response.Code != http.StatusOK || bytes.Contains(response.Body.Bytes(), []byte(`"submit"`)) || bytes.Contains(response.Body.Bytes(), []byte(matched)) || !bytes.Contains(response.Body.Bytes(), []byte(`"status":"strong"`)) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

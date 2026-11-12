@@ -55,6 +55,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /api/v1/finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /api/v1/finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /api/v1/finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
+	mux.Handle("DELETE /api/v1/finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.deleteDraft)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
@@ -80,6 +81,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
+	mux.Handle("DELETE /finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.deleteDraft)))
 	mux.Handle("POST /finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
 	mux.Handle("POST /finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
 	mux.Handle("POST /finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
@@ -198,11 +200,12 @@ func (s *Server) openDeleteReimbursement(w http.ResponseWriter, r *http.Request)
 	}
 	var input struct {
 		Confirmation string `json:"confirmation"`
+		Reason       string `json:"reason"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	value, err := s.useCases.DeleteDraft(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.DeleteDraftInput{CommandID: command, Confirmation: input.Confirmation})
+	value, err := s.useCases.DeleteDraft(r.Context(), actorFrom(p), strings.ToLower(strings.TrimSpace(r.PathValue("request_id"))), finance.DeleteDraftInput{CommandID: command, Confirmation: input.Confirmation, Reason: input.Reason})
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -457,6 +460,20 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 	value, err := s.useCases.Update(r.Context(), actorFrom(p), id, input)
 	s.writeRequest(w, 200, value, p, err)
 }
+func (s *Server) deleteDraft(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
+	if !p.CanResource(id) {
+		writeProblem(w, 403, "SCOPE_DENIED", "凭证范围不包含该申请", false)
+		return
+	}
+	var input finance.DeleteDraftInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	value, err := s.useCases.DeleteDraft(r.Context(), actorFrom(p), id, input)
+	s.writeRequest(w, 200, value, p, err)
+}
 func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r)
 	id := strings.ToLower(strings.TrimSpace(r.PathValue("request_id")))
@@ -467,6 +484,9 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 	value, err := s.useCases.Get(r.Context(), p.TenantID, id)
 	if err == nil && !p.Can(auth.ActionTenantRead) && value.ApplicantSubjectID != p.SubjectID {
 		err = finance.ErrNotFound
+	}
+	if err == nil && !p.Can(auth.ActionTenantRead) {
+		value.Details.Duplicate.MatchedRequestIDs = nil
 	}
 	s.writeRequest(w, 200, value, p, err)
 }
@@ -615,8 +635,15 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	readable := make(map[string]bool, len(page.Items))
+	for i := range page.Items {
+		readable[page.Items[i].ID] = true
+	}
 	for i := range page.Items {
 		page.Items[i].AllowedActions = allowedActions(page.Items[i], p)
+		if !p.Can(auth.ActionTenantRead) {
+			retainReadableDuplicateIDs(&page.Items[i], readable)
+		}
 	}
 	writeJSON(w, 200, page)
 }
@@ -679,6 +706,15 @@ func (s *Server) writeRequest(w http.ResponseWriter, status int, value finance.R
 	writeJSON(w, status, value)
 }
 func (s *Server) fail(w http.ResponseWriter, err error) {
+	var duplicate *finance.DuplicateError
+	if errors.As(err, &duplicate) {
+		code, detail := "INVOICE_SUSPECTED_DUPLICATE", "发票疑似重复，确认核对后可使用原幂等键并显式确认"
+		if duplicate.Strong {
+			code, detail = "INVOICE_STRONG_DUPLICATE", "发票已在其他财务申请中提交"
+		}
+		writeProblemFields(w, 409, code, detail, false, map[string]any{"matched_request_ids": duplicate.MatchedRequestIDs})
+		return
+	}
 	switch {
 	case errors.Is(err, finance.ErrNotFound):
 		writeProblem(w, 404, "FINANCE_REQUEST_NOT_FOUND", err.Error(), false)
@@ -686,10 +722,6 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeProblem(w, 409, "FINANCE_REQUEST_REVISION_CONFLICT", err.Error(), true)
 	case errors.Is(err, finance.ErrCommandConflict):
 		writeProblem(w, 409, "COMMAND_PAYLOAD_CONFLICT", err.Error(), false)
-	case errors.Is(err, finance.ErrStrongDuplicate):
-		writeProblem(w, 409, "INVOICE_STRONG_DUPLICATE", "发票已在其他报销中提交", false)
-	case errors.Is(err, finance.ErrSuspectedDuplicate):
-		writeProblem(w, 409, "INVOICE_SUSPECTED_DUPLICATE", "发票疑似重复，确认核对后可使用原幂等键并显式确认", false)
 	case errors.Is(err, finance.ErrStateConflict):
 		writeProblem(w, 409, "FINANCE_REQUEST_STATE_CONFLICT", err.Error(), false)
 	case errors.Is(err, finance.ErrPaymentUnknown):
@@ -703,6 +735,16 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	default:
 		writeProblem(w, 503, "DEPENDENCY_UNAVAILABLE", "服务暂不可用", true)
 	}
+}
+
+func retainReadableDuplicateIDs(value *finance.Request, readable map[string]bool) {
+	matched := value.Details.Duplicate.MatchedRequestIDs[:0]
+	for _, id := range value.Details.Duplicate.MatchedRequestIDs {
+		if readable[id] {
+			matched = append(matched, id)
+		}
+	}
+	value.Details.Duplicate.MatchedRequestIDs = matched
 }
 func allowedActions(value finance.Request, p auth.Principal) []string {
 	var actions []string
@@ -718,7 +760,7 @@ func allowedActions(value finance.Request, p auth.Principal) []string {
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
 		actions = append(actions, "delete")
 	}
-	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && (value.Status == "draft" || value.Status == "withdrawn") {
+	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && (value.Status == "draft" || value.Status == "withdrawn") && value.Details.Duplicate.Status != "strong" {
 		actions = append(actions, "submit")
 	}
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && value.Status == "payable" && value.PaidMinor == 0 && value.PaymentUnknownCount == 0 {
@@ -763,7 +805,14 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func writeProblem(w http.ResponseWriter, status int, code, detail string, retryable bool) {
-	writeJSON(w, status, map[string]any{"code": code, "detail": detail, "retryable": retryable})
+	writeProblemFields(w, status, code, detail, retryable, nil)
+}
+func writeProblemFields(w http.ResponseWriter, status int, code, detail string, retryable bool, fields map[string]any) {
+	value := map[string]any{"code": code, "detail": detail, "retryable": retryable}
+	for key, field := range fields {
+		value[key] = field
+	}
+	writeJSON(w, status, value)
 }
 func stripUntrustedIdentityHeaders(header http.Header) {
 	for name := range header {

@@ -434,6 +434,28 @@
   display: none;
 }
 
+.login-page__registration-row {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.login-page__registration-row .ant-form-item {
+  min-width: 0;
+}
+
+.login-page__form select.ant-input {
+  appearance: auto;
+  background: #fff;
+}
+
+.login-page__registration-help {
+  margin: -4px 0 18px;
+  color: #63706a;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 @keyframes login-fade-up {
   from {
     opacity: 0;
@@ -476,6 +498,11 @@
 }
 
 @media (max-width: 720px) {
+  .login-page__registration-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
   .login-page {
     padding: 34px 16px 24px;
   }

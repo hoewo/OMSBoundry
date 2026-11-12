@@ -66,6 +66,9 @@ func (f *executionCases) ListExecutionRuns(context.Context, string) ([]domain.Ex
 func (f *executionCases) RevisePayrollLine(context.Context, domain.Actor, string, string, domain.ReviseLineInput) (domain.ExecutionRun, error) {
 	return f.run, f.err
 }
+func (f *executionCases) ApplyAttendanceSummary(context.Context, domain.Actor, string, string, domain.ApplyAttendanceSummaryInput) (domain.ExecutionRun, error) {
+	return f.run, f.err
+}
 func (f *executionCases) ReviewPayrollRun(context.Context, domain.Actor, string, domain.RunCommandInput) (domain.ExecutionRun, error) {
 	return f.run, f.err
 }

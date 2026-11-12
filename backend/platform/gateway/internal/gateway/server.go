@@ -181,6 +181,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/gateway/feedback/config" && r.Method == http.MethodPost:
 		s.feedbackConfig(w, r)
 		return
+	case r.URL.Path == "/gateway/feedback/submission-snapshot" && r.Method == http.MethodPost:
+		s.feedbackSubmissionSnapshot(w, r)
+		return
 	case strings.HasPrefix(r.URL.Path, "/gateway/authorize/") && r.Method == http.MethodPost:
 		s.authorize(w, r)
 		return
@@ -471,7 +474,7 @@ func (s *Server) proxyFor(app manifest.Application) (*httputil.ReverseProxy, err
 		r.Host = target.Host
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
-		if app.ID == "identity-access" && response.StatusCode >= 200 && response.StatusCode < 300 && response.Request.Method == http.MethodPost && (response.Request.URL.Path == "/api/v1/login" || response.Request.URL.Path == "/api/v1/logout") {
+		if app.ID == "identity-access" && response.StatusCode >= 200 && response.StatusCode < 300 && response.Request.Method == http.MethodPost && (response.Request.URL.Path == "/api/v1/login" || response.Request.URL.Path == "/api/v1/logout" || response.Request.URL.Path == "/api/v1/session/organization") {
 			for _, protectedApp := range s.suite.Applications {
 				if len(protectedApp.EntryCapabilities()) != 0 {
 					response.Header.Add("Set-Cookie", expiredCapabilityCookie(protectedApp, s.cookieSecure).String())

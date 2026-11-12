@@ -60,3 +60,38 @@ func TestIAMSubjectMigrationPreservesLegacyLinkAsUnverified(t *testing.T) {
 		t.Fatal("person revision immutability trigger was not restored")
 	}
 }
+
+func TestPersonIAMSubjectLinkIsUniqueInsideTenantOnly(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `TRUNCATE people_groups_audit_entries,business_commands,roster_snapshots,group_capability_revisions,group_capability_assignments,membership_revisions,memberships,group_revisions,groups,definition_revisions,definitions,person_employment_events,person_revisions,persons`); err != nil {
+		t.Fatal(err)
+	}
+	const tenantA = "11111111-1111-4111-8111-111111111111"
+	const tenantB = "22222222-2222-4222-8222-222222222222"
+	const subjectID = "33333333-3333-4333-8333-333333333333"
+	insert := func(personID, tenantID, name string) error {
+		_, err := pool.Exec(ctx, `INSERT INTO persons(id,tenant_id,display_name,status,iam_subject_id,iam_subject_status,iam_subject_revision,revision,created_at,updated_at) VALUES($1,$2,$3,'active',$4,'active',1,1,clock_timestamp(),clock_timestamp())`, personID, tenantID, name, subjectID)
+		return err
+	}
+	if err := insert("44444444-4444-4444-8444-444444444444", tenantA, "组织 A 成员"); err != nil {
+		t.Fatal(err)
+	}
+	if err := insert("55555555-5555-4555-8555-555555555555", tenantB, "组织 B 成员"); err != nil {
+		t.Fatalf("same account should link to a different member in another tenant: %v", err)
+	}
+	if err := insert("66666666-6666-4666-8666-666666666666", tenantA, "组织 A 重复成员"); err == nil {
+		t.Fatal("same account linked to two members in one tenant")
+	}
+}

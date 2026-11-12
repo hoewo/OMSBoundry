@@ -50,9 +50,10 @@ const sdkServer = createServer((request, response) => {
       if (event.origin !== parentOrigin || event.source !== parent) return;
       const message = event.data;
       if (!message || message.source !== 'feedback-sdk-host') return;
+      if (message.type === 'feedback-sdk:configure') send('feedback-sdk:configured', {request_id: message.request_id});
       if (message.type === 'feedback-sdk:get-unread-count') send('feedback-sdk:unread-count', {request_id: message.request_id, unread_count: 0});
     });
-    send('feedback-sdk:ready');
+    send('feedback-sdk:ready', { supported_contracts: ['v3'], sdk_version: '3.0.1', build_id: 'acceptance' });
   })();
   </script></body></html>`)
 })

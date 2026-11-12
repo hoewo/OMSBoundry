@@ -29,6 +29,10 @@ var (
 	uuidPattern   = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	secretPattern = regexp.MustCompile(`^(bfk_[A-Za-z0-9_-]{10})_([A-Za-z0-9_-]{32,64})$`)
 	actionPattern = regexp.MustCompile(`^open-api\.[a-z0-9.-]+$`)
+	// ErrPersonMappingRequired distinguishes an absent Subject -> Person link
+	// from an unavailable People dependency. Callers must not turn a normal
+	// missing mapping into a retryable service outage.
+	ErrPersonMappingRequired = errors.New("IAM Subject is not linked to a Person")
 )
 
 type ErrorKind string
@@ -67,11 +71,14 @@ type PersonResolver interface {
 }
 
 type Key struct {
-	ID             string     `json:"id"`
-	TenantID       string     `json:"-"`
-	SubjectID      string     `json:"-"`
-	PersonID       string     `json:"person_id"`
-	PersonRevision int64      `json:"person_revision"`
+	ID        string `json:"id"`
+	TenantID  string `json:"-"`
+	SubjectID string `json:"-"`
+	// PersonID and PersonRevision are retained only for legacy keys created
+	// before keys became account-scoped. New keys do not capture a Person
+	// snapshot; Person-dependent actions resolve the current mapping on use.
+	PersonID       string     `json:"person_id,omitempty"`
+	PersonRevision int64      `json:"person_revision,omitempty"`
 	Label          string     `json:"label"`
 	Prefix         string     `json:"prefix"`
 	Status         string     `json:"status"`
@@ -91,7 +98,7 @@ type Usage struct {
 	KeyID          string     `json:"key_id"`
 	KeyPrefix      string     `json:"key_prefix"`
 	SubjectID      string     `json:"subject_id"`
-	PersonID       string     `json:"person_id"`
+	PersonID       string     `json:"person_id,omitempty"`
 	Action         string     `json:"action"`
 	RequestID      string     `json:"request_id"`
 	SourceIPMasked string     `json:"source_ip_masked"`
@@ -121,7 +128,7 @@ type Authentication struct {
 	ExpiresAt       time.Time `json:"expires_at"`
 	TenantID        string    `json:"tenant_id"`
 	SubjectID       string    `json:"subject_id"`
-	PersonID        string    `json:"person_id"`
+	PersonID        string    `json:"person_id,omitempty"`
 	KeyID           string    `json:"key_id"`
 	KeyPrefix       string    `json:"key_prefix"`
 	RequestID       string    `json:"request_id"`
@@ -166,13 +173,6 @@ func (s *Service) Create(ctx context.Context, actor identity.Principal, label st
 	if err := s.requireGrant(ctx, actor.TenantID, actor.SubjectID, ActionUse); err != nil {
 		return CreatedKey{}, err
 	}
-	person, err := s.people.ResolveBySubject(ctx, actor.TenantID, actor.SubjectID)
-	if err != nil {
-		return CreatedKey{}, problem(KindDependency, "person_reference_unavailable", "无法确认当前账号关联的成员", err)
-	}
-	if person.TenantID != actor.TenantID || !uuidPattern.MatchString(person.ID) || person.Revision < 1 || person.Status != "active" {
-		return CreatedKey{}, problem(KindForbidden, "person_mapping_required", "当前账号未关联有效成员", nil)
-	}
 	secret, prefix, err := newSecret()
 	if err != nil {
 		return CreatedKey{}, err
@@ -186,7 +186,7 @@ func (s *Service) Create(ctx context.Context, actor identity.Principal, label st
 		return CreatedKey{}, err
 	}
 	now := s.now()
-	value := Key{ID: id, TenantID: actor.TenantID, SubjectID: actor.SubjectID, PersonID: person.ID, PersonRevision: person.Revision, Label: label, Prefix: prefix, Status: "active", CreatedAt: now, ExpiresAt: now.AddDate(0, 0, ttlDays)}
+	value := Key{ID: id, TenantID: actor.TenantID, SubjectID: actor.SubjectID, Label: label, Prefix: prefix, Status: "active", CreatedAt: now, ExpiresAt: now.AddDate(0, 0, ttlDays)}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return CreatedKey{}, err
@@ -202,7 +202,7 @@ func (s *Service) Create(ctx context.Context, actor identity.Principal, label st
 	if active >= 5 {
 		return CreatedKey{}, problem(KindConflict, "active_api_key_limit", "最多可同时持有 5 个有效 API Key", nil)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO api_keys(id,tenant_id,subject_id,person_id,person_revision,label,prefix,secret_verifier,status,created_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`, value.ID, value.TenantID, value.SubjectID, value.PersonID, value.PersonRevision, value.Label, value.Prefix, string(verifier), value.CreatedAt, value.ExpiresAt); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO api_keys(id,tenant_id,subject_id,label,prefix,secret_verifier,status,created_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,'active',$7,$8)`, value.ID, value.TenantID, value.SubjectID, value.Label, value.Prefix, string(verifier), value.CreatedAt, value.ExpiresAt); err != nil {
 		return CreatedKey{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO api_key_events(id,tenant_id,api_key_id,event_kind,actor_subject_id,occurred_at,details) VALUES($1,$2,$3,'created',$4,$5,jsonb_build_object('ttl_days',$6::integer,'prefix',$7::text))`, eventID, value.TenantID, value.ID, actor.SubjectID, now, ttlDays, value.Prefix); err != nil {
@@ -221,7 +221,7 @@ func (s *Service) List(ctx context.Context, actor identity.Principal) ([]Key, er
 	if err := s.requireGrant(ctx, actor.TenantID, actor.SubjectID, ActionKeyManage); err != nil {
 		return nil, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id::text,tenant_id::text,subject_id::text,person_id::text,person_revision,label,prefix,status,created_at,expires_at,last_used_at,revoked_at FROM api_keys WHERE tenant_id=$1 AND subject_id=$2 ORDER BY created_at DESC,id DESC`, actor.TenantID, actor.SubjectID)
+	rows, err := s.pool.Query(ctx, `SELECT id::text,tenant_id::text,subject_id::text,COALESCE(person_id::text,''),COALESCE(person_revision,0),label,prefix,status,created_at,expires_at,last_used_at,revoked_at FROM api_keys WHERE tenant_id=$1 AND subject_id=$2 ORDER BY created_at DESC,id DESC`, actor.TenantID, actor.SubjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (s *Service) Revoke(ctx context.Context, actor identity.Principal, keyID st
 		return Key{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	row := tx.QueryRow(ctx, `UPDATE api_keys SET status='revoked',revoked_at=$4,revoked_by=$3 WHERE tenant_id=$1 AND subject_id=$2 AND id=$5 AND status='active' RETURNING id::text,tenant_id::text,subject_id::text,person_id::text,person_revision,label,prefix,status,created_at,expires_at,last_used_at,revoked_at`, actor.TenantID, actor.SubjectID, actor.SubjectID, now, keyID)
+	row := tx.QueryRow(ctx, `UPDATE api_keys SET status='revoked',revoked_at=$4,revoked_by=$3 WHERE tenant_id=$1 AND subject_id=$2 AND id=$5 AND status='active' RETURNING id::text,tenant_id::text,subject_id::text,COALESCE(person_id::text,''),COALESCE(person_revision,0),label,prefix,status,created_at,expires_at,last_used_at,revoked_at`, actor.TenantID, actor.SubjectID, actor.SubjectID, now, keyID)
 	value, err := scanKey(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Key{}, problem(KindNotFound, "active_api_key_not_found", "有效 API Key 不存在", nil)
@@ -282,7 +282,7 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 	}
 	var value Key
 	var verifier string
-	err := s.pool.QueryRow(ctx, `SELECT id::text,tenant_id::text,subject_id::text,person_id::text,person_revision,label,prefix,status,created_at,expires_at,last_used_at,revoked_at,secret_verifier FROM api_keys WHERE prefix=$1`, matches[1]).Scan(&value.ID, &value.TenantID, &value.SubjectID, &value.PersonID, &value.PersonRevision, &value.Label, &value.Prefix, &value.Status, &value.CreatedAt, &value.ExpiresAt, &value.LastUsedAt, &value.RevokedAt, &verifier)
+	err := s.pool.QueryRow(ctx, `SELECT id::text,tenant_id::text,subject_id::text,COALESCE(person_id::text,''),COALESCE(person_revision,0),label,prefix,status,created_at,expires_at,last_used_at,revoked_at,secret_verifier FROM api_keys WHERE prefix=$1`, matches[1]).Scan(&value.ID, &value.TenantID, &value.SubjectID, &value.PersonID, &value.PersonRevision, &value.Label, &value.Prefix, &value.Status, &value.CreatedAt, &value.ExpiresAt, &value.LastUsedAt, &value.RevokedAt, &verifier)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && bcrypt.CompareHashAndPassword([]byte(verifier), []byte(secret)) != nil) {
 		return Authentication{}, problem(KindUnauthorized, "invalid_api_key", "API Key 无效或不可用", nil)
 	}
@@ -296,12 +296,18 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 	if err := s.requireGrant(ctx, value.TenantID, value.SubjectID, ActionUse); err != nil {
 		return Authentication{}, problem(KindUnauthorized, "invalid_api_key", "API Key 无效或不可用", err)
 	}
-	person, err := s.people.ResolveBySubject(ctx, value.TenantID, value.SubjectID)
-	if err != nil {
-		return Authentication{}, problem(KindDependency, "person_reference_unavailable", "成员关联暂时无法验证", err)
-	}
-	if person.TenantID != value.TenantID || person.ID != value.PersonID || person.Status != "active" || person.Revision < 1 {
-		return Authentication{}, problem(KindUnauthorized, "invalid_api_key", "API Key 无效或不可用", nil)
+	person := PersonReference{}
+	if actionRequiresPerson(action) {
+		person, err = s.people.ResolveBySubject(ctx, value.TenantID, value.SubjectID)
+		if err != nil {
+			if errors.Is(err, ErrPersonMappingRequired) {
+				return Authentication{}, problem(KindForbidden, "person_mapping_required", "该业务需要先关联有效成员档案", nil)
+			}
+			return Authentication{}, problem(KindDependency, "person_reference_unavailable", "成员关联暂时无法验证", err)
+		}
+		if person.TenantID != value.TenantID || !uuidPattern.MatchString(person.ID) || person.Status != "active" || person.Revision < 1 {
+			return Authentication{}, problem(KindForbidden, "person_mapping_required", "该业务需要先关联有效成员档案", nil)
+		}
 	}
 	usageID, credentialID, err := twoIDs(s.newID)
 	if err != nil {
@@ -323,9 +329,13 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 		if err != nil {
 			return Authentication{}, err
 		}
+		ownerName := "API Key " + value.Prefix
+		if person.DisplayName != "" {
+			ownerName = person.DisplayName
+		}
 		baseOwnerClaims := identity.CapabilityClaims{
 			Version: "1", Issuer: s.issuer, Subject: value.SubjectID, Tenant: value.TenantID,
-			Audience: ownerAudience, Name: person.DisplayName, Actions: ownerActions,
+			Audience: ownerAudience, Name: ownerName, Actions: ownerActions,
 			Scope: identity.Scope{Kind: "tenant"}, IssuedAt: now.Unix(), NotBefore: now.Unix(),
 			ExpiresAt: expires.Unix(), AuthTime: now.Unix(), ID: ownerID,
 		}
@@ -346,13 +356,13 @@ func (s *Service) Authenticate(ctx context.Context, secret, requestID, action, s
 	if _, err := tx.Exec(ctx, `UPDATE api_keys SET last_used_at=$2 WHERE id=$1 AND status='active' AND expires_at>$2`, value.ID, now); err != nil {
 		return Authentication{}, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO open_api_usage_records(id,tenant_id,subject_id,person_id,api_key_id,key_prefix,action,request_id,source_ip_masked,result_code,http_status,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'authenticated',0,$10)`, usageID, value.TenantID, value.SubjectID, value.PersonID, value.ID, value.Prefix, action, requestID, sourceIPMasked, now); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO open_api_usage_records(id,tenant_id,subject_id,person_id,api_key_id,key_prefix,action,request_id,source_ip_masked,result_code,http_status,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'authenticated',0,$10)`, usageID, value.TenantID, value.SubjectID, nullablePersonID(person.ID), value.ID, value.Prefix, action, requestID, sourceIPMasked, now); err != nil {
 		return Authentication{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Authentication{}, err
 	}
-	return Authentication{Credential: credential, OwnerCredential: ownerCredential, OwnerAudience: ownerAudience, ExpiresAt: expires, TenantID: value.TenantID, SubjectID: value.SubjectID, PersonID: value.PersonID, KeyID: value.ID, KeyPrefix: value.Prefix, RequestID: requestID}, nil
+	return Authentication{Credential: credential, OwnerCredential: ownerCredential, OwnerAudience: ownerAudience, ExpiresAt: expires, TenantID: value.TenantID, SubjectID: value.SubjectID, PersonID: person.ID, KeyID: value.ID, KeyPrefix: value.Prefix, RequestID: requestID}, nil
 }
 
 func (s *Service) CompleteUsage(ctx context.Context, tenantID, subjectID, keyID, requestID, resultCode string, httpStatus int) error {
@@ -400,7 +410,7 @@ func (s *Service) ListUsage(ctx context.Context, actor identity.Principal, tenan
 		args = append(args, position.OccurredAt, position.ID)
 		where += fmt.Sprintf(" AND (occurred_at,id)<($%d,$%d::uuid)", len(args)-1, len(args))
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id::text,api_key_id::text,key_prefix,subject_id::text,person_id::text,action,request_id,source_ip_masked,result_code,http_status,occurred_at,completed_at FROM open_api_usage_records WHERE `+where+` ORDER BY occurred_at DESC,id DESC LIMIT $2`, args...)
+	rows, err := s.pool.Query(ctx, `SELECT id::text,api_key_id::text,key_prefix,subject_id::text,COALESCE(person_id::text,''),action,request_id,source_ip_masked,result_code,http_status,occurred_at,completed_at FROM open_api_usage_records WHERE `+where+` ORDER BY occurred_at DESC,id DESC LIMIT $2`, args...)
 	if err != nil {
 		return UsagePage{}, err
 	}
@@ -499,6 +509,17 @@ func allowedRequestAction(action string) bool {
 	default:
 		return false
 	}
+}
+
+func actionRequiresPerson(action string) bool {
+	return strings.HasPrefix(action, "open-api.reimbursement.")
+}
+
+func nullablePersonID(personID string) any {
+	if personID == "" {
+		return nil
+	}
+	return personID
 }
 
 func ownerAccess(action string) (string, []string) {

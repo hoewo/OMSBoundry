@@ -96,7 +96,7 @@ acceptance/p9-full-composition/verify-c4-finance-requests
 
 C4 re-verifies and binds C0 through C3. It refreshes the existing C1 Person snapshots, grants only Finance self-read/self-manage, and creates one external one-time-payee payment request per Tenant. Because reimbursement submission requires Evidence by design, this bounded phase uses payment requests and records the required explicit acknowledgement that Evidence is missing. Both requests must reach `payable` with the frozen `not_required` approval placeholder, masked account numbers, zero payment facts, isolated self lists and cross-Tenant 404. The gate never calls a payment endpoint or Money, starts no service, and accepts only the precise already-submitted state conflict on safe reruns before re-reading the final fact. Validate a handed-off artifact with `verify-c4-evidence EVIDENCE_DIR`.
 
-Continue with the employee API Key gate. The secret directory is an explicit recovery input and must be absolute, mode `0700`, separate from evidence and backed up through an approved secret channel:
+Continue with the organization account API Key gate. The secret directory is an explicit recovery input and must be absolute, mode `0700`, separate from evidence and backed up through an approved secret channel:
 
 ```sh
 P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
@@ -113,9 +113,9 @@ P9_SECONDARY_ADMIN_PASSWORD_FILE=/restricted/admin-b.password \
 acceptance/p9-full-composition/verify-c5-api-keys
 ```
 
-C5 re-verifies and binds C0 through C4, grants the three existing employee Open API capabilities, and creates one 180-day API Key for each existing C1 member. A newly issued secret is written exactly once to a mode-`0600` file outside evidence; subsequent runs with those protected recovery files reuse the same Key instead of creating another one. Each employee must see only their redacted Key list, call `/open-api/v1/me` with the exact Tenant／Subject／Person／Key binding, read the disabled Webhook placeholder from settings, and see both calls in their own usage audit. C5 performs no reimbursement or other business write and never persists the secret, Cookie, password, Authorization header or response body in evidence. Validate a handed-off artifact with `verify-c5-evidence EVIDENCE_DIR`.
+C5 re-verifies and binds C0 through C4, grants the three existing Open API capabilities, and creates one 180-day API Key for each existing C1 administrator account. A newly issued secret is written exactly once to a mode-`0600` file outside evidence; subsequent runs with those protected recovery files reuse the same Key instead of creating another one. Each account must see only its redacted Key list, call `/open-api/v1/me` with the exact Tenant／Subject／Key binding, read the disabled Webhook placeholder from settings, and see both calls in its own usage audit without a Person field. C1 Person IDs remain in the continuity state only for C6, where reimbursement actually requires an employee identity. C5 performs no reimbursement or other business write and never persists the secret, Cookie, password, Authorization header or response body in evidence. Validate a handed-off artifact with `verify-c5-evidence EVIDENCE_DIR`.
 
-Continue with the employee invoice reimbursement gate using the same protected C5 Key files:
+Continue with the employee invoice reimbursement gate using the same protected account-scoped C5 Key files:
 
 ```sh
 P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \
@@ -131,7 +131,7 @@ acceptance/p9-full-composition/verify-c6-invoice-reimbursements
 
 C6 re-verifies and binds C0 through C5. Each employee uploads distinct real PDF bytes through an Evidence signed upload URL, completes the `invoice-v1` validation, creates a reimbursement with the stable File ID／Version, submits it to `payable`, and reads it from their own list and detail. The gate requires the frozen Evidence reference, `not_required` approval snapshot, masked bank account, zero payment, isolated self lists and cross-Tenant 404. API Keys and signed URLs are passed through protected temporary curl config files and never enter evidence. C6 does not call a payment endpoint or Money. Validate a handed-off artifact with `verify-c6-evidence EVIDENCE_DIR`.
 
-Continue with the authorized reimbursement payment gate against the same running composition. Administrator passwords and employee API Keys remain protected inputs outside evidence:
+Continue with the authorized reimbursement payment gate against the same running composition. Administrator passwords and account API Keys remain protected inputs outside evidence:
 
 ```sh
 P9_C0_EVIDENCE_DIR=/absolute/path/to/evidence/c0 \

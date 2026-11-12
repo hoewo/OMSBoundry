@@ -102,7 +102,7 @@ open_request() {
   actual=$(printf '%s' "$result" | awk '{print $1}'); duration=$(printf '%s' "$result" | awk '{print $2}'); record_http "$request_label" "$expected" "$actual" "$duration"; expect_status "$expected" "$actual" "$request_label"
 }
 provision_key() {
-  actor_label=$1; cookies=$2; csrf=$3; person_id=$4
+  actor_label=$1; cookies=$2; csrf=$3
   key_file="$secret_dir/$actor_label.api-key"; metadata_file="$secret_dir/$actor_label.json"
   if [ -e "$key_file" ] || [ -e "$metadata_file" ]; then
     [ -f "$key_file" ] && [ -f "$metadata_file" ] || { echo "$actor_label API Key recovery files are incomplete" >&2; exit 2; }
@@ -111,14 +111,14 @@ provision_key() {
   else
     jq -n --arg label "P9 C5 $actor_label 连续验收" '{label:$label,ttl_days:180}' >"$workspace/$actor_label-key-request.json"
     request POST /auth/api/v1/api-keys "$cookies" "$csrf" "$workspace/$actor_label-key-request.json" "$workspace/$actor_label-key-created.json" 201 "POST $actor_label API Key"
-    jq -e --arg person "$person_id" '.person_id==$person and .person_revision>=1 and .status=="active" and (.secret|test("^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$"))' "$workspace/$actor_label-key-created.json" >/dev/null || { echo "$actor_label API Key response is invalid" >&2; exit 1; }
+    jq -e '.status=="active" and (has("person_id")|not) and (has("person_revision")|not) and (.secret|test("^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$"))' "$workspace/$actor_label-key-created.json" >/dev/null || { echo "$actor_label API Key response is invalid" >&2; exit 1; }
     jq -er '.secret' "$workspace/$actor_label-key-created.json" >"$key_file"
     jq 'del(.secret)' "$workspace/$actor_label-key-created.json" >"$metadata_file"
     chmod 0600 "$key_file" "$metadata_file"; rm -f -- "$workspace/$actor_label-key-created.json"
     provisioning=created
   fi
   tr -d '\r\n' <"$key_file" | grep -Eq '^bfk_[A-Za-z0-9_-]{10}_[A-Za-z0-9_-]{32,64}$' || { echo "$actor_label API Key recovery secret is invalid" >&2; exit 1; }
-  jq -e --arg person "$person_id" '.person_id==$person and .person_revision>=1 and .status=="active" and (.id|test("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$")) and (has("secret")|not)' "$metadata_file" >/dev/null || { echo "$actor_label API Key metadata is invalid" >&2; exit 1; }
+  jq -e '.status=="active" and (has("person_id")|not) and (has("person_revision")|not) and (.id|test("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) and (.prefix|test("^bfk_[A-Za-z0-9_-]{10}$")) and (has("secret")|not)' "$metadata_file" >/dev/null || { echo "$actor_label API Key metadata is invalid" >&2; exit 1; }
   printf '%s' "$provisioning"
 }
 
@@ -129,41 +129,41 @@ request GET /auth/api/v1/session "$secondary_cookies" '' '' "$workspace/secondar
 primary_subject_id=$(jq -er --arg tenant "$primary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/primary-session.json"); secondary_subject_id=$(jq -er --arg tenant "$secondary_tenant_id" '.principal|select(.tenant_id==$tenant)|.subject_id' "$workspace/secondary-session.json")
 [ "$primary_subject_id" = "$(jq -er '.tenants[0].administrator_subject_id' "$c1_state")" ] && [ "$secondary_subject_id" = "$(jq -er '.tenants[1].administrator_subject_id' "$c1_state")" ] || { echo 'administrator Subject changed since C1' >&2; exit 1; }
 grant_open_api "$primary_cookies" "$primary_csrf" "$primary_subject_id" primary; grant_open_api "$secondary_cookies" "$secondary_csrf" "$secondary_subject_id" secondary
-primary_provisioning=$(provision_key primary "$primary_cookies" "$primary_csrf" "$primary_person_id")
-secondary_provisioning=$(provision_key secondary "$secondary_cookies" "$secondary_csrf" "$secondary_person_id")
+primary_provisioning=$(provision_key primary "$primary_cookies" "$primary_csrf")
+secondary_provisioning=$(provision_key secondary "$secondary_cookies" "$secondary_csrf")
 primary_key_id=$(jq -er '.id' "$secret_dir/primary.json"); secondary_key_id=$(jq -er '.id' "$secret_dir/secondary.json")
 primary_prefix=$(jq -er '.prefix' "$secret_dir/primary.json"); secondary_prefix=$(jq -er '.prefix' "$secret_dir/secondary.json")
 
 request GET /auth/api/v1/api-keys "$primary_cookies" '' '' "$workspace/primary-keys.json" 200 'GET primary API Key list'
 request GET /auth/api/v1/api-keys "$secondary_cookies" '' '' "$workspace/secondary-keys.json" 200 'GET secondary API Key list'
-jq -e --arg own "$primary_key_id" --arg other "$secondary_key_id" --arg person "$primary_person_id" 'any(.items[];.id==$own and .person_id==$person and .status=="active") and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/primary-keys.json" >/dev/null || { echo 'primary API Key list failed isolation or redaction' >&2; exit 1; }
-jq -e --arg own "$secondary_key_id" --arg other "$primary_key_id" --arg person "$secondary_person_id" 'any(.items[];.id==$own and .person_id==$person and .status=="active") and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/secondary-keys.json" >/dev/null || { echo 'secondary API Key list failed isolation or redaction' >&2; exit 1; }
+jq -e --arg own "$primary_key_id" --arg other "$secondary_key_id" 'any(.items[];.id==$own and .status=="active" and (has("person_id")|not) and (has("person_revision")|not)) and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/primary-keys.json" >/dev/null || { echo 'primary API Key list failed isolation or redaction' >&2; exit 1; }
+jq -e --arg own "$secondary_key_id" --arg other "$primary_key_id" 'any(.items[];.id==$own and .status=="active" and (has("person_id")|not) and (has("person_revision")|not)) and all(.items[];.id!=$other and (has("secret")|not))' "$workspace/secondary-keys.json" >/dev/null || { echo 'secondary API Key list failed isolation or redaction' >&2; exit 1; }
 
 open_request primary GET /open-api/v1/me "$secret_dir/primary.api-key" "$workspace/primary-me.json" 200 'GET primary Open API profile'
 open_request secondary GET /open-api/v1/me "$secret_dir/secondary.api-key" "$workspace/secondary-me.json" 200 'GET secondary Open API profile'
 open_request primary GET /open-api/v1/settings "$secret_dir/primary.api-key" "$workspace/primary-settings.json" 200 'GET primary Open API settings'
 open_request secondary GET /open-api/v1/settings "$secret_dir/secondary.api-key" "$workspace/secondary-settings.json" 200 'GET secondary Open API settings'
-jq -e --arg tenant "$primary_tenant_id" --arg subject "$primary_subject_id" --arg person "$primary_person_id" --arg key "$primary_key_id" --arg prefix "$primary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .person_id==$person and .key_id==$key and .key_prefix==$prefix' "$workspace/primary-me.json" >/dev/null || { echo 'primary Open API profile identity is invalid' >&2; exit 1; }
-jq -e --arg tenant "$secondary_tenant_id" --arg subject "$secondary_subject_id" --arg person "$secondary_person_id" --arg key "$secondary_key_id" --arg prefix "$secondary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .person_id==$person and .key_id==$key and .key_prefix==$prefix' "$workspace/secondary-me.json" >/dev/null || { echo 'secondary Open API profile identity is invalid' >&2; exit 1; }
+jq -e --arg tenant "$primary_tenant_id" --arg subject "$primary_subject_id" --arg key "$primary_key_id" --arg prefix "$primary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .key_id==$key and .key_prefix==$prefix and (has("person_id")|not)' "$workspace/primary-me.json" >/dev/null || { echo 'primary Open API profile account identity is invalid' >&2; exit 1; }
+jq -e --arg tenant "$secondary_tenant_id" --arg subject "$secondary_subject_id" --arg key "$secondary_key_id" --arg prefix "$secondary_prefix" '.tenant_id==$tenant and .subject_id==$subject and .key_id==$key and .key_prefix==$prefix and (has("person_id")|not)' "$workspace/secondary-me.json" >/dev/null || { echo 'secondary Open API profile account identity is invalid' >&2; exit 1; }
 for settings in "$workspace/primary-settings.json" "$workspace/secondary-settings.json"; do jq -e '.webhook.available==false and .webhook.status=="not_available" and .webhook.callback_url_editable==false' "$settings" >/dev/null || { echo 'Open API Webhook placeholder is invalid' >&2; exit 1; }; done
 
 request GET '/auth/api/v1/open-api-usage?limit=20' "$primary_cookies" '' '' "$workspace/primary-usage.json" 200 'GET primary Open API usage'
 request GET '/auth/api/v1/open-api-usage?limit=20' "$secondary_cookies" '' '' "$workspace/secondary-usage.json" 200 'GET secondary Open API usage'
-jq -e --arg key "$primary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200)' "$workspace/primary-usage.json" >/dev/null || { echo 'primary Open API usage audit is incomplete' >&2; exit 1; }
-jq -e --arg key "$secondary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200)' "$workspace/secondary-usage.json" >/dev/null || { echo 'secondary Open API usage audit is incomplete' >&2; exit 1; }
+jq -e --arg key "$primary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200 and (has("person_id")|not)) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200 and (has("person_id")|not))' "$workspace/primary-usage.json" >/dev/null || { echo 'primary Open API usage audit is incomplete' >&2; exit 1; }
+jq -e --arg key "$secondary_key_id" 'any(.items[];.key_id==$key and .action=="open-api.profile.read" and .http_status==200 and (has("person_id")|not)) and any(.items[];.key_id==$key and .action=="open-api.settings.read" and .http_status==200 and (has("person_id")|not))' "$workspace/secondary-usage.json" >/dev/null || { echo 'secondary Open API usage audit is incomplete' >&2; exit 1; }
 
 captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 jq -n --argjson schema_version 1 --arg captured_at "$captured_at" --arg project "$compose_project" --arg public_url "$base_url" --arg c0 "$c0_sha" --arg c1 "$c1_sha" --arg c2 "$c2_sha" --arg c3 "$c3_sha" --arg c4 "$c4_sha" \
   --arg ta "$primary_tenant_id" --arg pa "$primary_person_id" --arg ka "$primary_key_id" --arg xa "$primary_prefix" --arg za "$primary_provisioning" \
   --arg tb "$secondary_tenant_id" --arg pb "$secondary_person_id" --arg kb "$secondary_key_id" --arg xb "$secondary_prefix" --arg zb "$secondary_provisioning" \
-  '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C5",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4},tenants:[{id:$ta,person_id:$pa,api_key:{id:$ka,prefix:$xa,status:"active",ttl_days:180,provisioning:$za}},{id:$tb,person_id:$pb,api_key:{id:$kb,prefix:$xb,status:"active",ttl_days:180,provisioning:$zb}}],checks:{one_time_secret_externalized:"pass",api_key_list_isolation:"pass",open_api_identity_binding:"pass",settings_webhook_placeholder:"pass",self_usage_audit:"pass",business_write_performed:false,secrets_recorded:false}}' >"$workspace/state-after-c5.json"
+  '{schema_version:$schema_version,scenario_id:"oms-v1-p9-full-composition-v1",phase:"C5",result:"pass",captured_at:$captured_at,deployment:{profile:"D1",compose_project:$project,public_url:$public_url,c0_checksums_sha256:$c0,c1_checksums_sha256:$c1,c2_checksums_sha256:$c2,c3_checksums_sha256:$c3,c4_checksums_sha256:$c4},tenants:[{id:$ta,person_id:$pa,api_key:{id:$ka,prefix:$xa,status:"active",ttl_days:180,provisioning:$za}},{id:$tb,person_id:$pb,api_key:{id:$kb,prefix:$xb,status:"active",ttl_days:180,provisioning:$zb}}],checks:{one_time_secret_externalized:"pass",api_key_list_isolation:"pass",open_api_account_binding:"pass",settings_webhook_placeholder:"pass",self_usage_audit:"pass",business_write_performed:false,secrets_recorded:false}}' >"$workspace/state-after-c5.json"
 cat >"$workspace/result.md" <<EOF
-# P9 C5 employee API Key result
+# P9 C5 organization account API Key result
 
 - Result: pass
 - Captured at: $captured_at
 - Public origin: $base_url
-- Checks: two Tenant-bound employee API Keys, one-time secret externalization, redacted self lists, profile/settings calls and self usage audit.
+- Checks: two Tenant-and-Subject-bound account API Keys, one-time secret externalization, redacted self lists, profile/settings calls and self usage audit. C1 Person IDs are carried only for the later reimbursement phase.
 - Business write performed through Open API: no
 - Secrets recorded in evidence: no
 EOF
@@ -174,4 +174,4 @@ for artifact in http-evidence.tsv result.md state-after-c5.json; do printf '%s  
 chmod 600 "$evidence_stage/checksums.sha256"; "$script_dir/verify-c5-evidence" "$evidence_stage" >/dev/null
 if [ -d "$evidence_dir" ]; then rmdir "$evidence_dir"; fi
 mv "$evidence_stage" "$evidence_dir"; evidence_stage=
-echo 'PASS P9 C5 employee API Key identity, settings and audit isolation'
+echo 'PASS P9 C5 organization account API Key identity, settings and audit isolation'

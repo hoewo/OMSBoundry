@@ -16,6 +16,8 @@ set -eu
 : "${BONUS_DISTRIBUTION_DB_PASSWORD:?BONUS_DISTRIBUTION_DB_PASSWORD is required}"
 : "${INTERNAL_FINANCE_REQUESTS_DB_PASSWORD:?INTERNAL_FINANCE_REQUESTS_DB_PASSWORD is required}"
 : "${PAYROLL_DB_PASSWORD:?PAYROLL_DB_PASSWORD is required}"
+: "${WORKFORCE_ATTENDANCE_DB_PASSWORD:?WORKFORCE_ATTENDANCE_DB_PASSWORD is required}"
+: "${INVOICE_RECOGNITION_DB_PASSWORD:?INVOICE_RECOGNITION_DB_PASSWORD is required}"
 
 # The same script runs both inside PostgreSQL's init phase and in the
 # idempotent provisioning container.  On a brand-new Compose network the
@@ -63,3 +65,5 @@ create_role_and_database cost_outsourcing cost_outsourcing "$COST_OUTSOURCING_DB
 create_role_and_database bonus_distribution bonus_distribution "$BONUS_DISTRIBUTION_DB_PASSWORD"
 create_role_and_database internal_finance_requests internal_finance_requests "$INTERNAL_FINANCE_REQUESTS_DB_PASSWORD"
 create_role_and_database payroll payroll "$PAYROLL_DB_PASSWORD"
+create_role_and_database workforce_attendance workforce_attendance "$WORKFORCE_ATTENDANCE_DB_PASSWORD"
+create_role_and_database invoice_recognition invoice_recognition "$INVOICE_RECOGNITION_DB_PASSWORD"

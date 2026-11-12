@@ -1,0 +1,310 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  OMS_API_KEY=... oms-open-api-test [smoke|check] [options]
+  oms-open-api-test [smoke|check] --key-file /secure/path/api-key [options]
+  oms-open-api-test draft --key-file /secure/path/api-key --confirm-business-write \
+    --bank-name NAME --account-file /secure/path/account [options]
+  oms-open-api-test submit --key-file /secure/path/api-key --confirm-business-write \
+    --confirm-submit --bank-name NAME --account-file /secure/path/account [options]
+
+Commands:
+  smoke   Validate the Key, profile and settings, probe Person mapping, then
+          create and immediately abort a bounded Evidence upload session.
+          This is the default and does not upload file bytes or create a claim.
+  check   Read-only validation. No upload session or business record is created.
+  draft   Upload a generated test PDF and create a real reimbursement draft.
+  submit  Do everything in draft, then submit the reimbursement as payable.
+
+Options:
+  --base-url URL             Default: https://oatest.antuinfo.cn/open-api/v1
+  --key-file PATH            Read the Key from a mode 0600 or 0400 file.
+                             Never pass a Key as a command-line argument.
+  --expect-person VALUE      either (default), active, or missing.
+  --confirm-business-write   Required by draft and submit.
+  --confirm-submit           Additionally required by submit.
+  --amount-minor INTEGER     Default: 100 (one yuan).
+  --bank-name NAME           Required by draft and submit.
+  --account-file PATH        Read the payee account from a mode 0600 or 0400
+                             file. OMS_PAYEE_ACCOUNT_NUMBER is available to CI.
+                             The account is never accepted as a CLI argument.
+  --invoice-code VALUE       Optional unique test invoice code.
+  --invoice-number VALUE     Optional unique test invoice number.
+  --issuer-name VALUE        Default: 开放 API CLI 测试开票方
+  --business-date YYYY-MM-DD Default: today.
+  --help
+
+The Key, authorization header, signed upload URL, full bank account and request
+bodies stay in a mode-0700 temporary directory and are removed on exit.
+EOF
+}
+
+die() {
+  printf 'ERROR: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+for dependency in curl jq openssl; do
+  command -v "$dependency" >/dev/null 2>&1 || die "$dependency is required" 2
+done
+
+command_name=smoke
+case "${1:-}" in
+  smoke|check|draft|submit) command_name=$1; shift ;;
+  --help|-h) usage; exit 0 ;;
+esac
+
+base_url=${OMS_API_BASE_URL:-https://oatest.antuinfo.cn/open-api/v1}
+key_file=
+expect_person=either
+confirm_business_write=false
+confirm_submit=false
+amount_minor=100
+bank_name=
+account_file=
+account_number=
+invoice_code=
+invoice_number=
+issuer_name='开放 API CLI 测试开票方'
+business_date=$(date '+%Y-%m-%d')
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --base-url) [ "$#" -ge 2 ] || die '--base-url requires a value' 2; base_url=$2; shift 2 ;;
+    --key-file) [ "$#" -ge 2 ] || die '--key-file requires a value' 2; key_file=$2; shift 2 ;;
+    --expect-person) [ "$#" -ge 2 ] || die '--expect-person requires a value' 2; expect_person=$2; shift 2 ;;
+    --confirm-business-write) confirm_business_write=true; shift ;;
+    --confirm-submit) confirm_submit=true; shift ;;
+    --amount-minor) [ "$#" -ge 2 ] || die '--amount-minor requires a value' 2; amount_minor=$2; shift 2 ;;
+    --bank-name) [ "$#" -ge 2 ] || die '--bank-name requires a value' 2; bank_name=$2; shift 2 ;;
+    --account-file) [ "$#" -ge 2 ] || die '--account-file requires a value' 2; account_file=$2; shift 2 ;;
+    --invoice-code) [ "$#" -ge 2 ] || die '--invoice-code requires a value' 2; invoice_code=$2; shift 2 ;;
+    --invoice-number) [ "$#" -ge 2 ] || die '--invoice-number requires a value' 2; invoice_number=$2; shift 2 ;;
+    --issuer-name) [ "$#" -ge 2 ] || die '--issuer-name requires a value' 2; issuer_name=$2; shift 2 ;;
+    --business-date) [ "$#" -ge 2 ] || die '--business-date requires a value' 2; business_date=$2; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) die "unknown option: $1" 2 ;;
+  esac
+done
+
+case "$expect_person" in either|active|missing) ;; *) die '--expect-person must be either, active, or missing' 2;; esac
+case "$base_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) die 'base URL must use HTTPS or an HTTP loopback address' 2;; esac
+base_url=${base_url%/}
+printf '%s' "$amount_minor" | grep -Eq '^[1-9][0-9]*$' || die '--amount-minor must be a positive integer' 2
+printf '%s' "$business_date" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || die '--business-date must use YYYY-MM-DD' 2
+
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+if [ -n "$key_file" ] && [ -n "${OMS_API_KEY:-}" ]; then
+  die 'use either OMS_API_KEY or --key-file, not both' 2
+fi
+if [ -n "$key_file" ]; then
+  [ -f "$key_file" ] || die "Key file not found: $key_file" 2
+  key_mode=$(file_mode "$key_file")
+  case "$key_mode" in 400|600) ;; *) die 'Key file mode must be 0600 or 0400' 2;; esac
+  api_key=$(tr -d '\r\n' <"$key_file")
+else
+  api_key=${OMS_API_KEY:-}
+fi
+unset OMS_API_KEY 2>/dev/null || true
+[ -n "$api_key" ] || die 'set OMS_API_KEY or provide --key-file' 2
+printf '%s' "$api_key" | grep -Eq '^bfk_[A-Za-z0-9_-]{32,128}$' || die 'API Key format is invalid' 2
+
+if [ -n "$account_file" ] && [ -n "${OMS_PAYEE_ACCOUNT_NUMBER:-}" ]; then
+  die 'use either OMS_PAYEE_ACCOUNT_NUMBER or --account-file, not both' 2
+fi
+if [ -n "$account_file" ]; then
+  [ -f "$account_file" ] || die "account file not found: $account_file" 2
+  account_mode=$(file_mode "$account_file")
+  case "$account_mode" in 400|600) ;; *) die 'account file mode must be 0600 or 0400' 2;; esac
+  account_number=$(tr -d '\r\n' <"$account_file")
+else
+  account_number=${OMS_PAYEE_ACCOUNT_NUMBER:-}
+fi
+unset OMS_PAYEE_ACCOUNT_NUMBER 2>/dev/null || true
+
+if [ "$command_name" = draft ] || [ "$command_name" = submit ]; then
+  [ "$confirm_business_write" = true ] || die "$command_name creates real business data; add --confirm-business-write" 2
+  [ -n "$bank_name" ] || die '--bank-name is required by draft and submit' 2
+  [ -n "$account_number" ] || die 'set OMS_PAYEE_ACCOUNT_NUMBER or provide --account-file for draft and submit' 2
+fi
+if [ "$command_name" = submit ]; then
+  [ "$confirm_submit" = true ] || die 'submit creates a payable reimbursement; add --confirm-submit' 2
+fi
+
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/oms-open-api-test.XXXXXX")
+chmod 700 "$runtime"
+auth_config="$runtime/api-auth.conf"
+printf 'header = "Authorization: ApiKey %s"\n' "$api_key" >"$auth_config"
+chmod 600 "$auth_config"
+pending_session=
+request_code=
+
+new_idempotency() {
+  printf 'oms-cli-%s-%s-%s' "$(date -u '+%Y%m%dT%H%M%SZ')" "$1" "$(openssl rand -hex 8)"
+}
+
+api_request() {
+  request_method=$1
+  request_path=$2
+  request_idempotency=$3
+  request_payload=$4
+  request_output=$5
+  set -- --silent --show-error --connect-timeout 10 --max-time 45 --output "$request_output" --write-out '%{http_code}' --request "$request_method" --config "$auth_config"
+  [ -z "$request_idempotency" ] || set -- "$@" --header "Idempotency-Key: $request_idempotency"
+  [ -z "$request_payload" ] || set -- "$@" --header 'Content-Type: application/json' --data-binary "@$request_payload"
+  if ! request_code=$(curl "$@" "$base_url$request_path"); then
+    die "$request_method $request_path could not reach the API"
+  fi
+}
+
+problem_code() {
+  jq -r '.error.code // .code // "UNKNOWN"' "$1" 2>/dev/null || printf 'UNKNOWN'
+}
+
+show_problem() {
+  jq -c '{code:(.error.code // .code // "UNKNOWN"),message:(.error.message // .message // "request failed"),retryable:(.error.retryable // .retryable // false),recovery_path:(.error.recovery.path // .recovery.path // null)}' "$1" 2>/dev/null || printf '{"code":"UNKNOWN","message":"non-JSON error response"}\n'
+}
+
+expect_http() {
+  expected_code=$1
+  label=$2
+  output_file=$3
+  if [ "$request_code" != "$expected_code" ]; then
+    printf 'ERROR: %s returned HTTP %s, expected %s: ' "$label" "$request_code" "$expected_code" >&2
+    show_problem "$output_file" >&2
+    exit 1
+  fi
+}
+
+abort_pending_session() {
+  [ -n "$pending_session" ] || return 0
+  printf '{"reason":"client_shutdown"}\n' >"$runtime/cleanup-abort.json"
+  curl --silent --show-error --connect-timeout 5 --max-time 15 --output /dev/null \
+    --request POST --config "$auth_config" --header "Idempotency-Key: $(new_idempotency cleanup-abort)" \
+    --header 'Content-Type: application/json' --data-binary "@$runtime/cleanup-abort.json" \
+    "$base_url/evidence/upload-sessions/$pending_session/abort" >/dev/null 2>&1 || true
+  pending_session=
+}
+
+cleanup() {
+  exit_code=$?
+  trap - EXIT HUP INT TERM
+  abort_pending_session
+  api_key=
+  if [ -n "${runtime:-}" ] && [ -d "$runtime" ]; then
+    case "$runtime" in "${TMPDIR:-/tmp}"/oms-open-api-test.*) rm -rf -- "$runtime" ;; esac
+  fi
+  exit "$exit_code"
+}
+trap cleanup EXIT HUP INT TERM
+
+printf '[1/4] validating API Key context\n' >&2
+api_request GET / '' '' "$runtime/root.json"
+expect_http 200 'GET /' "$runtime/root.json"
+api_request GET /me '' '' "$runtime/me.json"
+expect_http 200 'GET /me' "$runtime/me.json"
+api_request GET /settings '' '' "$runtime/settings.json"
+expect_http 200 'GET /settings' "$runtime/settings.json"
+
+printf '[2/4] probing employee-only reimbursement access\n' >&2
+api_request GET '/reimbursements?limit=1' '' '' "$runtime/reimbursements.json"
+person_mapping=
+repair_path=
+if [ "$request_code" = 200 ]; then
+  person_mapping=active
+elif [ "$request_code" = 403 ] && [ "$(problem_code "$runtime/reimbursements.json")" = PERSON_MAPPING_REQUIRED ]; then
+  person_mapping=missing
+  repair_path=$(jq -r '.error.recovery.path // .recovery.path // "/workbench/?view=oms-v1#member-account-link"' "$runtime/reimbursements.json")
+else
+  printf 'ERROR: reimbursement probe returned HTTP %s: ' "$request_code" >&2
+  show_problem "$runtime/reimbursements.json" >&2
+  exit 1
+fi
+case "$expect_person:$person_mapping" in
+  either:*|active:active|missing:missing) ;;
+  *) die "Person mapping is $person_mapping, expected $expect_person" ;;
+esac
+
+if [ "$command_name" = check ]; then
+  jq -n --arg command "$command_name" --arg mapping "$person_mapping" --arg repair "$repair_path" \
+    '{result:"pass",command:$command,credential:"valid",person_mapping:$mapping,repair_path:($repair|if length>0 then . else null end),business_write:false,evidence_session:"not_created"}'
+  exit 0
+fi
+
+if [ "$command_name" != smoke ] && [ "$person_mapping" != active ]; then
+  die "$command_name requires an active Person mapping; open $repair_path, link the account to a member, and rerun with --expect-person active"
+fi
+
+printf '[3/4] creating bounded Evidence upload session\n' >&2
+pdf="$runtime/open-api-test-invoice.pdf"
+printf '%%PDF-1.7\n%% OMS Open API CLI generated test invoice\n1 0 obj<</Type/Catalog>>endobj\n%%%%EOF\n' >"$pdf"
+pdf_size=$(wc -c <"$pdf" | tr -d ' ')
+pdf_sha=$(openssl dgst -sha256 -r "$pdf" | awk '{print $1}')
+jq -n --argjson size "$pdf_size" --arg sha "$pdf_sha" \
+  '{file_name:"open-api-cli-test-invoice.pdf",size_bytes:$size,media_type:"application/pdf",sha256:$sha,client_context:{purpose:"invoice"}}' >"$runtime/upload-create.json"
+api_request POST /evidence/upload-sessions "$(new_idempotency upload-create)" "$runtime/upload-create.json" "$runtime/upload-session.json"
+expect_http 201 'POST /evidence/upload-sessions' "$runtime/upload-session.json"
+pending_session=$(jq -er '.session_id' "$runtime/upload-session.json") || die 'upload session response has no session_id'
+
+if [ "$command_name" = smoke ]; then
+  printf '[4/4] aborting temporary upload session\n' >&2
+  printf '{"reason":"client_shutdown"}\n' >"$runtime/upload-abort.json"
+  api_request POST "/evidence/upload-sessions/$pending_session/abort" "$(new_idempotency upload-abort)" "$runtime/upload-abort.json" "$runtime/upload-abort-response.json"
+  expect_http 204 'POST upload session abort' "$runtime/upload-abort-response.json"
+  pending_session=
+  jq -n --arg command "$command_name" --arg mapping "$person_mapping" --arg repair "$repair_path" \
+    '{result:"pass",command:$command,credential:"valid",person_mapping:$mapping,repair_path:($repair|if length>0 then . else null end),business_write:false,evidence_session:"created_and_aborted"}'
+  exit 0
+fi
+
+printf '[4/4] uploading Evidence and writing reimbursement %s\n' "$command_name" >&2
+upload_url=$(jq -er '.authorization.upload_url' "$runtime/upload-session.json") || die 'upload session response has no upload URL'
+case "$upload_url" in https://*|http://127.0.0.1:*|http://localhost:*) ;; *) die 'signed upload URL must use HTTPS or loopback HTTP';; esac
+upload_config="$runtime/signed-upload.conf"
+printf 'url = "%s"\n' "$upload_url" >"$upload_config"
+chmod 600 "$upload_config"
+upload_code=$(curl --silent --show-error --connect-timeout 10 --max-time 45 --output "$runtime/upload-response.txt" --write-out '%{http_code}' \
+  --request PUT --config "$upload_config" --dump-header "$runtime/upload.headers" --header 'Content-Type: application/pdf' --data-binary "@$pdf") || die 'signed Evidence upload failed'
+[ "$upload_code" = 204 ] || die "signed Evidence upload returned HTTP $upload_code"
+etag=$(awk 'tolower($1)=="etag:" {gsub(/[\r\n\"]/ ,"",$2); print $2}' "$runtime/upload.headers")
+[ -n "$etag" ] || die 'signed Evidence upload did not return ETag'
+jq -n --argjson size "$pdf_size" --arg sha "$pdf_sha" --arg etag "$etag" '{observed_size_bytes:$size,observed_sha256:$sha,etag:$etag}' >"$runtime/upload-complete.json"
+api_request POST "/evidence/upload-sessions/$pending_session/complete" "$(new_idempotency upload-complete)" "$runtime/upload-complete.json" "$runtime/evidence.json"
+expect_http 200 'POST upload session complete' "$runtime/evidence.json"
+pending_session=
+jq -e '.version>=1 and .validation_profile=="invoice-v1" and .security_status=="passed" and .status=="available"' "$runtime/evidence.json" >/dev/null || die 'Evidence validation did not finish as available/passed'
+file_id=$(jq -er '.file_id' "$runtime/evidence.json")
+file_version=$(jq -er '.version' "$runtime/evidence.json")
+
+unique_suffix=$(date -u '+%Y%m%d%H%M%S')$(openssl rand -hex 3)
+[ -n "$invoice_code" ] || invoice_code="CLI$unique_suffix"
+[ -n "$invoice_number" ] || invoice_number="$unique_suffix"
+jq -n --arg file "$file_id" --argjson version "$file_version" --arg date "$business_date" \
+  --argjson amount "$amount_minor" --arg bank "$bank_name" --arg account "$account_number" \
+  --arg code "$invoice_code" --arg number "$invoice_number" --arg issuer "$issuer_name" \
+  '{title:"开放 API CLI 测试报销",lines:[{business_date:$date,category_key:"travel",category_name:"差旅费",category_revision:1,purpose:"开放 API CLI 显式业务链测试",amount_minor:$amount,evidence:[{file_id:$file,version:$version,purpose:"invoice"}],invoice:{code:$code,number:$number,issuer_name:$issuer,invoice_date:$date,amount_minor:$amount}}],payee:{bank_name:$bank,account_number:$account}}' >"$runtime/reimbursement-create.json"
+api_request POST /reimbursements "$(new_idempotency reimbursement-create)" "$runtime/reimbursement-create.json" "$runtime/reimbursement.json"
+expect_http 201 'POST /reimbursements' "$runtime/reimbursement.json"
+request_id=$(jq -er '.id' "$runtime/reimbursement.json")
+revision=$(jq -er '.revision' "$runtime/reimbursement.json")
+final_state=draft
+
+if [ "$command_name" = submit ]; then
+  jq -n --argjson revision "$revision" '{expected_revision:$revision,suspected_duplicate_acknowledged:false}' >"$runtime/reimbursement-submit.json"
+  api_request POST "/reimbursements/$request_id/submit" "$(new_idempotency reimbursement-submit)" "$runtime/reimbursement-submit.json" "$runtime/reimbursement-submitted.json"
+  expect_http 200 'POST reimbursement submit' "$runtime/reimbursement-submitted.json"
+  final_state=$(jq -er '.status' "$runtime/reimbursement-submitted.json")
+  [ "$final_state" = payable ] || die "submitted reimbursement status is $final_state, expected payable"
+fi
+
+api_request GET "/reimbursements/$request_id" '' '' "$runtime/reimbursement-detail.json"
+expect_http 200 'GET reimbursement detail' "$runtime/reimbursement-detail.json"
+api_request GET '/reimbursements?limit=20' '' '' "$runtime/reimbursement-list.json"
+expect_http 200 'GET reimbursement list' "$runtime/reimbursement-list.json"
+jq -e --arg id "$request_id" 'any(.items[]; .id==$id)' "$runtime/reimbursement-list.json" >/dev/null || die 'created reimbursement is absent from the self list'
+
+jq -n --arg command "$command_name" --arg mapping "$person_mapping" --arg request_id "$request_id" --arg state "$final_state" --arg file_id "$file_id" --argjson file_version "$file_version" \
+  '{result:"pass",command:$command,credential:"valid",person_mapping:$mapping,business_write:true,evidence:{file_id:$file_id,version:$file_version,status:"available"},reimbursement:{id:$request_id,status:$state}}'

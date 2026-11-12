@@ -191,7 +191,7 @@ docker run --detach --name "$edge_container" --cpus 0.5 --memory 96m -p 127.0.0.
 for attempt in $(seq 1 60); do curl -kfsS "$base/health/ready" >/dev/null 2>&1 && break; [ "$attempt" -lt 60 ] || { docker logs "$edge_container" >&2; exit 1; }; sleep 1; done
 printf 'request\texpected\tactual\n' >"$runtime/http-evidence.tsv"
 request GET "$base/open-api/v1/me" "$api_key" '' '' "$runtime/me.json" 200
-jq -e --arg tenant "$tenant" --arg person "$person" '.tenant_id==$tenant and .person_id==$person' "$runtime/me.json" >/dev/null
+jq -e --arg tenant "$tenant" --arg subject "$admin" --arg key "$key_id" '.tenant_id==$tenant and .subject_id==$subject and .key_id==$key and (has("person_id")|not)' "$runtime/me.json" >/dev/null
 
 echo '[6/10] 注入 Evidence 故障后用原幂等键恢复，并上传真实测试 PDF'
 kill "$evidence_pid"; wait "$evidence_pid" 2>/dev/null || true

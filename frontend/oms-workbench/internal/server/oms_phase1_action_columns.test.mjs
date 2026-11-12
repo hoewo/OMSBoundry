@@ -11,7 +11,7 @@ test('every operational table reserves its final column for row details', () => 
   const actionHeaders = html.match(/<th><\/th>/g) || [];
   const actionCells = script.match(/<td><button class="oms-v1__row-action"/g) || [];
   const internalActionCells = internalScript.match(/class="oms-v1__row-actions"/g) || [];
-  assert.equal(actionHeaders.length, 13);
+  assert.equal(actionHeaders.length, 15);
   assert.equal(actionCells.length, 5);
   assert.equal(internalActionCells.length, 3);
   assert.match(html, /<table class="oms-v1__table"><thead><tr><th>名称<\/th>[^]*<th><\/th><\/tr><\/thead><tbody data-open-api-key-body>/, 'API Key rows keep a terminal revoke-action column');

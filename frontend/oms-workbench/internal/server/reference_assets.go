@@ -115,6 +115,12 @@ var omsPhase1PayrollOwnerJS string
 //go:embed oms_phase1_finance_owner.js
 var omsPhase1FinanceOwnerJS string
 
+// omsPhase1Workforce composes Workforce Attendance, Invoice Recognition,
+// People, Payroll and Evidence through their versioned owner APIs.
+//
+//go:embed oms_phase1_workforce.js
+var omsPhase1WorkforceJS string
+
 // omsPhase1OpenAPI lets each authenticated employee manage only their own API
 // keys and inspect masked usage metadata through the IAM-owned API.
 //

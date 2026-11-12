@@ -29,6 +29,7 @@ type Service struct {
 	store            Store
 	personReferences PersonReferencePort
 	paymentDelivery  PaymentDeliveryPort
+	attendance       AttendanceSummaryPort
 }
 
 func NewService(store Store, dependencies ...any) (*Service, error) {
@@ -48,6 +49,11 @@ func NewService(store Store, dependencies ...any) (*Service, error) {
 				return nil, fmt.Errorf("at most one payment delivery port is allowed")
 			}
 			service.paymentDelivery = value
+		case AttendanceSummaryPort:
+			if service.attendance != nil {
+				return nil, fmt.Errorf("at most one attendance summary port is allowed")
+			}
+			service.attendance = value
 		default:
 			return nil, fmt.Errorf("unsupported payroll dependency")
 		}
