@@ -29,6 +29,11 @@
   var csrfRequest = null;
   var configuredConfig = null;
   var configurationRequest = null;
+  var sessionRefreshRequest = null;
+  var sessionRefreshTimer = 0;
+  var sessionRefreshGeneration = 0;
+  var sessionRenewalLeadMs = 2 * 60 * 1000;
+  var sessionMinimumLifetimeMs = 60 * 1000;
   var identityKey = currentIdentityKey();
   var unreadRequestID = '';
   var toastTimer = 0;
@@ -100,20 +105,32 @@
     if (!/^oms1_v[1-9][0-9]{0,3}_[A-Za-z0-9_-]{43}$/.test(String(value.customUserId || ''))) throw new Error('invalid feedback identity');
     if (!isLoopbackURL(value.gatewayUrl)) throw new Error('invalid feedback gateway');
     if (mode === 'apiKey' && !/^ak_[A-Za-z0-9_-]{16,}$/.test(String(value.apiKey || ''))) throw new Error('invalid feedback key');
-    if (mode === 'session' && String(value.feedbackSessionToken || '').length < 16) throw new Error('invalid feedback session');
+    var sessionExpiresAt = 0;
+    if (mode === 'session') {
+      if (String(value.feedbackSessionToken || '').length < 16) throw new Error('invalid feedback session');
+      var absoluteExpiry = Date.parse(String(value.expiresAt || ''));
+      var expiresInSeconds = Number(value.expiresInSeconds);
+      if (!Number.isFinite(absoluteExpiry) || !Number.isInteger(expiresInSeconds) || expiresInSeconds < sessionMinimumLifetimeMs / 1000 || expiresInSeconds > 20 * 60) throw new Error('invalid feedback session expiry');
+      // Use the server-calculated relative lifetime for scheduling so a skewed
+      // workstation clock cannot make a healthy short session look expired.
+      sessionExpiresAt = Date.now() + expiresInSeconds * 1000;
+    }
     return {
-      feedbackV2Enabled: true,
-      feedbackV2NotificationsEnabled: value.feedbackV2NotificationsEnabled === true,
-      feedbackV2AuthMode: mode,
-      apiKey: mode === 'apiKey' ? String(value.apiKey) : undefined,
-      feedbackSessionToken: mode === 'session' ? String(value.feedbackSessionToken) : undefined,
-      projectId: value.projectId,
-      customUserId: String(value.customUserId),
-      gatewayUrl: String(value.gatewayUrl),
-      theme: value.theme === 'dark' || value.theme === 'light' ? value.theme : 'system',
-      locale: value.locale === 'en-US' ? 'en-US' : 'zh-CN',
-      parentOrigins: [window.location.origin],
-      hostContext: buildHostContext()
+      sessionExpiresAt: sessionExpiresAt,
+      sdkConfig: {
+        feedbackV2Enabled: true,
+        feedbackV2NotificationsEnabled: value.feedbackV2NotificationsEnabled === true,
+        feedbackV2AuthMode: mode,
+        apiKey: mode === 'apiKey' ? String(value.apiKey) : undefined,
+        feedbackSessionToken: mode === 'session' ? String(value.feedbackSessionToken) : undefined,
+        projectId: value.projectId,
+        customUserId: String(value.customUserId),
+        gatewayUrl: String(value.gatewayUrl),
+        theme: value.theme === 'dark' || value.theme === 'light' ? value.theme : 'system',
+        locale: value.locale === 'en-US' ? 'en-US' : 'zh-CN',
+        parentOrigins: [window.location.origin],
+        hostContext: buildHostContext()
+      }
     };
   }
 
@@ -131,7 +148,7 @@
     }
     return {
       release: 'oms1',
-      build: '20261111.2',
+      build: '20261112.1',
       module: 'workbench',
       route: route,
       browser: browser,
@@ -145,7 +162,10 @@
   async function fetchRuntimeConfig(force) {
     if (currentIdentityKey() !== identityKey) clearRuntime();
     if (!force && runtimeConfig) return runtimeConfig;
-    if (!force && configRequest) return configRequest;
+    // Refresh events, visibility recovery and foreground actions can arrive at
+    // the same time. They must share one server-side session exchange.
+    if (configRequest) return configRequest;
+    var requestIdentityKey = identityKey;
     configRequest = csrfToken().then(function (csrf) {
       return fetch('/gateway/feedback/config', {
         method: 'POST',
@@ -162,17 +182,81 @@
       }
       return response.json();
     }).then(function (payload) {
+      if (currentIdentityKey() !== requestIdentityKey) throw new Error('feedback identity changed');
       runtimeConfig = validateConfig(payload && payload.config);
       setEntryVisible(true);
+      scheduleSessionRenewal(runtimeConfig);
       return runtimeConfig;
     }).catch(function (error) {
-      setEntryVisible(false);
+      if (!hasUsableSession(runtimeConfig)) setEntryVisible(false);
       if (notice && error && error.status === 401) notice.textContent = '登录已失效，请重新登录后使用产品反馈。';
       throw error;
     }).finally(function () {
       configRequest = null;
     });
     return configRequest;
+  }
+
+  function sessionRemaining(config) {
+    if (!config || !config.sdkConfig || config.sdkConfig.feedbackV2AuthMode !== 'session') return 0;
+    return config.sessionExpiresAt - Date.now();
+  }
+
+  function hasUsableSession(config) {
+    return Boolean(config && config.sdkConfig && (config.sdkConfig.feedbackV2AuthMode === 'apiKey' || sessionRemaining(config) > 0));
+  }
+
+  function scheduleSessionRenewal(config, retryDelay) {
+    window.clearTimeout(sessionRefreshTimer);
+    sessionRefreshTimer = 0;
+    sessionRefreshGeneration += 1;
+    if (!config || !config.sdkConfig || config.sdkConfig.feedbackV2AuthMode !== 'session') return;
+    var remaining = sessionRemaining(config);
+    if (remaining <= 0) return;
+    var delay = Number.isFinite(retryDelay)
+      ? Math.min(Math.max(1000, retryDelay), Math.max(1000, remaining - 1000))
+      : Math.max(1000, remaining - sessionRenewalLeadMs);
+    var generation = sessionRefreshGeneration;
+    sessionRefreshTimer = window.setTimeout(function () {
+      if (generation !== sessionRefreshGeneration) return;
+      void refreshFeedbackSession(false).catch(function () {});
+    }, delay);
+  }
+
+  function refreshFeedbackSession(required) {
+    if (sessionRefreshRequest) return sessionRefreshRequest;
+    var previous = runtimeConfig;
+    sessionRefreshRequest = fetchRuntimeConfig(true).then(function (config) {
+      if (!frame) return config;
+      return awaitReady().then(function () { return configureFrame(config); }).then(function () { return config; });
+    }).then(function (config) {
+      setEntryVisible(true);
+      scheduleSessionRenewal(config);
+      return config;
+    }).catch(function (error) {
+      var remaining = sessionRemaining(previous);
+      if (!required && error && error.status !== 401 && remaining > 5000) {
+        // A temporary exchange outage must not discard an access token that is
+        // still valid. Retry once more within the remaining bounded lifetime.
+        runtimeConfig = previous;
+        setEntryVisible(true);
+        scheduleSessionRenewal(previous, Math.min(30000, Math.max(1000, remaining / 2)));
+        return previous;
+      }
+      showFailure();
+      throw error;
+    }).finally(function () {
+      sessionRefreshRequest = null;
+    });
+    return sessionRefreshRequest;
+  }
+
+  function runtimeConfigForUse() {
+    if (currentIdentityKey() !== identityKey) clearRuntime();
+    if (runtimeConfig && runtimeConfig.sdkConfig.feedbackV2AuthMode === 'session' && sessionRemaining(runtimeConfig) <= sessionRenewalLeadMs) {
+      return refreshFeedbackSession(false);
+    }
+    return fetchRuntimeConfig(false);
   }
 
   function ensureFrame() {
@@ -253,7 +337,7 @@
         rejectRequest(new Error('feedback configuration timeout'));
       }, 10000)
     };
-    post('feedback-sdk:configure', { config: config, request_id: requestID });
+    post('feedback-sdk:configure', { config: config.sdkConfig, request_id: requestID });
     return promise;
   }
 
@@ -370,7 +454,7 @@
     if (!sdkURL || (mode !== 'submit' && mode !== 'status')) return showFailure();
     stopSubmissionWatch();
     try {
-      var config = await fetchRuntimeConfig(false);
+      var config = await runtimeConfigForUse();
       // The snapshot only improves the post-submit transition. A cold or
       // temporarily slow Feedback API must never prevent the V3 SDK itself
       // from opening; the SDK remains the authority for the submit journey.
@@ -403,7 +487,7 @@
     }
     if (document.visibilityState === 'hidden') return;
     try {
-      var config = await fetchRuntimeConfig(false);
+      var config = await runtimeConfigForUse();
       ensureFrame();
       await awaitReady();
       await configureFrame(config);
@@ -415,6 +499,10 @@
 
   function clearRuntime() {
     stopSubmissionWatch();
+    sessionRefreshGeneration += 1;
+    window.clearTimeout(sessionRefreshTimer);
+    sessionRefreshTimer = 0;
+    sessionRefreshRequest = null;
     identityKey = currentIdentityKey();
     if (notice) notice.textContent = '反馈会话已结束。';
     runtimeConfig = null;
@@ -461,9 +549,8 @@
       return;
     }
     if (message.type === 'feedback-sdk:refresh-session') {
-      runtimeConfig = null;
       configuredConfig = null;
-      void fetchRuntimeConfig(true).then(configureFrame).catch(showFailure);
+      void refreshFeedbackSession(true).catch(function () {});
       return;
     }
     if (message.type === 'feedback-sdk:unread-changed') {
@@ -488,6 +575,12 @@
     form.addEventListener('submit', clearRuntime);
   });
   window.addEventListener('pagehide', clearRuntime, { once: true });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    if (runtimeConfig && runtimeConfig.sdkConfig.feedbackV2AuthMode === 'session' && sessionRemaining(runtimeConfig) <= sessionRenewalLeadMs) {
+      void refreshFeedbackSession(false).catch(function () {});
+    }
+  });
 
   if (window.requestIdleCallback) window.requestIdleCallback(function () { void prepareUnread(); }, { timeout: 3000 });
   else window.setTimeout(function () { void prepareUnread(); }, 1800);

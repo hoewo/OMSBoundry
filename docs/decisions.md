@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-12 BF-330（已接受／本地实现；发布待验）：Feedback 的 15 分钟 Session 是降低浏览器凭证泄漏影响的访问凭证，不通过延长为长期 Token 解决体验问题。OMS 采用 token-mediating backend：项目 API Key 只保存在 Gateway，浏览器只接收按 Project＋稳定匿名用户限域的 `fbs_`；宿主在到期前约 2 分钟主动续期，以 single-flight 合并计时器、前台动作、标签恢复和 SDK 过期信号。主动续期暂时失败时只允许继续使用尚未过期的旧 Token 并在剩余窗口内有界重试；SDK 401 必须强制换票且业务请求最多重放一次。Gateway 必须拒绝少于 1 分钟可用期、超过 20 分钟、错 Project 或错用户的换票响应；正式 D1 必须使用 `session`，`apiKey` 只保留 Gateway 兼容能力。Refresh Token／长期 Key 不得进入 iframe、浏览器存储、URL、日志或 OMS 业务库。该变更不改变 OMS 登录 Session、业务 Capability TTL、Feedback 事实所有权或稳定 `customUserId`。[本地验证](./reports/oms-feedback-session-renewal-local-validation-20261112.md)
+
 2026-11-11 BF-329（已接受／已发布；闭合 BF-327 的相邻运维事项）：Feedback 网关校验一期浏览器 API Key 时，auth-server 的旧 Key 只保存 bcrypt verifier，冷校验需要扫描有效 Key；同一页面并发读取能力、会话和通知时，不得重复并行执行同一 bearer 的完整 bcrypt 扫描。auth-server 以 bearer 的 SHA-256 内存键合并同 Key 在途校验，只短缓存 30 秒成功结果，未知／无效 Key 不缓存；新建或删除 Key 清空成功缓存，真实请求仍更新 `last_used_at`。该修复不放大网关 5 秒预算、不跳过 Key 状态／期限／服务范围，也不改变 BF-299 已接受的一期 `apiKey` 装配模式。正式热修为 `nebula-auth@fea711f`，并发冷／热与截图对应会话列表路由均已在公网只读复验。[发布验证](./reports/oms-feedback-api-key-validation-burst-repair-publication-20261111.md)
 
 2026-11-11 BF-328（已接受／已发布；纠正 BF-325／BF-327 的验收充分性）：V3 发布门禁必须观察最终产品面，不能只检查 channel、ready 的 `supported_contracts` 或 configured ACK。V3 artifact 在宿主配置可能早于 React 监听时，必须在监听安装后读取当前配置并收敛到 V3；不得因丢失一次边沿事件而渲染 V2 兼容页。正式 `v3-stable/sdk-v3` 已提升到 3.0.4；验收从 OMS 父域确认标题“帮助与反馈”、Tab“智能客服／我的反馈”可见且“反馈建议”标题不存在。旧 3.0.3 灰度因缺 OMS 构建时父域白名单没有提升 stable，保持不可变历史制品。[纠错与发布验证](./reports/oms-feedback-v3-product-surface-race-repair-20261111.md)

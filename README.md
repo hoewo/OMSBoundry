@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前 Feedback 短 Token 连续性（BF-330，本地实现／尚未发布）：正式 D1 改为 Gateway 代管长期 API Key、浏览器只接收 15 分钟限域 Session，并在到期前约 2 分钟 single-flight 主动续期；后台恢复复核，SDK 401 强制换票，旧 Token 只在剩余有效期内有界降级。Gateway 同时校验 1～20 分钟期限并禁止正式 D1 `apiKey` 模式。Gateway、Workbench、P9 组合与备份恢复门禁通过；线上仍保持原配置，不能视为已发布。[本地验证](./docs/reports/oms-feedback-session-renewal-local-validation-20261112.md)
+
 当前 Feedback V3 产品面纠错（BF-328，已发布）：用户截图确认 3.0.2 虽声明 V3 contract，实际仍可能显示旧“反馈建议”表单；根因是 SDK ready／React 监听安装之间的配置事件竞态。稳定 `sdk-v3` 已提升到 3.0.4，真实 Chrome 从 OMS 父域打开后显示“帮助与反馈、智能客服、我的反馈”，旧标题计数为 0。现有 OMS 页面需刷新以丢弃已加载的 3.0.2 iframe。[纠错与发布验证](./docs/reports/oms-feedback-v3-product-surface-race-repair-20261111.md)
 
 当前 Feedback V3 可用性热修（BF-327，已发布）：OMS 升级目标确实是网站内嵌 Feedback SDK V3；首次发布的问题是宿主在打开 iframe 前等待辅助的提交快照，Feedback 鉴权冷启动超过 Gateway 5 秒后快照返回 502，进而把整个反馈层误判为不可用。Workbench v1.98 已把快照改为非阻塞增强：即使快照失败，V3 仍正常打开，只暂时失去该次提交后的自动状态切换。D1 检查、21/21 healthy、备份、公网资源同哈希和真实跨域 Chrome 502 场景已通过。[发布验证](./docs/reports/oms-feedback-v3-snapshot-nonblocking-publication-20261111.md)

@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-12 BF-330 已完成本地实现、待发布：Gateway 已能只向浏览器下发 1～20 分钟约束内的 Feedback Session；Workbench 已实现到期前约 2 分钟主动续期、single-flight、标签恢复复核、SDK 强制刷新和旧 Token 剩余有效期内的有界降级；D1／P9 已从正式 `apiKey` 收敛到 `session`。本地 Gateway、Workbench、组合预检和备份恢复门禁通过。下一步是备份 `oatest`、把部署环境切到 `session`、发布 Gateway／Workbench，并以超过 15 分钟的真实 Chrome 旅程复验智能客服、反馈提交、未读、后台恢复、退出与换票拒绝；完成前不得登记已发布。
+
 2026-11-11 BF-329 已完成并发布：Feedback auth-server `fea711f` 已为同 Key 的 bcrypt 校验增加在途合并与 30 秒成功短缓存，未知 Key 不缓存，新建／删除 Key 清缓存。专项 race、全包只编译和 vet 通过；全量测试中的既有注册集成测试因本机无 Redis 触发空指针，未误记为通过。公网 8 路真实 Key 冷校验从原 23 秒超时收敛为 8/8 约 3.25 秒同时 200，热校验 95～127ms；截图对应会话历史路由 8/8 为 200，Workshop 与 OpenHands 继续健康。D1 的一期 `apiKey` 基线未改变。[发布验证](./reports/oms-feedback-api-key-validation-burst-repair-publication-20261111.md)
 
 2026-11-11 BF-328 已完成并发布：Feedback SDK commit `693e173` 修复配置事件早于 React 订阅时的 V3 状态丢失，SDK 23 文件 142/142 与发布脚本 8/8 通过。3.0.4 携带显式 OMS 父域白名单，完成 canary 视觉门禁后已提升 `v3-stable`；OMS 不需重新部署。后续 V3 发布必须保留真实宿主产品面断言，不能再用 contract 握手替代可见 UI。

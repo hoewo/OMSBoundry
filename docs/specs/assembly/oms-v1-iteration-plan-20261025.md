@@ -582,15 +582,15 @@
 - 不代表银行自动代付、自动审批、OCR／AI 识别、Webhook、全部内部管理业务 API、工资、人事、项目／合同或 OMS1 全产品闭环已经完成；
 - 不改变 Evidence、Internal Finance Requests、Money、IAM 和 People 各自事实所有权，也不新增通用工作流、通用 API 代理或共享业务数据库。
 
-### 3.9 已确认：Feedback SDK V2 首阶段装配与鉴权
+### 3.9 已确认：Feedback SDK 装配与短期 Session 鉴权
 
-OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Feedback SDK V2，并由 SDK 继续提供“提交反馈”和“我的反馈”两个工作面。当前首阶段显式选择 `apiKey` 直连模式，绑定既有 Feedback 项目 115；该选择取代本轮讨论中尚未确认的 Session 优先建议，但正式安全收敛目标仍为宿主服务端换取 15 分钟 Feedback Session。
+OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载 Feedback SDK V3 产品面，既有 Feedback HTTP 端口继续为 V2。历史 BF-299 曾显式选择 `apiKey` 直连；BF-330 起正式 D1 已收敛为宿主服务端代管长期 Key，并换取 15 分钟 Feedback Session，绑定既有项目 115。稳定 `customUserId` 与用户历史保持不变。
 
 #### 入口与运行时配置
 
-- SDK 页面使用 Feedback 平台发布的 V2 embed 入口，Workbench 复用现有“产品反馈”一级入口，不在 OMS 内复制一套提交／列表／会话页面；
+- SDK 页面使用 Feedback 平台发布的 V3 稳定 embed 入口，Workbench 复用现有“产品反馈”一级入口，不在 OMS 内复制一套提交／列表／会话页面；
 - 进入“提交反馈”发送 `feedback-sdk:open` 的 `submit` 模式，进入“我的反馈”发送 `status` 模式；同一 iframe 实例复用，不因两种模式切换反复加载；
-- 当前配置的 Feedback Project ID 为 115；完整 API Key 不登记在本文件、Git、前端源码、URL、日志、监控标签或错误上报中，只允许由部署配置注入；示例和测试夹具只能使用明显无效的占位值；
+- 当前配置的 Feedback Project ID 为 115；完整 API Key 不登记在本文件、Git、前端源码、URL、浏览器配置、日志、监控标签或错误上报中，只允许由 Gateway 部署配置注入；示例和测试夹具只能使用明显无效的占位值；
 - `gatewayUrl` 使用 Feedback 平台正式 Gateway，主题跟随系统；具体凭证值和环境差异属于部署秘密／配置，不构成业务架构事实。
 
 #### 身份、租户与权限
@@ -602,10 +602,10 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 
 #### 安全边界
 
-- `apiKey` 直连意味着凭证会在浏览器运行时可被提取，不能把它描述为客户端秘密；当前只能使用项目专用、最小范围、可轮换、可吊销且有网关限流／滥用监控的凭证；
+- 历史 `apiKey` 直连意味着凭证可在浏览器运行时提取，只保留为 Gateway 兼容实现，不允许正式 D1 继续选择；
 - SDK 必须限制允许的父页面 origin；发布前将 OMS 正式 origin 加入 `VITE_SDK_PARENT_ORIGINS`，宿主对消息同时校验精确 `event.origin`、`event.source === iframe.contentWindow`、消息 `source` 和已知 `type`，发送时使用精确 `targetOrigin`，禁止 `*`；
 - Key 不进入查询参数、本地持久化、业务数据库或日志。账号退出、切换或能力撤销时立即卸载／清空 iframe 配置，避免旧身份继续使用；
-- 直连模式是首阶段兼容方案。迁移到 Session 时由 OMS 服务端保存长期 Key，基于同一稳定 `customUserId` 换取 15 分钟、单项目／单用户短 Token；迁移不得改变用户可见的反馈历史。
+- OMS Gateway 保存长期 Key，基于同一稳定 `customUserId` 换取 15 分钟、单项目／单用户短 Token；浏览器不得获得 Refresh Token。Workbench 在到期前约 2 分钟主动续期，以 single-flight 合并并发刷新，标签页恢复时复核；SDK 401 强制换票且原请求最多重放一次。主动续期暂时失败只能在旧 Token 尚未过期时有界重试。迁移不得改变用户可见的反馈历史。
 
 #### 数据所有权与失败边界
 
@@ -613,7 +613,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 - OMS 只拥有入口选择、当前账号权限判断、稳定匿名身份派生和 iframe bridge 装配状态；Feedback 不反向成为 OMS 登录、租户、人员或业务事实 Owner；
 - SDK 未就绪、凭证无效、项目成员关系失效、跨域白名单错误或 Feedback 服务不可用时，OMS 显示独立错误和重试入口，不得阻塞 OMS 其他业务页面，也不得把空响应解释为“没有反馈”；
 - iframe 的 `ready` 只证明 SDK 页面加载完成，不证明运行时凭证已应用。宿主发送配置时必须携带一次性 `request_id`，收到 SDK 同源、同 iframe、同 `request_id` 的 `feedback-sdk:configured` 回执后，才能发送打开页面或读取未读数命令；超时按反馈服务不可用降级，不能继续打开一个缺少 Key 的假成功弹窗；
-- 当前代码的 V2 Session 模式支持 WebSocket 实时消息，`apiKey` 模式在当前 SDK 中退化为轮询；两种传输差异不得改变反馈、消息和已读事实的含义。
+- 当前 Session 模式支持 WebSocket 实时消息；Gateway 兼容的 `apiKey` 模式退化为轮询。两种传输差异不得改变反馈、消息和已读事实的含义，正式 D1 只验收 Session。
 
 #### 已确认：通知与未读角标
 
@@ -631,7 +631,7 @@ OMS1 不重新开发反馈系统。Workbench 通过跨域 iframe 加载现有 Fe
 3. 无能力、账号停用、Key 无效／吊销、错误 Project ID、未允许父 origin 和 Feedback 服务不可用均有明确失败且不影响 OMS 其他页面；
 4. “提交反馈”与“我的反馈”共用 iframe 并正确切换，关闭事件只隐藏反馈层，不改变 OMS 当前业务路由；
 5. 浏览器请求、页面源码、URL、OMS 日志和错误信息不出现文档／仓库中的明文 Key；部署轮换 Key 后无需修改业务源码；
-6. 后续从直连模式迁移 Session 时，同一账号仍能访问原 Feedback 项目 115 下由稳定 `customUserId` 归属的历史。
+6. 从直连模式迁移 Session 后，同一账号仍能访问原 Feedback 项目 115 下由稳定 `customUserId` 归属的历史；连续打开超过 15 分钟不出现用户可见中断。
 7. 项目 115 开启通知后，开发者回复能使对应账号角标增加；读取计数不清零，打开一条只清该条，其余反馈未读保持；跨账号／跨租户无法看到该角标或通知。
 
 #### 当前实现审计与拆解依据（2026-10-25）

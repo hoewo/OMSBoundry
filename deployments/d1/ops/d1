@@ -115,7 +115,7 @@ validate_feedback_config() {
   [ "$feedback_notifications_enabled" = false ] || feedback_configured=true
   [ "$feedback_configured" = true ] || return 0
 
-  [ "$feedback_auth_mode" = apiKey ] || { echo "FEEDBACK_AUTH_MODE must be apiKey for the first release" >&2; exit 2; }
+  [ "$feedback_auth_mode" = session ] || { echo "FEEDBACK_AUTH_MODE must be session for formal D1 deployments" >&2; exit 2; }
   validate_feedback_url FEEDBACK_SDK_URL "$feedback_sdk_url"
   validate_feedback_url FEEDBACK_GATEWAY_URL "$feedback_gateway_url"
   [ "$feedback_project_id" = 115 ] || { echo "FEEDBACK_PROJECT_ID must be 115 for this OMS1 release" >&2; exit 2; }

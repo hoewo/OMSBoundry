@@ -121,6 +121,64 @@ func TestFeedbackConfigRequiresOnlyActiveSessionAndReturnsPseudonymousScope(t *t
 	}
 }
 
+func TestFeedbackConfigSessionModeMediatesShortToken(t *testing.T) {
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := writeKeys(t, publicKey)
+	now := time.Now().UTC()
+	iam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie(sessionCookieName); err != nil || cookie.Value != "session-good" {
+			writeProblem(w, http.StatusUnauthorized, "session", "bad")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"principal": map[string]any{"subject_id": testSubject, "tenant_id": testTenant, "username": "tester", "display_name": "体验账号", "administrator": false, "auth_time": now}})
+	}))
+	defer iam.Close()
+	identitySecret := []byte("0123456789abcdef0123456789abcdef")
+	expectedUser := deriveFeedbackUserID(identitySecret, "v1", testTenant, testSubject)
+	feedbackAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/workshop/v2/apikey/feedback-sessions" || r.Header.Get("Authorization") != "Bearer ak_0123456789abcdef" {
+			t.Fatalf("unexpected Feedback session exchange: %s %s", r.Method, r.URL.Path)
+		}
+		var input map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input["project_id"] != float64(115) || input["custom_user_id"] != expectedUser {
+			t.Fatalf("unexpected Feedback session scope: %#v %v", input, err)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"code": "OK", "data": map[string]any{
+			"token": "fbs_0123456789abcdef", "token_type": "Bearer", "project_id": 115,
+			"custom_user_id": expectedUser, "expires_at": time.Now().UTC().Add(15 * time.Minute),
+		}})
+	}))
+	defer feedbackAPI.Close()
+
+	suite := manifest.Suite{SchemaVersion: "1", SuiteID: "feedback-session-test", TenantID: testTenant, Applications: []manifest.Application{{ID: "identity-access", Version: "0.1.0", Enabled: true, Required: true, RoutePrefix: "/auth", Upstream: iam.URL, ReadinessPath: "/health/ready", Audience: "identity-access"}}}
+	server, err := New(suite, credential.New(keyPath, "https://oms.example.test/auth"), slog.New(slog.NewTextHandler(io.Discard, nil)), Options{RequestsPerMinute: 100, Feedback: FeedbackOptions{AuthMode: "session", GatewayURL: feedbackAPI.URL, ProjectID: 115, APIKeys: []string{"ak_0123456789abcdef"}, IdentityHMACKey: identitySecret, IdentityVersion: "v1", NotificationsEnabled: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "https://oms.example.test/gateway/feedback/config", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-good"})
+	request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token-0123456789"})
+	request.Header.Set("X-CSRF-Token", "csrf-token-0123456789")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("session config response = %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Config map[string]any `json:"config"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	remaining, _ := body.Config["expiresInSeconds"].(float64)
+	if body.Config["feedbackV2AuthMode"] != "session" || body.Config["feedbackSessionToken"] != "fbs_0123456789abcdef" || body.Config["expiresAt"] == nil || remaining < 60 || remaining > 20*60 || body.Config["apiKey"] != nil {
+		t.Fatalf("unexpected mediated session config: %#v", body.Config)
+	}
+}
+
 func TestFeedbackSubmissionSnapshotIsScopedAndDoesNotExposeCredentials(t *testing.T) {
 	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -213,6 +271,35 @@ func TestFeedbackSessionExchangeUsesBoundedRotationFallback(t *testing.T) {
 	session, err := adapter.exchangeFeedbackSession(t.Context(), "oms1_v1_example")
 	if err != nil || session.Token != "fbs_0123456789abcdef" || calls != 2 {
 		t.Fatalf("rotated Feedback key fallback session=%#v calls=%d err=%v", session, calls, err)
+	}
+}
+
+func TestFeedbackSessionLifetimeMustStayShortAndUsable(t *testing.T) {
+	now := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	valid := feedbackSession{
+		Token:        "fbs_0123456789abcdef",
+		TokenType:    "Bearer",
+		ProjectID:    115,
+		CustomUserID: "oms1_v1_example",
+		ExpiresAt:    now.Add(15 * time.Minute),
+	}
+	if err := validateFeedbackSession(valid, 115, "oms1_v1_example", now); err != nil {
+		t.Fatalf("valid bounded session rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*feedbackSession){
+		"wrong token family": func(value *feedbackSession) { value.Token = "ak_0123456789abcdef" },
+		"almost expired":     func(value *feedbackSession) { value.ExpiresAt = now.Add(30 * time.Second) },
+		"unbounded lifetime": func(value *feedbackSession) { value.ExpiresAt = now.Add(21 * time.Minute) },
+		"wrong project":      func(value *feedbackSession) { value.ProjectID = 116 },
+		"wrong customer":     func(value *feedbackSession) { value.CustomUserID = "oms1_v1_other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := validateFeedbackSession(candidate, 115, "oms1_v1_example", now); err == nil {
+				t.Fatal("unsafe Feedback session accepted")
+			}
+		})
 	}
 }
 

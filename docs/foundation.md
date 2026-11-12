@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-12 Feedback 短期 Session 连续性基线（BF-330，本地实现／发布待验）：15 分钟 `fbs_` 是短期、按项目和稳定匿名用户限域的访问凭证，体验问题通过 Gateway 中介与主动续期解决，不通过延长为长期 Token。长期 API Key 只留在 Gateway；浏览器不持有 Refresh Token，不持久化短 Session。宿主到期前约 2 分钟 single-flight 换票，标签页恢复复核，SDK 401 强制换票且最多重放一次；主动续期失败只在旧 Token 尚有效时有界降级。正式 D1 必须使用 `session`。本地验证通过，线上仍未切换。
+
 2026-11-11 Feedback API Key 并发校验基线（BF-329，已发布）：一期仍使用 BF-299 明确接受的 `apiKey` 装配，不借故障修复静默切换鉴权模式。Feedback auth-server 必须合并同一 Key 的并发 bcrypt 冷校验，并仅短缓存成功结果；无效 Key 不得进入缓存，Key 新建／删除必须使成功缓存失效。V3 首屏的能力、会话和通知读取不得再因同 Key 并发把单次约 3 秒校验放大到 20 秒以上。该修复不改变 Feedback 事实、OMS 身份派生、网关超时或 OpenHands 模型配置。
 
 2026-11-11 Feedback V3 产品面验收基线（BF-328，已发布）：产品版本以用户最终看到的界面和行为为准；URL、channel manifest、ready contract 与 configured ACK 都只是必要条件。V3 必须呈现“帮助与反馈”统一面板及“智能客服／我的反馈”，不能落入独立“反馈建议”表单。SDK 初始化必须兼容宿主在 React 订阅前已完成配置的时序。正式稳定版本现为 3.0.4；已加载旧 iframe 的浏览器需刷新页面取得新制品。

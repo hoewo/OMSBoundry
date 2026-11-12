@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-12 Feedback Token-Mediating Backend（BF-330，本地实现／发布待验）：Browser 以 OMS 的 HttpOnly Session＋CSRF 请求同源 Gateway；Gateway 从可信 Tenant／Subject 派生稳定匿名用户，以仅存服务端的 Feedback API Key 换取 15 分钟 `fbs_`，再把短 Token 与到期时间交给 iframe。Workbench 只在内存保存 Session，到期前约 2 分钟 single-flight 续期，后台恢复复核；Gateway 验证 token family、Bearer、Project、用户和 1～20 分钟剩余期限。浏览器没有 Refresh Token，API Key 不进入 SDK；退出／身份变化／OMS Session 失效后不能换新票。Feedback Owner 和 HTTP V2 不变，正式 D1 禁止直出 `apiKey`。
+
 2026-11-11 Feedback API Key 校验突发保护（BF-329，已发布）：Gateway 仍逐请求把 bearer 交给 auth-server 最终验证；auth-server 对旧 bcrypt-only Key 的同摘要并发请求使用进程内 single-flight，并短缓存成功的验证投影。缓存索引只保存 bearer 的 SHA-256，不保存明文；未知／无效 Key 不缓存，成功缓存不晚于 Key 自身到期时间，Key 生命周期命令清除缓存。所有命中仍更新 `last_used_at`。该机制只消除重复 CPU 工作，不把鉴权搬进 OMS、不改变 API Key 的服务范围、网关失败关闭、Feedback V2 路由或事实所有权。
 
 2026-11-11 Feedback V3 初始化时序（BF-328，已发布）：Feedback SDK bridge 可能在 React App 挂载前向父窗口发送 ready；宿主随后回传的 configure 既写入 SDK 当前配置，也发送 configured ACK。React 选择产品面不能只依赖一次配置事件，必须在订阅后复核当前配置，使 `VITE_SDK_CONTRACT=v3` 与有效 V2 传输鉴权稳定选择统一支持面。该修复只改变 SDK 客户端状态收敛，不改变 OMS Gateway、Feedback HTTP V2、身份派生或事实所有权。正式稳定 artifact 为 3.0.4。

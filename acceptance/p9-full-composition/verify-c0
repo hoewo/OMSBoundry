@@ -78,7 +78,7 @@ for flag in $domain_flags; do
   [ "$(env_value "$flag" false)" = true ] || { echo "$flag must be true for P9 full composition" >&2; exit 1; }
 done
 
-[ "$(env_value FEEDBACK_AUTH_MODE)" = apiKey ] || { echo "P9 requires Feedback apiKey mode" >&2; exit 1; }
+[ "$(env_value FEEDBACK_AUTH_MODE)" = session ] || { echo "P9 requires Feedback session mode" >&2; exit 1; }
 [ "$(env_value FEEDBACK_PROJECT_ID)" = 115 ] || { echo "P9 requires Feedback project 115" >&2; exit 1; }
 [ "$(env_value FEEDBACK_NOTIFICATIONS_ENABLED false)" = true ] || { echo "P9 requires Feedback notifications enabled" >&2; exit 1; }
 [ -n "$(env_value FEEDBACK_SDK_URL)" ] || { echo "P9 requires the Feedback SDK URL" >&2; exit 1; }

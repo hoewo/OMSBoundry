@@ -34,6 +34,8 @@ COST_OUTSOURCING_DB_PASSWORD=CostOutsourcingPassword_123
 BONUS_DISTRIBUTION_DB_PASSWORD=BonusDistributionPassword_123
 INTERNAL_FINANCE_REQUESTS_DB_PASSWORD=InternalFinancePassword_123
 PAYROLL_DB_PASSWORD=PayrollPassword_123
+WORKFORCE_ATTENDANCE_DB_PASSWORD=WorkforceAttendancePassword_123
+INVOICE_RECOGNITION_DB_PASSWORD=InvoiceRecognitionPassword_123
 BOOTSTRAP_ADMIN_PASSWORD=BootstrapPassword_123
 ENABLE_CONTRACT=false
 ENABLE_MONEY=true
@@ -49,6 +51,8 @@ ENABLE_COST_OUTSOURCING=false
 ENABLE_BONUS_DISTRIBUTION=false
 ENABLE_INTERNAL_FINANCE_REQUESTS=true
 ENABLE_PAYROLL=true
+ENABLE_WORKFORCE_ATTENDANCE=true
+ENABLE_INVOICE_RECOGNITION=false
 PROJECT_PARTY_BASE_URL=
 PARTY_CURSOR_HMAC_KEY=PartyCursorHMACKey_1234567890123456
 EVIDENCE_PUBLIC_BASE_URL=http://127.0.0.1:18000/evidence
@@ -73,8 +77,10 @@ jq -e '
   .services["internal-finance-requests"].depends_on["evidence-service"].condition == "service_healthy" and
   .services.payroll.environment.WORKLOAD_ID == "payroll" and
   .services.payroll.environment.MONEY_BASE_URL == "http://money-flow-ledger:8083" and
+  .services.payroll.environment.ATTENDANCE_BASE_URL == "http://workforce-attendance:8096" and
   .services.payroll.depends_on["people-groups"].condition == "service_healthy" and
   .services.payroll.depends_on["money-flow-ledger"].condition == "service_healthy" and
+  .services.payroll.depends_on["workforce-attendance"].condition == "service_healthy" and
   .volumes["internal-finance-requests-workload-private"] != null
 ' "$test_dir/rendered.json" >/dev/null || {
   echo 'P9 rendered composition has an incomplete Finance/Payroll dependency graph' >&2
@@ -99,8 +105,9 @@ assert_invalid_selection() {
 
 assert_invalid_selection finance-without-money 'ENABLE_MONEY=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
 assert_invalid_selection finance-without-evidence 'ENABLE_EVIDENCE=false' 'ENABLE_INTERNAL_FINANCE_REQUESTS=true requires ENABLE_MONEY=true and ENABLE_EVIDENCE=true'
-assert_invalid_selection payroll-without-people 'ENABLE_PEOPLE=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
-assert_invalid_selection payroll-without-money 'ENABLE_MONEY=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true and ENABLE_MONEY=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+assert_invalid_selection payroll-without-people 'ENABLE_PEOPLE=false' 'ENABLE_WORKFORCE_ATTENDANCE=true requires ENABLE_PEOPLE=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+assert_invalid_selection payroll-without-money 'ENABLE_MONEY=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true, ENABLE_MONEY=true and ENABLE_WORKFORCE_ATTENDANCE=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
+assert_invalid_selection payroll-without-attendance 'ENABLE_WORKFORCE_ATTENDANCE=false' 'ENABLE_PAYROLL=true requires ENABLE_PEOPLE=true, ENABLE_MONEY=true and ENABLE_WORKFORCE_ATTENDANCE=true' 'ENABLE_INTERNAL_FINANCE_REQUESTS=false'
 
 invalid_drain_env="$test_dir/invalid-drain.env"
 cp "$env_file" "$invalid_drain_env"
@@ -117,7 +124,7 @@ feedback_env="$test_dir/feedback.env"
 cp "$env_file" "$feedback_env"
 printf '%s\n' \
   'FEEDBACK_SDK_URL=https://feedback.example.test/sdk.js' \
-  'FEEDBACK_AUTH_MODE=apiKey' \
+  'FEEDBACK_AUTH_MODE=session' \
   'FEEDBACK_GATEWAY_URL=https://feedback.example.test' \
   'FEEDBACK_PROJECT_ID=115' \
   "FEEDBACK_API_KEY=$feedback_key" \
@@ -127,7 +134,7 @@ printf '%s\n' \
 D1_ENV_FILE="$feedback_env" D1_PROJECT_NAME=omsbizfoundry-p9-feedback "$d1" config --format json >"$test_dir/feedback.json"
 jq -e '
   .services["unified-workbench"].environment.FEEDBACK_SDK_URL == "https://feedback.example.test/sdk.js" and
-  .services.gateway.environment.FEEDBACK_AUTH_MODE == "apiKey" and
+  .services.gateway.environment.FEEDBACK_AUTH_MODE == "session" and
   (.services.gateway.environment.FEEDBACK_PROJECT_ID | tostring) == "115" and
   (.services.gateway.environment.FEEDBACK_NOTIFICATIONS_ENABLED | tostring) == "true"
 ' "$test_dir/feedback.json" >/dev/null
@@ -157,14 +164,14 @@ assert_invalid_feedback() {
 }
 
 feedback_common="FEEDBACK_SDK_URL=https://feedback.example.test/sdk.js
-FEEDBACK_AUTH_MODE=apiKey
+FEEDBACK_AUTH_MODE=session
 FEEDBACK_GATEWAY_URL=https://feedback.example.test
 FEEDBACK_PROJECT_ID=115
 FEEDBACK_API_KEY=$feedback_key
 FEEDBACK_IDENTITY_HMAC_KEY=$feedback_hmac
 FEEDBACK_IDENTITY_VERSION=v1
 FEEDBACK_NOTIFICATIONS_ENABLED=true"
-assert_invalid_feedback partial 'FEEDBACK_AUTH_MODE=apiKey' 'FEEDBACK_SDK_URL must use HTTPS or loopback HTTP'
+assert_invalid_feedback partial 'FEEDBACK_AUTH_MODE=session' 'FEEDBACK_SDK_URL must use HTTPS or loopback HTTP'
 assert_invalid_feedback wrong-project "${feedback_common}
 FEEDBACK_PROJECT_ID=116" 'FEEDBACK_PROJECT_ID must be 115 for this OMS1 release'
 assert_invalid_feedback insecure-remote "${feedback_common}
@@ -176,8 +183,8 @@ FEEDBACK_API_KEY=
 FEEDBACK_API_KEYS=${feedback_key},ak_previous_0123456789abcdef0123456789abcdef,ak_older_0123456789abcdef0123456789abcdef" 'FEEDBACK_API_KEYS must contain one current key and at most one previous key'
 assert_invalid_feedback short-hmac "${feedback_common}
 FEEDBACK_IDENTITY_HMAC_KEY=too-short" 'FEEDBACK_IDENTITY_HMAC_KEY must contain at least 32 characters'
-assert_invalid_feedback session-mode "${feedback_common}
-FEEDBACK_AUTH_MODE=session" 'FEEDBACK_AUTH_MODE must be apiKey for the first release'
+assert_invalid_feedback direct-mode "${feedback_common}
+FEEDBACK_AUTH_MODE=apiKey" 'FEEDBACK_AUTH_MODE must be session for formal D1 deployments'
 
 # Exercise the selected backup and empty-target restore command graph without
 # starting Docker. This proves the two new Owners participate in the same D1
@@ -202,6 +209,7 @@ people-groups
 evidence-service
 internal-finance-requests
 payroll
+workforce-attendance
 unified-workbench
 gateway
 nginx
@@ -231,7 +239,7 @@ done
 if [ -n "$backup_id" ]; then
   target="$D1_TEST_BACKUP_DIR/$backup_id"
   mkdir -p "$target"
-  for artifact in identity-access.dump signing-keys.json money-flow-ledger.zip people-groups.dump evidence-service.zip internal-finance-requests.dump payroll.dump; do
+  for artifact in identity-access.dump signing-keys.json money-flow-ledger.zip people-groups.dump evidence-service.zip internal-finance-requests.dump payroll.dump workforce-attendance.dump; do
     : >"$target/$artifact"
   done
 fi
@@ -245,8 +253,10 @@ backup=$(find "$test_dir/backups" -mindepth 1 -maxdepth 1 -type d -print -quit)
 [ -n "$backup" ] && [ -f "$backup/checksums.sha256" ] && [ -f "$backup/suite-selection.env" ]
 grep -qx 'ENABLE_INTERNAL_FINANCE_REQUESTS=true' "$backup/suite-selection.env"
 grep -qx 'ENABLE_PAYROLL=true' "$backup/suite-selection.env"
+grep -qx 'ENABLE_WORKFORCE_ATTENDANCE=true' "$backup/suite-selection.env"
 grep -q 'internal-finance-requests.dump' "$backup/checksums.sha256"
 grep -q 'payroll.dump' "$backup/checksums.sha256"
+grep -q 'workforce-attendance.dump' "$backup/checksums.sha256"
 grep -q 'backup-consistency.env' "$backup/checksums.sha256"
 grep -q 'database-fingerprints.tsv' "$backup/checksums.sha256"
 grep -qx 'CONSISTENCY_MODE=public-ingress-quiesced-v1' "$backup/backup-consistency.env"
@@ -255,15 +265,16 @@ grep -qx 'FORMAT	omsbizfoundry.d1-database-fingerprints/v1' "$backup/database-fi
 grep -qx 'EXCLUDED_DATA	identity_access.public.suite_sessions' "$backup/database-fingerprints.tsv"
 grep -q '^internal_finance_requests	' "$backup/database-fingerprints.tsv"
 grep -q '^payroll	' "$backup/database-fingerprints.tsv"
+grep -q '^workforce_attendance	' "$backup/database-fingerprints.tsv"
 awk -F '\t' '
   NR <= 3 { next }
   $2 != 1 || $3 != 1 { exit 1 }
   { databases++ }
-  END { if (databases != 6) exit 1 }
+  END { if (databases != 7) exit 1 }
 ' "$backup/database-fingerprints.tsv"
 stop_line=$(grep -n ' stop nginx' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
 first_dump_line=$(grep -n 'identity-access sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | head -n 1 | cut -d: -f1)
-last_dump_line=$(grep -n 'payroll sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
+last_dump_line=$(grep -n 'workforce-attendance sh -eu -c .*pg_dump' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
 restart_line=$(grep -n ' up --detach --no-deps --no-build --wait nginx' "$test_dir/backup-docker.log" | tail -n 1 | cut -d: -f1)
 [ -n "$stop_line" ] && [ -n "$first_dump_line" ] && [ -n "$last_dump_line" ] && [ -n "$restart_line" ] \
   && [ "$stop_line" -lt "$first_dump_line" ] && [ "$restart_line" -gt "$last_dump_line" ] || {
@@ -276,8 +287,10 @@ PATH="$mock_bin:$PATH" D1_DOCKER_MOCK_LOG="$mock_log" D1_TEST_BACKUP_DIR="$test_
   "$d1" restore "$backup_id" >"$test_dir/restore.out"
 grep -q 'internal-finance-requests sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'payroll sh -eu -c .*pg_dump' "$mock_log"
+grep -q 'workforce-attendance sh -eu -c .*pg_dump' "$mock_log"
 grep -q 'run --rm --no-deps .*internal-finance-requests sh -eu -c .*pg_restore' "$mock_log"
 grep -q 'run --rm --no-deps .*payroll sh -eu -c .*pg_restore' "$mock_log"
+grep -q 'run --rm --no-deps .*workforce-attendance sh -eu -c .*pg_restore' "$mock_log"
 
 # Backups created before BF-248 have no database fingerprint artifact. They
 # remain restorable after their original checksum manifest is verified.

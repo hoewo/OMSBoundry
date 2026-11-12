@@ -19,6 +19,11 @@ import (
 
 var feedbackIdentityVersionPattern = regexp.MustCompile(`^v[1-9][0-9]{0,3}$`)
 
+const (
+	feedbackSessionMinimumRemaining = time.Minute
+	feedbackSessionMaximumRemaining = 20 * time.Minute
+)
+
 // FeedbackOptions configures the external Feedback SDK adapter. APIKeys are
 // server-held deployment secrets. The first key is active; later keys are
 // accepted only as a bounded fallback while rotating session-mode deployments.
@@ -151,8 +156,9 @@ func (s *Server) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 		"locale":                         "zh-CN",
 	}
 	if s.feedback.authMode == "apiKey" {
-		// Direct mode is an explicit first-release risk acceptance. The key is
-		// browser-visible, but never enters source, logs, URLs or persistence.
+		// Direct mode remains available only for compatibility outside the
+		// formal D1 profile. The key is browser-visible, but never enters source,
+		// logs, URLs or persistence.
 		config["apiKey"] = s.feedback.apiKeys[0]
 	} else {
 		session, err := s.exchangeFeedbackSession(r.Context(), customUserID)
@@ -162,6 +168,7 @@ func (s *Server) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		config["feedbackSessionToken"] = session.Token
 		config["expiresAt"] = session.ExpiresAt.UTC().Format(time.RFC3339)
+		config["expiresInSeconds"] = int(time.Until(session.ExpiresAt).Seconds())
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"config": config})
 }
@@ -281,10 +288,18 @@ func (s *Server) exchangeFeedbackSession(ctx context.Context, customUserID strin
 			return feedbackSession{}, fmt.Errorf("feedback session response is invalid")
 		}
 		value := envelope.Data
-		if value.Token == "" || value.TokenType != "Bearer" || value.ProjectID != s.feedback.projectID || value.CustomUserID != customUserID || !value.ExpiresAt.After(time.Now().UTC()) {
-			return feedbackSession{}, fmt.Errorf("feedback session scope is invalid")
+		if err := validateFeedbackSession(value, s.feedback.projectID, customUserID, time.Now().UTC()); err != nil {
+			return feedbackSession{}, err
 		}
 		return value, nil
 	}
 	return feedbackSession{}, fmt.Errorf("feedback session exchange failed")
+}
+
+func validateFeedbackSession(value feedbackSession, projectID int, customUserID string, now time.Time) error {
+	remaining := value.ExpiresAt.Sub(now)
+	if !strings.HasPrefix(value.Token, "fbs_") || len(value.Token) < 16 || value.TokenType != "Bearer" || value.ProjectID != projectID || value.CustomUserID != customUserID || remaining < feedbackSessionMinimumRemaining || remaining > feedbackSessionMaximumRemaining {
+		return fmt.Errorf("feedback session scope or lifetime is invalid")
+	}
+	return nil
 }

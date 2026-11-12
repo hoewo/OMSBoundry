@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## Feedback 短期 Session 无感续期（2026-11-12，本地实现／发布待验）
+
+BF-330 的本地门禁必须证明：正式 D1 接受 `session` 且拒绝 `apiKey`；Gateway 不向浏览器返回长期 Key，并拒绝过短、过长、错 Project 或错用户的 Session；Workbench 在 15 分钟 Session 到期前约 2 分钟只调度一次续期，并把并发 SDK 过期信号合并为一次换票。浏览器配置不得携带宿主租约元数据，不得使用 Local／Session Storage 保存凭证。
+
+已实际运行 Gateway／Workbench `go test ./...` 与 `go vet ./...`、Workbench Node 全量 303 项（其中 Feedback 动态 47 项）、JS／Shell 语法检查、`acceptance/p9-full-composition/test-preflight` 和 `deployments/d1/ops/test-p9-composition`，均通过。公网部署、真实 15 分钟长会话、后台恢复和退出拒绝尚未运行，不登记为通过。[本地报告](./reports/oms-feedback-session-renewal-local-validation-20261112.md)
+
 ## Feedback API Key 并发校验（2026-11-11，已发布）
 
 BF-329 必须验证同一有效 Key 的并发冷校验只执行一次底层加载且所有等待者得到同一结果；成功结果可短缓存，无效结果不得缓存，clear 后必须重新加载。公网门禁使用现有 OMS Key 只读请求，不打印 bearer、不创建反馈：8 路冷请求必须全部在网关 5 秒预算内返回 200，热请求应直接命中快速路径；并单独复验 `/agent-chats/conversations` 的 200 与列表 envelope。
