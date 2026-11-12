@@ -1,10 +1,22 @@
 # OMSBizFoundry 验证入口
 
-## 工资批量输入可见标签（2026-11-12，本地通过／待发布）
+## Feedback SDK 父域发布门禁（2026-11-13，已发布）
+
+BF-337 必须验证正式 policy 中的每个父域都真实出现在构建 JavaScript 和 release manifest；缺失 `parent_origins` 或缺少目标 channel 所需父域的 release 必须在任何 loader／channel 写入前拒绝 promote。canary 与 stable 必须指向同一不可变摘要，真实 OMS 父域最终加载指定版本并显示 V3 产品面。
+
+SDK 23 个测试文件 143/143、release 11/11、TypeScript＋Vite production build、远端 release／asset 摘要和真实 Chrome 均通过；3.0.4 旧 manifest 被新门禁明确拒绝，3.0.6 stable 已加载。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
+
+## 最后使用组织（2026-11-13，本地通过／待发布）
+
+BF-336 必须验证存量 schema 12 账号迁移后以 primary Subject 回填；切换到第二组织后，新浏览器会话用同一凭据登录应直接返回第二组织 Tenant／Subject。last-used 停用时应回退主组织并自愈；指针必须属于同一账号。Session 创建／旋转和指针更新必须原子，失败不得只更新一侧。
+
+Identity `go test ./...`、`go vet ./...` 和 PostgreSQL 18.6 的 database／HTTP integration 已实际通过；临时容器已删除。公网 migration、备份、D1 check 和真实双组织登录尚未执行，不登记通过。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+
+## 工资批量输入可见标签（2026-11-12，已发布）
 
 BF-335 必须验证每位成员的绩效和个税输入分别由可见 label 关联，文本明确包含字段含义与“元”单位；可访问名称必须包含成员姓名，外层不得一个 label 包含两个输入。桌面双列和窄屏成员优先布局都必须存在；字段名、preview／commit 请求和 Payroll 计算不得改变。
 
-已实际运行变更 JavaScript 语法检查、Payroll 专项 9/9、Workbench Node 308/308、Workbench Go test／vet、P9 preflight、D1 P9 composition 和 `git diff --check`，均通过。发布包、目标机、公网资源与真实浏览器尚未运行，不登记通过。[本地报告](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+已实际运行变更 JavaScript 语法检查、Payroll 专项 9/9、Workbench Node 308/308、Workbench Go test／vet、P9 preflight、D1 P9 composition 和 `git diff --check`，均通过。公网 Workbench v1.102、备份、发布包、D1 check、21/21 healthy 和真实 Chrome 标签／可访问名称复验也已通过；未生成工资预览或写入工资。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 
 ## 财务申请审计删除与账号菜单收起（2026-11-12，已发布）
 

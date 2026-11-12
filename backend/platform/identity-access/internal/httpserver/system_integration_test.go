@@ -52,7 +52,7 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	if err := database.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
-	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000012_multi_organization_accounts.sql" {
+	if version, err := database.RequireCurrentSchema(context.Background(), pool); err != nil || version != "000013_last_used_organization.sql" {
 		t.Fatalf("schema version = %q, %v", version, err)
 	}
 	keys, err := signing.Open(t.TempDir()+"/signing-keys.json", time.Now().UTC())
@@ -136,6 +136,35 @@ func TestFreshDatabaseIdentityLifecycleAndCredentialIssuance(t *testing.T) {
 	postJSON(t, createdAdmin, server.URL+"/api/v1/session/organization", createdAdminCSRF, map[string]any{"tenant_id": stringField(t, secondMembershipTenantObject, "id")}, http.StatusOK)
 	if principal := currentSession(t, createdAdmin, server.URL, http.StatusOK); stringField(t, principal, "tenant_id") != stringField(t, secondMembershipTenantObject, "id") || stringField(t, principal, "subject_id") == stringField(t, objectField(t, createdAdministrator, "subject"), "id") {
 		t.Fatalf("switched organization principal = %#v", principal)
+	}
+	rememberedAdmin := newClient(t)
+	rememberedAdminCSRF := fetchCSRF(t, rememberedAdmin, server.URL)
+	login(t, rememberedAdmin, server.URL, rememberedAdminCSRF, "created-admin@example.com", "created administrator password 123", http.StatusOK)
+	rememberedPrincipal := currentSession(t, rememberedAdmin, server.URL, http.StatusOK)
+	if stringField(t, rememberedPrincipal, "tenant_id") != stringField(t, secondMembershipTenantObject, "id") || stringField(t, rememberedPrincipal, "subject_id") != stringField(t, objectField(t, secondMembershipAdministrator, "subject"), "id") {
+		t.Fatalf("remembered organization principal = %#v", rememberedPrincipal)
+	}
+	var lastUsedSubjectID string
+	if err := pool.QueryRow(context.Background(), `SELECT last_used_subject_id::text FROM login_accounts WHERE login_identifier='created-admin@example.com'`).Scan(&lastUsedSubjectID); err != nil || lastUsedSubjectID != stringField(t, rememberedPrincipal, "subject_id") {
+		t.Fatalf("last used subject = %q, principal = %#v, err = %v", lastUsedSubjectID, rememberedPrincipal, err)
+	}
+	secondSubjectID := stringField(t, objectField(t, secondMembershipAdministrator, "subject"), "id")
+	if _, err := pool.Exec(context.Background(), `UPDATE subjects SET status='disabled' WHERE id=$1`, secondSubjectID); err != nil {
+		t.Fatal(err)
+	}
+	fallbackAdmin := newClient(t)
+	fallbackAdminCSRF := fetchCSRF(t, fallbackAdmin, server.URL)
+	login(t, fallbackAdmin, server.URL, fallbackAdminCSRF, "created-admin@example.com", "created administrator password 123", http.StatusOK)
+	fallbackPrincipal := currentSession(t, fallbackAdmin, server.URL, http.StatusOK)
+	primarySubjectID := stringField(t, objectField(t, createdAdministrator, "subject"), "id")
+	if stringField(t, fallbackPrincipal, "tenant_id") != stringField(t, createdTenantObject, "id") || stringField(t, fallbackPrincipal, "subject_id") != primarySubjectID {
+		t.Fatalf("fallback organization principal = %#v", fallbackPrincipal)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT last_used_subject_id::text FROM login_accounts WHERE login_identifier='created-admin@example.com'`).Scan(&lastUsedSubjectID); err != nil || lastUsedSubjectID != primarySubjectID {
+		t.Fatalf("fallback last used subject = %q, want %q, err = %v", lastUsedSubjectID, primarySubjectID, err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE subjects SET status='active' WHERE id=$1`, secondSubjectID); err != nil {
+		t.Fatal(err)
 	}
 	adminInvitation := postJSON(t, systemAdmin, server.URL+"/api/v1/system/administrators", systemAdminCSRF, map[string]any{"tenant_id": testTenantID, "login_identifier": "tenant-admin@example.com", "display_name": "测试企业管理员"}, http.StatusCreated)
 	admin := newClient(t)

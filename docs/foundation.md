@@ -1,6 +1,10 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-11-12 工资批量输入可理解性基线（BF-335，待发布）：任何并排金额输入都必须在输入位置直接说明字段含义和单位；工资批量录入固定显示“当月绩效（元）”与“个人所得税（元）”，不能仅依靠输入顺序、默认值或预览中的内部字段名解释。成员姓名与字段名共同构成无障碍名称。[本地验证](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+2026-11-13 Feedback SDK 正式父域基线（BF-337，已发布）：跨域父页面只有同时存在于版本化发布策略、编译产物和不可变 release 清单时才能进入正式 channel。stable 提升必须失败关闭，不能用 ready、contract 或 configured 的局部成功替代父域兼容验证。正式 V3 已为 3.0.6，OMS 真实加载通过。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
+
+2026-11-13 最后使用组织基线（BF-336，本地通过／待发布）：账号的登录偏好由 IAM 服务端拥有，并且只在成功签发新 Session 时更新。偏好选择不改变组织内 Subject、权限和成员事实；不可用偏好必须回退到启用成员关系。首屏必须直接基于登录返回的 Tenant 拉取数据，不先请求另一个组织后再切换。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+
+2026-11-12 工资批量输入可理解性基线（BF-335，已发布）：任何并排金额输入都必须在输入位置直接说明字段含义和单位；工资批量录入固定显示“当月绩效（元）”与“个人所得税（元）”，不能仅依靠输入顺序、默认值或预览中的内部字段名解释。成员姓名与字段名共同构成无障碍名称。公网 v1.102 已复验。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 
 2026-11-12 财务申请删除基线（BF-333，已发布）：报销与付款申请的删除资格由 Internal Finance Requests 依据独立 Capability、当前 revision、生命周期和付款事实最终判断，不由页面按钮或“管理员”角色名推断。删除是带原因、Actor、Credential 和时间的软删除；默认隐藏不等于物理删除。已删除申请保留完整历史和发票指纹审计，但不再阻止同一发票用于纠正后的新申请；一旦存在实际付款、核销、超额或未知付款结果，删除失败关闭且只能沿业务调整／冲销路径处理。v1.101 已通过目标机与公网只读验收，未执行线上删除。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 

@@ -1,6 +1,10 @@
 # OMSBizFoundry
 
-当前工资批量输入标签（BF-335，待发布）：每位成员的两个金额输入框分别显示“当月绩效（元）”和“个人所得税（元）”，无障碍名称同时包含成员姓名与字段名；移动端保持成员信息在上、两个已标注金额字段在下。该变更不改变 Payroll 预览、确认写入或工资计算。本地专项 9/9、Workbench Node 308/308、Go test／vet、P9／D1 组合门禁与 diff check 已通过。[本地验证](./docs/reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+当前 Feedback V3 正式父域发布门禁（BF-337，已发布）：3.0.5 的发布构建漏掉 OMS 父域，导致 SDK ready 后拒绝 OMS configure；稳定通道已先回退 3.0.4 恢复，再提升到修复版 3.0.6。父域现在进入版本化 release policy，并由构建注入、产物扫描、release 清单和 stable 提升四层强校验；缺少 `oatest` 的制品会在发布前失败。真实 Chrome 已从 OMS 加载 3.0.6 并正常显示智能客服。[发布记录](./docs/reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
+
+当前登录组织偏好（BF-336，本地通过、待发布）：组织切换成功后，IAM 在服务端账号事实中保存最后使用的组织 Subject；下次登录直接签发该组织 Session，避免先加载默认组织再整页切换。偏好只在成功创建／旋转 Session 的事务中更新；若该组织成员关系已停用则回退到仍启用组织并自愈。浏览器不保存组织偏好，也不复制权限、成员或业务数据。[本地验证](./docs/reports/oms-last-used-organization-local-validation-20261113.md)
+
+当前工资批量输入标签（BF-335，已发布）：每位成员的两个金额输入框分别显示“当月绩效（元）”和“个人所得税（元）”，无障碍名称同时包含成员姓名与字段名；移动端保持成员信息在上、两个已标注金额字段在下。公网 Workbench v1.102、备份、D1 check、21/21 healthy 和真实 Chrome 复验通过；未生成预览或写入工资。[发布记录](./docs/reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 
 当前财务申请审计删除与账号菜单收起（BF-333／BF-334，已发布）：`oatest` v1.101 的报销和付款申请共用独立删除能力、expected revision 与必填原因；草稿、已撤回和未发生任何资金／未知结果的待支付申请可软删除，默认列表隐藏并可在“已删除”筛选审计回看。申请历史、Evidence 和发票指纹保留，但已删除申请释放发票占用；已付款或结果未知继续禁止删除。账号行操作菜单支持点外部、切换其他菜单和 Escape 收起。备份、D1 check、21/21 healthy、公网资源及真实 Chrome 只读验收通过，未执行线上删除。[发布记录](./docs/reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 

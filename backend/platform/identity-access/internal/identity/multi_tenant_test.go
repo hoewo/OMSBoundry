@@ -16,38 +16,39 @@ const (
 )
 
 type multiTenantRepository struct {
-	credential       Credential
-	resolved         Principal
-	tenantExists     bool
-	createdSessionID string
-	grantTenant      string
-	grants           []Grant
-	revokedProfiles  []string
-	listedTenant     string
-	tokenTenant      string
-	createdToken     ActivationToken
-	registration     RegistrationInvitation
-	registrationDone RegistrationResult
-	registrationUser string
-	registrationName string
-	registrationHash string
-	registrationOld  *Credential
-	invitedSubject   Subject
-	adminTenant      string
-	adminSubject     string
-	adminValue       bool
-	updatedTenant    string
-	updatedName      string
-	updatedSubject   string
-	updatedDisplay   string
-	updatedRevision  int64
-	tenants          []TenantSummary
-	subjects         map[string][]Subject
-	provisionTenant  string
-	provisionName    string
-	provisionSubject Subject
-	memberships      []OrganizationMembership
-	audits           []AuditEntry
+	credential        Credential
+	resolved          Principal
+	tenantExists      bool
+	createdSessionID  string
+	lastUsedSubjectID string
+	grantTenant       string
+	grants            []Grant
+	revokedProfiles   []string
+	listedTenant      string
+	tokenTenant       string
+	createdToken      ActivationToken
+	registration      RegistrationInvitation
+	registrationDone  RegistrationResult
+	registrationUser  string
+	registrationName  string
+	registrationHash  string
+	registrationOld   *Credential
+	invitedSubject    Subject
+	adminTenant       string
+	adminSubject      string
+	adminValue        bool
+	updatedTenant     string
+	updatedName       string
+	updatedSubject    string
+	updatedDisplay    string
+	updatedRevision   int64
+	tenants           []TenantSummary
+	subjects          map[string][]Subject
+	provisionTenant   string
+	provisionName     string
+	provisionSubject  Subject
+	memberships       []OrganizationMembership
+	audits            []AuditEntry
 }
 
 func (r *multiTenantRepository) HasSubjects(context.Context) (bool, error) { return true, nil }
@@ -92,10 +93,12 @@ func (r *multiTenantRepository) ResetLoginFailures(context.Context, string, time
 }
 func (r *multiTenantRepository) CreateSession(_ context.Context, _ []byte, subjectID string, _ int64, _, _ time.Time) error {
 	r.createdSessionID = subjectID
+	r.lastUsedSubjectID = subjectID
 	return nil
 }
 func (r *multiTenantRepository) RotateSession(_ context.Context, _, _ []byte, subjectID string, _ int64, authTime, _ time.Time) (Principal, error) {
 	r.createdSessionID = subjectID
+	r.lastUsedSubjectID = subjectID
 	for _, membership := range r.memberships {
 		if membership.SubjectID == subjectID {
 			return Principal{SubjectID: subjectID, AccountID: r.credential.AccountID, TenantID: membership.TenantID, DisplayName: membership.DisplayName, Administrator: membership.Administrator, AuthTime: authTime}, nil
@@ -245,8 +248,8 @@ func TestLoginAndSessionResolveTenantFromAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Principal.TenantID != secondTenant || repository.createdSessionID != testSubject {
-		t.Fatalf("login result = %#v, session subject = %q", result.Principal, repository.createdSessionID)
+	if result.Principal.TenantID != secondTenant || repository.createdSessionID != testSubject || repository.lastUsedSubjectID != testSubject {
+		t.Fatalf("login result = %#v, session subject = %q, last used subject = %q", result.Principal, repository.createdSessionID, repository.lastUsedSubjectID)
 	}
 	repository.resolved = result.Principal
 	resolved, found, err := service.ResolveSession(context.Background(), result.Token)
@@ -554,8 +557,8 @@ func TestAccountSwitchesOrganizationWithIndependentSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Principal.SubjectID != targetSubject || result.Principal.TenantID != secondTenant || result.Token == "" || repository.createdSessionID != targetSubject {
-		t.Fatalf("result=%#v created=%q", result, repository.createdSessionID)
+	if result.Principal.SubjectID != targetSubject || result.Principal.TenantID != secondTenant || result.Token == "" || repository.createdSessionID != targetSubject || repository.lastUsedSubjectID != targetSubject {
+		t.Fatalf("result=%#v created=%q last_used=%q", result, repository.createdSessionID, repository.lastUsedSubjectID)
 	}
 }
 

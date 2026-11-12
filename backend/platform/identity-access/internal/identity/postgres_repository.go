@@ -154,7 +154,7 @@ func (r *PostgresRepository) FindCredential(ctx context.Context, username string
 FROM login_accounts a
 JOIN LATERAL (
     SELECT s.* FROM subjects s WHERE s.account_id=a.id
-    ORDER BY (s.status='active') DESC, (s.id=a.primary_subject_id) DESC, s.created_at, s.id
+    ORDER BY (s.status='active') DESC, (s.id=a.last_used_subject_id) DESC, (s.id=a.primary_subject_id) DESC, s.created_at, s.id
     LIMIT 1
 ) s ON true
 WHERE a.login_identifier=$1`, username)
@@ -187,14 +187,26 @@ func (r *PostgresRepository) ResetLoginFailures(ctx context.Context, subjectID s
 }
 
 func (r *PostgresRepository) CreateSession(ctx context.Context, tokenHash []byte, subjectID string, generation int64, authTime, expiresAt time.Time) error {
-	result, err := r.pool.Exec(ctx, `INSERT INTO suite_sessions(token_hash,subject_id,session_generation,auth_time,expires_at) SELECT $1,id,session_generation,$4,$5 FROM subjects WHERE id=$2 AND session_generation=$3 AND status='active'`, tokenHash, subjectID, generation, authTime, expiresAt)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	result, err := tx.Exec(ctx, `INSERT INTO suite_sessions(token_hash,subject_id,session_generation,auth_time,expires_at) SELECT $1,id,session_generation,$4,$5 FROM subjects WHERE id=$2 AND session_generation=$3 AND status='active'`, tokenHash, subjectID, generation, authTime, expiresAt)
 	if err != nil {
 		return err
 	}
 	if result.RowsAffected() != 1 {
 		return &AuthenticationError{}
 	}
-	return nil
+	result, err = tx.Exec(ctx, `UPDATE login_accounts a SET last_used_subject_id=$1,updated_at=GREATEST(a.updated_at,$2) FROM subjects s WHERE s.id=$1 AND s.account_id=a.id AND s.status='active'`, subjectID, authTime)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return &AuthenticationError{}
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *PostgresRepository) RotateSession(ctx context.Context, oldTokenHash, newTokenHash []byte, subjectID string, generation int64, authTime, expiresAt time.Time) (Principal, error) {
@@ -211,6 +223,13 @@ func (r *PostgresRepository) RotateSession(ctx context.Context, oldTokenHash, ne
 		return Principal{}, &AuthenticationError{}
 	}
 	result, err = tx.Exec(ctx, `INSERT INTO suite_sessions(token_hash,subject_id,session_generation,auth_time,expires_at) SELECT $1,id,session_generation,$4,$5 FROM subjects WHERE id=$2 AND session_generation=$3 AND status='active'`, newTokenHash, subjectID, generation, authTime, expiresAt)
+	if err != nil {
+		return Principal{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return Principal{}, &AuthenticationError{}
+	}
+	result, err = tx.Exec(ctx, `UPDATE login_accounts a SET last_used_subject_id=$1,updated_at=GREATEST(a.updated_at,$2) FROM subjects s WHERE s.id=$1 AND s.account_id=a.id AND s.status='active'`, subjectID, authTime)
 	if err != nil {
 		return Principal{}, err
 	}
@@ -893,7 +912,7 @@ func insertAccount(ctx context.Context, tx pgx.Tx, subject Subject, passwordHash
 	if accountID == "" {
 		accountID = subject.ID
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO login_accounts(id,login_identifier,password_hash,failed_login_attempts,locked_until,password_changed_at,primary_subject_id,created_at,updated_at) VALUES($1,$2,$3,0,NULL,$4,$5,$6,$7)`, accountID, subject.Username, passwordHash, nullableTime(subject.PasswordChangedAt), subject.ID, subject.CreatedAt, subject.UpdatedAt)
+	_, err := tx.Exec(ctx, `INSERT INTO login_accounts(id,login_identifier,password_hash,failed_login_attempts,locked_until,password_changed_at,primary_subject_id,last_used_subject_id,created_at,updated_at) VALUES($1,$2,$3,0,NULL,$4,$5,$5,$6,$7)`, accountID, subject.Username, passwordHash, nullableTime(subject.PasswordChangedAt), subject.ID, subject.CreatedAt, subject.UpdatedAt)
 	if err != nil {
 		if isUnique(err) {
 			return &ConflictError{Message: "手机号、邮箱或用户名已被使用"}

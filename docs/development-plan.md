@@ -1,6 +1,10 @@
 # OMSBizFoundry 开发计划
 
-2026-11-12 BF-335 已完成本地实现、待发布：工资批量录入成员行已改为语义化容器，绩效与个税输入各有可见 label 和包含成员姓名的 `aria-label`；桌面保持双列金额，窄屏先显示成员再显示已标注输入。静态资源版本已更新，专项 9/9、Workbench Node 308/308、Go test／vet、P9／D1 组合门禁和 diff check 通过。下一步发布 Workbench 并做真实浏览器只读验收，不生成预览、不确认工资写入。[本地验证](./reports/oms-payroll-batch-input-labels-local-validation-20261112.md)
+2026-11-13 BF-337 已完成并发布：先将错误的 V3 stable 3.0.5 回退到已知可用 3.0.4，再把正式父域清单固化为 Feedback SDK release policy，新增构建扫描、manifest 元数据和 promote 门禁；旧 3.0.4 manifest 在新门禁下被拒绝，3.0.6 通过 canary、远端摘要／父域核验后提升 stable。真实 OMS Chrome 已加载 3.0.6 并打开智能客服。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
+
+2026-11-13 BF-336 已完成本地实现、待发布：Identity schema 13 保存账号最后使用 Subject，登录和组织切换事务同步更新；查询只从启用成员关系选择，并覆盖停用 last-used 回退和自愈。Identity Go test／vet、PostgreSQL 18 migration 与 HTTP integration 已通过。下一步只升级 Identity，先备份、执行 migration 13、D1 check 和 21/21 健康，再用受控双组织账号完成“切换→退出／新会话登录→直接进入目标组织”验收。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+
+2026-11-12 BF-335 已完成并发布：工资批量录入成员行已改为语义化容器，绩效与个税输入各有可见 label 和包含成员姓名的 `aria-label`；公网 Workbench v1.102、D1 check、21/21 healthy 和真实 Chrome 可访问名称复验通过，未生成预览或写入工资。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 
 2026-11-12 BF-333／BF-334 已发布：Finance 已增加独立申请删除 Capability、租户级审计删除、已删除审计读取和发票占用释放；Workbench 已覆盖报销／付款删除入口、空白必填原因、已删除筛选和详情审计，并让账号行菜单支持点外部／Escape 收起。Finance、Identity、Workbench Go test／vet、Workbench Node 307/307、PostgreSQL 18 集成、P9／D1 组合门禁、v1.101 发布包、目标机 D1 check、21/21 healthy、公网资源和真实 Chrome 只读验收通过。当前线上无付款申请样本，未为验收创建或删除业务数据；付款申请删除由共同实现与集成测试覆盖。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 

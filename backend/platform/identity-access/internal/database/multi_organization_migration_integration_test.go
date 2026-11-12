@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestSchemaTwelveBackfillsAccountsAndAllowsCrossTenantMembership(t *testing.T) {
+func TestSchemasTwelveAndThirteenBackfillAccountsAndLastUsedOrganization(t *testing.T) {
 	pool := openMigrationDatabase(t)
 	ctx := context.Background()
 	versions, err := migrationVersions()
@@ -53,12 +53,12 @@ func TestSchemaTwelveBackfillsAccountsAndAllowsCrossTenantMembership(t *testing.
 	if err := Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	var accountID, loginIdentifier, linkedAccountID string
-	if err := pool.QueryRow(ctx, `SELECT a.id::text,a.login_identifier,s.account_id::text FROM login_accounts a JOIN subjects s ON s.id=a.primary_subject_id WHERE s.id=$1`, subjectA).Scan(&accountID, &loginIdentifier, &linkedAccountID); err != nil {
+	var accountID, loginIdentifier, linkedAccountID, lastUsedSubjectID string
+	if err := pool.QueryRow(ctx, `SELECT a.id::text,a.login_identifier,s.account_id::text,a.last_used_subject_id::text FROM login_accounts a JOIN subjects s ON s.id=a.primary_subject_id WHERE s.id=$1`, subjectA).Scan(&accountID, &loginIdentifier, &linkedAccountID, &lastUsedSubjectID); err != nil {
 		t.Fatal(err)
 	}
-	if accountID != subjectA || linkedAccountID != subjectA || loginIdentifier != "member@example.com" {
-		t.Fatalf("backfill account=%q login=%q subject_account=%q", accountID, loginIdentifier, linkedAccountID)
+	if accountID != subjectA || linkedAccountID != subjectA || loginIdentifier != "member@example.com" || lastUsedSubjectID != subjectA {
+		t.Fatalf("backfill account=%q login=%q subject_account=%q last_used=%q", accountID, loginIdentifier, linkedAccountID, lastUsedSubjectID)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO subjects(id,account_id,tenant_id,username,display_name,password_hash,status,administrator,revision,session_generation,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,'member@example.com','组织 B 成员','$2a$10$not-a-real-login-hash-but-schema-valid','active',false,1,1,$4,$4,$4)`, subjectB, accountID, tenantB, now); err != nil {
 		t.Fatalf("cross-tenant membership: %v", err)
