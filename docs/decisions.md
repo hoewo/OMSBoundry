@@ -1,5 +1,9 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-12 BF-333（已接受／待发布；扩展 BF-324 的本人未提交草稿删除）：报销与付款申请都允许获得独立 `internal-finance-requests.request.delete` Capability 的授权人员执行租户内审计软删除。命令必须携带 expected revision、独立 Command ID、确认值和非空原因；只允许 `draft`、`withdrawn`，以及未产生实际付款、核销、超额或未知付款结果的 `payable`。删除设置 `deleted_at` 并追加不可变保留事件，默认列表隐藏、授权审计筛选可见；申请、全部 revision、Evidence 精确引用、发票指纹、Actor、Credential、时间与原因均保留。为解除错误记录的业务占用，重复发票判断只把未删除申请视为有效占用者。不得删除已实际付款或结果未知的申请，不得级联删除 Money、Evidence、Billing 或其他 Owner 事实。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
+2026-11-12 BF-334（已接受／待发布）：账号目录的行操作 `<details>` 菜单是瞬时界面状态；打开一个菜单应收起其他行菜单，点击菜单外部或按 Escape 必须收起当前菜单，点击菜单内部和摘要按钮仍保留原生切换语义。该修复不改变 IAM 命令、账号、Tenant、成员关联、权限或审计。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
 2026-11-12 BF-332（已接受／已发布；取代 BF-312 的“已确认候选不得删除”限制）：Invoice Recognition 的 `needs_review` 与 `confirmed` 记录都允许通过原 discard Command、expected revision 和必填原因追加为 `discarded`。删除不得物理清除或改写确认记录、Evidence、revision、幂等命令、Actor、Credential、时间和不可变审计；默认列表隐藏但“已删除”可回看删除元数据。已经消费确认快照的 Internal Finance Requests、Billing 或其他 Owner 事实不得级联删除，必须在各自业务中追加作废／冲销／删除动作。能力名与 API 保持不变，不因状态放宽自动扩大 Grant。v1.100 的备份、D1 check、21/21 healthy、公网资源和真实 Chrome 只读验证通过。[规格](./specs/assembly/oms-invoice-recognition-v1.md) [发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 2026-11-12 BF-331（已接受／已发布）：OMS 的访问连续性建立在全站业务 Capability 契约上，不把 Feedback Token 当作业务鉴权核心。Browser 不直接持有或设置 Authorization；Gateway 用按 Owner Route 隔离的 HttpOnly Cookie 承载 5 分钟 Capability，删除客户端 Authorization／身份 Header，校验后向上游注入 Bearer；Owner 再校验签名、Audience、Action、Scope、Tenant 与业务状态。Workbench 只保存无 Token 内存租约，按 Audience 提前最多 60 秒 single-flight 续期，页面恢复复核；写入发送前强制换票。v1.99 已按此发布，备份、D1 check、21/21 healthy 和无 Grant 拒绝通过；不为系统管理员扩大业务权限。带业务 Grant 的公网正向 Owner 读取和超过 5 分钟续期仍须独立验收账号补证。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)

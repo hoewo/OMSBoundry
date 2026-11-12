@@ -10,6 +10,7 @@ const (
 	ActionSelfRead             = "internal-finance-requests.self.read"
 	ActionSelfManage           = "internal-finance-requests.self.manage"
 	ActionTenantRead           = "internal-finance-requests.tenant.read"
+	ActionRequestDelete        = "internal-finance-requests.request.delete"
 	ActionReferenceRead        = "internal-finance-requests.reference.read"
 	ActionPaymentConfirm       = "internal-finance-requests.payment.confirm"
 	ActionPaymentBatchConfirm  = "internal-finance-requests.payment.batch-confirm"
@@ -19,7 +20,7 @@ const (
 	ActionSensitiveExport      = "internal-finance-requests.sensitive-account.export"
 )
 
-var AllActions = []string{ActionSelfRead, ActionSelfManage, ActionTenantRead, ActionReferenceRead, ActionPaymentConfirm, ActionPaymentBatchConfirm, ActionSensitiveAccountRead, ActionCategoryManage, ActionExport, ActionSensitiveExport}
+var AllActions = []string{ActionSelfRead, ActionSelfManage, ActionTenantRead, ActionRequestDelete, ActionReferenceRead, ActionPaymentConfirm, ActionPaymentBatchConfirm, ActionSensitiveAccountRead, ActionCategoryManage, ActionExport, ActionSensitiveExport}
 var ErrUnauthenticated = errors.New("authentication required")
 
 type Principal struct {

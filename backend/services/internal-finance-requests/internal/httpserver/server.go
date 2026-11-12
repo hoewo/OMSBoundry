@@ -55,7 +55,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /api/v1/finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /api/v1/finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /api/v1/finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
-	mux.Handle("DELETE /api/v1/finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.deleteDraft)))
+	mux.Handle("DELETE /api/v1/finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfManage, auth.ActionRequestDelete}, http.HandlerFunc(s.deleteDraft)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
 	mux.Handle("POST /api/v1/finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
@@ -81,7 +81,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 	mux.Handle("GET /finance-requests", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.list)))
 	mux.Handle("GET /finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfRead, auth.ActionTenantRead}, http.HandlerFunc(s.get)))
 	mux.Handle("PUT /finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.update)))
-	mux.Handle("DELETE /finance-requests/{request_id}", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.deleteDraft)))
+	mux.Handle("DELETE /finance-requests/{request_id}", s.protectedAny([]string{auth.ActionSelfManage, auth.ActionRequestDelete}, http.HandlerFunc(s.deleteDraft)))
 	mux.Handle("POST /finance-requests/{request_id}/submit", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.submit)))
 	mux.Handle("POST /finance-requests/{request_id}/withdraw", s.protected(auth.ActionSelfManage, http.HandlerFunc(s.withdraw)))
 	mux.Handle("POST /finance-requests/{request_id}/payments", s.protected(auth.ActionPaymentConfirm, http.HandlerFunc(s.confirmPayment)))
@@ -471,6 +471,7 @@ func (s *Server) deleteDraft(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+	input.TenantWide = p.Can(auth.ActionRequestDelete)
 	value, err := s.useCases.DeleteDraft(r.Context(), actorFrom(p), id, input)
 	s.writeRequest(w, 200, value, p, err)
 }
@@ -630,6 +631,17 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	if !p.Can(auth.ActionTenantRead) {
 		filter.ApplicantSubjectID = p.SubjectID
 	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("include_deleted")); raw != "" {
+		if raw != "true" {
+			writeProblem(w, 400, "INVALID_REQUEST", "include_deleted 只接受 true", false)
+			return
+		}
+		if !p.Can(auth.ActionRequestDelete) {
+			writeProblem(w, 403, "CAPABILITY_DENIED", "读取已删除申请需要审计删除能力", false)
+			return
+		}
+		filter.IncludeDeleted, filter.IncludeArchived = true, true
+	}
 	page, err := s.useCases.List(r.Context(), p.TenantID, filter)
 	if err != nil {
 		s.fail(w, err)
@@ -644,6 +656,9 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		if !p.Can(auth.ActionTenantRead) {
 			retainReadableDuplicateIDs(&page.Items[i], readable)
 		}
+	}
+	if p.Can(auth.ActionRequestDelete) {
+		page.AllowedActions = append(page.AllowedActions, "view_deleted")
 	}
 	writeJSON(w, 200, page)
 }
@@ -752,12 +767,18 @@ func allowedActions(value finance.Request, p auth.Principal) []string {
 		actions = append(actions, "read")
 	}
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt != nil && value.DeletedAt == nil {
-		actions = append(actions, "restore", "delete")
+		actions = append(actions, "restore")
+		if !p.Can(auth.ActionRequestDelete) {
+			actions = append(actions, "delete")
+		}
 	}
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
 		actions = append(actions, "update")
 	}
-	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
+	if !p.Can(auth.ActionRequestDelete) && p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.Status == "draft" && value.ArchivedAt == nil && value.DeletedAt == nil {
+		actions = append(actions, "delete")
+	}
+	if p.Can(auth.ActionRequestDelete) && deletableWithoutPayment(value) {
 		actions = append(actions, "delete")
 	}
 	if p.Can(auth.ActionSelfManage) && value.ApplicantSubjectID == p.SubjectID && value.ArchivedAt == nil && value.DeletedAt == nil && (value.Status == "draft" || value.Status == "withdrawn") && value.Details.Duplicate.Status != "strong" {
@@ -769,10 +790,17 @@ func allowedActions(value finance.Request, p auth.Principal) []string {
 	if p.Can(auth.ActionPaymentConfirm) && value.PaymentUnknownCount == 0 && (value.Status == "payable" || value.Status == "partially_paid") {
 		actions = append(actions, "confirm_payment")
 	}
-	if p.Can(auth.ActionSensitiveAccountRead) && value.Details.Payee.AccountLast4 != "" {
+	if value.DeletedAt == nil && p.Can(auth.ActionSensitiveAccountRead) && value.Details.Payee.AccountLast4 != "" {
 		actions = append(actions, "read_sensitive_account")
 	}
 	return actions
+}
+
+func deletableWithoutPayment(value finance.Request) bool {
+	if value.DeletedAt != nil || value.PaidMinor != 0 || value.AllocatedMinor != 0 || value.OverageMinor != 0 || value.PaymentUnknownCount != 0 {
+		return false
+	}
+	return value.Status == "draft" || value.Status == "withdrawn" || value.Status == "payable"
 }
 func actorFrom(p auth.Principal) finance.Actor {
 	kind := "iam_subject"

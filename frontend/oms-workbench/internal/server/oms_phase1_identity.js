@@ -38,6 +38,9 @@
     if(trigger)trigger.setAttribute('aria-expanded','false');
     if(menu)menu.hidden=true;
   }
+  function closeIdentityActions(except=null){
+    for(const details of page.querySelectorAll('.oms-v1__identity-actions[open]'))if(details!==except)details.open=false;
+  }
   function renderRailOrganization(activeOrganizations){
     const current=activeOrganizations.find(item=>item.current)||null,label=railOrganization?.querySelector('[data-identity-rail-tenant-name]'),trigger=railOrganization?.querySelector('[data-identity-rail-organization-trigger]'),menu=railOrganization?.querySelector('[data-identity-rail-organization-menu]'),options=railOrganization?.querySelector('[data-identity-rail-organization-options]'),chevron=railOrganization?.querySelector('[data-identity-rail-organization-chevron]'),ready=Boolean(current&&tenant?.id),switchable=ready&&activeOrganizations.length>1;
     if(label)label.textContent=current?.tenant_name||tenant?.name||'组织信息未就绪';
@@ -91,12 +94,13 @@
       const userName=isInvitation?'手机号 / 邮箱由本人填写':safe(item.username)+' · '+safe(identifierKind(item.username));
       return '<tr class="'+(current?'is-current':'')+'"><td><div class="oms-v1__identity-user"><strong>'+safe(isInvitation?'待受邀人注册':item.display_name)+'</strong>'+(current?'<span>当前账号</span>':'')+'<small>'+userName+'</small></div></td><td><div class="oms-v1__identity-member">'+association+'</div></td><td><div class="oms-v1__identity-access"><strong>'+safe(item.administrator?'管理员':'普通用户')+'</strong><span class="oms-v1__tag '+(item.status==='active'?'':'is-muted')+'">'+safe(statusLabel(item))+'</span></div></td><td><time>'+safe(dateTime(item.updated_at))+'</time></td><td>'+actions(item,person)+'</td></tr>';
     }).join(''):'<tr><td colspan="5"><div class="oms-v1__empty"><strong>'+(subjects.length?'没有匹配的账号':'暂无组织账号')+'</strong><span>'+(subjects.length?'调整搜索或筛选条件后重试。':'点击“创建邀请链接”，由受邀人自行注册手机号或邮箱。')+'</span></div></td></tr>';
-    for(const button of body?.querySelectorAll('[data-identity-status]')||[])button.onclick=()=>changeStatus(button.dataset.identityStatus,button.dataset.nextStatus);
-    for(const button of body?.querySelectorAll('[data-identity-reset]')||[])button.onclick=()=>resetPassword(button.dataset.identityReset);
-    for(const button of body?.querySelectorAll('[data-identity-reissue]')||[])button.onclick=()=>reissueInvitation(button.dataset.identityReissue);
-    for(const button of body?.querySelectorAll('[data-identity-administrator]')||[])button.onclick=()=>changeAdministrator(button.dataset.identityAdministrator,button.dataset.nextAdministrator==='true');
-    for(const button of body?.querySelectorAll('[data-identity-edit-account]')||[])button.onclick=()=>editAccount(button.dataset.identityEditAccount);
-    for(const button of body?.querySelectorAll('[data-identity-edit-member]')||[])button.onclick=()=>editMember(button.dataset.identityEditMember);
+    for(const details of body.querySelectorAll('.oms-v1__identity-actions'))details.addEventListener('toggle',()=>{if(details.open)closeIdentityActions(details)});
+    for(const button of body?.querySelectorAll('[data-identity-status]')||[])button.onclick=()=>{closeIdentityActions();changeStatus(button.dataset.identityStatus,button.dataset.nextStatus)};
+    for(const button of body?.querySelectorAll('[data-identity-reset]')||[])button.onclick=()=>{closeIdentityActions();resetPassword(button.dataset.identityReset)};
+    for(const button of body?.querySelectorAll('[data-identity-reissue]')||[])button.onclick=()=>{closeIdentityActions();reissueInvitation(button.dataset.identityReissue)};
+    for(const button of body?.querySelectorAll('[data-identity-administrator]')||[])button.onclick=()=>{closeIdentityActions();changeAdministrator(button.dataset.identityAdministrator,button.dataset.nextAdministrator==='true')};
+    for(const button of body?.querySelectorAll('[data-identity-edit-account]')||[])button.onclick=()=>{closeIdentityActions();editAccount(button.dataset.identityEditAccount)};
+    for(const button of body?.querySelectorAll('[data-identity-edit-member]')||[])button.onclick=()=>{closeIdentityActions();editMember(button.dataset.identityEditMember)};
   }
 
   function setReloadVisible(visible){const button=page.querySelector('[data-identity-reload]');if(button)button.hidden=!visible}
@@ -180,7 +184,7 @@
   page.querySelector('[data-identity-reload]')?.addEventListener('click',()=>{organizationRecoveryShown=false;void load({interactive:true})});
   railOrganization?.querySelector('[data-identity-rail-organization-trigger]')?.addEventListener('click',()=>{const trigger=railOrganization.querySelector('[data-identity-rail-organization-trigger]'),menu=railOrganization.querySelector('[data-identity-rail-organization-menu]');if(trigger.disabled)return;const open=menu.hidden;closeRailOrganization();if(open){menu.hidden=false;trigger.setAttribute('aria-expanded','true')}});
   railOrganization?.querySelector('[data-identity-rail-organization-options]')?.addEventListener('click',event=>{const option=event.target.closest('[data-identity-rail-organization-option]');if(option)void switchOrganization(String(option.dataset.identityRailOrganizationOption||''),option)});
-  document.addEventListener('click',event=>{if(railOrganization&&!railOrganization.contains(event.target))closeRailOrganization()});
-  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeRailOrganization()});
+  document.addEventListener('click',event=>{if(railOrganization&&!railOrganization.contains(event.target))closeRailOrganization();closeIdentityActions(event.target.closest?.('.oms-v1__identity-actions')||null)});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeRailOrganization();closeIdentityActions()}});
   void load();
 })();

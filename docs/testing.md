@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 财务申请审计删除与账号菜单收起（2026-11-12，本地通过／待发布）
+
+BF-333 必须分别验证报销与付款申请可在授权、expected revision、确认值和非空原因齐备时软删除；`draft`、`withdrawn` 和零付款且无未知投递的 `payable` 可删除，已付、已核销、超额、未知结果、旧 revision、重复或异义命令必须失败关闭。默认列表隐藏，独立能力才能读取“已删除”；删除后申请、revision、Evidence 引用、发票指纹和删除 Actor／Credential／时间／原因仍可审计，但同一发票可由新的纠正申请重新提交。不得级联写入 Money、Evidence、Billing。BF-334 必须验证账号行菜单同一时刻最多展开一个，点击外部和 Escape 收起，菜单内点击不被外部处理器误关。
+
+已实际运行 Finance、Identity Capability、Workbench 的 Go test／vet，Workbench Node 307/307、JavaScript 语法检查、一次性 PostgreSQL 18 Finance 集成、P9 preflight、D1 P9 composition 和 `git diff --check`，均通过。发布包、目标机、公网资源和真实浏览器尚未运行，不登记通过。[本地报告](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
 ## 已确认发票识别记录审计删除（2026-11-12，已发布）
 
 BF-332 必须验证待确认与已确认 proposal 都能以独立 Command、expected revision 和非空原因进入 `discarded`；confirmed 删除后的 confirmation 行、识别 revision、审计事件、Evidence 引用、Actor／Credential／时间必须保持。已删除再次删除、旧 revision、异义重放继续冲突；默认列表隐藏，已删除筛选能显示原因、操作人和时间。不得因删除识别记录而删除或改写 Finance／Billing 等下游事实。

@@ -10,7 +10,7 @@ const server=readFileSync(new URL('./server.go',import.meta.url),'utf8');
 test('formal finance owner replaces browser-local finance when assembled',()=>{
   assert.match(local,/const ownerFinance=Boolean\(ownerAPI\?\.app\?\.\('internal-finance-requests'\)\)/);
   assert.match(local,/if\(!ownerFinance\)renderFinance\(\)/);
-  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261109\.3/);
+  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261112\.1/);
 });
 
 test('new reimbursement and payment requests offer manual or recognized invoice entry',()=>{
@@ -74,9 +74,9 @@ test('finance operator ids resolve through current organization IAM names',()=>{
     '/api/v1/admin/subjects',
     'actors:new Map()',
     'const actorLabel=',
-    'safe(actorLabel(item.payments?.at(-1)?.operator_subject_id||item.applicant_subject_id))',
+    "operator=item.deletion?.actor_subject_id||item.payments?.at(-1)?.operator_subject_id||item.applicant_subject_id",
     'safe(actorLabel(value.operator_subject_id))',
-    'actorLabel(item.payments?.at(-1)?.operator_subject_id||item.applicant_subject_id),item.updated_at',
+    "actorLabel(item.deletion?.actor_subject_id||item.payments?.at(-1)?.operator_subject_id||item.applicant_subject_id)",
   ])assert.ok(owner.includes(marker),`missing ${marker}`);
   assert.ok(owner.includes("return displayName||'账号 '+id.slice(0,8)"),'unknown operators must not expose a full subject id');
 });
@@ -126,15 +126,19 @@ test('strong invoice duplicates block submission and identify the occupying requ
   assert.ok(shell.includes('error.data=data'),'Owner API errors must preserve structured conflict references');
 });
 
-test('deleting a never-submitted draft requires a reason and leaves an audited soft delete',()=>{
+test('audited deletion covers reimbursement and payment requests before actual funds',()=>{
   for(const marker of [
     "method:'DELETE'",
     'data-finance-owner-delete',
-    'data-delete-draft',
+    'data-delete-request',
     '删除当前草稿',
     'function openDelete(item)',
     '删除原因 *',
+    'expected_revision:item.revision',
     "confirmation:'DELETE'",
-    '系统仍保留删除时间、原因、操作人和凭证身份',
-  ])assert.ok(owner.includes(marker),`missing audited draft deletion marker ${marker}`);
+    '/api/v1/finance-requests?include_deleted=true',
+    "status==='deleted'?deleted",
+    '删除原因：',
+    '已经实际付款或付款结果未知的申请不能删除',
+  ])assert.ok(owner.includes(marker),`missing audited request deletion marker ${marker}`);
 });

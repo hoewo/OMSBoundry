@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-12 BF-333／BF-334 已完成本地实现、待发布：Finance 已增加独立申请删除 Capability、租户级审计删除、已删除审计读取和发票占用释放；Workbench 已覆盖报销／付款删除入口、空白必填原因、已删除筛选和详情审计，并让账号行菜单支持点外部／Escape 收起。Finance、Identity、Workbench Go test／vet、Workbench Node 307/307、PostgreSQL 18 集成、P9／D1 组合门禁和 diff check 通过。下一步是提交并发布 Finance／Workbench 与能力清单，显式向目标测试操作主体授予新能力，再做目标机 D1、21/21 healthy、公网资源和真实 Chrome 只读验收；不在线上代用户执行删除。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
 2026-11-12 BF-332 已发布：Invoice Recognition 服务与 PostgreSQL Repository 已允许 confirmed→discarded，并继续保存不可变 confirmation、三段 revision 和审计；Workbench 已给已确认行增加删除、取消预填原因、显示跨 Owner 不级联警告，并在已删除详情显示原因／操作人／时间。v1.100 的联合备份、D1 check、21/21 healthy、公网资源和真实 Chrome 只读验收通过；没有执行线上删除。后续仅在用户实际操作后按审计记录验证业务效果，不扩大到下游 Owner 自动撤销。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 2026-11-12 BF-330／BF-331 已发布：Gateway／Workbench v1.99 和正式 Feedback `session` 模式已部署；备份 `20261112T125812Z`、D1 check、21/21 healthy、公网资源摘要、匿名配置拒绝、登录态 V3 `3.0.4` 与快照读取通过。普通账号和系统管理员无 Grant 的 Owner 授权均失败关闭，没有扩大权限。下一步仅补证：用独立 `0600` 业务验收账号运行增强后的 `verify-public-oms-v1.py`，完成五 Owner 正向读取、写前换票、超过 5 分钟 Capability 续期，以及超过 15 分钟 Feedback 续期／后台恢复／退出拒绝。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)

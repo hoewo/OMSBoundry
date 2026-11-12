@@ -7,6 +7,7 @@
     { "id": "internal-finance-requests.self.read", "description": "查看本人提交的报销与付款申请及其当前状态", "risk": "read", "resource_types": ["finance_request"] },
     { "id": "internal-finance-requests.self.manage", "description": "建立、修改、提交和在允许状态下撤回本人的财务申请", "risk": "write", "resource_types": ["finance_request"] },
     { "id": "internal-finance-requests.tenant.read", "description": "读取本租户全部财务申请的非敏感投影", "risk": "privileged", "resource_types": ["finance_request"] },
+    { "id": "internal-finance-requests.request.delete", "description": "审计删除本租户尚未发生实际付款的报销或付款申请", "risk": "privileged", "resource_types": ["finance_request"] },
     { "id": "internal-finance-requests.payment.confirm", "description": "逐笔确认财务申请的实际付款并登记 Money 稳定引用", "risk": "privileged", "resource_types": ["finance_request"] },
     { "id": "internal-finance-requests.payment.batch-confirm", "description": "批量确认财务申请付款，逐项返回成功或失败", "risk": "privileged", "resource_types": ["finance_request"] },
     { "id": "internal-finance-requests.sensitive-account.read", "description": "显式读取单笔申请的完整收款账户信息", "risk": "privileged", "resource_types": ["finance_request"] },

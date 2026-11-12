@@ -509,10 +509,10 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal.js?v=20261105.2" defer></script>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261105.1" defer></script>
-<script src="assets/oms-phase1-finance-owner.js?v=20261109.3" defer></script>
+<script src="assets/oms-phase1-finance-owner.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-workforce.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261030.1" defer></script>
-<script src="assets/oms-phase1-identity.js?v=20261101.1" defer></script>
+<script src="assets/oms-phase1-identity.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-feedback.js?v=20261112.1" defer></script>
 {{end}}{{if .SystemAdministrator}}<script src="assets/oms-system-admin.js?v=20261030.1" defer></script>{{end}}
 {{else}}<div class="ant-layout app-shell">

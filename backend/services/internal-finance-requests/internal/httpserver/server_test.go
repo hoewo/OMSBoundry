@@ -158,6 +158,37 @@ func TestInternalDeleteDraftPassesRequiredReason(t *testing.T) {
 	}
 }
 
+func TestTenantDeleteCapabilityCoversAnotherApplicantsPaymentRequest(t *testing.T) {
+	other := "99999999-9999-4999-8999-999999999999"
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: other, RequestType: "payment", Status: "withdrawn", Revision: 4}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, Provider: "iam", CredentialID: "44444444-4444-4444-8444-444444444444", ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionRequestDelete: true}}}
+	server, _ := New(cases, a)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/finance-requests/"+testRequest, bytes.NewBufferString(`{"command_id":"55555555-5555-4555-8555-555555555555","expected_revision":4,"confirmation":"DELETE","reason":"重复付款申请"}`))
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !cases.deleteInput.TenantWide || cases.deleteInput.ExpectedRevision != 4 || cases.deleteInput.Reason != "重复付款申请" {
+		t.Fatalf("delete status=%d input=%#v body=%s", response.Code, cases.deleteInput, response.Body.String())
+	}
+}
+
+func TestFinanceDeletionAuditListRequiresIndependentCapability(t *testing.T) {
+	now := time.Now().UTC()
+	cases := &fakeCases{value: finance.Request{ID: testRequest, TenantID: testTenant, ApplicantSubjectID: testSubject, RequestType: "reimbursement", Status: "withdrawn", Revision: 3, DeletedAt: &now}}
+	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionTenantRead: true, auth.ActionRequestDelete: true}}}
+	server, _ := New(cases, a)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/finance-requests?include_deleted=true", nil))
+	if response.Code != http.StatusOK || !cases.listFilter.IncludeDeleted || !cases.listFilter.IncludeArchived || !bytes.Contains(response.Body.Bytes(), []byte(`"allowed_actions":["view_deleted"]`)) {
+		t.Fatalf("status=%d filter=%#v body=%s", response.Code, cases.listFilter, response.Body.String())
+	}
+	a.principal.AllowedActions = map[string]bool{auth.ActionTenantRead: true}
+	denied := httptest.NewRecorder()
+	server.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/api/v1/finance-requests?include_deleted=true", nil))
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("deleted audit without capability status=%d body=%s", denied.Code, denied.Body.String())
+	}
+}
+
 func TestEvidenceReferenceUsageRequiresTenantReferenceCapability(t *testing.T) {
 	cases := &fakeCases{}
 	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionReferenceRead: true}}}

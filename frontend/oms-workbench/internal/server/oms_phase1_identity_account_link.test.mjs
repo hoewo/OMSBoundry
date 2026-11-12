@@ -37,6 +37,13 @@ test('pending registration stays distinct from a member association', () => {
   assert.match(source, /成员关系不随邀请预设/)
 })
 
+test('account row action menu dismisses outside and keeps only one menu open', () => {
+  assert.match(source, /function closeIdentityActions\(except=null\)/)
+  assert.match(source, /details\.addEventListener\('toggle'/)
+  assert.match(source, /event\.target\.closest\?\.\('\.oms-v1__identity-actions'\)/)
+  assert.match(source, /if\(event\.key==='Escape'\).*closeIdentityActions/)
+})
+
 test('registration, legacy activation and password reset use separate link fragments', () => {
   assert.match(source, /registration_invitation/)
   assert.match(source, /activation_token/)

@@ -204,8 +204,8 @@ func (s *Service) Restore(ctx context.Context, actor Actor, id string, input Res
 
 func (s *Service) DeleteDraft(ctx context.Context, actor Actor, id string, input DeleteDraftInput) (Request, error) {
 	id, input.CommandID, input.Confirmation, input.Reason = normalizeID(id), normalizeID(input.CommandID), strings.TrimSpace(input.Confirmation), strings.TrimSpace(input.Reason)
-	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.Confirmation != "DELETE" || input.Reason == "" || len([]rune(input.Reason)) > 1000 {
-		return Request{}, fmt.Errorf("invalid draft deletion confirmation")
+	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(id) || !uuidPattern.MatchString(input.CommandID) || input.ExpectedRevision < 0 || (input.TenantWide && input.ExpectedRevision < 1) || input.Confirmation != "DELETE" || input.Reason == "" || len([]rune(input.Reason)) > 1000 {
+		return Request{}, fmt.Errorf("invalid finance request deletion confirmation")
 	}
 	value, err := s.store.DeleteDraft(ctx, actor, id, input, hash(input))
 	return redactRequest(value, false), err

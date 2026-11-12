@@ -29,7 +29,7 @@ func TestLoadCatalogAndRejectUnknownOrDuplicateAudience(t *testing.T) {
 	}
 	for audience, action := range map[string]string{
 		"identity-access":           "identity-access.subject.reference.read",
-		"internal-finance-requests": "internal-finance-requests.payment.confirm",
+		"internal-finance-requests": "internal-finance-requests.request.delete",
 		"payroll":                   "payroll.payment.confirm",
 		"open-api":                  "open-api.invoice-reimbursement.use",
 	} {

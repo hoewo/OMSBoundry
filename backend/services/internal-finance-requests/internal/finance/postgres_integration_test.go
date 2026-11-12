@@ -316,6 +316,12 @@ func TestFullyDigitalInvoiceNumberIsStrongDuplicateWithoutLegacyCode(t *testing.
 	if _, err = service.Submit(ctx, actor, duplicate.ID, SubmitInput{CommandID: "11000000-0000-4000-8000-000000000004", ExpectedRevision: duplicate.Revision}); !errors.Is(err, ErrStrongDuplicate) {
 		t.Fatalf("expected strong duplicate for fully digital invoice number, got %v", err)
 	}
+	if _, err = service.DeleteDraft(ctx, actor, first.ID, DeleteDraftInput{CommandID: "11000000-0000-4000-8000-000000000005", ExpectedRevision: 2, Confirmation: "DELETE", Reason: "原申请误录，释放发票占用", TenantWide: true}); err != nil {
+		t.Fatalf("delete occupying request: %v", err)
+	}
+	if _, err = service.Submit(ctx, actor, duplicate.ID, SubmitInput{CommandID: "11000000-0000-4000-8000-000000000004", ExpectedRevision: duplicate.Revision}); err != nil {
+		t.Fatalf("soft-deleted request still occupied the invoice: %v", err)
+	}
 }
 
 func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
@@ -350,14 +356,14 @@ func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
 		t.Fatalf("restore=%#v err=%v", restored, err)
 	}
 	deleted, err := service.DeleteDraft(ctx, actor, created.ID, DeleteDraftInput{CommandID: "90000000-0000-4000-8000-000000000003", Confirmation: "DELETE", Reason: "重复发票草稿"})
-	if err != nil || deleted.DeletedAt == nil {
+	if err != nil || deleted.DeletedAt == nil || deleted.Deletion == nil || deleted.Deletion.Reason != "重复发票草稿" || deleted.Deletion.ActorSubjectID != actor.ID {
 		t.Fatalf("delete=%#v err=%v", deleted, err)
 	}
 	if _, err = service.Get(ctx, actor.TenantID, created.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleted draft must be hidden, got %v", err)
 	}
 	page, err = service.List(ctx, actor.TenantID, ListFilter{ApplicantSubjectID: actor.ID, IncludeArchived: true, IncludeDeleted: true})
-	if err != nil || len(page.Items) != 1 || page.Items[0].DeletedAt == nil {
+	if err != nil || len(page.Items) != 1 || page.Items[0].DeletedAt == nil || page.Items[0].Deletion == nil || page.Items[0].Deletion.Reason != "重复发票草稿" {
 		t.Fatalf("audit list=%#v err=%v", page, err)
 	}
 	var revisions, retentionEvents int
@@ -373,6 +379,62 @@ func TestDraftRetentionArchiveRestoreAndSoftDelete(t *testing.T) {
 	}
 	if deletionReason != "重复发票草稿" || deletionActor != actor.ID || deletionCredential != actor.CredentialID {
 		t.Fatalf("deletion log reason=%q actor=%q credential=%q", deletionReason, deletionActor, deletionCredential)
+	}
+}
+
+func TestTenantWideAuditedDeleteCoversReimbursementAndPaymentBeforeFunds(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	money := &integrationMoney{}
+	service, _ := NewServiceWithDependencies(store, money, integrationEvidence{})
+	applicant := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	operator := Actor{ID: "44444444-4444-4444-8444-444444444444", TenantID: applicant.TenantID, CredentialID: "55555555-5555-4555-8555-555555555555"}
+
+	payment, err := service.Create(ctx, applicant, CreateInput{CommandID: "a1000000-0000-4000-8000-000000000001", RequestType: "payment", Title: "重复付款申请", AmountMinor: 100, Currency: "CNY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deletedPayment, err := service.DeleteDraft(ctx, operator, payment.ID, DeleteDraftInput{CommandID: "a1000000-0000-4000-8000-000000000002", ExpectedRevision: payment.Revision, Confirmation: "DELETE", Reason: "重复录入付款", TenantWide: true})
+	if err != nil || deletedPayment.Deletion == nil || deletedPayment.Deletion.ActorSubjectID != operator.ID {
+		t.Fatalf("tenant payment delete=%#v err=%v", deletedPayment, err)
+	}
+
+	person := ReferenceSnapshot{ID: "66666666-6666-4666-8666-666666666666", Revision: 1, Digest: "sha256:" + strings.Repeat("6", 64), DisplayName: "申请人"}
+	reimbursementDetails := DetailSnapshot{Applicant: person, Payee: PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人"}, Lines: []Line{{ID: "77777777-7777-4777-8777-777777777777", BusinessDate: "2026-11-12", CategoryKey: "travel", CategoryName: "差旅费", CategoryRev: 1, Purpose: "误录报销", AmountMinor: 200, Evidence: []EvidenceRef{{FileID: "88888888-8888-4888-8888-888888888888", Version: 1, Purpose: "invoice"}}}}}
+	reimbursement, err := service.Create(ctx, applicant, CreateInput{CommandID: "a1000000-0000-4000-8000-000000000003", RequestType: "reimbursement", Title: "误录报销", AmountMinor: 200, Currency: "CNY", Details: reimbursementDetails})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reimbursement, err = service.Submit(ctx, applicant, reimbursement.ID, SubmitInput{CommandID: "a1000000-0000-4000-8000-000000000007", ExpectedRevision: reimbursement.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reimbursement, err = service.Withdraw(ctx, applicant, reimbursement.ID, WithdrawInput{CommandID: "a1000000-0000-4000-8000-000000000008", ExpectedRevision: reimbursement.Revision, Reason: "申请人撤回"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deletedReimbursement, err := service.DeleteDraft(ctx, operator, reimbursement.ID, DeleteDraftInput{CommandID: "a1000000-0000-4000-8000-000000000004", ExpectedRevision: reimbursement.Revision, Confirmation: "DELETE", Reason: "撤回后确认作废", TenantWide: true})
+	if err != nil || deletedReimbursement.Deletion == nil || deletedReimbursement.Deletion.Reason != "撤回后确认作废" {
+		t.Fatalf("tenant reimbursement delete=%#v err=%v", deletedReimbursement, err)
+	}
+
+	paidDetails := DetailSnapshot{Applicant: person, Payee: PayeeSnapshot{Kind: "one_time", EntityKind: "organization", PaymentMethod: "cash", DisplayName: "收款方"}, Lines: []Line{{ID: "99999999-9999-4999-8999-999999999999", BusinessDate: "2026-11-12", Purpose: "已有付款结果", AmountMinor: 300}}}
+	blocked, err := service.Create(ctx, applicant, CreateInput{CommandID: "a1000000-0000-4000-8000-000000000005", RequestType: "payment", Title: "已有付款结果", AmountMinor: 300, Currency: "CNY", Details: paidDetails})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = service.Submit(ctx, applicant, blocked.ID, SubmitInput{CommandID: "a1000000-0000-4000-8000-000000000009", ExpectedRevision: blocked.Revision, MissingEvidenceAcknowledged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = service.ConfirmPayment(ctx, applicant, blocked.ID, ConfirmPaymentInput{CommandID: "a1000000-0000-4000-8000-000000000010", ExpectedRevision: blocked.Revision, ActualAmountMinor: 300, OccurredOn: "2026-11-12", Note: "实际付款"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.DeleteDraft(ctx, operator, blocked.ID, DeleteDraftInput{CommandID: "a1000000-0000-4000-8000-000000000006", ExpectedRevision: blocked.Revision, Confirmation: "DELETE", Reason: "不应允许", TenantWide: true}); !errors.Is(err, ErrStateConflict) {
+		t.Fatalf("paid request deletion err=%v", err)
 	}
 }
 

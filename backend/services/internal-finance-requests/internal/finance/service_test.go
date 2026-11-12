@@ -76,6 +76,25 @@ func TestDeleteDraftRequiresAndNormalizesReason(t *testing.T) {
 	}
 }
 
+func TestTenantWideDeleteRequiresObservedRevision(t *testing.T) {
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	store := &deleteDraftStore{}
+	service, _ := NewService(store)
+	id := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	command := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	input := DeleteDraftInput{CommandID: command, Confirmation: "DELETE", Reason: "重复付款申请", TenantWide: true}
+	if _, err := service.DeleteDraft(context.Background(), actor, id, input); err == nil {
+		t.Fatal("tenant-wide deletion without expected revision was accepted")
+	}
+	input.ExpectedRevision = 3
+	if _, err := service.DeleteDraft(context.Background(), actor, id, input); err != nil {
+		t.Fatal(err)
+	}
+	if !store.input.TenantWide || store.input.ExpectedRevision != 3 || store.input.Reason != "重复付款申请" {
+		t.Fatalf("trusted tenant-wide delete input=%#v", store.input)
+	}
+}
+
 func TestTotalLinesRejectsOverflow(t *testing.T) {
 	if value, err := totalLines([]Line{{AmountMinor: math.MaxInt64 - 1}, {AmountMinor: 1}}); err != nil || value != math.MaxInt64 {
 		t.Fatalf("valid boundary total=%d err=%v", value, err)

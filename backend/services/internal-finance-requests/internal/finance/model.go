@@ -167,7 +167,15 @@ type Request struct {
 	UpdatedAt           time.Time         `json:"updated_at"`
 	ArchivedAt          *time.Time        `json:"archived_at,omitempty"`
 	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
+	Deletion            *DeletionAudit    `json:"deletion,omitempty"`
 	AllowedActions      []string          `json:"allowed_actions,omitempty"`
+}
+
+type DeletionAudit struct {
+	Reason         string    `json:"reason"`
+	ActorSubjectID string    `json:"actor_subject_id"`
+	CredentialID   string    `json:"credential_id"`
+	OccurredAt     time.Time `json:"occurred_at"`
 }
 type CreateInput struct {
 	CommandID   string         `json:"command_id"`
@@ -204,9 +212,11 @@ type RestoreInput struct {
 }
 
 type DeleteDraftInput struct {
-	CommandID    string `json:"command_id"`
-	Confirmation string `json:"confirmation"`
-	Reason       string `json:"reason"`
+	CommandID        string `json:"command_id"`
+	ExpectedRevision int64  `json:"expected_revision,omitempty"`
+	Confirmation     string `json:"confirmation"`
+	Reason           string `json:"reason"`
+	TenantWide       bool   `json:"-"`
 }
 
 type ConfirmPaymentInput struct {
@@ -277,8 +287,9 @@ type ListFilter struct {
 	IncludeDeleted     bool
 }
 type Page struct {
-	Items      []Request `json:"items"`
-	NextCursor string    `json:"next_cursor,omitempty"`
+	Items          []Request `json:"items"`
+	NextCursor     string    `json:"next_cursor,omitempty"`
+	AllowedActions []string  `json:"allowed_actions,omitempty"`
 }
 
 type EvidenceVersion struct {

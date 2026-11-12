@@ -1,5 +1,9 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-12 财务申请删除基线（BF-333，待发布）：报销与付款申请的删除资格由 Internal Finance Requests 依据独立 Capability、当前 revision、生命周期和付款事实最终判断，不由页面按钮或“管理员”角色名推断。删除是带原因、Actor、Credential 和时间的软删除；默认隐藏不等于物理删除。已删除申请保留完整历史和发票指纹审计，但不再阻止同一发票用于纠正后的新申请；一旦存在实际付款、核销、超额或未知付款结果，删除失败关闭且只能沿业务调整／冲销路径处理。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
+2026-11-12 账号行操作菜单基线（BF-334，待发布）：账号目录每次最多展开一个行操作菜单；点外部或按 Escape 收起。该瞬时状态不持久化，也不影响 IAM／People 事实和权限。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
 2026-11-12 已确认识别结果删除基线（BF-332，已发布）：Invoice Recognition 删除是追加式生命周期命令，`needs_review` 与 `confirmed` 均可在有 discard Capability、expected revision 和必填原因时进入 `discarded`。确认记录与全部来源、历史、Actor、时间和审计保持不可变；默认列表隐藏不等于物理删除。下游报销、付款申请和正式票据拥有自己的快照与生命周期，识别记录删除不能跨 Owner 级联撤销。该基线已由 `oatest` v1.100 的 D1、健康、公网资源和真实 Chrome 只读验收确认。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 2026-11-12 全站业务 Capability 与 Feedback Session 基线（BF-330／BF-331，已发布）：网站的业务 Owner 继续校验 Gateway 注入的 Bearer Capability，Browser 不直接读取 Token；Workbench 按 Audience 管理无凭证短租约，提前最多 60 秒 single-flight 续期，写入必须先取得新能力。Feedback 长期 API Key 只留在 Gateway，浏览器只持有内存中的 15 分钟限域 `fbs_`。v1.99 已发布并通过 D1 check、21/21 healthy、Feedback V3 登录态正向和无授权主体负向；没有改变 Session、Capability TTL、Grant 或 Owner 最终授权。带业务 Grant 的公网 Owner 正向与 5／15 分钟长会话仍待受控账号补证。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)

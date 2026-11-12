@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前财务申请审计删除与账号菜单收起（BF-333／BF-334，待发布）：报销和付款申请共用独立删除能力、expected revision 与必填原因；草稿、已撤回和未发生任何资金／未知结果的待支付申请可软删除，默认列表隐藏并可在“已删除”筛选审计回看。申请历史、Evidence 和发票指纹保留，但已删除申请释放发票占用；已付款或结果未知继续禁止删除。账号行操作菜单支持点外部、切换其他菜单和 Escape 收起。本地 Go／Node、PostgreSQL 18 与 307 项 Workbench 回归已通过。[本地验证](./docs/reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+
 当前已确认发票识别记录删除（BF-332，已发布）：`oatest` v1.100 的待确认与已确认识别记录都可填写必填原因后追加为 `discarded`，默认列表隐藏但确认记录、Evidence、revision、操作人、凭证、时间和审计全部保留；删除识别记录不会级联撤销已生成的报销、付款申请或正式票据。联合备份、D1 check、21/21 healthy、公网静态资源和真实 Chrome 空白原因弹窗验证通过，未删除线上数据。[发布记录](./docs/reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 当前全站 Capability 与 Feedback Session（BF-330／BF-331，已发布）：`oatest` v1.99 的每个业务 Owner API 继续校验 Gateway 注入的 Bearer Capability，浏览器只持有 Route-scoped HttpOnly Cookie 与不含 Token 的内存租约；读请求提前续期，写请求发送前强制换票。Feedback V3 正式改为 Gateway 代管长期 API Key、浏览器只接收 15 分钟限域 Session。备份、D1 check、21/21 healthy、登录态 V3 `3.0.4`、匿名拒绝和无 Grant 拒绝通过；未给系统管理员增加业务权限。带业务 Grant 的公网 Owner 正向读取与 5／15 分钟长会话仍待独立验收账号补证。[发布记录](./docs/reports/oms-capability-feedback-v199-publication-20261112.md)

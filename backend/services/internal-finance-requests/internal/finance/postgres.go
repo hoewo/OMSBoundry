@@ -205,7 +205,7 @@ func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checke
 			if evidence.SHA256 == "" {
 				continue
 			}
-			rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND evidence_sha256=$3`, value.TenantID, value.ID, evidence.SHA256)
+			rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.evidence_sha256=$3 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, evidence.SHA256)
 			if err != nil {
 				return DuplicateAssessment{}, err
 			}
@@ -215,7 +215,7 @@ func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checke
 		}
 		invoice := line.Invoice
 		if invoice.Number != "" {
-			rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND invoice_code=$3 AND invoice_number=$4`, value.TenantID, value.ID, invoice.Code, invoice.Number)
+			rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.invoice_code=$3 AND fingerprints.invoice_number=$4 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, invoice.Code, invoice.Number)
 			if err != nil {
 				return DuplicateAssessment{}, err
 			}
@@ -223,7 +223,7 @@ func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checke
 				return DuplicateAssessment{}, err
 			}
 		}
-		rows, err := q.Query(ctx, `SELECT DISTINCT request_id::text FROM finance_invoice_fingerprints WHERE tenant_id=$1 AND request_id<>$2 AND issuer_name=$3 AND invoice_date=$4::date AND amount_minor=$5`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
+		rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.issuer_name=$3 AND fingerprints.invoice_date=$4::date AND fingerprints.amount_minor=$5 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
 		if err != nil {
 			return DuplicateAssessment{}, err
 		}
@@ -414,18 +414,24 @@ func (s *PostgresStore) DeleteDraft(ctx context.Context, actor Actor, id string,
 	if err != nil {
 		return Request{}, err
 	}
-	if value.ApplicantSubjectID != actor.ID {
+	if !input.TenantWide && value.ApplicantSubjectID != actor.ID {
 		return Request{}, ErrNotFound
+	}
+	if input.ExpectedRevision > 0 && value.Revision != input.ExpectedRevision {
+		return Request{}, ErrRevisionConflict
 	}
 	var submitted, paymentStarted bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM finance_request_revisions WHERE tenant_id=$1 AND request_id=$2 AND event_kind='submitted'), EXISTS(SELECT 1 FROM finance_payment_deliveries WHERE tenant_id=$1 AND request_id=$2 AND status IN ('unknown','succeeded'))`, actor.TenantID, id).Scan(&submitted, &paymentStarted); err != nil {
 		return Request{}, err
 	}
-	if value.Status != "draft" || value.DeletedAt != nil || submitted || paymentStarted {
+	selfDraftDeletion := !input.TenantWide && value.Status == "draft" && !submitted
+	tenantDeletion := input.TenantWide && (value.Status == "draft" || value.Status == "withdrawn" || value.Status == "payable")
+	if value.DeletedAt != nil || value.PaidMinor != 0 || value.AllocatedMinor != 0 || value.OverageMinor != 0 || paymentStarted || (!selfDraftDeletion && !tenantDeletion) {
 		return Request{}, ErrStateConflict
 	}
 	now := time.Now().UTC()
 	value.DeletedAt, value.UpdatedAt = &now, now
+	value.Deletion = &DeletionAudit{Reason: input.Reason, ActorSubjectID: actor.ID, CredentialID: actor.CredentialID, OccurredAt: now}
 	if _, err = tx.Exec(ctx, `UPDATE finance_requests SET deleted_at=$3,updated_at=$3 WHERE tenant_id=$1 AND id=$2`, value.TenantID, value.ID, now); err != nil {
 		return Request{}, err
 	}
@@ -734,6 +740,9 @@ func (s *PostgresStore) List(ctx context.Context, tenant string, filter ListFilt
 		if scanErr = loadPayments(ctx, s.pool, &value); scanErr != nil {
 			return nil, scanErr
 		}
+		if scanErr = loadDeletion(ctx, s.pool, &value); scanErr != nil {
+			return nil, scanErr
+		}
 		if scanErr = projectInvoiceDuplicates(ctx, s.pool, &value); scanErr != nil {
 			return nil, scanErr
 		}
@@ -979,6 +988,9 @@ func load(ctx context.Context, q querier, tenant, id, suffix string) (Request, e
 	if err = loadPayments(ctx, q, &value); err != nil {
 		return Request{}, err
 	}
+	if err = loadDeletion(ctx, q, &value); err != nil {
+		return Request{}, err
+	}
 	return value, nil
 }
 func loadPayments(ctx context.Context, q querier, value *Request) error {
@@ -999,6 +1011,21 @@ func loadPayments(ctx context.Context, q querier, value *Request) error {
 		value.Payments = append(value.Payments, d)
 	}
 	return rows.Err()
+}
+
+func loadDeletion(ctx context.Context, q querier, value *Request) error {
+	if value.DeletedAt == nil {
+		return nil
+	}
+	var deletion DeletionAudit
+	err := q.QueryRow(ctx, `SELECT COALESCE(details->>'reason',''),actor_subject_id::text,credential_id,occurred_at FROM finance_request_retention_events WHERE tenant_id=$1 AND request_id=$2 AND action='deleted' ORDER BY occurred_at DESC,id DESC LIMIT 1`, value.TenantID, value.ID).Scan(&deletion.Reason, &deletion.ActorSubjectID, &deletion.CredentialID, &deletion.OccurredAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err == nil {
+		value.Deletion = &deletion
+	}
+	return err
 }
 func loadDelivery(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
