@@ -1,8 +1,10 @@
 # OMSBizFoundry 验证入口
 
-## 已确认发票识别记录审计删除（2026-11-12，本地实现／发布待验）
+## 已确认发票识别记录审计删除（2026-11-12，已发布）
 
 BF-332 必须验证待确认与已确认 proposal 都能以独立 Command、expected revision 和非空原因进入 `discarded`；confirmed 删除后的 confirmation 行、识别 revision、审计事件、Evidence 引用、Actor／Credential／时间必须保持。已删除再次删除、旧 revision、异义重放继续冲突；默认列表隐藏，已删除筛选能显示原因、操作人和时间。不得因删除识别记录而删除或改写 Finance／Billing 等下游事实。
+
+v1.100 已完成本地 Go／Node、真实 PostgreSQL 18、P9／D1 门禁、发布包 checksum、目标机 D1 check、21/21 healthy、公网静态资源哈希和真实 Chrome 删除弹窗只读验证；线上验收只打开后取消，未实际删除业务记录。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 ## 全站业务 Capability 无感续期（2026-11-12，本地实现／发布待验）
 

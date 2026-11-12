@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前工程架构
 
-2026-11-12 已确认识别结果删除边界（BF-332，本地实现／发布待验）：Invoice Recognition 仍拥有候选与确认历史，discard 是其追加 revision 的生命周期命令；confirmed→discarded 只改变当前投影可见性，不修改 confirmation 或 Evidence。Internal Finance Requests、Billing 等消费者保存自己的不可变来源快照，识别结果后续删除不会跨库级联；消费者的撤销继续走各自版本化命令。既有 `invoice-recognition.discard` Capability、API、数据库所有权和 Gateway／IAM 链不变。
+2026-11-12 已确认识别结果删除边界（BF-332，已发布）：Invoice Recognition 仍拥有候选与确认历史，discard 是其追加 revision 的生命周期命令；confirmed→discarded 只改变当前投影可见性，不修改 confirmation 或 Evidence。Internal Finance Requests、Billing 等消费者保存自己的不可变来源快照，识别结果后续删除不会跨库级联；消费者的撤销继续走各自版本化命令。既有 `invoice-recognition.discard` Capability、API、数据库所有权和 Gateway／IAM 链不变。`oatest` v1.100 已验证该装配边界。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
 2026-11-12 全站 Capability Lease 协调（BF-331，已发布）：IAM 继续签发最长 5 分钟、按 Audience 的 Ed25519 Capability JWT。Browser 只携带 Gateway 设置的 Route-scoped HttpOnly Cookie；Gateway 验签并在内部请求注入 `Authorization: Bearer`，Owner 再验签并做最终资源／状态授权。JSON authorize 只返回应用、Audience 与期限，Workbench 在内存提前最多 60 秒 single-flight 换票；读 API 可复用安全窗口，写 API 发出前强制换票。v1.99 已发布，系统管理员仍不能取得业务 Capability，边界未被验收绕过。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)
 

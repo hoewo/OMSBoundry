@@ -1,5 +1,7 @@
 # OMS 已确认发票识别记录审计删除本地验证
 
+> 后续状态：BF-332 已发布到 `oatest` v1.100；公网与运行证据见[发布记录](./oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)。本文保留发布前本地验证事实。
+
 日期：2026-11-12  
 事项：BF-332  
 状态：本地实现与验证通过，尚未发布
