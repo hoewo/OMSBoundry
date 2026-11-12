@@ -4,6 +4,8 @@
 
 BF-331 必须证明每个业务 Owner 请求最终仍收到并自行校验 Gateway 注入的 Bearer Capability，Browser 和租约 JSON 都不能读取 Token。5 分钟租约应在最多提前 60 秒时按 Audience single-flight 续期，后台恢复复核；读请求可在续期暂时失败时使用尚未过期旧票，写请求必须在发送前成功换新票。明确 IAM 拒绝必须清 Cookie，IAM 网络／5xx 不得误删仍有效 Cookie；Owner `credential_required` 最多换票并重放一次。
 
+2026-11-12 BF-330／BF-331 公网发布验证：v1.99 发布包、Gateway／Workbench 摘要、联合备份 21 项 checksum、D1 check 和 21/21 healthy 通过；三个关键静态资源与本地 SHA-256 一致。匿名 Feedback 配置为 403/no-store；Chrome 完整刷新后的登录态配置为 200，实际加载 V3 `3.0.4`，智能客服、我的反馈和快照读取可用。普通账号与系统管理员无业务 Grant 的 JSON authorize 均为 403。增强后的公网验收脚本已检查当前资源、JSON 租约精确字段、no-store、无浏览器持久化，并支持 `0600` 业务账号文件；当前没有该账号，因此五 Owner 有权公网读取与 5／15 分钟长会话不登记通过。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)
+
 已实际运行 Gateway／Workbench `go test ./...` 与 `go vet ./...`、变更 JavaScript `node --check`、Workbench Node 全量 306/306、`acceptance/p9-full-composition/test-preflight`、`deployments/d1/ops/test-p9-composition` 和 `git diff --check`，均通过。公网部署、真实登录、超过 5 分钟持续读取、后台恢复、写前授权与退出拒绝尚未运行，不登记为通过。[本地报告](./reports/oms-sitewide-capability-renewal-local-validation-20261112.md)
 
 ## Feedback 短期 Session 无感续期（2026-11-12，本地实现／发布待验）

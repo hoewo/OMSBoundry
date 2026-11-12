@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Read-only public acceptance for the deployed OMS v1 assembly."""
 
+import argparse
 import hashlib
 import http.cookiejar
 import json
+from pathlib import Path
+import stat
 import subprocess
 import urllib.error
 import urllib.parse
@@ -12,6 +15,12 @@ import urllib.request
 
 PUBLIC = "https://oatest.antuinfo.cn"
 OPERATING_PARTY_ID = "95d3793f-7e0d-4ec9-acb8-9baf8bcb1039"
+LOGIN_ASSET_VERSION = "20261030.1"
+STYLE_ASSET_VERSION = "20261109.2"
+PAGINATION_ASSET_VERSION = "20261022.6"
+CAPABILITY_ASSET_VERSION = "20261112.1"
+MAIN_ASSET_VERSION = "20261112.1"
+EVIDENCE_ASSET_VERSION = "20261022.6"
 APPLICATIONS = {
     "party-directory": ("/party/api/v1/parties?status=all&limit=100", "items"),
     "project-workspace": ("/project/api/v1/project-directory?status=all&limit=100", "items"),
@@ -52,8 +61,29 @@ def iam_environment():
     return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
 
 
+def login_credentials(environment, credentials_file):
+    if credentials_file is None:
+        return {
+            "username": environment["BOOTSTRAP_ADMIN_USERNAME"],
+            "password": environment["BOOTSTRAP_ADMIN_PASSWORD"],
+        }
+    path = Path(credentials_file)
+    if not path.is_file() or path.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+        raise RuntimeError("login credentials file must be readable only by its owner")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    if not username or not password:
+        raise RuntimeError("login credentials file must contain username and password")
+    return {"username": username, "password": password}
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--login-credentials-file")
+    args = parser.parse_args()
     environment = iam_environment()
+    credentials = login_credentials(environment, args.login_credentials_file)
     jar = http.cookiejar.CookieJar()
     client = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar)
@@ -90,8 +120,8 @@ def main():
     _, login_page, _ = request("/workbench/?view=oms-v1")
     for marker in (
         b"data-oms-login",
-        b"assets/oms-phase1-login.css?v=20261022.6",
-        b"assets/oms-phase1-login.js?v=20261022.6",
+        f"assets/oms-phase1-login.css?v={LOGIN_ASSET_VERSION}".encode(),
+        f"assets/oms-phase1-login.js?v={LOGIN_ASSET_VERSION}".encode(),
     ):
         if marker not in login_page:
             raise RuntimeError(f"OMS login page is missing current asset marker: {marker!r}")
@@ -106,8 +136,8 @@ def main():
             raise RuntimeError(f"OMS login page still loads retired runtime: {retired!r}")
 
     for path in (
-        "/workbench/assets/oms-phase1-login.css?v=20261022.6",
-        "/workbench/assets/oms-phase1-login.js?v=20261022.6",
+        f"/workbench/assets/oms-phase1-login.css?v={LOGIN_ASSET_VERSION}",
+        f"/workbench/assets/oms-phase1-login.js?v={LOGIN_ASSET_VERSION}",
     ):
         _, asset, asset_headers = request(path)
         if not asset:
@@ -143,8 +173,8 @@ def main():
     csrf = json.loads(csrf_raw)["csrf_token"]
     login_body = json.dumps(
         {
-            "username": environment["BOOTSTRAP_ADMIN_USERNAME"],
-            "password": environment["BOOTSTRAP_ADMIN_PASSWORD"],
+            "username": credentials["username"],
+            "password": credentials["password"],
         }
     ).encode()
     _, login_raw, _ = request(
@@ -154,23 +184,34 @@ def main():
         {"Content-Type": "application/json", "X-CSRF-Token": csrf},
     )
     principal = json.loads(login_raw)["principal"]
-    if not principal.get("administrator"):
-        raise RuntimeError("public login did not return the deployment administrator")
+    if not principal.get("subject_id") or not principal.get("tenant_id"):
+        raise RuntimeError("public login did not return a tenant-bound principal")
 
     _, page, page_headers = request("/workbench/?view=oms-v1")
-    markers = (
-        b"data-oms-v1",
-        b"data-oms-v1-nav=\"overview\"",
-        b"data-oms-v1-nav=\"projects\"",
-        b"data-oms-v1-nav=\"receivable\"",
-        b"data-oms-v1-nav=\"payable\"",
-        (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
-        b"assets/oms-phase1.css?v=20261022.10",
-        b"assets/oms-phase1-pagination.js?v=20261022.6",
-        b"assets/oms-phase1.js?v=20261022.9",
-    )
-    if not all(marker in page for marker in markers):
-        raise RuntimeError("OMS v1 page is missing required assembly markers")
+    if principal.get("system_administrator"):
+        markers = (
+            b"data-oms-system-admin",
+            b"assets/oms-system-admin.css?v=20261027.2",
+            b"assets/oms-system-admin.js?v=20261030.1",
+        )
+    else:
+        markers = (
+            b"data-oms-v1",
+            b"data-oms-v1-nav=\"overview\"",
+            b"data-oms-v1-nav=\"projects\"",
+            b"data-oms-v1-nav=\"receivable\"",
+            b"data-oms-v1-nav=\"payable\"",
+            (b"data-operating-party-id=\"" + OPERATING_PARTY_ID.encode() + b"\""),
+            f"assets/oms-phase1.css?v={STYLE_ASSET_VERSION}".encode(),
+            f"assets/oms-phase1-pagination.js?v={PAGINATION_ASSET_VERSION}".encode(),
+            f"assets/oms-phase1-capability.js?v={CAPABILITY_ASSET_VERSION}".encode(),
+            f"assets/oms-phase1.js?v={MAIN_ASSET_VERSION}".encode(),
+        )
+    missing_markers = [marker.decode(errors="replace") for marker in markers if marker not in page]
+    if missing_markers:
+        raise RuntimeError(
+            "OMS v1 page is missing required assembly markers: " + ", ".join(missing_markers)
+        )
     eager_legacy_assets = (
         b'src="assets/reference-oa-react-bidding.js',
         b'src="assets/reference-oa-initiation-runtime.js',
@@ -186,18 +227,23 @@ def main():
 
     critical_assets = {}
     for path in (
-        "/workbench/assets/oms-phase1.css?v=20261022.10",
-        "/workbench/assets/oms-phase1-pagination.js?v=20261022.6",
-        "/workbench/assets/oms-phase1.js?v=20261022.9",
+        f"/workbench/assets/oms-phase1.css?v={STYLE_ASSET_VERSION}",
+        f"/workbench/assets/oms-phase1-pagination.js?v={PAGINATION_ASSET_VERSION}",
+        f"/workbench/assets/oms-phase1-capability.js?v={CAPABILITY_ASSET_VERSION}",
+        f"/workbench/assets/oms-phase1.js?v={MAIN_ASSET_VERSION}",
     ):
         _, asset, asset_headers = request(path)
         if asset_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
             raise RuntimeError(f"versioned OMS asset is not immutable: {path}")
         critical_assets[path.rsplit("/", 1)[-1]] = len(asset)
-        if path.endswith("oms-phase1.js?v=20261022.9") and (b"function partyVisibleForRole" not in asset or b"/api/v1/project-party-candidates" not in asset):
+        if path.endswith(f"oms-phase1.js?v={MAIN_ASSET_VERSION}") and (b"function partyVisibleForRole" not in asset or b"/api/v1/project-party-candidates" not in asset):
             raise RuntimeError("current OMS script is missing the party directory visibility guard")
+        if path.endswith(f"oms-phase1-capability.js?v={CAPABILITY_ASSET_VERSION}"):
+            for forbidden in (b"localStorage", b"sessionStorage", b"document.cookie"):
+                if forbidden in asset:
+                    raise RuntimeError("capability coordinator must not store or read credentials")
 
-    evidence_path = "/workbench/assets/oms-phase1-evidence.js?v=20261022.6"
+    evidence_path = f"/workbench/assets/oms-phase1-evidence.js?v={EVIDENCE_ASSET_VERSION}"
     _, evidence_asset, evidence_headers = request(evidence_path)
     if evidence_headers.get("Cache-Control") != "public, max-age=31536000, immutable":
         raise RuntimeError("current OMS Evidence runtime is not immutable")
@@ -208,15 +254,32 @@ def main():
     owner_items = {}
     for application, (path, list_key) in APPLICATIONS.items():
         form = urllib.parse.urlencode({"csrf_token": csrf}).encode()
-        request(
+        _, lease_raw, lease_headers = request(
             "/gateway/authorize/" + application,
             "POST",
             form,
             {
+                "Accept": "application/json",
                 "Content-Type": "application/x-www-form-urlencoded",
                 "X-CSRF-Token": csrf,
             },
         )
+        if lease_headers.get_content_type() != "application/json":
+            raise RuntimeError(f"{application} capability lease did not return JSON")
+        if lease_headers.get("Cache-Control") != "no-store":
+            raise RuntimeError(f"{application} capability lease is cacheable")
+        lease = json.loads(lease_raw)
+        if set(lease) != {
+            "application_id",
+            "audience",
+            "expires_at",
+            "expires_in_seconds",
+        }:
+            raise RuntimeError(f"{application} capability lease exposed an unexpected field")
+        if lease.get("application_id") != application or lease.get("audience") != application:
+            raise RuntimeError(f"{application} capability lease is bound to another audience")
+        if not isinstance(lease.get("expires_in_seconds"), int) or lease["expires_in_seconds"] <= 0:
+            raise RuntimeError(f"{application} capability lease is already expired")
         runtime_path = RUNTIME_CONTEXTS.get(application)
         if runtime_path:
             _, runtime_raw, runtime_headers = request(runtime_path)

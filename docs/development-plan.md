@@ -1,8 +1,6 @@
 # OMSBizFoundry 开发计划
 
-2026-11-12 BF-331 已完成本地实现、待发布：Gateway 授权端新增无 Token 租约元数据，并修正续期失败时误删仍有效 Capability Cookie；Workbench 已把全部业务 Owner 调用收口到按 Audience 提前续期、并发 single-flight、后台恢复复核和写前强制换票的统一协调器。Gateway／Workbench Go test 与 vet、Workbench Node 306/306、P9 和 D1 组合门禁通过。下一步与 BF-330 同批备份并发布 Gateway／Workbench，把正式 Feedback 模式切为 `session`，再复验公网登录、Owner 读取、写前授权、后台恢复、5 分钟以上续期和退出拒绝；完成前不得登记线上通过。
-
-2026-11-12 BF-330 已完成本地实现、待发布：Gateway 已能只向浏览器下发 1～20 分钟约束内的 Feedback Session；Workbench 已实现到期前约 2 分钟主动续期、single-flight、标签恢复复核、SDK 强制刷新和旧 Token 剩余有效期内的有界降级；D1／P9 已从正式 `apiKey` 收敛到 `session`。本地 Gateway、Workbench、组合预检和备份恢复门禁通过。下一步是备份 `oatest`、把部署环境切到 `session`、发布 Gateway／Workbench，并以超过 15 分钟的真实 Chrome 旅程复验智能客服、反馈提交、未读、后台恢复、退出与换票拒绝；完成前不得登记已发布。
+2026-11-12 BF-330／BF-331 已发布：Gateway／Workbench v1.99 和正式 Feedback `session` 模式已部署；备份 `20261112T125812Z`、D1 check、21/21 healthy、公网资源摘要、匿名配置拒绝、登录态 V3 `3.0.4` 与快照读取通过。普通账号和系统管理员无 Grant 的 Owner 授权均失败关闭，没有扩大权限。下一步仅补证：用独立 `0600` 业务验收账号运行增强后的 `verify-public-oms-v1.py`，完成五 Owner 正向读取、写前换票、超过 5 分钟 Capability 续期，以及超过 15 分钟 Feedback 续期／后台恢复／退出拒绝。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)
 
 2026-11-11 BF-329 已完成并发布：Feedback auth-server `fea711f` 已为同 Key 的 bcrypt 校验增加在途合并与 30 秒成功短缓存，未知 Key 不缓存，新建／删除 Key 清缓存。专项 race、全包只编译和 vet 通过；全量测试中的既有注册集成测试因本机无 Redis 触发空指针，未误记为通过。公网 8 路真实 Key 冷校验从原 23 秒超时收敛为 8/8 约 3.25 秒同时 200，热校验 95～127ms；截图对应会话历史路由 8/8 为 200，Workshop 与 OpenHands 继续健康。D1 的一期 `apiKey` 基线未改变。[发布验证](./reports/oms-feedback-api-key-validation-burst-repair-publication-20261111.md)
 

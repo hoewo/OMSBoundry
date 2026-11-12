@@ -4,6 +4,8 @@
 
 决策：BF-330
 
+状态：本报告记录发布前本地证据；BF-330 后续已随 v1.99 发布到 `oatest`，公网结果见[发布记录](./oms-capability-feedback-v199-publication-20261112.md)。
+
 ## 问题与结果
 
 问题 A：Feedback 的项目 API Key 直接进入浏览器；迁移到 15 分钟 Session 后，宿主又只在 Token 已过期并收到 SDK 401 时被动换票，用户会遇到短时中断，并且多个前台／恢复事件可能重复触发换票。

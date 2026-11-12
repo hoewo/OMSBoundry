@@ -2,7 +2,7 @@
 
 ## 结论
 
-BF-331 已完成本地实现，尚未发布到 `oatest`。OMS 的全部 Owner API 继续使用原有“双重校验”链：浏览器持有按 Owner 路径隔离的 HttpOnly Capability Cookie，Gateway 校验后删除任何客户端伪造身份与 Authorization，再注入 `Authorization: Bearer <Capability JWT>`；目标 Owner 重新校验签名、Audience、动作、Scope、Tenant 和业务状态。此次没有把 Feedback 作为业务鉴权核心，也没有把 Token 放进 JavaScript、Local Storage、Session Storage、URL 或业务库。
+本报告记录发布前本地证据；BF-331 后续已随 v1.99 发布到 `oatest`，公网结果见[发布记录](./oms-capability-feedback-v199-publication-20261112.md)。OMS 的全部 Owner API 继续使用原有“双重校验”链：浏览器持有按 Owner 路径隔离的 HttpOnly Capability Cookie，Gateway 校验后删除任何客户端伪造身份与 Authorization，再注入 `Authorization: Bearer <Capability JWT>`；目标 Owner 重新校验签名、Audience、动作、Scope、Tenant 和业务状态。此次没有把 Feedback 作为业务鉴权核心，也没有把 Token 放进 JavaScript、Local Storage、Session Storage、URL 或业务库。
 
 ## 问题 A → 可验证结果 B
 

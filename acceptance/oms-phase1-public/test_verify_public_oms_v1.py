@@ -1,5 +1,8 @@
 import importlib.util
+import json
 from pathlib import Path
+import stat
+import tempfile
 import unittest
 
 
@@ -31,6 +34,24 @@ class DirectoryAuthorityTest(unittest.TestCase):
 
     def test_does_not_apply_to_other_owner_documents(self):
         MODULE.require_directory_authority("project-workspace", {"items": []})
+
+    def test_owner_only_credentials_file_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "login.json")
+            path.write_text(json.dumps({"username": "operator", "password": "secret"}))
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            self.assertEqual(
+                MODULE.login_credentials({}, str(path)),
+                {"username": "operator", "password": "secret"},
+            )
+
+    def test_group_readable_credentials_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "login.json")
+            path.write_text(json.dumps({"username": "operator", "password": "secret"}))
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
+            with self.assertRaisesRegex(RuntimeError, "only by its owner"):
+                MODULE.login_credentials({}, str(path))
 
 
 if __name__ == "__main__":
