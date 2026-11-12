@@ -6,9 +6,10 @@ const shell = fs.readFileSync(new URL('./oms_phase1.js', import.meta.url), 'utf8
 const internal = fs.readFileSync(new URL('./oms_phase1_internal.js', import.meta.url), 'utf8')
 const html = fs.readFileSync(new URL('./oms_phase1.html', import.meta.url), 'utf8')
 
-test('capability authorization accepts the gateway redirect without following an application root', () => {
-  assert.match(shell, /fetch\('\/gateway\/authorize\/'\+encodeURIComponent\(id\),\{method:'POST',credentials:'same-origin',body,redirect:'manual'\}\)/)
-  assert.match(shell, /if\(!credentialRedirect\(response\)&&!response\.ok\)await problem\(response\)/)
+test('capability authorization receives only gateway lease metadata without following an application root', () => {
+  assert.match(shell, /fetch\('\/gateway\/authorize\/'\+encodeURIComponent\(id\),\{method:'POST',credentials:'same-origin',body,redirect:'manual',headers:\{Accept:'application\/json'\}\}\)/)
+  assert.match(shell, /if\(!response\.ok\)await problem\(response\)/)
+  assert.match(shell, /capabilityCoordinator\.requireFresh\(id,config\.audience\)/)
   assert.doesNotMatch(shell, /gateway\/authorize[^\n]+redirect:'follow'/)
 })
 

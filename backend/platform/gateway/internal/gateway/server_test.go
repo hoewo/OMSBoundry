@@ -137,6 +137,25 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) == "" {
 		t.Fatal("route-scoped capability cookie missing")
 	}
+	leaseRequest, _ := http.NewRequest(http.MethodPost, gateway.URL+"/gateway/authorize/contract-ledger", strings.NewReader(form.Encode()))
+	leaseRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	leaseRequest.Header.Set("Accept", "application/json")
+	response = do(t, client, leaseRequest, http.StatusOK)
+	if response.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("capability lease response was cacheable: %q", response.Header.Get("Cache-Control"))
+	}
+	lease := decodeMap(t, response.Body)
+	_ = response.Body.Close()
+	if lease["application_id"] != "contract-ledger" || lease["audience"] != "contract-ledger" {
+		t.Fatalf("unexpected capability lease metadata: %#v", lease)
+	}
+	remaining, ok := lease["expires_in_seconds"].(float64)
+	if !ok || remaining < 1 || remaining > 300 {
+		t.Fatalf("invalid capability lease remaining lifetime: %#v", lease)
+	}
+	if _, exposed := lease["token"]; exposed || strings.Contains(strings.ToLower(mustJSON(t, lease)), "bearer") {
+		t.Fatalf("capability lease exposed credential material: %#v", lease)
+	}
 	request, _ = http.NewRequest(http.MethodGet, gateway.URL+"/contract/contracts", nil)
 	request.Header.Set("Authorization", "Bearer forged")
 	request.Header.Set("X-OMS-Forged", "attacker")
@@ -200,8 +219,8 @@ func TestGatewayLoginHeaderCleaningAuthorizationAndDisabledRoute(t *testing.T) {
 	iam.Close()
 	response = postForm(t, client, gateway.URL+"/gateway/authorize/contract-ledger", form, http.StatusBadGateway)
 	_ = response.Body.Close()
-	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) != "" {
-		t.Fatal("IAM outage retained a stale capability cookie after explicit reauthorization")
+	if cookieValueForPath(t, client, gateway.URL, "/contract/", capabilityCookieName("contract-ledger")) == "" {
+		t.Fatal("IAM outage erased an otherwise valid capability cookie")
 	}
 	response = get(t, client, gateway.URL+"/money/", 404)
 	_ = response.Body.Close()
@@ -549,6 +568,14 @@ func decodeMap(t *testing.T, reader io.Reader) map[string]any {
 		t.Fatal(err)
 	}
 	return value
+}
+func mustJSON(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 func cookieValue(t *testing.T, client *http.Client, base, name string) string {
 	return cookieValueForPath(t, client, base, "/", name)

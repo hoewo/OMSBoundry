@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-12 全站 Capability Lease 协调（BF-331，本地实现／发布待验）：IAM 继续签发最长 5 分钟、按 Audience 的 Ed25519 Capability JWT。Browser 只携带 Gateway 设置的 Route-scoped HttpOnly Cookie；Gateway 验签并在内部请求注入 `Authorization: Bearer`，Owner 再验签并做最终资源／状态授权。新增 JSON authorize 端口只返回应用、Audience 与相对／绝对到期时间，Workbench 以相对期限在内存调度提前最多 60 秒的 single-flight 换票。读 API 复用安全窗口，写 API 在发出前强制换票；IAM 临时失败保留尚有效 Cookie，明确拒绝清除。IAM Session、Feedback Session、开放 API Key 与 Evidence 签名数据面保持各自边界。
+
 2026-11-12 Feedback Token-Mediating Backend（BF-330，本地实现／发布待验）：Browser 以 OMS 的 HttpOnly Session＋CSRF 请求同源 Gateway；Gateway 从可信 Tenant／Subject 派生稳定匿名用户，以仅存服务端的 Feedback API Key 换取 15 分钟 `fbs_`，再把短 Token 与到期时间交给 iframe。Workbench 只在内存保存 Session，到期前约 2 分钟 single-flight 续期，后台恢复复核；Gateway 验证 token family、Bearer、Project、用户和 1～20 分钟剩余期限。浏览器没有 Refresh Token，API Key 不进入 SDK；退出／身份变化／OMS Session 失效后不能换新票。Feedback Owner 和 HTTP V2 不变，正式 D1 禁止直出 `apiKey`。
 
 2026-11-11 Feedback API Key 校验突发保护（BF-329，已发布）：Gateway 仍逐请求把 bearer 交给 auth-server 最终验证；auth-server 对旧 bcrypt-only Key 的同摘要并发请求使用进程内 single-flight，并短缓存成功的验证投影。缓存索引只保存 bearer 的 SHA-256，不保存明文；未知／无效 Key 不缓存，成功缓存不晚于 Key 自身到期时间，Key 生命周期命令清除缓存。所有命中仍更新 `last_used_at`。该机制只消除重复 CPU 工作，不把鉴权搬进 OMS、不改变 API Key 的服务范围、网关失败关闭、Feedback V2 路由或事实所有权。

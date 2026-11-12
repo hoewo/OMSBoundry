@@ -15,7 +15,6 @@
   const contextGroup=root.querySelector('[data-oms-v1-context-group]');
   const contexts=root.querySelector('[data-oms-v1-context]');
   const sync=root.querySelector('[data-oms-v1-sync]');
-  const authorizationTasks=new Map();
   let loadTask=null,evidenceRuntimeTask=null;
   let activeFilterPanel=null,activeFilterButton=null;
   // Self-contained equivalent of ReferenceOAGatewayCSRF keeps OMS first paint independent of the legacy runtime.
@@ -26,7 +25,7 @@
     async refresh(){if(!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(this.route||''))throw new Error('页面状态已过期，请刷新后重试');const response=await fetch(this.route+'/api/v1/csrf',{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json'}});if(!response.ok||response.redirected)throw new Error('页面状态已过期，请刷新后重试');const data=await response.json(),current=this.current();if(!current||data.csrf_token!==current)throw new Error('页面状态已过期，请刷新后重试');return current}
   }
   const csrfProvider=new GatewayCSRF(root.dataset.identityRoutePrefix);
-  const app=id=>{const node=root.querySelector('[data-oms-v1-application="'+id+'"]');return node?{id,route:node.dataset.omsV1Route}:null};
+  const app=id=>{const node=root.querySelector('[data-oms-v1-application="'+id+'"]');return node?{id,route:node.dataset.omsV1Route,audience:node.dataset.omsV1Audience}:null};
   const safeText=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   const option=(value,label,current)=>'<option value="'+safeText(value)+'" '+(value===current?'selected':'')+'>'+safeText(label)+'</option>';
   const selectMenu=document.createElement('div');selectMenu.id='oms-v1-select-menu';selectMenu.className='oms-v1__select-menu';selectMenu.hidden=true;selectMenu.setAttribute('role','listbox');document.body.append(selectMenu);
@@ -63,21 +62,23 @@
   const sourceIssue=(label,error)=>{const message=error instanceof Error?error.message:'';return label+'：'+(/页面状态已过期|当前账号/.test(message)?message:'数据暂不可用，请稍后重试')};
   const problem=async response=>{throw await responseProblem(response)};
   const credentialRedirect=response=>response?.type==='opaqueredirect'||response?.status===0||(response?.status>=300&&response?.status<400);
+  const capabilityFactory=globalThis.OMSPhase1CapabilityCoordinator;
+  if(!capabilityFactory?.create)throw new Error('页面能力管理器加载失败，请刷新后重试');
+  const capabilityCoordinator=capabilityFactory.create({
+    exchange:async(id,audience)=>{
+      const config=app(id);if(!config||config.audience!==audience)throw new Error('相关功能暂不可用，请联系管理员');
+      const token=await csrfProvider.token(),body=new URLSearchParams({csrf_token:token});
+      const response=await fetch('/gateway/authorize/'+encodeURIComponent(id),{method:'POST',credentials:'same-origin',body,redirect:'manual',headers:{Accept:'application/json'}});
+      if(credentialRedirect(response)){const error=new Error('页面状态已过期，请重新登录');error.status=401;throw error}
+      if(!response.ok)await problem(response);
+      try{return await response.json()}catch{const error=new Error('Gateway 返回了无效的能力租约');error.status=502;throw error}
+    },
+    onLease:id=>state.authorized.add(id),
+    onClear:id=>state.authorized.delete(id)
+  });
   async function authorize(id,force=false){
-    if(force)state.authorized.delete(id);
-    if(state.authorized.has(id))return;
-    if(authorizationTasks.has(id))return authorizationTasks.get(id);
-    const task=(async()=>{
-      const config=app(id);if(!config)throw new Error('相关功能暂不可用，请联系管理员');
-      if(!csrfProvider)throw new Error('页面状态已过期，请刷新后重试');
-      const token=await csrfProvider.token();
-      const body=new URLSearchParams({csrf_token:token});
-      const response=await fetch('/gateway/authorize/'+encodeURIComponent(id),{method:'POST',credentials:'same-origin',body,redirect:'manual'});
-      if(!credentialRedirect(response)&&!response.ok)await problem(response);
-      state.authorized.add(id);
-    })();
-    authorizationTasks.set(id,task);
-    try{return await task}finally{if(authorizationTasks.get(id)===task)authorizationTasks.delete(id)}
+    const config=app(id);if(!config||!config.audience)throw new Error('相关功能暂不可用，请联系管理员');
+    return force?capabilityCoordinator.requireFresh(id,config.audience):capabilityCoordinator.ensure(id,config.audience);
   }
   async function refreshAdministratorCapabilitiesOnce(){
     if(root.dataset.administrator!=='true')return;
@@ -92,26 +93,29 @@
     const evidencePath=id==='evidence-service'&&/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(path);
     if((!evidencePath&&!/^\/api\/v1\/[A-Za-z0-9_/?=&%.:-]+$/.test(path))||path.includes('..'))throw new Error('业务请求路径无效');
     const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD',request=()=>fetch(config.route+path,{...options,credentials:'same-origin',redirect:'manual',headers:{Accept:'application/json',...(options.headers||{})}});
-    if(mutating)await authorize(id,true);
+    await authorize(id,mutating);
     let response=await request();
-    if(credentialRedirect(response)){state.authorized.delete(id);await authorize(id,true);response=await request()}
-    if(response.status===401){const error=await responseProblem(response);if(error.code==='credential_required'){state.authorized.delete(id);await authorize(id,true);response=await request()}else throw error}
+    if(credentialRedirect(response)){capabilityCoordinator.invalidate(id);await authorize(id,true);response=await request()}
+    if(response.status===401){const error=await responseProblem(response);if(error.code==='credential_required'){capabilityCoordinator.invalidate(id);await authorize(id,true);response=await request()}else throw error}
     if(credentialRedirect(response))throw new Error('页面状态已过期，请刷新后重试');
     if(!response.ok)await problem(response);
     state.authorized.add(id);
     return response.status===204?{}:response.json();
   }
   globalThis.OMSPhase1OwnerAPI=Object.freeze({api,authorize,app});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)capabilityCoordinator.recheck()});
+  window.addEventListener('pageshow',()=>capabilityCoordinator.recheck());
+  window.addEventListener('pagehide',()=>capabilityCoordinator.dispose(),{once:true});
   async function evidenceFetch(path,options={}){
     const config=app('evidence-service'),value=String(path);
     if(!config||!/^\/evidence(?:\/|$)/.test(config.route||''))throw new Error('附件功能暂不可用，请稍后重试');
     if(!/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(value)||value.includes('..'))throw new Error('文件请求路径无效');
     const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD';
-    if(mutating)await authorize('evidence-service',true);
+    await authorize('evidence-service',mutating);
     const headers=new Headers(options.headers||{});if(!headers.has('Accept'))headers.set('Accept','application/json');
     const request=()=>fetch(config.route+value,{...options,credentials:'same-origin',redirect:'manual',headers});let response=await request();
-    if(credentialRedirect(response)){state.authorized.delete('evidence-service');await authorize('evidence-service',true);response=await request()}
-    if(response.status===401){const error=await responseProblem(response.clone());if(error.code==='credential_required'){state.authorized.delete('evidence-service');await authorize('evidence-service',true);response=await request()}}
+    if(credentialRedirect(response)){capabilityCoordinator.invalidate('evidence-service');await authorize('evidence-service',true);response=await request()}
+    if(response.status===401){const error=await responseProblem(response.clone());if(error.code==='credential_required'){capabilityCoordinator.invalidate('evidence-service');await authorize('evidence-service',true);response=await request()}}
     if(credentialRedirect(response))throw new Error('页面状态已过期，请刷新后重试');
     if(response.ok)state.authorized.add('evidence-service');
     return response;

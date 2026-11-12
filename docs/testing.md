@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 全站业务 Capability 无感续期（2026-11-12，本地实现／发布待验）
+
+BF-331 必须证明每个业务 Owner 请求最终仍收到并自行校验 Gateway 注入的 Bearer Capability，Browser 和租约 JSON 都不能读取 Token。5 分钟租约应在最多提前 60 秒时按 Audience single-flight 续期，后台恢复复核；读请求可在续期暂时失败时使用尚未过期旧票，写请求必须在发送前成功换新票。明确 IAM 拒绝必须清 Cookie，IAM 网络／5xx 不得误删仍有效 Cookie；Owner `credential_required` 最多换票并重放一次。
+
+已实际运行 Gateway／Workbench `go test ./...` 与 `go vet ./...`、变更 JavaScript `node --check`、Workbench Node 全量 306/306、`acceptance/p9-full-composition/test-preflight`、`deployments/d1/ops/test-p9-composition` 和 `git diff --check`，均通过。公网部署、真实登录、超过 5 分钟持续读取、后台恢复、写前授权与退出拒绝尚未运行，不登记为通过。[本地报告](./reports/oms-sitewide-capability-renewal-local-validation-20261112.md)
+
 ## Feedback 短期 Session 无感续期（2026-11-12，本地实现／发布待验）
 
 BF-330 的本地门禁必须证明：正式 D1 接受 `session` 且拒绝 `apiKey`；Gateway 不向浏览器返回长期 Key，并拒绝过短、过长、错 Project 或错用户的 Session；Workbench 在 15 分钟 Session 到期前约 2 分钟只调度一次续期，并把并发 SDK 过期信号合并为一次换票。浏览器配置不得携带宿主租约元数据，不得使用 Local／Session Storage 保存凭证。

@@ -90,6 +90,12 @@ var omsPhase1CSS string
 //go:embed oms_phase1.js
 var omsPhase1JS string
 
+// omsPhase1Capability coordinates short-lived per-audience browser leases.
+// Credential material remains in route-scoped HttpOnly cookies owned by Gateway.
+//
+//go:embed oms_phase1_capability.js
+var omsPhase1CapabilityJS string
+
 // omsPhase1InternalModel contains exact local calculations for the company
 // internal-management interaction candidate. It does not own persisted facts.
 //

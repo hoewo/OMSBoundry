@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前全站业务 Capability 连续性（BF-331，本地实现／尚未发布）：OMS 业务仍由每个 Owner API 校验 Gateway 注入的 `Authorization: Bearer`；浏览器只持有按路由隔离的 HttpOnly Cookie，并按 Audience 在内存维护不含 Token 的 5 分钟租约。Workbench 最多提前 60 秒 single-flight 换票、后台恢复复核，写请求在发送前强制换票；IAM 短暂故障不再误删仍有效旧能力。Gateway 的 JSON 授权响应只暴露租约时间。306 项 Workbench Node 及 Gateway／Workbench／P9／D1 本地门禁通过；线上尚未发布。[本地验证](./docs/reports/oms-sitewide-capability-renewal-local-validation-20261112.md)
+
 当前 Feedback 短 Token 连续性（BF-330，本地实现／尚未发布）：正式 D1 改为 Gateway 代管长期 API Key、浏览器只接收 15 分钟限域 Session，并在到期前约 2 分钟 single-flight 主动续期；后台恢复复核，SDK 401 强制换票，旧 Token 只在剩余有效期内有界降级。Gateway 同时校验 1～20 分钟期限并禁止正式 D1 `apiKey` 模式。Gateway、Workbench、P9 组合与备份恢复门禁通过；线上仍保持原配置，不能视为已发布。[本地验证](./docs/reports/oms-feedback-session-renewal-local-validation-20261112.md)
 
 当前 Feedback V3 产品面纠错（BF-328，已发布）：用户截图确认 3.0.2 虽声明 V3 contract，实际仍可能显示旧“反馈建议”表单；根因是 SDK ready／React 监听安装之间的配置事件竞态。稳定 `sdk-v3` 已提升到 3.0.4，真实 Chrome 从 OMS 父域打开后显示“帮助与反馈、智能客服、我的反馈”，旧标题计数为 0。现有 OMS 页面需刷新以丢弃已加载的 3.0.2 iframe。[纠错与发布验证](./docs/reports/oms-feedback-v3-product-surface-race-repair-20261111.md)

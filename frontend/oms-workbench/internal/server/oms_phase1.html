@@ -1,6 +1,6 @@
 {{define "oms-phase1-body"}}
   <div class="oms-v1" data-oms-v1 data-tenant-id="{{.TenantID}}" data-subject-id="{{.SubjectID}}" data-display-name="{{.DisplayName}}" data-administrator="{{.Administrator}}" data-identity-route-prefix="{{.IAMRoutePrefix}}" data-operating-party-id="{{.OMSOperatingPartyID}}" data-feedback-sdk-url="{{.FeedbackSDKURL}}">
-    <div hidden data-oms-v1-routes>{{range .BusinessApplications}}<span data-oms-v1-application="{{.ID}}" data-oms-v1-route="{{.RoutePrefix}}"></span>{{end}}</div>
+    <div hidden data-oms-v1-routes>{{range .BusinessApplications}}<span data-oms-v1-application="{{.ID}}" data-oms-v1-route="{{.RoutePrefix}}" data-oms-v1-audience="{{.Audience}}"></span>{{end}}</div>
 
     <aside class="oms-v1__rail" aria-label="OMS 一期主导航">
       <div class="oms-v1__brand"><span>O</span><div><strong>OMS</strong><small>项目经营管理</small></div></div>

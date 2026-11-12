@@ -351,6 +351,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/assets/oms-phase1.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1JS))
+	case "/assets/oms-phase1-capability.js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(omsPhase1CapabilityJS))
 	case "/assets/oms-phase1-internal-model.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(omsPhase1InternalModelJS))
@@ -501,7 +504,8 @@ const pageHTML = `<!doctype html>
 <body class="{{if and .Authenticated .OMSPhase1}}oms-v1-active{{end}}" data-demo-preview="{{.DemoPreview}}">{{if .Authenticated}}{{if .DemoPreview}}<div class="demo-preview-badge" role="status"><strong>OA 界面演示</strong><span>演示数据 · 不读取或写入真实业务</span></div>{{end}}{{if .OMSPhase1}}
 {{if .SystemAdministrator}}{{template "oms-system-admin-body" .}}{{else}}<div class="ant-layout app-shell"><section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content"><section class="oa-view is-active" data-view="oms-v1" data-page-hydrated="true">{{template "oms-phase1-body" .}}</section></div></main></section></div>
 <script src="assets/oms-phase1-pagination.js?v=20261022.6" defer></script>
-<script src="assets/oms-phase1.js?v=20261111.1" defer></script>
+<script src="assets/oms-phase1-capability.js?v=20261112.1" defer></script>
+<script src="assets/oms-phase1.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal.js?v=20261105.2" defer></script>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261105.1" defer></script>
@@ -509,7 +513,7 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-workforce.js?v=20261108.5" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261030.1" defer></script>
 <script src="assets/oms-phase1-identity.js?v=20261101.1" defer></script>
-<script src="assets/oms-phase1-feedback.js?v=20261111.2" defer></script>
+<script src="assets/oms-phase1-feedback.js?v=20261112.1" defer></script>
 {{end}}{{if .SystemAdministrator}}<script src="assets/oms-system-admin.js?v=20261030.1" defer></script>{{end}}
 {{else}}<div class="ant-layout app-shell">
 <aside class="ant-layout-sider app-shell__sider"><div class="app-sidebar"><div class="app-sidebar__topbar"><a class="app-sidebar__brand" href="/" aria-label="返回 OMS 一期"><img src="assets/jinghong-logo.webp" alt="旧版项目管理系统 Logo" class="app-sidebar__brand-logo"><span class="app-sidebar__brand-copy"><span class="app-sidebar__brand-title">旧版项目管理</span><span class="app-sidebar__brand-subtitle">历史功能与原型对照</span></span></a><button class="app-sidebar__collapse-button" type="button" aria-label="收起侧边栏" data-sidebar-collapse>☰</button></div>

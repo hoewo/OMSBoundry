@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-12 全站业务 Capability 连续性基线（BF-331，本地实现／发布待验）：网站的所有业务 Owner 继续校验 Gateway 注入的 Bearer Capability，Browser 不直接读取 Token。Workbench 按 Audience 管理不含凭证的短租约，提前最多 60 秒 single-flight 续期，标签页恢复复核；读取可在 IAM 临时不可用时用完尚有效租约，写入必须先取得新能力。Gateway 仅向浏览器返回租约期限，并且只在正式拒绝时清除旧 Cookie。该机制不改变 Session、Capability TTL、Grant 或 Owner 最终授权；本地门禁通过，线上尚未切换。
+
 2026-11-12 Feedback 短期 Session 连续性基线（BF-330，本地实现／发布待验）：15 分钟 `fbs_` 是短期、按项目和稳定匿名用户限域的访问凭证，体验问题通过 Gateway 中介与主动续期解决，不通过延长为长期 Token。长期 API Key 只留在 Gateway；浏览器不持有 Refresh Token，不持久化短 Session。宿主到期前约 2 分钟 single-flight 换票，标签页恢复复核，SDK 401 强制换票且最多重放一次；主动续期失败只在旧 Token 尚有效时有界降级。正式 D1 必须使用 `session`。本地验证通过，线上仍未切换。
 
 2026-11-11 Feedback API Key 并发校验基线（BF-329，已发布）：一期仍使用 BF-299 明确接受的 `apiKey` 装配，不借故障修复静默切换鉴权模式。Feedback auth-server 必须合并同一 Key 的并发 bcrypt 冷校验，并仅短缓存成功结果；无效 Key 不得进入缓存，Key 新建／删除必须使成功缓存失效。V3 首屏的能力、会话和通知读取不得再因同 Key 并发把单次约 3 秒校验放大到 20 秒以上。该修复不改变 Feedback 事实、OMS 身份派生、网关超时或 OpenHands 模型配置。

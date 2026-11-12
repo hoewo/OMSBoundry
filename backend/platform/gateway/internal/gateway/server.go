@@ -74,6 +74,12 @@ type credentialResponse struct {
 	Claims         json.RawMessage `json:"claims"`
 	PolicyDecision json.RawMessage `json:"policy_decision,omitempty"`
 }
+type capabilityLeaseResponse struct {
+	ApplicationID    string    `json:"application_id"`
+	Audience         string    `json:"audience"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	ExpiresInSeconds int       `json:"expires_in_seconds"`
+}
 
 func New(suite manifest.Suite, verifier *credential.Verifier, logger *slog.Logger, options Options) (*Server, error) {
 	if verifier == nil || logger == nil {
@@ -338,6 +344,7 @@ func (s *Server) validLogoutCSRF(r *http.Request) bool {
 	return origin.Scheme == expectedScheme
 }
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if !s.validCSRF(r) {
 		writeProblem(w, 403, "csrf_failed", "安全校验失败")
 		return
@@ -373,20 +380,23 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	payload, _ := json.Marshal(payloadValue)
 	request, err := s.iamRequest(r.Context(), http.MethodPost, "/api/v1/credentials", bytes.NewReader(payload), r)
 	if err != nil {
-		s.clearCapability(w, app)
 		writeProblem(w, 502, "iam_unavailable", "IAM 暂时不可用")
 		return
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := s.client.Do(request)
 	if err != nil {
-		s.clearCapability(w, app)
 		writeProblem(w, 502, "iam_unavailable", "IAM 暂时不可用")
 		return
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		s.clearCapability(w, app)
+		// A definitive IAM rejection invalidates the browser's previous lease.
+		// Upstream outages and 5xx responses must not erase an otherwise valid,
+		// route-scoped capability that the owner can still verify independently.
+		if response.StatusCode >= 400 && response.StatusCode < 500 {
+			s.clearCapability(w, app)
+		}
 		copyProblem(w, response)
 		return
 	}
@@ -394,7 +404,6 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	decoder.DisallowUnknownFields()
 	var issued credentialResponse
 	if err := decoder.Decode(&issued); err != nil || issued.Token == "" || issued.TokenType != "Bearer" || !issued.ExpiresAt.After(time.Now()) || len(issued.Claims) == 0 {
-		s.clearCapability(w, app)
 		writeProblem(w, 502, "invalid_iam_response", "IAM 返回了无效凭证")
 		return
 	}
@@ -409,7 +418,15 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		issued.ExpiresAt = signedExpiry
 	}
 	maxAge := int(time.Until(issued.ExpiresAt).Seconds())
+	if maxAge < 1 {
+		writeProblem(w, 502, "invalid_iam_response", "IAM 返回了已过期凭证")
+		return
+	}
 	http.SetCookie(w, &http.Cookie{Name: capabilityCookieName(app.ID), Value: issued.Token, Path: app.RoutePrefix, Secure: s.cookieSecure, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge, Expires: issued.ExpiresAt})
+	if strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json") {
+		writeJSON(w, http.StatusOK, capabilityLeaseResponse{ApplicationID: app.ID, Audience: app.Audience, ExpiresAt: issued.ExpiresAt, ExpiresInSeconds: maxAge})
+		return
+	}
 	http.Redirect(w, r, app.RoutePrefix+"/", http.StatusSeeOther)
 }
 
