@@ -1,8 +1,8 @@
 # OMSBizFoundry 当前工程架构
 
-2026-11-12 财务申请审计删除边界（BF-333，待发布）：Internal Finance Requests 独占报销／付款申请的删除资格、当前投影和不可变保留事件；IAM 只签发独立 `request.delete` Capability，Gateway 只传递已验证能力，Workbench 不代替 Owner 判定状态。软删除保留申请、revision、Evidence 引用和发票指纹，重复判断通过关联申请 `deleted_at` 只排除已删除占用。Money 实际资金、核销和未知投递状态仍是硬门禁，删除命令不跨库、不物理删除文件、不撤销 Billing 或其他业务事实。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+2026-11-12 财务申请审计删除边界（BF-333，已发布）：Internal Finance Requests 独占报销／付款申请的删除资格、当前投影和不可变保留事件；IAM 只签发独立 `request.delete` Capability，Gateway 只传递已验证能力，Workbench 不代替 Owner 判定状态。软删除保留申请、revision、Evidence 引用和发票指纹，重复判断通过关联申请 `deleted_at` 只排除已删除占用。Money 实际资金、核销和未知投递状态仍是硬门禁，删除命令不跨库、不物理删除文件、不撤销 Billing 或其他业务事实。v1.101 已部署并只读复验。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
-2026-11-12 账号菜单交互边界（BF-334，待发布）：账号行操作菜单的外部点击与 Escape 关闭逻辑完全位于 Unified Workbench；Identity Access 和 People & Groups 的 API、schema、Capability 和事实所有权不变。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+2026-11-12 账号菜单交互边界（BF-334，已发布）：账号行操作菜单的外部点击与 Escape 关闭逻辑完全位于 Unified Workbench；Identity Access 和 People & Groups 的 API、schema、Capability 和事实所有权不变。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 2026-11-12 已确认识别结果删除边界（BF-332，已发布）：Invoice Recognition 仍拥有候选与确认历史，discard 是其追加 revision 的生命周期命令；confirmed→discarded 只改变当前投影可见性，不修改 confirmation 或 Evidence。Internal Finance Requests、Billing 等消费者保存自己的不可变来源快照，识别结果后续删除不会跨库级联；消费者的撤销继续走各自版本化命令。既有 `invoice-recognition.discard` Capability、API、数据库所有权和 Gateway／IAM 链不变。`oatest` v1.100 已验证该装配边界。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 

@@ -1,8 +1,8 @@
 # OMSBizFoundry 当前讨论基线
 
-2026-11-12 财务申请删除基线（BF-333，待发布）：报销与付款申请的删除资格由 Internal Finance Requests 依据独立 Capability、当前 revision、生命周期和付款事实最终判断，不由页面按钮或“管理员”角色名推断。删除是带原因、Actor、Credential 和时间的软删除；默认隐藏不等于物理删除。已删除申请保留完整历史和发票指纹审计，但不再阻止同一发票用于纠正后的新申请；一旦存在实际付款、核销、超额或未知付款结果，删除失败关闭且只能沿业务调整／冲销路径处理。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+2026-11-12 财务申请删除基线（BF-333，已发布）：报销与付款申请的删除资格由 Internal Finance Requests 依据独立 Capability、当前 revision、生命周期和付款事实最终判断，不由页面按钮或“管理员”角色名推断。删除是带原因、Actor、Credential 和时间的软删除；默认隐藏不等于物理删除。已删除申请保留完整历史和发票指纹审计，但不再阻止同一发票用于纠正后的新申请；一旦存在实际付款、核销、超额或未知付款结果，删除失败关闭且只能沿业务调整／冲销路径处理。v1.101 已通过目标机与公网只读验收，未执行线上删除。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
-2026-11-12 账号行操作菜单基线（BF-334，待发布）：账号目录每次最多展开一个行操作菜单；点外部或按 Escape 收起。该瞬时状态不持久化，也不影响 IAM／People 事实和权限。[本地验证](./reports/oms-finance-request-audited-delete-account-menu-local-validation-20261112.md)
+2026-11-12 账号行操作菜单基线（BF-334，已发布）：账号目录每次最多展开一个行操作菜单；点外部或按 Escape 收起。该瞬时状态不持久化，也不影响 IAM／People 事实和权限。真实 Chrome 已验证点击搜索框收起。[发布记录](./reports/oms-finance-request-audited-delete-account-menu-v101-publication-20261112.md)
 
 2026-11-12 已确认识别结果删除基线（BF-332，已发布）：Invoice Recognition 删除是追加式生命周期命令，`needs_review` 与 `confirmed` 均可在有 discard Capability、expected revision 和必填原因时进入 `discarded`。确认记录与全部来源、历史、Actor、时间和审计保持不可变；默认列表隐藏不等于物理删除。下游报销、付款申请和正式票据拥有自己的快照与生命周期，识别记录删除不能跨 Owner 级联撤销。该基线已由 `oatest` v1.100 的 D1、健康、公网资源和真实 Chrome 只读验收确认。[发布记录](./reports/oms-confirmed-invoice-recognition-discard-v100-publication-20261112.md)
 
