@@ -209,10 +209,14 @@ func (s *Service) Discard(ctx context.Context, actor Actor, input DiscardInput) 
 	if err != nil {
 		return contract.Proposal{}, err
 	}
-	if proposal.Status != "needs_review" || proposal.Revision != input.ExpectedRevision {
+	if !discardableStatus(proposal.Status) || proposal.Revision != input.ExpectedRevision {
 		return contract.Proposal{}, ErrConflict
 	}
 	return s.repo.Discard(ctx, actor, input.CommandID, proposal, input.Reason, s.now().UTC(), requestHash)
+}
+
+func discardableStatus(status string) bool {
+	return status == "needs_review" || status == "confirmed"
 }
 
 func validateActor(actor Actor) error {

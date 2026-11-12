@@ -205,7 +205,7 @@ func (r *PostgresRepository) Discard(ctx context.Context, actor Actor, commandID
 	if err != nil {
 		return contract.Proposal{}, err
 	}
-	if current.Status != "needs_review" || current.Revision != proposal.Revision {
+	if !discardableStatus(current.Status) || current.Revision != proposal.Revision {
 		return contract.Proposal{}, ErrConflict
 	}
 	current.Status = "discarded"

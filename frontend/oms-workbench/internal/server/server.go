@@ -510,7 +510,7 @@ const pageHTML = `<!doctype html>
 <script src="assets/oms-phase1-internal.js?v=20261105.2" defer></script>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261105.1" defer></script>
 <script src="assets/oms-phase1-finance-owner.js?v=20261109.3" defer></script>
-<script src="assets/oms-phase1-workforce.js?v=20261108.5" defer></script>
+<script src="assets/oms-phase1-workforce.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261030.1" defer></script>
 <script src="assets/oms-phase1-identity.js?v=20261101.1" defer></script>
 <script src="assets/oms-phase1-feedback.js?v=20261112.1" defer></script>

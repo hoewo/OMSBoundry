@@ -1,5 +1,9 @@
 # OMSBizFoundry 验证入口
 
+## 已确认发票识别记录审计删除（2026-11-12，本地实现／发布待验）
+
+BF-332 必须验证待确认与已确认 proposal 都能以独立 Command、expected revision 和非空原因进入 `discarded`；confirmed 删除后的 confirmation 行、识别 revision、审计事件、Evidence 引用、Actor／Credential／时间必须保持。已删除再次删除、旧 revision、异义重放继续冲突；默认列表隐藏，已删除筛选能显示原因、操作人和时间。不得因删除识别记录而删除或改写 Finance／Billing 等下游事实。
+
 ## 全站业务 Capability 无感续期（2026-11-12，本地实现／发布待验）
 
 BF-331 必须证明每个业务 Owner 请求最终仍收到并自行校验 Gateway 注入的 Bearer Capability，Browser 和租约 JSON 都不能读取 Token。5 分钟租约应在最多提前 60 秒时按 Audience single-flight 续期，后台恢复复核；读请求可在续期暂时失败时使用尚未过期旧票，写请求必须在发送前成功换新票。明确 IAM 拒绝必须清 Cookie，IAM 网络／5xx 不得误删仍有效 Cookie；Owner `credential_required` 最多换票并重放一次。

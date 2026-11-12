@@ -31,9 +31,9 @@
 - Repository 以请求意图摘要防止同键异义重放。
 - Provider 超时或结果未知时，不得用新 Command 静默创建第二个候选；调用方应先按原 Command 查询或重放。
 - 确认必须校验 expected revision，已确认或 revision 不符时失败关闭。
-- 只有 `needs_review` 候选可通过独立 Command、expected revision 和必填原因追加为 `discarded`；同义重放返回同一结果，换原因或目标的同 Command 拒绝。
-- `discarded` 保留 Proposal、Evidence 精确引用、Provider 输出、全部 revision、Actor、时间、原因和审计，只从默认工作列表隐藏；它不是 Evidence 物理删除。
-- `confirmed` 不允许在识别域删除。若已登记为正式发票，作废／冲销继续由 Billing 的追加式命令负责。
+- `needs_review` 与 `confirmed` 都可通过独立 Command、expected revision 和必填原因追加为 `discarded`；同义重放返回同一结果，换原因或目标的同 Command 拒绝。
+- `discarded` 保留 Proposal、Confirmation、Evidence 精确引用、Provider 输出、全部 revision、Actor、Credential、时间、原因和审计，只从默认工作列表隐藏；它不是 Evidence 物理删除。
+- 删除 confirmed 识别记录不会级联撤销已消费该确认快照的报销、付款申请或 Billing 正式发票；这些事实的删除、作废或冲销继续由各自 Owner 的追加式命令负责。
 
 ## 交付、导出与内部财务申请消费
 

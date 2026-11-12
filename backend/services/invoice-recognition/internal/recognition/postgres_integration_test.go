@@ -75,6 +75,21 @@ func TestPostgresProposalConfirmationReplayAndImmutableHistory(t *testing.T) {
 	if replay, replayErr := service.Confirm(ctx, actor, confirmationInput); replayErr != nil || replay.ProposalID != proposal.ID {
 		t.Fatalf("confirmation replay=%+v err=%v", replay, replayErr)
 	}
+	confirmedDiscardInput := DiscardInput{CommandID: "cccccccc-cccc-4ccc-8ccc-ccccccccccc2", ProposalID: proposal.ID, ExpectedRevision: confirmed.Revision, Reason: "已确认重复记录"}
+	confirmedDiscarded, discardErr := service.Discard(ctx, actor, confirmedDiscardInput)
+	if discardErr != nil || confirmedDiscarded.Status != "discarded" || confirmedDiscarded.Revision != 3 || confirmedDiscarded.DiscardReason != "已确认重复记录" {
+		t.Fatalf("confirmed discard=%+v err=%v", confirmedDiscarded, discardErr)
+	}
+	var confirmationCount, revisionCount, auditCount int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM invoice_recognition_confirmations WHERE tenant_id=$1 AND proposal_id=$2`, actor.TenantID, proposal.ID).Scan(&confirmationCount); err != nil || confirmationCount != 1 {
+		t.Fatalf("confirmation history count=%d err=%v", confirmationCount, err)
+	}
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM invoice_recognition_proposal_revisions WHERE tenant_id=$1 AND proposal_id=$2`, actor.TenantID, proposal.ID).Scan(&revisionCount); err != nil || revisionCount != 3 {
+		t.Fatalf("proposal revision count=%d err=%v", revisionCount, err)
+	}
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM invoice_recognition_audit_events WHERE tenant_id=$1 AND proposal_id=$2`, actor.TenantID, proposal.ID).Scan(&auditCount); err != nil || auditCount != 3 {
+		t.Fatalf("audit count=%d err=%v", auditCount, err)
+	}
 	if _, err = pool.Exec(ctx, `UPDATE invoice_recognition_proposal_revisions SET snapshot='{}' WHERE tenant_id=$1 AND proposal_id=$2 AND revision=1`, actor.TenantID, proposal.ID); err == nil {
 		t.Fatal("proposal revision must be immutable")
 	}

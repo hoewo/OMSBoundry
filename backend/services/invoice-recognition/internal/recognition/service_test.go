@@ -189,3 +189,33 @@ func TestPendingProposalCanBeDiscardedWithoutErasingHistory(t *testing.T) {
 		t.Fatalf("discarded proposal confirmation returned %v", err)
 	}
 }
+
+func TestConfirmedProposalCanBeDiscardedWithoutChangingConfirmation(t *testing.T) {
+	body := []byte("trusted invoice bytes")
+	service, _, repo := serviceFixture(body)
+	proposal, err := service.Start(context.Background(), Actor{SubjectID: subjectID, TenantID: tenantID}, StartInput{CommandID: commandID, Evidence: evidence(body)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := proposal.Candidate
+	candidate.TotalAmountMinor = amount(11300)
+	confirmation, err := service.Confirm(context.Background(), Actor{SubjectID: subjectID, TenantID: tenantID}, ConfirmInput{
+		CommandID: "66666666-6666-4666-8666-666666666666", ProposalID: proposal.ID, ExpectedRevision: proposal.Revision, Candidate: candidate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.proposal.Revision = 2
+	discarded, err := service.Discard(context.Background(), Actor{SubjectID: subjectID, TenantID: tenantID}, DiscardInput{
+		CommandID: "77777777-7777-4777-8777-777777777778", ProposalID: proposal.ID, ExpectedRevision: 2, Reason: "重复确认，保留审计后删除",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if discarded.Status != "discarded" || discarded.Revision != 3 || discarded.DiscardedBy != subjectID || discarded.DiscardedAt == nil {
+		t.Fatalf("unexpected discarded confirmation: %#v", discarded)
+	}
+	if confirmation.ProposalID != proposal.ID || confirmation.Candidate.TotalAmountMinor == nil || *confirmation.Candidate.TotalAmountMinor != 11300 {
+		t.Fatalf("confirmation changed after discard: %#v", confirmation)
+	}
+}

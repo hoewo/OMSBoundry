@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-12 BF-332 已完成本地实现、待发布：Invoice Recognition 服务与 PostgreSQL Repository 已允许 confirmed→discarded，并继续保存不可变 confirmation、三段 revision 和审计；Workbench 已给已确认行增加删除、取消预填原因、显示跨 Owner 不级联警告，并在已删除详情显示原因／操作人／时间。下一步运行完整 Workbench／D1 门禁，构建 Invoice Recognition 与 Workbench 匹配镜像，备份后发布并在不执行真实删除的前提下复验公网资源和服务健康。
+
 2026-11-12 BF-330／BF-331 已发布：Gateway／Workbench v1.99 和正式 Feedback `session` 模式已部署；备份 `20261112T125812Z`、D1 check、21/21 healthy、公网资源摘要、匿名配置拒绝、登录态 V3 `3.0.4` 与快照读取通过。普通账号和系统管理员无 Grant 的 Owner 授权均失败关闭，没有扩大权限。下一步仅补证：用独立 `0600` 业务验收账号运行增强后的 `verify-public-oms-v1.py`，完成五 Owner 正向读取、写前换票、超过 5 分钟 Capability 续期，以及超过 15 分钟 Feedback 续期／后台恢复／退出拒绝。[发布记录](./reports/oms-capability-feedback-v199-publication-20261112.md)
 
 2026-11-11 BF-329 已完成并发布：Feedback auth-server `fea711f` 已为同 Key 的 bcrypt 校验增加在途合并与 30 秒成功短缓存，未知 Key 不缓存，新建／删除 Key 清缓存。专项 race、全包只编译和 vet 通过；全量测试中的既有注册集成测试因本机无 Redis 触发空指针，未误记为通过。公网 8 路真实 Key 冷校验从原 23 秒超时收敛为 8/8 约 3.25 秒同时 200，热校验 95～127ms；截图对应会话历史路由 8/8 为 200，Workshop 与 OpenHands 继续健康。D1 的一期 `apiKey` 基线未改变。[发布验证](./reports/oms-feedback-api-key-validation-burst-repair-publication-20261111.md)
