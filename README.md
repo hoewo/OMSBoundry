@@ -2,7 +2,7 @@
 
 当前 Feedback V3 正式父域发布门禁（BF-337，已发布）：3.0.5 的发布构建漏掉 OMS 父域，导致 SDK ready 后拒绝 OMS configure；稳定通道已先回退 3.0.4 恢复，再提升到修复版 3.0.6。父域现在进入版本化 release policy，并由构建注入、产物扫描、release 清单和 stable 提升四层强校验；缺少 `oatest` 的制品会在发布前失败。真实 Chrome 已从 OMS 加载 3.0.6 并正常显示智能客服。[发布记录](./docs/reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-当前登录组织偏好（BF-336，本地通过、待发布）：组织切换成功后，IAM 在服务端账号事实中保存最后使用的组织 Subject；下次登录直接签发该组织 Session，避免先加载默认组织再整页切换。偏好只在成功创建／旋转 Session 的事务中更新；若该组织成员关系已停用则回退到仍启用组织并自愈。浏览器不保存组织偏好，也不复制权限、成员或业务数据。[本地验证](./docs/reports/oms-last-used-organization-local-validation-20261113.md)
+当前登录组织偏好（BF-336，已发布）：组织切换成功后，IAM 在服务端账号事实中保存最后使用的组织 Subject；下次登录直接签发该组织 Session，避免先加载默认组织再整页切换。偏好只在成功创建／旋转 Session 的事务中更新；若该组织成员关系已停用则回退到仍启用组织并自愈。浏览器不保存组织偏好，也不复制权限、成员或业务数据。公网 Identity／Suite v1.103、schema 13、D1 check、21/21 长运行容器和真实 Chrome 双组织切换复验通过。[发布记录](./docs/reports/oms-last-used-organization-v103-publication-20261113.md)
 
 当前工资批量输入标签（BF-335，已发布）：每位成员的两个金额输入框分别显示“当月绩效（元）”和“个人所得税（元）”，无障碍名称同时包含成员姓名与字段名；移动端保持成员信息在上、两个已标注金额字段在下。公网 Workbench v1.102、备份、D1 check、21/21 healthy 和真实 Chrome 复验通过；未生成预览或写入工资。[发布记录](./docs/reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 

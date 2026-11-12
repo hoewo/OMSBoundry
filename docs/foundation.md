@@ -2,7 +2,7 @@
 
 2026-11-13 Feedback SDK 正式父域基线（BF-337，已发布）：跨域父页面只有同时存在于版本化发布策略、编译产物和不可变 release 清单时才能进入正式 channel。stable 提升必须失败关闭，不能用 ready、contract 或 configured 的局部成功替代父域兼容验证。正式 V3 已为 3.0.6，OMS 真实加载通过。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-2026-11-13 最后使用组织基线（BF-336，本地通过／待发布）：账号的登录偏好由 IAM 服务端拥有，并且只在成功签发新 Session 时更新。偏好选择不改变组织内 Subject、权限和成员事实；不可用偏好必须回退到启用成员关系。首屏必须直接基于登录返回的 Tenant 拉取数据，不先请求另一个组织后再切换。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+2026-11-13 最后使用组织基线（BF-336，已发布）：账号的登录偏好由 IAM 服务端拥有，并且只在成功签发新 Session 时更新。偏好选择不改变组织内 Subject、权限和成员事实；不可用偏好必须回退到启用成员关系。首屏必须直接基于登录返回的 Tenant 拉取数据，不先请求另一个组织后再切换。公网 Identity／Suite v1.103、schema 13 和真实 Chrome 双组织切换已复验。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)
 
 2026-11-12 工资批量输入可理解性基线（BF-335，已发布）：任何并排金额输入都必须在输入位置直接说明字段含义和单位；工资批量录入固定显示“当月绩效（元）”与“个人所得税（元）”，不能仅依靠输入顺序、默认值或预览中的内部字段名解释。成员姓名与字段名共同构成无障碍名称。公网 v1.102 已复验。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 

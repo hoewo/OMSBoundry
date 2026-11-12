@@ -2,7 +2,7 @@
 
 2026-11-13 Feedback SDK 发布装配边界（BF-337，已发布）：`config/sdk-release-policy.json` 属于 Feedback SDK 交付策略，声明 channel 所需父域；构建将其注入 Vite 并扫描实际 JS，release manifest 保存 `parent_origins`，promote 再校验目标 channel。OMS 只继续固定 `sdk-v3` 稳定别名和严格 postMessage origin／window／request ID；不拥有 SDK 制品、API Key 或 Feedback 事实。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-2026-11-13 登录组织偏好边界（BF-336，本地通过／待发布）：Identity Access 在全局 `login_accounts` 拥有最后使用 Subject 指针，并以 `(last_used_subject_id, account_id)` 复合外键保证它属于同一账号。Session 仍绑定 Tenant 内 Subject，Gateway／Workbench 只消费登录结果；浏览器不持久化组织，People 和各业务 Owner 不保存该偏好。失败登录、失败切换和停用成员关系不能污染偏好。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+2026-11-13 登录组织偏好边界（BF-336，已发布）：Identity Access 在全局 `login_accounts` 拥有最后使用 Subject 指针，并以 `(last_used_subject_id, account_id)` 复合外键保证它属于同一账号。Session 仍绑定 Tenant 内 Subject，Gateway／Workbench 只消费登录结果；浏览器不持久化组织，People 和各业务 Owner 不保存该偏好。失败登录、失败切换和停用成员关系不能污染偏好。公网 Identity／Suite v1.103 已按该边界运行。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)
 
 2026-11-12 工资批量输入标签边界（BF-335，已发布）：可见 label、成员字段可访问名称和响应式排列完全属于 Unified Workbench；Payroll 继续独占 `performance_minor`、`tax_minor`、`tax_snapshot`、`net_payable_minor` 计算与 preview／commit。该 UI 修复不增加字段、不在浏览器计算税额、不改变 API、schema、Capability 或跨应用写入。公网 v1.102 已复验。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 

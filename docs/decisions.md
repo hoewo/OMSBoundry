@@ -2,7 +2,7 @@
 
 2026-11-13 BF-337（已接受／已发布）：Feedback SDK 的跨域宿主允许清单是正式发布契约，不是构建人员记忆。每个托管 channel 在版本化 policy 中声明 required parent origins；release build 必须注入并扫描真实 JavaScript，release manifest 必须记录该清单，promote 必须按目标 channel 再校验。缺少 OMS 父域的旧 release 不得提升 `v3-stable`。3.0.5 事故已按该规则用 3.0.6 修复，不改变 OMS Gateway Session、API Key 保管或 Feedback 事实。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-2026-11-13 BF-336（已接受／本地通过／待发布）：多组织账号的默认登录组织取最后一次成功获得 Session 的启用 Subject，而不是永久固定 primary Subject。IAM 在 `login_accounts.last_used_subject_id` 服务端保存偏好；普通登录创建 Session 与组织切换旋转 Session 必须在各自事务内同时更新，失败不改变偏好。选择顺序先过滤启用成员关系，再取 last-used、primary 和稳定创建顺序；已停用 last-used 必须安全回退并在成功登录时自愈。偏好不进入浏览器存储、不跨 Tenant 复制 Grant／Person／业务事实。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+2026-11-13 BF-336（已接受／已发布）：多组织账号的默认登录组织取最后一次成功获得 Session 的启用 Subject，而不是永久固定 primary Subject。IAM 在 `login_accounts.last_used_subject_id` 服务端保存偏好；普通登录创建 Session 与组织切换旋转 Session 必须在各自事务内同时更新，失败不改变偏好。选择顺序先过滤启用成员关系，再取 last-used、primary 和稳定创建顺序；已停用 last-used 必须安全回退并在成功登录时自愈。偏好不进入浏览器存储、不跨 Tenant 复制 Grant／Person／业务事实。公网 Identity／Suite v1.103 已按该决定运行。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)
 
 2026-11-12 BF-335（已接受／已发布）：工资批量录入中每位成员的 `performance_minor` 与 `tax_minor` 必须分别具有可见的“当月绩效（元）”和“个人所得税（元）”标签；可访问名称还必须包含成员姓名，避免重复字段无法区分。外层成员行不得用一个 `<label>` 包住两个输入控件。该决定只改变 Workbench 呈现，不改变 Payroll Owner 的 preview／commit 契约、整数分计算、revision 门禁或事实所有权。公网 v1.102 已复验。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 

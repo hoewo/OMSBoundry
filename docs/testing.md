@@ -6,11 +6,11 @@ BF-337 必须验证正式 policy 中的每个父域都真实出现在构建 Java
 
 SDK 23 个测试文件 143/143、release 11/11、TypeScript＋Vite production build、远端 release／asset 摘要和真实 Chrome 均通过；3.0.4 旧 manifest 被新门禁明确拒绝，3.0.6 stable 已加载。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-## 最后使用组织（2026-11-13，本地通过／待发布）
+## 最后使用组织（2026-11-13，已发布）
 
 BF-336 必须验证存量 schema 12 账号迁移后以 primary Subject 回填；切换到第二组织后，新浏览器会话用同一凭据登录应直接返回第二组织 Tenant／Subject。last-used 停用时应回退主组织并自愈；指针必须属于同一账号。Session 创建／旋转和指针更新必须原子，失败不得只更新一侧。
 
-Identity `go test ./...`、`go vet ./...` 和 PostgreSQL 18.6 的 database／HTTP integration 已实际通过；临时容器已删除。公网 migration、备份、D1 check 和真实双组织登录尚未执行，不登记通过。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+Identity `go test ./...`、`go vet ./...` 和 PostgreSQL 18.6 的 database／HTTP integration 已实际通过；临时容器已删除。公网 v1.103 的备份、migration 13、D1 check、21/21 长运行容器、数据约束聚合和真实 Chrome 双组织切换已通过。浏览器验收切换到第二组织后完整重载了该组织数据，并已切回原组织；公网没有使用账号凭据执行退出后重新登录，因此新会话直达与停用回退以 PostgreSQL HTTP integration 为证据。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)
 
 ## 工资批量输入可见标签（2026-11-12，已发布）
 

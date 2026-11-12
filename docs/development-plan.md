@@ -2,7 +2,7 @@
 
 2026-11-13 BF-337 已完成并发布：先将错误的 V3 stable 3.0.5 回退到已知可用 3.0.4，再把正式父域清单固化为 Feedback SDK release policy，新增构建扫描、manifest 元数据和 promote 门禁；旧 3.0.4 manifest 在新门禁下被拒绝，3.0.6 通过 canary、远端摘要／父域核验后提升 stable。真实 OMS Chrome 已加载 3.0.6 并打开智能客服。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
-2026-11-13 BF-336 已完成本地实现、待发布：Identity schema 13 保存账号最后使用 Subject，登录和组织切换事务同步更新；查询只从启用成员关系选择，并覆盖停用 last-used 回退和自愈。Identity Go test／vet、PostgreSQL 18 migration 与 HTTP integration 已通过。下一步只升级 Identity，先备份、执行 migration 13、D1 check 和 21/21 健康，再用受控双组织账号完成“切换→退出／新会话登录→直接进入目标组织”验收。[本地验证](./reports/oms-last-used-organization-local-validation-20261113.md)
+2026-11-13 BF-336 已完成并发布：Identity schema 13 保存账号最后使用 Subject，登录和组织切换事务同步更新；查询只从启用成员关系选择，并覆盖停用 last-used 回退和自愈。Identity Go test／vet、PostgreSQL 18 migration 与 HTTP integration、公网备份、D1 check、21/21 长运行容器和真实 Chrome 双组织切换均通过；公网未持有登录凭据，故“退出后新登录直达目标组织”由真实 PostgreSQL HTTP 集成覆盖，不外推为人工公网登录复验。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)
 
 2026-11-12 BF-335 已完成并发布：工资批量录入成员行已改为语义化容器，绩效与个税输入各有可见 label 和包含成员姓名的 `aria-label`；公网 Workbench v1.102、D1 check、21/21 healthy 和真实 Chrome 可访问名称复验通过，未生成预览或写入工资。[发布记录](./reports/oms-payroll-batch-input-labels-v102-publication-20261112.md)
 
