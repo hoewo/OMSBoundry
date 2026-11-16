@@ -98,11 +98,13 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 }
 
 type openReimbursementWrite struct {
-	ExpectedRevision int64                       `json:"expected_revision,omitempty"`
-	Title            string                      `json:"title"`
-	Lines            []finance.Line              `json:"lines"`
-	Payee            openReimbursementPayee      `json:"payee"`
-	Attribution      finance.AttributionSnapshot `json:"attribution,omitempty"`
+	ExpectedRevision int64                        `json:"expected_revision,omitempty"`
+	Title            string                       `json:"title"`
+	Lines            []finance.Line               `json:"lines"`
+	InvoiceEntryMode string                       `json:"invoice_entry_mode,omitempty"`
+	Invoices         []finance.InvoiceAssociation `json:"invoices,omitempty"`
+	Payee            openReimbursementPayee       `json:"payee"`
+	Attribution      finance.AttributionSnapshot  `json:"attribution,omitempty"`
 }
 
 type openReimbursementPayee struct {
@@ -229,7 +231,7 @@ func (s *Server) openGetReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value.AllowedActions = allowedActions(value, p)
-	value.Details.Duplicate.MatchedRequestIDs = nil
+	clearDuplicateIDs(&value)
 	writeETagJSON(w, r, requestETag(value), value)
 }
 
@@ -256,7 +258,7 @@ func (s *Server) openListReimbursements(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		value.AllowedActions = allowedActions(value, p)
-		value.Details.Duplicate.MatchedRequestIDs = nil
+		clearDuplicateIDs(&value)
 		items = append(items, value)
 	}
 	page.Items = items
@@ -266,14 +268,31 @@ func (s *Server) openListReimbursements(w http.ResponseWriter, r *http.Request) 
 }
 
 func openDetails(w http.ResponseWriter, p auth.Principal, input openReimbursementWrite) (finance.DetailSnapshot, bool) {
-	for _, line := range input.Lines {
-		if line.Invoice == nil || len(line.Evidence) == 0 {
-			writeProblem(w, http.StatusUnprocessableEntity, "INVOICE_REQUIRED", "每条报销明细必须包含发票信息和附件", false)
-			return finance.DetailSnapshot{}, false
+	if len(input.Invoices) > 0 {
+		associated := map[string]bool{}
+		for _, invoice := range input.Invoices {
+			if len(invoice.Evidence) == 0 {
+				writeProblem(w, http.StatusUnprocessableEntity, "INVOICE_REQUIRED", "每张关联发票必须包含原文件", false)
+				return finance.DetailSnapshot{}, false
+			}
+			associated[invoice.LineID] = true
+		}
+		for _, line := range input.Lines {
+			if !associated[line.ID] {
+				writeProblem(w, http.StatusUnprocessableEntity, "INVOICE_REQUIRED", "每条报销明细必须关联一张发票", false)
+				return finance.DetailSnapshot{}, false
+			}
+		}
+	} else {
+		for _, line := range input.Lines {
+			if line.Invoice == nil || len(line.Evidence) == 0 {
+				writeProblem(w, http.StatusUnprocessableEntity, "INVOICE_REQUIRED", "每条报销明细必须包含发票信息和附件", false)
+				return finance.DetailSnapshot{}, false
+			}
 		}
 	}
 	person := finance.ReferenceSnapshot{ID: p.PersonID, Revision: p.PersonRevision, Digest: p.PersonDigest, DisplayName: p.PersonDisplayName}
-	return finance.DetailSnapshot{Applicant: person, Payee: finance.PayeeSnapshot{Kind: "person", Reference: person, DisplayName: p.PersonDisplayName, BankName: input.Payee.BankName, AccountNumber: input.Payee.AccountNumber}, Lines: input.Lines, Attribution: input.Attribution}, true
+	return finance.DetailSnapshot{Applicant: person, Payee: finance.PayeeSnapshot{Kind: "person", Reference: person, DisplayName: p.PersonDisplayName, BankName: input.Payee.BankName, AccountNumber: input.Payee.AccountNumber}, Lines: input.Lines, InvoiceEntryMode: input.InvoiceEntryMode, Invoices: input.Invoices, Attribution: input.Attribution}, true
 }
 
 func requireOpenPerson(w http.ResponseWriter, p auth.Principal) bool {
@@ -362,7 +381,7 @@ func (s *Server) writeOpenRequest(w http.ResponseWriter, status int, value finan
 		return
 	}
 	value.AllowedActions = allowedActions(value, p)
-	value.Details.Duplicate.MatchedRequestIDs = nil
+	clearDuplicateIDs(&value)
 	w.Header().Set("ETag", requestETag(value))
 	writeJSON(w, status, value)
 }
@@ -487,7 +506,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 		err = finance.ErrNotFound
 	}
 	if err == nil && !p.Can(auth.ActionTenantRead) {
-		value.Details.Duplicate.MatchedRequestIDs = nil
+		clearDuplicateIDs(&value)
 	}
 	s.writeRequest(w, 200, value, p, err)
 }
@@ -727,7 +746,7 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		if duplicate.Strong {
 			code, detail = "INVOICE_STRONG_DUPLICATE", "发票已在其他财务申请中提交"
 		}
-		writeProblemFields(w, 409, code, detail, false, map[string]any{"matched_request_ids": duplicate.MatchedRequestIDs})
+		writeProblemFields(w, 409, code, detail, false, map[string]any{"matched_request_ids": duplicate.MatchedRequestIDs, "invoices": duplicate.Invoices})
 		return
 	}
 	switch {
@@ -760,6 +779,28 @@ func retainReadableDuplicateIDs(value *finance.Request, readable map[string]bool
 		}
 	}
 	value.Details.Duplicate.MatchedRequestIDs = matched
+	for i := range value.Details.Duplicate.Invoices {
+		invoiceMatched := value.Details.Duplicate.Invoices[i].MatchedRequestIDs[:0]
+		for _, id := range value.Details.Duplicate.Invoices[i].MatchedRequestIDs {
+			if readable[id] {
+				invoiceMatched = append(invoiceMatched, id)
+			}
+		}
+		value.Details.Duplicate.Invoices[i].MatchedRequestIDs = invoiceMatched
+		if value.Details.Duplicate.Invoices[i].Status != "clear" && len(invoiceMatched) == 0 {
+			value.Details.Duplicate.Invoices[i].Status = "restricted"
+		}
+	}
+}
+
+func clearDuplicateIDs(value *finance.Request) {
+	value.Details.Duplicate.MatchedRequestIDs = nil
+	for i := range value.Details.Duplicate.Invoices {
+		value.Details.Duplicate.Invoices[i].MatchedRequestIDs = nil
+		if value.Details.Duplicate.Invoices[i].Status != "clear" {
+			value.Details.Duplicate.Invoices[i].Status = "restricted"
+		}
+	}
 }
 func allowedActions(value finance.Request, p auth.Principal) []string {
 	var actions []string

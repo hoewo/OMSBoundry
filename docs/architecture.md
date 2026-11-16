@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-16 报销发票关联边界（BF-338，本地实现、未发布）：Internal Finance Requests 的聚合仍是 Finance Request；`details.lines[]` 拥有费用明细，`details.invoices[]` 是同一聚合内通过 `line_id` 建立的一对零或一关联。关联包含自身稳定 ID、来源方式、可选 Invoice Recognition Proposal ID／revision、精确 Evidence File ID／Version 和不可变票面快照；它不是新的共享 Invoice Owner。Invoice Recognition、Evidence 与 Finance 只通过版本化端口和稳定引用交互，不能跨库查询、共享 ORM 或级联改写。重复指纹按每个关联独立生成并在 Finance 提交事务内聚合阻断；旧 `line.invoice` 继续兼容，JSONB 扩展不需要 schema migration。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+
 2026-11-13 Feedback SDK 发布装配边界（BF-337，已发布）：`config/sdk-release-policy.json` 属于 Feedback SDK 交付策略，声明 channel 所需父域；构建将其注入 Vite 并扫描实际 JS，release manifest 保存 `parent_origins`，promote 再校验目标 channel。OMS 只继续固定 `sdk-v3` 稳定别名和严格 postMessage origin／window／request ID；不拥有 SDK 制品、API Key 或 Feedback 事实。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
 2026-11-13 登录组织偏好边界（BF-336，已发布）：Identity Access 在全局 `login_accounts` 拥有最后使用 Subject 指针，并以 `(last_used_subject_id, account_id)` 复合外键保证它属于同一账号。Session 仍绑定 Tenant 内 Subject，Gateway／Workbench 只消费登录结果；浏览器不持久化组织，People 和各业务 Owner 不保存该偏好。失败登录、失败切换和停用成员关系不能污染偏好。公网 Identity／Suite v1.103 已按该边界运行。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)

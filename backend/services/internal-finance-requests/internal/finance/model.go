@@ -20,6 +20,7 @@ var (
 type DuplicateError struct {
 	Strong            bool
 	MatchedRequestIDs []string
+	Invoices          []InvoiceDuplicateAssessment
 }
 
 func (e *DuplicateError) Error() string {
@@ -64,6 +65,26 @@ type InvoiceSnapshot struct {
 	AmountMinor int64  `json:"amount_minor"`
 }
 
+// InvoiceRecognitionRef points at the exact confirmed recognition proposal
+// without transferring ownership of the recognition record to Finance.
+type InvoiceRecognitionRef struct {
+	Application string `json:"application"`
+	ProposalID  string `json:"proposal_id"`
+	Revision    int64  `json:"revision"`
+}
+
+// InvoiceAssociation is local to one finance request. Evidence owns the source
+// bytes, Invoice Recognition owns the recognition history, and Finance freezes
+// only the exact references and the business-time invoice snapshot it consumes.
+type InvoiceAssociation struct {
+	ID          string                 `json:"id"`
+	LineID      string                 `json:"line_id"`
+	Source      string                 `json:"source"`
+	Recognition *InvoiceRecognitionRef `json:"recognition_ref,omitempty"`
+	Evidence    []EvidenceRef          `json:"evidence,omitempty"`
+	Snapshot    InvoiceSnapshot        `json:"snapshot"`
+}
+
 type Line struct {
 	ID           string           `json:"id"`
 	BusinessDate string           `json:"business_date,omitempty"`
@@ -102,20 +123,30 @@ type ApprovalSnapshot struct {
 }
 
 type DetailSnapshot struct {
-	Applicant                   ReferenceSnapshot   `json:"applicant"`
-	Payee                       PayeeSnapshot       `json:"payee"`
-	Lines                       []Line              `json:"lines"`
-	Evidence                    []EvidenceRef       `json:"evidence,omitempty"`
-	Attribution                 AttributionSnapshot `json:"attribution,omitempty"`
-	MissingEvidenceAcknowledged bool                `json:"missing_evidence_acknowledged"`
-	Approval                    ApprovalSnapshot    `json:"approval"`
-	Duplicate                   DuplicateAssessment `json:"duplicate"`
+	Applicant                   ReferenceSnapshot    `json:"applicant"`
+	Payee                       PayeeSnapshot        `json:"payee"`
+	Lines                       []Line               `json:"lines"`
+	InvoiceEntryMode            string               `json:"invoice_entry_mode,omitempty"`
+	Invoices                    []InvoiceAssociation `json:"invoices,omitempty"`
+	Evidence                    []EvidenceRef        `json:"evidence,omitempty"`
+	Attribution                 AttributionSnapshot  `json:"attribution,omitempty"`
+	MissingEvidenceAcknowledged bool                 `json:"missing_evidence_acknowledged"`
+	Approval                    ApprovalSnapshot     `json:"approval"`
+	Duplicate                   DuplicateAssessment  `json:"duplicate"`
 }
 
 type DuplicateAssessment struct {
-	Status            string    `json:"status"`
-	MatchedRequestIDs []string  `json:"matched_request_ids,omitempty"`
-	CheckedAt         time.Time `json:"checked_at,omitempty"`
+	Status            string                       `json:"status"`
+	MatchedRequestIDs []string                     `json:"matched_request_ids,omitempty"`
+	Invoices          []InvoiceDuplicateAssessment `json:"invoices,omitempty"`
+	CheckedAt         time.Time                    `json:"checked_at,omitempty"`
+}
+
+type InvoiceDuplicateAssessment struct {
+	InvoiceID         string   `json:"invoice_id"`
+	LineID            string   `json:"line_id"`
+	Status            string   `json:"status"`
+	MatchedRequestIDs []string `json:"matched_request_ids,omitempty"`
 }
 
 type PaymentDelivery struct {

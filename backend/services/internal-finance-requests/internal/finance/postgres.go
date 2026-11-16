@@ -149,10 +149,10 @@ func (s *PostgresStore) Submit(ctx context.Context, actor Actor, id string, inpu
 	}
 	value.Details.Duplicate = assessment
 	if assessment.Status == "strong" {
-		return Request{}, &DuplicateError{Strong: true, MatchedRequestIDs: assessment.MatchedRequestIDs}
+		return Request{}, &DuplicateError{Strong: true, MatchedRequestIDs: assessment.MatchedRequestIDs, Invoices: assessment.Invoices}
 	}
 	if assessment.Status == "suspected" && !input.SuspectedDuplicateAcknowledged {
-		return Request{}, &DuplicateError{MatchedRequestIDs: assessment.MatchedRequestIDs}
+		return Request{}, &DuplicateError{MatchedRequestIDs: assessment.MatchedRequestIDs, Invoices: assessment.Invoices}
 	}
 	value.Details.MissingEvidenceAcknowledged = input.MissingEvidenceAcknowledged
 	value.Details.Approval = ApprovalSnapshot{Policy: "not_required", Status: "not_applicable", Revision: 1, FrozenAt: now}
@@ -196,12 +196,10 @@ func assessInvoiceDuplicates(ctx context.Context, tx pgx.Tx, value Request) (Dup
 
 func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checkedAt time.Time) (DuplicateAssessment, error) {
 	result := DuplicateAssessment{Status: "clear", CheckedAt: checkedAt}
-	strong, suspected := map[string]bool{}, map[string]bool{}
-	for _, line := range value.Details.Lines {
-		if line.Invoice == nil {
-			continue
-		}
-		for _, evidence := range line.Evidence {
+	allStrong, allSuspected := map[string]bool{}, map[string]bool{}
+	for _, entry := range requestInvoices(value.Details) {
+		strong, suspected := map[string]bool{}, map[string]bool{}
+		for _, evidence := range entry.Evidence {
 			if evidence.SHA256 == "" {
 				continue
 			}
@@ -213,7 +211,7 @@ func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checke
 				return DuplicateAssessment{}, err
 			}
 		}
-		invoice := line.Invoice
+		invoice := entry.Snapshot
 		if invoice.Number != "" {
 			rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.invoice_code=$3 AND fingerprints.invoice_number=$4 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, invoice.Code, invoice.Number)
 			if err != nil {
@@ -223,22 +221,55 @@ func findInvoiceDuplicates(ctx context.Context, q querier, value Request, checke
 				return DuplicateAssessment{}, err
 			}
 		}
-		rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.issuer_name=$3 AND fingerprints.invoice_date=$4::date AND fingerprints.amount_minor=$5 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor)
+		rows, err := q.Query(ctx, `SELECT DISTINCT fingerprints.request_id::text FROM finance_invoice_fingerprints fingerprints JOIN finance_requests requests ON requests.tenant_id=fingerprints.tenant_id AND requests.id=fingerprints.request_id WHERE fingerprints.tenant_id=$1 AND fingerprints.request_id<>$2 AND fingerprints.issuer_name=$3 AND fingerprints.invoice_date=$4::date AND fingerprints.amount_minor=$5 AND requests.deleted_at IS NULL`, value.TenantID, value.ID, invoice.IssuerName, invoice.InvoiceDate, invoice.AmountMinor)
 		if err != nil {
 			return DuplicateAssessment{}, err
 		}
 		if err = collectRequestIDs(rows, suspected); err != nil {
 			return DuplicateAssessment{}, err
 		}
+		assessment := InvoiceDuplicateAssessment{InvoiceID: entry.ID, LineID: entry.LineID, Status: "clear"}
+		if len(strong) > 0 {
+			assessment.Status, assessment.MatchedRequestIDs = "strong", sortedKeys(strong)
+			for id := range strong {
+				allStrong[id] = true
+			}
+		} else if len(suspected) > 0 {
+			assessment.Status, assessment.MatchedRequestIDs = "suspected", sortedKeys(suspected)
+			for id := range suspected {
+				allSuspected[id] = true
+			}
+		}
+		result.Invoices = append(result.Invoices, assessment)
 	}
-	if len(strong) > 0 {
-		result.Status, result.MatchedRequestIDs = "strong", sortedKeys(strong)
+	if len(allStrong) > 0 {
+		result.Status, result.MatchedRequestIDs = "strong", sortedKeys(allStrong)
 		return result, nil
 	}
-	if len(suspected) > 0 {
-		result.Status, result.MatchedRequestIDs = "suspected", sortedKeys(suspected)
+	if len(allSuspected) > 0 {
+		result.Status, result.MatchedRequestIDs = "suspected", sortedKeys(allSuspected)
 	}
 	return result, nil
+}
+
+type requestInvoice struct {
+	ID       string
+	LineID   string
+	Evidence []EvidenceRef
+	Snapshot InvoiceSnapshot
+}
+
+func requestInvoices(details DetailSnapshot) []requestInvoice {
+	result := make([]requestInvoice, 0, len(details.Invoices)+len(details.Lines))
+	for _, line := range details.Lines {
+		if line.Invoice != nil {
+			result = append(result, requestInvoice{ID: line.ID, LineID: line.ID, Evidence: line.Evidence, Snapshot: *line.Invoice})
+		}
+	}
+	for _, invoice := range details.Invoices {
+		result = append(result, requestInvoice{ID: invoice.ID, LineID: invoice.LineID, Evidence: invoice.Evidence, Snapshot: invoice.Snapshot})
+	}
+	return result
 }
 
 func projectInvoiceDuplicates(ctx context.Context, q querier, value *Request) error {
@@ -275,21 +306,21 @@ func sortedKeys(values map[string]bool) []string {
 }
 
 func insertInvoiceFingerprints(ctx context.Context, tx pgx.Tx, value Request) error {
-	for _, line := range value.Details.Lines {
-		if line.Invoice == nil {
-			continue
-		}
-		hashes := make([]string, 0, len(line.Evidence))
-		for _, evidence := range line.Evidence {
+	for _, entry := range requestInvoices(value.Details) {
+		hashes, seen := make([]string, 0, len(entry.Evidence)), map[string]bool{}
+		for _, evidence := range entry.Evidence {
 			if evidence.SHA256 != "" {
-				hashes = append(hashes, evidence.SHA256)
+				if !seen[evidence.SHA256] {
+					hashes = append(hashes, evidence.SHA256)
+					seen[evidence.SHA256] = true
+				}
 			}
 		}
 		if len(hashes) == 0 {
 			hashes = append(hashes, "")
 		}
 		for _, digest := range hashes {
-			_, err := tx.Exec(ctx, `INSERT INTO finance_invoice_fingerprints(tenant_id,request_id,request_revision,line_id,evidence_sha256,invoice_code,invoice_number,issuer_name,invoice_date,amount_minor,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::date,$10,$11)`, value.TenantID, value.ID, value.Revision, line.ID, digest, line.Invoice.Code, line.Invoice.Number, line.Invoice.IssuerName, line.Invoice.InvoiceDate, line.Invoice.AmountMinor, value.UpdatedAt)
+			_, err := tx.Exec(ctx, `INSERT INTO finance_invoice_fingerprints(tenant_id,request_id,request_revision,line_id,evidence_sha256,invoice_code,invoice_number,issuer_name,invoice_date,amount_minor,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::date,$10,$11)`, value.TenantID, value.ID, value.Revision, entry.LineID, digest, entry.Snapshot.Code, entry.Snapshot.Number, entry.Snapshot.IssuerName, entry.Snapshot.InvoiceDate, entry.Snapshot.AmountMinor, value.UpdatedAt)
 			if err != nil {
 				return err
 			}
@@ -759,13 +790,26 @@ func (s *PostgresStore) RecordSensitiveAccess(ctx context.Context, actor Actor, 
 func (s *PostgresStore) IsEvidenceReferenced(ctx context.Context, tenant, fileID string, version int) (bool, error) {
 	var referenced bool
 	err := s.pool.QueryRow(ctx, `SELECT EXISTS(
-		SELECT 1
-		FROM finance_request_revisions r
-		CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.detail_snapshot->'lines','[]'::jsonb)) line
-		CROSS JOIN LATERAL jsonb_array_elements(COALESCE(line->'evidence','[]'::jsonb)) evidence
-		WHERE r.tenant_id=$1
-		  AND evidence->>'file_id'=$2
-		  AND CASE WHEN evidence->>'version' ~ '^[0-9]+$' THEN (evidence->>'version')::integer=$3 ELSE false END
+			SELECT 1 FROM (
+				SELECT evidence
+				FROM finance_request_revisions r
+				CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.detail_snapshot->'lines','[]'::jsonb)) line
+				CROSS JOIN LATERAL jsonb_array_elements(COALESCE(line->'evidence','[]'::jsonb)) evidence
+				WHERE r.tenant_id=$1
+				UNION ALL
+				SELECT evidence
+				FROM finance_request_revisions r
+				CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.detail_snapshot->'invoices','[]'::jsonb)) invoice
+				CROSS JOIN LATERAL jsonb_array_elements(COALESCE(invoice->'evidence','[]'::jsonb)) evidence
+				WHERE r.tenant_id=$1
+				UNION ALL
+				SELECT evidence
+				FROM finance_request_revisions r
+				CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.detail_snapshot->'evidence','[]'::jsonb)) evidence
+				WHERE r.tenant_id=$1
+			) refs
+			WHERE refs.evidence->>'file_id'=$2
+			  AND CASE WHEN refs.evidence->>'version' ~ '^[0-9]+$' THEN (refs.evidence->>'version')::integer=$3 ELSE false END
 	)`, tenant, fileID, version).Scan(&referenced)
 	return referenced, err
 }

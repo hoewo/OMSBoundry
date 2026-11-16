@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前多发票报销（BF-338，本地完成、未发布）：新增报销可选择单项或多项发票；多项模式由一个“报销内容”总名称和 2～20 条明细组成，明细名称不填时使用“内容1、内容2……”。每条明细最多一张发票，正式提交时每条必须带原票 Evidence，申请总额自动精确合计。Finance 只保存申请内发票关联、识别提案引用、Evidence 引用和票面快照，不接管 Invoice Recognition 或 Evidence 的事实所有权。[本地验证](./docs/reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+
 当前 Feedback V3 正式父域发布门禁（BF-337，已发布）：3.0.5 的发布构建漏掉 OMS 父域，导致 SDK ready 后拒绝 OMS configure；稳定通道已先回退 3.0.4 恢复，再提升到修复版 3.0.6。父域现在进入版本化 release policy，并由构建注入、产物扫描、release 清单和 stable 提升四层强校验；缺少 `oatest` 的制品会在发布前失败。真实 Chrome 已从 OMS 加载 3.0.6 并正常显示智能客服。[发布记录](./docs/reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
 当前登录组织偏好（BF-336，已发布）：组织切换成功后，IAM 在服务端账号事实中保存最后使用的组织 Subject；下次登录直接签发该组织 Session，避免先加载默认组织再整页切换。偏好只在成功创建／旋转 Session 的事务中更新；若该组织成员关系已停用则回退到仍启用组织并自愈。浏览器不保存组织偏好，也不复制权限、成员或业务数据。公网 Identity／Suite v1.103、schema 13、D1 check、21/21 长运行容器和真实 Chrome 双组织切换复验通过。[发布记录](./docs/reports/oms-last-used-organization-v103-publication-20261113.md)

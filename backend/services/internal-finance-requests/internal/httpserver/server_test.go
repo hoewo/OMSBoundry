@@ -259,13 +259,15 @@ func TestCreateRequiresTenantScope(t *testing.T) {
 
 func TestStrongDuplicateResponseReturnsStableMatchedRequestReferences(t *testing.T) {
 	matched := "44444444-4444-4444-8444-444444444444"
-	cases := &fakeCases{err: &finance.DuplicateError{Strong: true, MatchedRequestIDs: []string{matched}}}
+	lineID := "55555555-5555-4555-8555-555555555555"
+	invoiceID := "66666666-6666-4666-8666-666666666666"
+	cases := &fakeCases{err: &finance.DuplicateError{Strong: true, MatchedRequestIDs: []string{matched}, Invoices: []finance.InvoiceDuplicateAssessment{{InvoiceID: invoiceID, LineID: lineID, Status: "strong", MatchedRequestIDs: []string{matched}}}}}
 	a := &fixedAuth{principal: auth.Principal{SubjectID: testSubject, TenantID: testTenant, ScopeKind: "tenant", AllowedActions: map[string]bool{auth.ActionSelfManage: true}}}
 	server, _ := New(cases, a)
 	body := bytes.NewBufferString(`{"command_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","expected_revision":1}`)
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/finance-requests/"+testRequest+"/submit", body))
-	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"INVOICE_STRONG_DUPLICATE"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"matched_request_ids":["`+matched+`"]`)) || !bytes.Contains(response.Body.Bytes(), []byte(`发票已在其他财务申请中提交`)) {
+	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"INVOICE_STRONG_DUPLICATE"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"matched_request_ids":["`+matched+`"]`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"invoice_id":"`+invoiceID+`"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"line_id":"`+lineID+`"`)) || !bytes.Contains(response.Body.Bytes(), []byte(`发票已在其他财务申请中提交`)) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

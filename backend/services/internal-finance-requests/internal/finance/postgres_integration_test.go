@@ -290,6 +290,63 @@ func TestInvoiceStrongAndSuspectedDuplicateRules(t *testing.T) {
 	}
 }
 
+func TestRequestLocalMultiInvoiceFingerprintsAndEvidenceReferences(t *testing.T) {
+	ctx := context.Background()
+	pool, cleanup := integrationPool(t, ctx)
+	defer cleanup()
+	store, _ := NewPostgresStore(pool)
+	service, _ := NewServiceWithDependencies(store, nil, fingerprintEvidence{})
+	actor := Actor{ID: "22222222-2222-4222-8222-222222222222", TenantID: "11111111-1111-4111-8111-111111111111", CredentialID: "33333333-3333-4333-8333-333333333333"}
+	person := ReferenceSnapshot{ID: "44444444-4444-4444-8444-444444444444", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64), DisplayName: "申请人"}
+	makeDetails := func(firstNumber, secondNumber, firstFile, secondFile string) DetailSnapshot {
+		firstLine := "25000000-0000-4000-8000-000000000001"
+		secondLine := "25000000-0000-4000-8000-000000000002"
+		return DetailSnapshot{
+			Applicant:        person,
+			Payee:            PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人"},
+			InvoiceEntryMode: "multiple",
+			Lines: []Line{
+				{ID: firstLine, BusinessDate: "2026-11-16", CategoryKey: "other", CategoryName: "其他", CategoryRev: 1, Purpose: "内容1", AmountMinor: 12000},
+				{ID: secondLine, BusinessDate: "2026-11-16", CategoryKey: "other", CategoryName: "其他", CategoryRev: 1, Purpose: "打印纸", AmountMinor: 28000},
+			},
+			Invoices: []InvoiceAssociation{
+				{ID: "35000000-0000-4000-8000-000000000001", LineID: firstLine, Source: "manual", Evidence: []EvidenceRef{{FileID: firstFile, Version: 1, Purpose: "invoice"}}, Snapshot: InvoiceSnapshot{Number: firstNumber, IssuerName: "文具公司", InvoiceDate: "2026-11-15", AmountMinor: 12000}},
+				{ID: "35000000-0000-4000-8000-000000000002", LineID: secondLine, Source: "manual", Evidence: []EvidenceRef{{FileID: secondFile, Version: 1, Purpose: "invoice"}}, Snapshot: InvoiceSnapshot{Number: secondNumber, IssuerName: "纸业公司", InvoiceDate: "2026-11-16", AmountMinor: 28000}},
+			},
+		}
+	}
+	firstFile := "65000000-0000-4000-8000-000000000001"
+	secondFile := "75000000-0000-4000-8000-000000000002"
+	first, err := service.Create(ctx, actor, CreateInput{CommandID: "15000000-0000-4000-8000-000000000001", RequestType: "reimbursement", Title: "办公文具", AmountMinor: 1, Currency: "CNY", Details: makeDetails("M001", "M002", firstFile, secondFile)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Submit(ctx, actor, first.ID, SubmitInput{CommandID: "15000000-0000-4000-8000-000000000002", ExpectedRevision: first.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	referenced, err := service.IsEvidenceReferenced(ctx, actor.TenantID, secondFile, 1)
+	if err != nil || !referenced {
+		t.Fatalf("request-local invoice Evidence was not protected: referenced=%v err=%v", referenced, err)
+	}
+
+	duplicateDetails := makeDetails("M003", "M002", "85000000-0000-4000-8000-000000000003", "95000000-0000-4000-8000-000000000004")
+	duplicate, err := service.Create(ctx, actor, CreateInput{CommandID: "15000000-0000-4000-8000-000000000003", RequestType: "reimbursement", Title: "重复办公采购", AmountMinor: 1, Currency: "CNY", Details: duplicateDetails})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected, err := service.Get(ctx, actor.TenantID, duplicate.ID)
+	if err != nil || projected.Details.Duplicate.Status != "strong" || len(projected.Details.Duplicate.Invoices) != 2 || projected.Details.Duplicate.Invoices[1].LineID != duplicateDetails.Lines[1].ID || projected.Details.Duplicate.Invoices[1].Status != "strong" {
+		t.Fatalf("per-invoice duplicate projection=%#v err=%v", projected.Details.Duplicate, err)
+	}
+	if _, err = service.Submit(ctx, actor, duplicate.ID, SubmitInput{CommandID: "15000000-0000-4000-8000-000000000004", ExpectedRevision: duplicate.Revision}); !errors.Is(err, ErrStrongDuplicate) {
+		t.Fatalf("expected strong duplicate for one associated invoice, got %v", err)
+	}
+	var duplicateError *DuplicateError
+	if !errors.As(err, &duplicateError) || len(duplicateError.Invoices) != 2 || duplicateError.Invoices[1].Status != "strong" || duplicateError.Invoices[1].LineID != duplicateDetails.Lines[1].ID {
+		t.Fatalf("per-invoice duplicate error=%#v err=%v", duplicateError, err)
+	}
+}
+
 func TestFullyDigitalInvoiceNumberIsStrongDuplicateWithoutLegacyCode(t *testing.T) {
 	ctx := context.Background()
 	pool, cleanup := integrationPool(t, ctx)

@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## 多发票报销（2026-11-16，本地完成、未发布）
+
+BF-338 必须验证单项模式恰好一条明细，多项模式只接受 2～20 条；空白明细名称稳定补为“内容N”，总额按整数分精确求和且不可独立编辑。每个 `invoices[]` 关联必须引用存在的 Line ID，一条 Line 最多一个关联，票面金额等于明细金额；正式提交逐条要求 `invoice-v1/passed` Evidence。直接录入与识别来源都要覆盖，识别来源必须保存 Proposal ID／revision 但不得复制 Provider 历史。强重复必须指出具体 Invoice ID／Line ID，任一关联命中即阻断整单；Evidence 引用保留检查必须覆盖关联数组。旧 `line.invoice`、付款申请、软删除释放占用和 Tenant 隔离不得回归。
+
+本地 Finance Go test／vet、Workbench Go test／vet 和 Workbench Node 309/309 已实际通过。带 `integration` build tag 的多发票 PostgreSQL 用例已编译，但因本机未配置 `TEST_DATABASE_URL` 明确跳过；发布前还须运行 PostgreSQL 18 集成、D1 check、备份恢复、静态资源摘要和真实 Chrome 单项／多项写旅程，不能把当前结果登记为公网通过。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+
 ## Feedback SDK 父域发布门禁（2026-11-13，已发布）
 
 BF-337 必须验证正式 policy 中的每个父域都真实出现在构建 JavaScript 和 release manifest；缺失 `parent_origins` 或缺少目标 channel 所需父域的 release 必须在任何 loader／channel 写入前拒绝 promote。canary 与 stable 必须指向同一不可变摘要，真实 OMS 父域最终加载指定版本并显示 V3 产品面。

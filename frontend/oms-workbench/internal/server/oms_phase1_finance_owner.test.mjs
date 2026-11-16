@@ -10,7 +10,35 @@ const server=readFileSync(new URL('./server.go',import.meta.url),'utf8');
 test('formal finance owner replaces browser-local finance when assembled',()=>{
   assert.match(local,/const ownerFinance=Boolean\(ownerAPI\?\.app\?\.\('internal-finance-requests'\)\)/);
   assert.match(local,/if\(!ownerFinance\)renderFinance\(\)/);
-  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261112\.1/);
+  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261116\.1/);
+});
+
+test('reimbursement requests support one request-local invoice per detail line',()=>{
+  for(const marker of [
+    '单项发票',
+    '多项发票',
+    '报销内容 *',
+    '明细名称（选填）',
+    "'内容'+(index+1)",
+    '一条明细对应一张发票',
+    'invoice_entry_mode:next.entry_mode',
+    'invoices,evidence:[]',
+    'line_id:line.id',
+    "application:'invoice-recognition'",
+    '每条报销明细都必须关联一张包含原文件的发票',
+    '申请总额由全部明细自动合计',
+    'duplicateInvoiceLabels',
+    '修改／更换冲突发票',
+    '系统已停止整张申请提交',
+    'const positiveMinor=',
+    'sum+positiveMinor(line.amount)',
+    'total+=positiveMinor',
+    'hasCompleteReimbursementEvidence',
+    'lines.every(line=>invoices.some',
+  ])assert.ok(owner.includes(marker),`missing multi-invoice reimbursement marker ${marker}`);
+  assert.match(owner,/next\.entry_mode==='multiple'&&next\.lines\.length<2/);
+  assert.match(owner,/invoiceAmount!==amountMinor/);
+  assert.match(owner,/details\.invoices\.some\(invoice=>!invoice\.evidence\?\.length\)/);
 });
 
 test('new reimbursement and payment requests offer manual or recognized invoice entry',()=>{
@@ -117,7 +145,7 @@ test('strong invoice duplicates block submission and identify the occupying requ
     '当前发票不能再次提交',
     '这张发票已经使用过',
     '不能覆盖或再次提交',
-    '修改／更换发票',
+    '修改／更换冲突发票',
     'openDuplicateResolution',
     "error?.code==='INVOICE_STRONG_DUPLICATE'",
     'error?.data?.matched_request_ids',

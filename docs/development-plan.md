@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-16 BF-338 已完成本地纵向实现、尚未发布：Finance 契约增加申请内 `invoices[]` 与逐发票重复结果，Workbench 增加单项／多项切换、可选明细名称、逐明细直接录入／识别和自动总额；旧单发票与付款申请路径继续兼容。Finance Go test／vet、Workbench Go test／vet、309 项 Node 回归和 integration build-tag 编译通过；PostgreSQL 运行型用例因本机未配置 `TEST_DATABASE_URL` 只完成编译并明确跳过。下一步只在用户确认部署后执行 PostgreSQL 18 集成、D1／备份、发布与真实 Chrome 写旅程，不把本地结果外推为公网可用。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+
 2026-11-13 BF-337 已完成并发布：先将错误的 V3 stable 3.0.5 回退到已知可用 3.0.4，再把正式父域清单固化为 Feedback SDK release policy，新增构建扫描、manifest 元数据和 promote 门禁；旧 3.0.4 manifest 在新门禁下被拒绝，3.0.6 通过 canary、远端摘要／父域核验后提升 stable。真实 OMS Chrome 已加载 3.0.6 并打开智能客服。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
 2026-11-13 BF-336 已完成并发布：Identity schema 13 保存账号最后使用 Subject，登录和组织切换事务同步更新；查询只从启用成员关系选择，并覆盖停用 last-used 回退和自愈。Identity Go test／vet、PostgreSQL 18 migration 与 HTTP integration、公网备份、D1 check、21/21 长运行容器和真实 Chrome 双组织切换均通过；公网未持有登录凭据，故“退出后新登录直达目标组织”由真实 PostgreSQL HTTP 集成覆盖，不外推为人工公网登录复验。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)

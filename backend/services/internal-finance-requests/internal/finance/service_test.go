@@ -224,3 +224,47 @@ func TestNormalizeReimbursementDetailsAcceptsConfirmedInvoiceSnapshot(t *testing
 		t.Fatalf("reimbursement invoice snapshot was not normalized: %#v", got)
 	}
 }
+
+func TestNormalizeReimbursementDetailsAcceptsRequestLocalInvoiceAssociations(t *testing.T) {
+	person := ReferenceSnapshot{ID: "11111111-1111-4111-8111-111111111111", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64), DisplayName: "申请人"}
+	lines := []Line{
+		{ID: "22222222-2222-4222-8222-222222222221", Purpose: "内容1", AmountMinor: 12000, BusinessDate: "2026-11-16", CategoryKey: "other", CategoryName: "其他", CategoryRev: 1},
+		{ID: "22222222-2222-4222-8222-222222222222", Purpose: "打印纸", AmountMinor: 28000, BusinessDate: "2026-11-16", CategoryKey: "other", CategoryName: "其他", CategoryRev: 1},
+	}
+	details := DetailSnapshot{
+		Applicant:        person,
+		Payee:            PayeeSnapshot{Kind: "person", Reference: person, DisplayName: "申请人"},
+		Lines:            lines,
+		InvoiceEntryMode: "multiple",
+		Invoices: []InvoiceAssociation{
+			{ID: "33333333-3333-4333-8333-333333333331", LineID: lines[0].ID, Source: "manual", Evidence: []EvidenceRef{{FileID: "44444444-4444-4444-8444-444444444441", Version: 1, Purpose: "invoice"}}, Snapshot: InvoiceSnapshot{Number: " 2493-0001 ", IssuerName: " 文具公司 ", InvoiceDate: "2026-11-16", AmountMinor: 12000}},
+			{ID: "33333333-3333-4333-8333-333333333332", LineID: lines[1].ID, Source: "recognition", Recognition: &InvoiceRecognitionRef{Application: " invoice-recognition ", ProposalID: "55555555-5555-4555-8555-555555555555", Revision: 1}, Evidence: []EvidenceRef{{FileID: "44444444-4444-4444-8444-444444444442", Version: 1, Purpose: "invoice"}}, Snapshot: InvoiceSnapshot{Number: "24930002", IssuerName: "纸业公司", InvoiceDate: "2026-11-16", AmountMinor: 28000}},
+		},
+	}
+	if err := normalizeDetails("reimbursement", &details, true); err != nil {
+		t.Fatalf("multi-invoice reimbursement rejected: %v", err)
+	}
+	if details.Invoices[0].Snapshot.Number != "24930001" || details.Invoices[0].Snapshot.IssuerName != "文具公司" || details.Invoices[1].Recognition.Application != "invoice-recognition" {
+		t.Fatalf("invoice associations were not normalized: %#v", details.Invoices)
+	}
+
+	missing := details
+	missing.Invoices = missing.Invoices[:1]
+	if err := normalizeDetails("reimbursement", &missing, true); err == nil {
+		t.Fatal("multi-invoice reimbursement with an unassociated line was accepted")
+	}
+
+	duplicateLine := details
+	duplicateLine.Invoices = append([]InvoiceAssociation(nil), details.Invoices...)
+	duplicateLine.Invoices[1].LineID = duplicateLine.Invoices[0].LineID
+	if err := normalizeDetails("reimbursement", &duplicateLine, true); err == nil {
+		t.Fatal("two invoices associated with one line were accepted")
+	}
+
+	missingEvidence := details
+	missingEvidence.Invoices = append([]InvoiceAssociation(nil), details.Invoices...)
+	missingEvidence.Invoices[1].Evidence = nil
+	if err := normalizeDetails("reimbursement", &missingEvidence, true); err == nil {
+		t.Fatal("multi-invoice reimbursement with an invoice missing Evidence was accepted")
+	}
+}

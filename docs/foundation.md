@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-16 多发票报销基线（BF-338，本地实现、未发布）：报销总名称不再被迫等同于唯一费用明细；单项和多项使用同一申请模型，多项展开为一组各自拥有稳定 Line ID 的费用明细。每条明细只能有一张发票，正式提交逐条要求 Evidence、票面金额与明细金额一致；总额只由明细精确合计。识别小系统、Evidence 与 Finance 保持独立，关联只保存稳定引用和业务时快照。旧申请兼容读取，本批未部署。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+
 2026-11-13 Feedback SDK 正式父域基线（BF-337，已发布）：跨域父页面只有同时存在于版本化发布策略、编译产物和不可变 release 清单时才能进入正式 channel。stable 提升必须失败关闭，不能用 ready、contract 或 configured 的局部成功替代父域兼容验证。正式 V3 已为 3.0.6，OMS 真实加载通过。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 
 2026-11-13 最后使用组织基线（BF-336，已发布）：账号的登录偏好由 IAM 服务端拥有，并且只在成功签发新 Session 时更新。偏好选择不改变组织内 Subject、权限和成员事实；不可用偏好必须回退到启用成员关系。首屏必须直接基于登录返回的 Tenant 拉取数据，不先请求另一个组织后再切换。公网 Identity／Suite v1.103、schema 13 和真实 Chrome 双组织切换已复验。[发布记录](./reports/oms-last-used-organization-v103-publication-20261113.md)

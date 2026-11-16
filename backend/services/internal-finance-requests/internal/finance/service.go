@@ -432,6 +432,7 @@ func validateActor(actor Actor) error {
 	return nil
 }
 func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) error {
+	d.InvoiceEntryMode = strings.ToLower(strings.TrimSpace(d.InvoiceEntryMode))
 	d.Applicant.ID, d.Applicant.Digest, d.Applicant.DisplayName = normalizeID(d.Applicant.ID), strings.ToLower(strings.TrimSpace(d.Applicant.Digest)), strings.TrimSpace(d.Applicant.DisplayName)
 	d.Payee.Kind, d.Payee.EntityKind, d.Payee.PaymentMethod, d.Payee.Reference.ID, d.Payee.Reference.Digest = strings.ToLower(strings.TrimSpace(d.Payee.Kind)), strings.ToLower(strings.TrimSpace(d.Payee.EntityKind)), strings.ToLower(strings.TrimSpace(d.Payee.PaymentMethod)), normalizeID(d.Payee.Reference.ID), strings.ToLower(strings.TrimSpace(d.Payee.Reference.Digest))
 	d.Payee.DisplayName, d.Payee.BankName, d.Payee.AccountNumber, d.Payee.DelegateReason = strings.TrimSpace(d.Payee.DisplayName), strings.TrimSpace(d.Payee.BankName), strings.TrimSpace(d.Payee.AccountNumber), strings.TrimSpace(d.Payee.DelegateReason)
@@ -445,6 +446,7 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 		return fmt.Errorf("invalid lines: at least one line is required")
 	}
 	lineIDs := map[string]bool{}
+	linesByID := map[string]*Line{}
 	for i := range d.Lines {
 		line := &d.Lines[i]
 		line.ID, line.BusinessDate, line.CategoryKey, line.CategoryName, line.Purpose = normalizeID(line.ID), strings.TrimSpace(line.BusinessDate), strings.TrimSpace(line.CategoryKey), strings.TrimSpace(line.CategoryName), strings.TrimSpace(line.Purpose)
@@ -452,6 +454,7 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 			return fmt.Errorf("invalid line")
 		}
 		lineIDs[line.ID] = true
+		linesByID[line.ID] = line
 		if requestType == "reimbursement" {
 			parsed, err := time.Parse("2006-01-02", line.BusinessDate)
 			if err != nil || parsed.Format("2006-01-02") != line.BusinessDate || line.CategoryKey == "" || line.CategoryName == "" || line.CategoryRev < 1 {
@@ -469,6 +472,58 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 			parsed, dateErr := time.Parse("2006-01-02", line.Invoice.InvoiceDate)
 			if dateErr != nil || parsed.Format("2006-01-02") != line.Invoice.InvoiceDate || line.Invoice.IssuerName == "" || len([]rune(line.Invoice.IssuerName)) > 200 || line.Invoice.AmountMinor != line.AmountMinor || line.Invoice.Number == "" {
 				return fmt.Errorf("invalid invoice snapshot")
+			}
+		}
+	}
+	if requestType == "reimbursement" {
+		if d.InvoiceEntryMode != "" && d.InvoiceEntryMode != "single" && d.InvoiceEntryMode != "multiple" {
+			return fmt.Errorf("invalid reimbursement invoice entry mode")
+		}
+		if d.InvoiceEntryMode == "single" && len(d.Lines) != 1 {
+			return fmt.Errorf("invalid single-invoice reimbursement lines")
+		}
+		if d.InvoiceEntryMode == "multiple" && (len(d.Lines) < 2 || len(d.Lines) > 20) {
+			return fmt.Errorf("invalid multi-invoice reimbursement lines")
+		}
+	}
+	if len(d.Invoices) > 20 {
+		return fmt.Errorf("invalid invoice associations")
+	}
+	invoiceIDs, associatedLines := map[string]bool{}, map[string]bool{}
+	for i := range d.Invoices {
+		invoice := &d.Invoices[i]
+		invoice.ID, invoice.LineID, invoice.Source = normalizeID(invoice.ID), normalizeID(invoice.LineID), strings.ToLower(strings.TrimSpace(invoice.Source))
+		line := linesByID[invoice.LineID]
+		if !uuidPattern.MatchString(invoice.ID) || invoiceIDs[invoice.ID] || line == nil || associatedLines[invoice.LineID] || line.Invoice != nil || (invoice.Source != "manual" && invoice.Source != "recognition") {
+			return fmt.Errorf("invalid invoice association")
+		}
+		invoiceIDs[invoice.ID], associatedLines[invoice.LineID] = true, true
+		if invoice.Source == "recognition" {
+			if invoice.Recognition == nil {
+				return fmt.Errorf("invalid invoice recognition reference")
+			}
+			invoice.Recognition.Application = strings.ToLower(strings.TrimSpace(invoice.Recognition.Application))
+			invoice.Recognition.ProposalID = normalizeID(invoice.Recognition.ProposalID)
+			if invoice.Recognition.Application != "invoice-recognition" || !uuidPattern.MatchString(invoice.Recognition.ProposalID) || invoice.Recognition.Revision < 1 {
+				return fmt.Errorf("invalid invoice recognition reference")
+			}
+		} else if invoice.Recognition != nil {
+			return fmt.Errorf("invalid manual invoice source")
+		}
+		if err := normalizeEvidence(invoice.Evidence); err != nil {
+			return err
+		}
+		if err := normalizeInvoiceSnapshot(&invoice.Snapshot, line.AmountMinor); err != nil {
+			return err
+		}
+		if submitting && len(invoice.Evidence) == 0 {
+			return fmt.Errorf("invalid invoice association: Evidence is required")
+		}
+	}
+	if submitting && d.InvoiceEntryMode != "" {
+		for _, line := range d.Lines {
+			if !associatedLines[line.ID] {
+				return fmt.Errorf("invalid reimbursement: every line requires one invoice")
 			}
 		}
 	}
@@ -549,11 +604,28 @@ func normalizeInvoiceIdentifier(value string) string {
 	return strings.NewReplacer(" ", "", "-", "").Replace(value)
 }
 
+func normalizeInvoiceSnapshot(invoice *InvoiceSnapshot, lineAmount int64) error {
+	invoice.Code = normalizeInvoiceIdentifier(invoice.Code)
+	invoice.Number = normalizeInvoiceIdentifier(invoice.Number)
+	invoice.IssuerName = strings.TrimSpace(invoice.IssuerName)
+	invoice.InvoiceDate = strings.TrimSpace(invoice.InvoiceDate)
+	parsed, dateErr := time.Parse("2006-01-02", invoice.InvoiceDate)
+	if dateErr != nil || parsed.Format("2006-01-02") != invoice.InvoiceDate || invoice.IssuerName == "" || len([]rune(invoice.IssuerName)) > 200 || invoice.AmountMinor != lineAmount || invoice.Number == "" {
+		return fmt.Errorf("invalid invoice snapshot")
+	}
+	return nil
+}
+
 func (s *Service) resolveEvidence(ctx context.Context, tenantID string, details *DetailSnapshot) error {
 	refs := make([]*EvidenceRef, 0)
 	for i := range details.Lines {
 		for j := range details.Lines[i].Evidence {
 			refs = append(refs, &details.Lines[i].Evidence[j])
+		}
+	}
+	for i := range details.Invoices {
+		for j := range details.Invoices[i].Evidence {
+			refs = append(refs, &details.Invoices[i].Evidence[j])
 		}
 	}
 	for i := range details.Evidence {
@@ -598,6 +670,11 @@ func hasEvidence(d DetailSnapshot) bool {
 	}
 	for _, line := range d.Lines {
 		if len(line.Evidence) > 0 {
+			return true
+		}
+	}
+	for _, invoice := range d.Invoices {
+		if len(invoice.Evidence) > 0 {
 			return true
 		}
 	}
