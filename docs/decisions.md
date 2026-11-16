@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发决策总表
 
-2026-11-16 BF-339（已接受／本地实现／未发布）：报销模式切换必须区分未保存编辑状态与已持久化事实。新建／未保存的多项明细切回单项时，Workbench 在当前编辑会话暂存额外明细并仅显示第一项；切回多项时恢复，不因空占位阻断，也不立即丢失用户输入。若额外明细已经持久化，继续失败关闭，不能借模式切换绕过 revision 与审计删除。多项编辑面采用左侧明细字段、右侧发票工作区的扁平双列，窄屏单列；本项不修改 Finance API、schema 或 Owner 数据。[本地验证](./reports/oms-reimbursement-mode-switch-layout-local-validation-20261116.md)
+2026-11-16 BF-339（已接受／已发布）：报销模式切换必须区分未保存编辑状态与已持久化事实。新建／未保存的多项明细切回单项时，Workbench 在当前编辑会话暂存额外明细并仅显示第一项；切回多项时恢复，不因空占位阻断，也不立即丢失用户输入。若额外明细已经持久化，继续失败关闭，不能借模式切换绕过 revision 与审计删除。多项编辑面采用左侧明细字段、右侧发票工作区的扁平双列，窄屏单列；本项不修改 Finance API、schema 或 Owner 数据。公网 Workbench v1.105 已通过备份升级、D1 check、21/21 容器健康、资源摘要和真实 Chrome 无写入切换验收。[发布记录](./reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)
 
 2026-11-16 BF-338（已接受／已发布）：报销申请采用“整单＋明细＋申请内发票关联”模型。一张申请保存一个总名称；单项模式恰好一条明细，多项模式 2～20 条明细，空白明细名称按当前 revision 的稳定顺序补为“内容N”。一条明细最多关联一张发票，发票价税合计必须等于该明细金额；正式提交时每条明细都必须有一张带有效 Evidence 的发票，整单金额只能由全部明细整数分求和。Internal Finance Requests 拥有申请、明细、关联和消费快照；Invoice Recognition 继续拥有 Proposal／确认历史，Evidence 继续拥有文件。Finance 只保存 Proposal ID／revision、File ID／Version 和票面快照，不共享表、不复制 Provider 输出或文件字节。旧 `line.invoice` 作为兼容读写输入保留，不静默迁移历史；本批没有数据库 migration。公网 Suite v1.104 已完成备份升级、D1 check、21/21 容器健康和静态资源摘要核对，发布验收未写业务数据。[发布记录](./reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
