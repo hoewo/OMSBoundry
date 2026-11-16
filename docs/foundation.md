@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-16 报销模式交互基线（BF-339，本地实现、未发布）：自动添加的空明细不能把单项／多项切换变成单向操作。未保存的额外明细只属于当前编辑会话，可暂存并恢复；已保存明细属于 revision 事实，不能由页面模式开关静默移除。明细编辑使用扁平横向工作区，基础字段与发票操作并列，减少重复边框和缩进；移动端仍保持单列可用。[本地验证](./reports/oms-reimbursement-mode-switch-layout-local-validation-20261116.md)
+
 2026-11-16 多发票报销基线（BF-338，已发布）：报销总名称不再被迫等同于唯一费用明细；单项和多项使用同一申请模型，多项展开为一组各自拥有稳定 Line ID 的费用明细。每条明细只能有一张发票，正式提交逐条要求 Evidence、票面金额与明细金额一致；总额只由明细精确合计。识别小系统、Evidence 与 Finance 保持独立，关联只保存稳定引用和业务时快照。旧申请兼容读取；公网 Suite v1.104 已通过 PostgreSQL 18.6 集成、D1 check、21/21 容器健康和静态资源核对。[发布记录](./reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
 2026-11-13 Feedback SDK 正式父域基线（BF-337，已发布）：跨域父页面只有同时存在于版本化发布策略、编译产物和不可变 release 清单时才能进入正式 channel。stable 提升必须失败关闭，不能用 ready、contract 或 configured 的局部成功替代父域兼容验证。正式 V3 已为 3.0.6，OMS 真实加载通过。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)

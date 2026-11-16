@@ -1,5 +1,9 @@
 # OMSBizFoundry 验证入口
 
+## 报销模式切换与横向明细（2026-11-16，本地完成、未发布）
+
+BF-339 必须验证：新建单项切到多项后可立即切回单项；填写第 2 项后切回单项不会丢失当前编辑会话输入，再切回多项可恢复；保存单项不得提交暂存明细；已持久化的额外明细继续阻断压缩。桌面每条明细必须把基本字段与发票区并列、减少嵌套边框，760px 以下回落单列。当前 JavaScript 语法、Workbench Go test／vet、专项 10/10 和全量 Node 310/310 已通过；尚未执行 D1、公网摘要和真实浏览器检查。[本地验证](./reports/oms-reimbursement-mode-switch-layout-local-validation-20261116.md)
+
 ## 多发票报销（2026-11-16，已发布）
 
 BF-338 必须验证单项模式恰好一条明细，多项模式只接受 2～20 条；空白明细名称稳定补为“内容N”，总额按整数分精确求和且不可独立编辑。每个 `invoices[]` 关联必须引用存在的 Line ID，一条 Line 最多一个关联，票面金额等于明细金额；正式提交逐条要求 `invoice-v1/passed` Evidence。直接录入与识别来源都要覆盖，识别来源必须保存 Proposal ID／revision 但不得复制 Provider 历史。强重复必须指出具体 Invoice ID／Line ID，任一关联命中即阻断整单；Evidence 引用保留检查必须覆盖关联数组。旧 `line.invoice`、付款申请、软删除释放占用和 Tenant 隔离不得回归。

@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前多发票模式切换与明细布局（BF-339，本地完成、待发布）：新建或尚未保存的多项明细切回单项时，不再被占位明细阻断；额外明细在当前编辑会话内暂存，再切回多项即可恢复。已保存多项明细继续因审计边界禁止压缩。每条明细改为左侧基本字段、右侧发票工作区的扁平双列，窄屏回落单列，不改变 Finance API、schema 或业务事实。[本地验证](./docs/reports/oms-reimbursement-mode-switch-layout-local-validation-20261116.md)
+
 当前多发票报销（BF-338，已发布）：新增报销可选择单项或多项发票；多项模式由一个“报销内容”总名称和 2～20 条明细组成，明细名称不填时使用“内容1、内容2……”。每条明细最多一张发票，正式提交时每条必须带原票 Evidence，申请总额自动精确合计。Finance 只保存申请内发票关联、识别提案引用、Evidence 引用和票面快照，不接管 Invoice Recognition 或 Evidence 的事实所有权。公网 Suite v1.104、PostgreSQL 18.6 集成、D1 check、21/21 长运行容器及静态资源摘要已经通过；发布验收未写业务数据。[发布记录](./docs/reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
 当前 Feedback V3 正式父域发布门禁（BF-337，已发布）：3.0.5 的发布构建漏掉 OMS 父域，导致 SDK ready 后拒绝 OMS configure；稳定通道已先回退 3.0.4 恢复，再提升到修复版 3.0.6。父域现在进入版本化 release policy，并由构建注入、产物扫描、release 清单和 stable 提升四层强校验；缺少 `oatest` 的制品会在发布前失败。真实 Chrome 已从 OMS 加载 3.0.6 并正常显示智能客服。[发布记录](./docs/reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)

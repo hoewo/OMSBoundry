@@ -6,11 +6,26 @@ const owner=readFileSync(new URL('./oms_phase1_finance_owner.js',import.meta.url
 const shell=readFileSync(new URL('./oms_phase1.js',import.meta.url),'utf8');
 const local=readFileSync(new URL('./oms_phase1_internal.js',import.meta.url),'utf8');
 const server=readFileSync(new URL('./server.go',import.meta.url),'utf8');
+const styles=readFileSync(new URL('./oms_phase1.css',import.meta.url),'utf8');
 
 test('formal finance owner replaces browser-local finance when assembled',()=>{
   assert.match(local,/const ownerFinance=Boolean\(ownerAPI\?\.app\?\.\('internal-finance-requests'\)\)/);
   assert.match(local,/if\(!ownerFinance\)renderFinance\(\)/);
-  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261116\.1/);
+  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261116\.2/);
+});
+
+test('new multi-invoice drafts can return to single mode without losing reversible input',()=>{
+  for(const marker of [
+    'stashed_lines:[]',
+    'next.stashed_lines=extra',
+    'next.lines=next.lines.slice(0,1)',
+    'stashed.length?stashed:[emptyReimbursementLine(1)]',
+    '已保存的多项明细需要保留审计，不能切换为单项发票',
+    'oms-v1__reimbursement-line-fields',
+  ])assert.ok(owner.includes(marker),`missing reversible mode marker ${marker}`);
+  assert.ok(styles.includes('grid-template-columns:minmax(210px,.72fr) minmax(0,1.45fr)'),'detail fields and invoice workspace must expand horizontally');
+  assert.ok(styles.includes('.oms-v1__finance-invoice.is-line{min-width:0;margin:0;padding:0 0 0 18px;border:0;border-left:1px solid var(--line)'),'nested invoice card chrome must be flattened');
+  assert.match(server,/oms-phase1\.css\?v=20261116\.2/);
 });
 
 test('reimbursement requests support one request-local invoice per detail line',()=>{
