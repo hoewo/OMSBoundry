@@ -1,6 +1,6 @@
 # OMSBizFoundry 开发决策总表
 
-2026-11-16 BF-338（已接受／本地实现／未发布）：报销申请采用“整单＋明细＋申请内发票关联”模型。一张申请保存一个总名称；单项模式恰好一条明细，多项模式 2～20 条明细，空白明细名称按当前 revision 的稳定顺序补为“内容N”。一条明细最多关联一张发票，发票价税合计必须等于该明细金额；正式提交时每条明细都必须有一张带有效 Evidence 的发票，整单金额只能由全部明细整数分求和。Internal Finance Requests 拥有申请、明细、关联和消费快照；Invoice Recognition 继续拥有 Proposal／确认历史，Evidence 继续拥有文件。Finance 只保存 Proposal ID／revision、File ID／Version 和票面快照，不共享表、不复制 Provider 输出或文件字节。旧 `line.invoice` 作为兼容读写输入保留，不静默迁移历史；本批没有数据库 migration，尚未部署。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+2026-11-16 BF-338（已接受／已发布）：报销申请采用“整单＋明细＋申请内发票关联”模型。一张申请保存一个总名称；单项模式恰好一条明细，多项模式 2～20 条明细，空白明细名称按当前 revision 的稳定顺序补为“内容N”。一条明细最多关联一张发票，发票价税合计必须等于该明细金额；正式提交时每条明细都必须有一张带有效 Evidence 的发票，整单金额只能由全部明细整数分求和。Internal Finance Requests 拥有申请、明细、关联和消费快照；Invoice Recognition 继续拥有 Proposal／确认历史，Evidence 继续拥有文件。Finance 只保存 Proposal ID／revision、File ID／Version 和票面快照，不共享表、不复制 Provider 输出或文件字节。旧 `line.invoice` 作为兼容读写输入保留，不静默迁移历史；本批没有数据库 migration。公网 Suite v1.104 已完成备份升级、D1 check、21/21 容器健康和静态资源摘要核对，发布验收未写业务数据。[发布记录](./reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
 2026-11-13 BF-337（已接受／已发布）：Feedback SDK 的跨域宿主允许清单是正式发布契约，不是构建人员记忆。每个托管 channel 在版本化 policy 中声明 required parent origins；release build 必须注入并扫描真实 JavaScript，release manifest 必须记录该清单，promote 必须按目标 channel 再校验。缺少 OMS 父域的旧 release 不得提升 `v3-stable`。3.0.5 事故已按该规则用 3.0.6 修复，不改变 OMS Gateway Session、API Key 保管或 Feedback 事实。[发布记录](./reports/oms-feedback-v3-parent-origin-release-gate-publication-20261113.md)
 

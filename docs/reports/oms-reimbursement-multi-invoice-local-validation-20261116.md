@@ -1,7 +1,7 @@
 # OMS 多发票报销本地实现与验证（BF-338）
 
 日期：2026-11-16（GMT+8）  
-状态：本地实现完成，未部署，未写入公网业务数据
+状态：本地实现完成；后续已随 Suite v1.104 发布，见[发布记录](./oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
 ## 问题与可验证结果
 
@@ -33,11 +33,10 @@
 - Unified Workbench：`go test ./...` 通过；`go vet ./...` 通过。
 - Unified Workbench：`node --test internal/server/*.test.mjs`，309/309 通过。
 - Finance Owner JavaScript：`node --check` 通过。
-- PostgreSQL 多发票集成用例已加入并以 `-tags integration` 成功编译；本机未配置 `TEST_DATABASE_URL`，运行时明确 SKIP，不能登记为数据库集成通过。
+- PostgreSQL 多发票集成用例已加入；发布准备阶段使用临时 PostgreSQL 18.6 实例实际运行 `go test -count=1 -tags=integration ./internal/finance ./internal/httpserver` 并通过，实例随后停止并自动移除。
 
-## 发布前仍需完成
+## 后续发布结果
 
-- 在 PostgreSQL 18 测试实例实际运行多发票指纹、逐发票冲突与 Evidence 保留集成用例。
-- 生成部署前备份，运行 D1 check、全部长运行容器健康检查和静态资源摘要核对。
-- 真实 Chrome 分别完成单项、多项、默认明细名称、直接录入、上传识别、强重复阻断和旧草稿兼容旅程。
-- 本记录不证明公网已更新；等待单独部署指令。
+- PostgreSQL 18.6 集成、P9 preflight、D1 composition、发布包、升级前联合备份、正式 D1 check、21/21 长运行容器和静态资源逐字节摘要均已通过。
+- 公网版本为 `v0.1.0-test.oms-v1.104`；本地记录本身不替代[发布记录](./oms-reimbursement-multi-invoice-v104-publication-20261116.md)。
+- 发布验收没有创建或修改报销数据；真实 Chrome 的单项／多项写旅程交由用户使用自有测试数据完成。

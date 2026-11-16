@@ -1,10 +1,10 @@
 # OMSBizFoundry 验证入口
 
-## 多发票报销（2026-11-16，本地完成、未发布）
+## 多发票报销（2026-11-16，已发布）
 
 BF-338 必须验证单项模式恰好一条明细，多项模式只接受 2～20 条；空白明细名称稳定补为“内容N”，总额按整数分精确求和且不可独立编辑。每个 `invoices[]` 关联必须引用存在的 Line ID，一条 Line 最多一个关联，票面金额等于明细金额；正式提交逐条要求 `invoice-v1/passed` Evidence。直接录入与识别来源都要覆盖，识别来源必须保存 Proposal ID／revision 但不得复制 Provider 历史。强重复必须指出具体 Invoice ID／Line ID，任一关联命中即阻断整单；Evidence 引用保留检查必须覆盖关联数组。旧 `line.invoice`、付款申请、软删除释放占用和 Tenant 隔离不得回归。
 
-本地 Finance Go test／vet、Workbench Go test／vet 和 Workbench Node 309/309 已实际通过。带 `integration` build tag 的多发票 PostgreSQL 用例已编译，但因本机未配置 `TEST_DATABASE_URL` 明确跳过；发布前还须运行 PostgreSQL 18 集成、D1 check、备份恢复、静态资源摘要和真实 Chrome 单项／多项写旅程，不能把当前结果登记为公网通过。[本地验证](./reports/oms-reimbursement-multi-invoice-local-validation-20261116.md)
+Finance Go test／vet、Workbench Go test／vet、Workbench Node 309/309 和 PostgreSQL 18.6 `integration` 用例已实际通过；P9 preflight、D1 composition、发布包校验、升级前备份、正式 D1 check、21/21 长运行容器和公网静态资源逐字节摘要也通过。公网发布验收没有创建或修改报销数据，因此不能登记为真实 Chrome 单项／多项写旅程通过；该体验验证交由用户使用自有测试数据完成。[发布记录](./reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)
 
 ## Feedback SDK 父域发布门禁（2026-11-13，已发布）
 
