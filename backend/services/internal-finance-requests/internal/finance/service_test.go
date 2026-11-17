@@ -248,6 +248,17 @@ func TestNormalizeReimbursementDetailsAcceptsRequestLocalInvoiceAssociations(t *
 		t.Fatalf("invoice associations were not normalized: %#v", details.Invoices)
 	}
 
+	oneLineDraft := details
+	oneLineDraft.Lines = append([]Line(nil), details.Lines[:1]...)
+	oneLineDraft.Invoices = append([]InvoiceAssociation(nil), details.Invoices[:1]...)
+	if err := normalizeDetails("reimbursement", &oneLineDraft, false); err != nil {
+		t.Fatalf("one-line multi-invoice draft rejected: %v", err)
+	}
+	oneLineSubmit := oneLineDraft
+	if err := normalizeDetails("reimbursement", &oneLineSubmit, true); err == nil {
+		t.Fatal("one-line multi-invoice reimbursement was accepted for formal submission")
+	}
+
 	missing := details
 	missing.Invoices = missing.Invoices[:1]
 	if err := normalizeDetails("reimbursement", &missing, true); err == nil {

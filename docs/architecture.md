@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-17 报销草稿数量门禁（BF-340，本地实现）：`details.invoice_entry_mode=multiple` 在 Create／Update 草稿阶段接受 1～20 条 Line，Submit 阶段才要求 2～20 条；单项模式仍恰好 1 条。数量门禁属于 Internal Finance Requests Owner，Workbench 只提供相同的前置反馈。该调整不改变 `details.lines[]`／`details.invoices[]` 结构、金额计算、发票一对零或一关系、Evidence 门禁、schema、Capability 或跨应用所有权；界面布局也不引入浏览器持久化事实。[本地验证](./reports/oms-reimbursement-single-initial-line-layout-local-validation-20261117.md)
+
 2026-11-16 报销编辑态边界（BF-339，已发布）：Workbench 可以在一个打开的编辑会话中暂存尚未提交的额外明细，以支持单项／多项可逆切换；该暂存不进入 Local Storage、Server、Finance Request 或跨页面缓存。已持久化 Line 仍只能通过 Owner 的 revision／审计语义处理，页面不得把它降格为可丢弃草稿。布局改为字段区与发票区并列，不改变 `details.lines[]`、`details.invoices[]` 或任何版本化端口。该表面已随 Workbench v1.105 发布。[发布记录](./reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)
 
 2026-11-16 报销发票关联边界（BF-338，已发布）：Internal Finance Requests 的聚合仍是 Finance Request；`details.lines[]` 拥有费用明细，`details.invoices[]` 是同一聚合内通过 `line_id` 建立的一对零或一关联。关联包含自身稳定 ID、来源方式、可选 Invoice Recognition Proposal ID／revision、精确 Evidence File ID／Version 和不可变票面快照；它不是新的共享 Invoice Owner。Invoice Recognition、Evidence 与 Finance 只通过版本化端口和稳定引用交互，不能跨库查询、共享 ORM 或级联改写。重复指纹按每个关联独立生成并在 Finance 提交事务内聚合阻断；旧 `line.invoice` 继续兼容，JSONB 扩展不需要 schema migration。该边界已随 Suite v1.104 发布，Owner 与 Workbench 镜像摘要锁定。[发布记录](./reports/oms-reimbursement-multi-invoice-v104-publication-20261116.md)

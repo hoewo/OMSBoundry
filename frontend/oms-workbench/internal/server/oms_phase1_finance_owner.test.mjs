@@ -11,21 +11,24 @@ const styles=readFileSync(new URL('./oms_phase1.css',import.meta.url),'utf8');
 test('formal finance owner replaces browser-local finance when assembled',()=>{
   assert.match(local,/const ownerFinance=Boolean\(ownerAPI\?\.app\?\.\('internal-finance-requests'\)\)/);
   assert.match(local,/if\(!ownerFinance\)renderFinance\(\)/);
-  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261116\.2/);
+  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261117\.1/);
 });
 
-test('new multi-invoice drafts can return to single mode without losing reversible input',()=>{
+test('multi-invoice drafts start with one line and can return to single mode without losing reversible input',()=>{
   for(const marker of [
     'stashed_lines:[]',
     'next.stashed_lines=extra',
     'next.lines=next.lines.slice(0,1)',
-    'stashed.length?stashed:[emptyReimbursementLine(1)]',
+    'next.lines.push(...stashed)',
     '已保存的多项明细需要保留审计，不能切换为单项发票',
+    'oms-v1__reimbursement-line-heading',
     'oms-v1__reimbursement-line-fields',
   ])assert.ok(owner.includes(marker),`missing reversible mode marker ${marker}`);
-  assert.ok(styles.includes('grid-template-columns:minmax(210px,.72fr) minmax(0,1.45fr)'),'detail fields and invoice workspace must expand horizontally');
-  assert.ok(styles.includes('.oms-v1__finance-invoice.is-line{min-width:0;margin:0;padding:0 0 0 18px;border:0;border-left:1px solid var(--line)'),'nested invoice card chrome must be flattened');
-  assert.match(server,/oms-phase1\.css\?v=20261116\.2/);
+  assert.doesNotMatch(owner,/stashed\.length\?stashed:\[emptyReimbursementLine\(1\)\]/);
+  assert.match(owner,/next\.entry_mode==='multiple'&&next\.save_mode==='submit'&&next\.lines\.length<2/);
+  assert.ok(styles.includes('grid-template-columns:minmax(0,1.35fr) minmax(140px,.62fr) minmax(170px,.78fr)'),'detail name, amount and date must share one horizontal row');
+  assert.ok(styles.includes('border-top:1px dashed #d8dfdb;border-radius:0;background:transparent'),'invoice workspace must follow the detail fields without nested card chrome');
+  assert.match(server,/oms-phase1\.css\?v=20261117\.1/);
 });
 
 test('reimbursement requests support one request-local invoice per detail line',()=>{
@@ -35,7 +38,7 @@ test('reimbursement requests support one request-local invoice per detail line',
     '报销内容 *',
     '明细名称（选填）',
     "'内容'+(index+1)",
-    '一条明细对应一张发票',
+    '本条明细只关联一张发票',
     'invoice_entry_mode:next.entry_mode',
     'invoices,evidence:[]',
     'line_id:line.id',
@@ -51,7 +54,7 @@ test('reimbursement requests support one request-local invoice per detail line',
     'hasCompleteReimbursementEvidence',
     'lines.every(line=>invoices.some',
   ])assert.ok(owner.includes(marker),`missing multi-invoice reimbursement marker ${marker}`);
-  assert.match(owner,/next\.entry_mode==='multiple'&&next\.lines\.length<2/);
+  assert.match(owner,/next\.entry_mode==='multiple'&&next\.save_mode==='submit'&&next\.lines\.length<2/);
   assert.match(owner,/invoiceAmount!==amountMinor/);
   assert.match(owner,/details\.invoices\.some\(invoice=>!invoice\.evidence\?\.length\)/);
 });

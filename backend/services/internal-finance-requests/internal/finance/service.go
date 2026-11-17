@@ -482,7 +482,7 @@ func normalizeDetails(requestType string, d *DetailSnapshot, submitting bool) er
 		if d.InvoiceEntryMode == "single" && len(d.Lines) != 1 {
 			return fmt.Errorf("invalid single-invoice reimbursement lines")
 		}
-		if d.InvoiceEntryMode == "multiple" && (len(d.Lines) < 2 || len(d.Lines) > 20) {
+		if d.InvoiceEntryMode == "multiple" && (len(d.Lines) > 20 || (submitting && len(d.Lines) < 2)) {
 			return fmt.Errorf("invalid multi-invoice reimbursement lines")
 		}
 	}
