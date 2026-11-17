@@ -1,6 +1,9 @@
 package provider
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestInvoiceFromTSVReturnsFieldsAndVisualRegions(t *testing.T) {
 	tsv := "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
@@ -115,6 +118,39 @@ func TestInvoiceFromTSVCleansSpacedPartyNamesAndKeepsBuyerSellerColumns(t *testi
 	}
 	for _, field := range []string{"buyer_name", "seller_name", "buyer_tax_id", "seller_tax_id"} {
 		if len(result.FieldRegions[field]) != 1 || result.FieldRegions[field][0].WidthBPS >= 6000 {
+			t.Fatalf("field %s region=%+v", field, result.FieldRegions[field])
+		}
+	}
+}
+
+func TestInvoiceFromTSVDropsNoisyVerticalRoleTextBeforePartyNameColon(t *testing.T) {
+	tsv := "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
+		"1\t1\t0\t0\t0\t0\t0\t0\t2000\t1200\t-1\t\n" +
+		"5\t1\t1\t1\t1\t1\t60\t300\t50\t40\t82\t墨芎\n" +
+		"5\t1\t1\t1\t1\t2\t120\t300\t50\t40\t91\t名\n" +
+		"5\t1\t1\t1\t1\t3\t180\t300\t50\t40\t91\t称\n" +
+		"5\t1\t1\t1\t1\t4\t240\t300\t30\t40\t96\t:\n" +
+		"5\t1\t1\t1\t1\t5\t280\t300\t80\t40\t95\t北京\n" +
+		"5\t1\t1\t1\t1\t6\t370\t300\t180\t40\t95\t飞天橙子\n" +
+		"5\t1\t1\t1\t1\t7\t560\t300\t220\t40\t95\t科技有限公司\n" +
+		"5\t1\t1\t1\t1\t8\t1040\t300\t50\t40\t82\t藿\n" +
+		"5\t1\t1\t1\t1\t9\t1100\t300\t50\t40\t91\t名\n" +
+		"5\t1\t1\t1\t1\t10\t1160\t300\t50\t40\t91\t称\n" +
+		"5\t1\t1\t1\t1\t11\t1220\t300\t30\t40\t96\t:\n" +
+		"5\t1\t1\t1\t1\t12\t1260\t300\t80\t40\t95\t河北\n" +
+		"5\t1\t1\t1\t1\t13\t1350\t300\t220\t40\t95\t雄安臻玺\n" +
+		"5\t1\t1\t1\t1\t14\t1580\t300\t300\t40\t95\t餐饮服务有限公司\n" +
+		"5\t1\t2\t1\t1\t1\t1220\t90\t180\t40\t96\t发票号码：\n" +
+		"5\t1\t2\t1\t1\t2\t1420\t90\t400\t40\t99\t26132000003698822386\n"
+	result, err := invoiceFromTSV(tsv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Candidate.BuyerName != "北京飞天橙子科技有限公司" || result.Candidate.SellerName != "河北雄安臻玺餐饮服务有限公司" {
+		t.Fatalf("party names=%q / %q", result.Candidate.BuyerName, result.Candidate.SellerName)
+	}
+	for _, field := range []string{"buyer_name", "seller_name"} {
+		if len(result.FieldRegions[field]) != 1 || strings.ContainsAny(result.FieldRegions[field][0].Text, ":：") {
 			t.Fatalf("field %s region=%+v", field, result.FieldRegions[field])
 		}
 	}

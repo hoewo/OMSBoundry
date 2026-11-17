@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-17 BF-342 实现完成、待发布：生产只读 SQL 确认截图对应的 21:35 新 Proposal 实际保存 `藿名称:河北雄安臻玺餐饮服务有限公司` 与 `墨芎名称:北京飞天橙子科技有限公司`，根因是原始 OCR 字符间有空格，旧规则未命中连续“名称”。Provider 已改为从首个冒号右侧提取名称，并修复全角冒号按字节截断产生乱码的边界；使用同一票号和噪声形态的自动回归、Invoice Recognition `go test ./...` 与 `go vet ./...` 已通过。下一步只发布 Invoice Recognition 镜像并执行 D1／健康检查；不改写既有候选。
+
 2026-11-17 BF-341 已完成并发布：标准 PDF 票面购销双方改为左右分栏提取并清理中文 OCR 字符间空格；Invoice Recognition 增加受保护的首页审阅图读取，Workbench 的 PDF 分支不再绕过标注层进入原生 `iframe`。后端 Go test／vet、受保护 PNG 路由、分栏噪声回归、Workbench Go test／vet、JS 语法、Node 310/310、P9 preflight、D1 composition、发布包、两次升级前备份、正式 D1 check、21/21 容器和真实 Chrome 既有 PDF 9 项标注均通过。未重新上传发票，因此新购销双方结果以自动回归为证，不外推为公网样本验收。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)
 
 2026-11-17 BF-340 已完成并发布：多项模式默认 1 条，添加第二条改为显式动作；Workbench 与 Finance Owner 区分“1 条可保存草稿”和“至少 2 条才可正式提交”。明细布局收敛为单一纵向工作流，名称／金额／日期在同一行，发票方式在其下连续展开，760px 以下单列。Finance／Workbench Go test 与 vet、Node 310/310、PostgreSQL 18.6 集成、P9 preflight、D1 composition、发布包、升级前联合备份、正式 D1 check、21/21 容器和公网资源摘要均通过。浏览器刷新后既有会话已过期，本轮没有代用户登录或执行报销写入。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)

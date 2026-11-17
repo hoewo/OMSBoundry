@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-17 BF-342（已接受／待发布）：标准发票的购销方名称以 OCR 行内第一个半角或全角冒号作为标签与字段值的稳定边界；冒号左侧即使混入纵排“购买方／销售方”、字符间空格或错字，也不得进入 `buyer_name`／`seller_name`。没有冒号时才兼容既有连续“名称”标签规则。该修复只影响新生成 Proposal，不静默改写 2026-11-17 21:35 已存在的 `needs_review` 候选或任何确认历史；Invoice Recognition、Evidence、Finance 与 Billing 的所有权不变。
+
 2026-11-17 BF-341（已接受／已发布）：PDF 发票校对不得直接使用浏览器原生 PDF `iframe`，因为 Provider 返回的万分比字段坐标无法可靠覆盖浏览器内部工具栏、缩放和滚动面。Invoice Recognition 增加同一 `tenant.read`／Proposal Scope 保护的只读首页审阅图端口；它重新打开并校验原 Evidence 精确版本后即时用 Poppler 栅格化，只流式返回 `image/png`、`no-store`，不保存第二份文件。Workbench 把该图送入既有缩放／拖动／标注查看器。标准票面购销双方必须先按左右半页选行，再清除“名称”标签噪声与中文 OCR 字符间空格，不能从包含双方的整行首尾猜测。既有 Proposal 不被静默重写，新上传识别按新 Provider 规则生成。公网 v1.109 已通过 D1 与真实 Chrome 只读验收。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)
 
 2026-11-17 BF-340（已接受／已发布）：多项发票模式进入编辑态时只创建 1 条明细，后续明细由用户显式点击“添加一项”；多项草稿允许 1～20 条，以支持逐项录入，正式提交仍要求 2～20 条且每条满足既有发票／Evidence 门禁。该规则同时由 Workbench 与 Internal Finance Requests Owner 执行，不能只靠页面提示。明细界面改为“标题—名称／金额／日期同一行—发票方式与状态”的单向工作流，取代 BF-339 的左右双列，不增加嵌套卡片、数据字段或新的事实 Owner。公网 Suite v1.106 已通过备份升级、D1 check、21/21 容器健康与资源摘要复验。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)

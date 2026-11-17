@@ -565,8 +565,8 @@ func fallbackPartyNames(lines []ocrLine) (ocrLine, ocrLine) {
 }
 
 func partyNameAfterColon(value string) string {
-	if index := strings.IndexAny(value, ":："); index >= 0 {
-		value = value[index+1:]
+	if suffix, ok := textAfterFirstColon(value); ok {
+		value = suffix
 	}
 	value = strings.Map(func(char rune) rune {
 		if unicode.IsSpace(char) || strings.ContainsRune("|;；,，'\"`′“”", char) {
@@ -735,7 +735,14 @@ func fallbackTopMatch(lines []ocrLine, pattern *regexp.Regexp) (string, ocrLine,
 
 func nameAfterLabel(value string) string {
 	compact := strings.TrimSpace(value)
-	if index := strings.LastIndex(compact, "名称"); index >= 0 {
+	// The vertical party-role text and the horizontal name label can be merged
+	// into one OCR row, and Tesseract may insert spaces or misread either label
+	// (for example, "藿 名 称 :" or "墨芎 名 称 :"). The first colon is the
+	// stable invoice-field boundary: label noise must never become part of the
+	// party name.
+	if suffix, ok := textAfterFirstColon(compact); ok {
+		compact = suffix
+	} else if index := strings.LastIndex(compact, "名称"); index >= 0 {
 		compact = compact[index+len("名称"):]
 	}
 	compact = normalizePartyName(strings.Trim(compact, " :："))
@@ -743,6 +750,15 @@ func nameAfterLabel(value string) string {
 		return ""
 	}
 	return compact
+}
+
+func textAfterFirstColon(value string) (string, bool) {
+	for index, char := range value {
+		if char == ':' || char == '：' {
+			return value[index+len(string(char)):], true
+		}
+	}
+	return value, false
 }
 
 func normalizePartyName(value string) string {
