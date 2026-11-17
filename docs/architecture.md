@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前工程架构
 
-2026-11-17 报销编辑工作区装配边界（BF-341，本地验证）：宽窗口、左右 segment、发票虚线边界与明细名实时同步只属于 Unified Workbench 表面；980px 以下可响应式堆叠。左右对应继续使用当前编辑态 Line 索引，保存时仍生成 Owner 已定义的稳定 Line ID 与 `InvoiceAssociation.line_id`，不得把视觉分栏变成新的持久化聚合、浏览器事实或跨应用关系。本次不改变 schema、API、Capability、Evidence 或任何 Owner。[本地验证](./reports/oms-reimbursement-wide-split-editor-local-validation-20261117.md)
+2026-11-17 报销编辑工作区装配边界（BF-341，已发布）：宽窗口、左右 segment、发票细虚线边界与明细名实时同步只属于 Unified Workbench 表面；980px 以下可响应式堆叠。左右对应继续使用当前编辑态 Line 索引，保存时仍生成 Owner 已定义的稳定 Line ID 与 `InvoiceAssociation.line_id`，不得把视觉分栏变成新的持久化聚合、浏览器事实或跨应用关系。本次不改变 schema、API、Capability、Evidence 或任何 Owner。该表面已随 Workbench v1.107 发布。[发布记录](./reports/oms-reimbursement-wide-split-editor-v107-publication-20261117.md)
 
 2026-11-17 报销草稿数量门禁（BF-340，已发布）：`details.invoice_entry_mode=multiple` 在 Create／Update 草稿阶段接受 1～20 条 Line，Submit 阶段才要求 2～20 条；单项模式仍恰好 1 条。数量门禁属于 Internal Finance Requests Owner，Workbench 只提供相同的前置反馈。该调整不改变 `details.lines[]`／`details.invoices[]` 结构、金额计算、发票一对零或一关系、Evidence 门禁、schema、Capability 或跨应用所有权；界面布局也不引入浏览器持久化事实。该边界已随 Suite v1.106 部署。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
