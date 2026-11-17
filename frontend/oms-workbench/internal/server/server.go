@@ -505,12 +505,12 @@ const pageHTML = `<!doctype html>
 {{if .SystemAdministrator}}{{template "oms-system-admin-body" .}}{{else}}<div class="ant-layout app-shell"><section class="ant-layout app-shell__main app-shell__main--workspace-detail"><main class="ant-layout-content app-shell__content app-shell__content--workspace-detail app-main"><div class="app-content"><section class="oa-view is-active" data-view="oms-v1" data-page-hydrated="true">{{template "oms-phase1-body" .}}</section></div></main></section></div>
 <script src="assets/oms-phase1-pagination.js?v=20261022.6" defer></script>
 <script src="assets/oms-phase1-capability.js?v=20261112.1" defer></script>
-<script src="assets/oms-phase1.js?v=20261117.2" defer></script>
+<script src="assets/oms-phase1.js?v=20261117.3" defer></script>
 <script src="assets/oms-phase1-internal-model.js?v=20261023.2" defer></script>
 <script src="assets/oms-phase1-internal.js?v=20261105.2" defer></script>
 <script src="assets/oms-phase1-payroll-owner.js?v=20261112.2" defer></script>
 <script src="assets/oms-phase1-finance-owner.js?v=20261117.1" defer></script>
-<script src="assets/oms-phase1-workforce.js?v=20261117.2" defer></script>
+<script src="assets/oms-phase1-workforce.js?v=20261117.3" defer></script>
 <script src="assets/oms-phase1-open-api.js?v=20261030.1" defer></script>
 <script src="assets/oms-phase1-identity.js?v=20261112.1" defer></script>
 <script src="assets/oms-phase1-feedback.js?v=20261112.1" defer></script>
