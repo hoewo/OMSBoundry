@@ -1,7 +1,7 @@
 # OMS 多项报销单行起步与布局收敛本地验证（BF-340）
 
 日期：2026-11-17（GMT+8）  
-状态：本地实现与回归通过；尚未登记为公网发布
+状态：本地实现与回归通过；后续已随 Suite v1.106 发布，见[发布记录](./oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
 ## 可验证结果
 
@@ -20,6 +20,7 @@
 - 一次性 PostgreSQL 18.6：`TEST_DATABASE_URL=... go test -count=1 -tags=integration ./internal/finance` 通过；临时容器已删除。
 - `git diff --check`：通过。
 
-## 尚未完成
+## 后续发布结果
 
-- 发布候选镜像／发布包、升级前备份、D1 check、容器健康、公网静态资源摘要和真实 Chrome 视觉复验尚未在本记录中宣称通过。
+- Finance Owner 与 Workbench v1.106 镜像、发布包、升级前备份、正式 D1 check、21/21 容器健康和公网资源摘要均通过。
+- 浏览器刷新后既有登录会话已过期；本轮未代用户输入登录凭据，未执行线上报销写入或登录后视觉验收。

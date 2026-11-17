@@ -1,8 +1,8 @@
 # OMSBizFoundry 验证入口
 
-## 多项报销单行起步与布局收敛（2026-11-17，本地实现）
+## 多项报销单行起步与布局收敛（2026-11-17，已发布）
 
-BF-340 必须验证：单项切换到多项后仍只有 1 条，只有点击“添加一项”才出现下一条；1 条多项可以 Create／Update 为草稿，但 Workbench 和 Finance Owner 都拒绝正式 Submit；2～20 条沿用逐明细发票、Evidence 与精确金额门禁。桌面端每条明细按标题、名称／金额／日期同一行、发票方式／状态连续展开，不能再出现左右双区竖分隔；760px 以下回落单列。当前 JavaScript 语法、专项 10/10、Workbench Node 310/310、两个受影响 Go module 的 test／vet、PostgreSQL 18.6 `integration` 和 `git diff --check` 已实际通过。[本地验证](./reports/oms-reimbursement-single-initial-line-layout-local-validation-20261117.md)
+BF-340 必须验证：单项切换到多项后仍只有 1 条，只有点击“添加一项”才出现下一条；1 条多项可以 Create／Update 为草稿，但 Workbench 和 Finance Owner 都拒绝正式 Submit；2～20 条沿用逐明细发票、Evidence 与精确金额门禁。桌面端每条明细按标题、名称／金额／日期同一行、发票方式／状态连续展开，不能再出现左右双区竖分隔；760px 以下回落单列。JavaScript 语法、专项 10/10、Workbench Node 310/310、两个受影响 Go module 的 test／vet、PostgreSQL 18.6 `integration`、P9 preflight、D1 composition、发布包、备份、正式 D1 check、21/21 容器及公网资源摘要已实际通过。浏览器刷新后到登录页，未代用户输入凭据或执行线上业务写入。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
 ## 报销模式切换与横向明细（2026-11-16，已发布）
 
