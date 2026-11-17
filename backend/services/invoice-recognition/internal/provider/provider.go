@@ -94,6 +94,7 @@ func (XML) Recognize(_ context.Context, document recognition.Document) (recognit
 		InvoiceCode:        pick(values, "invoicecode", "fpdm", "fapiaodaima"),
 		InvoiceNumber:      pick(values, "invoicenumber", "invoiceno", "fpdmhm", "fphm", "fapiaohaoma"),
 		IssuedOn:           normalizeDate(pick(values, "issuedate", "invoicedate", "kprq", "kaipiaoriqi")),
+		InvoiceItemName:    pick(values, "invoiceitemname", "itemname", "projectname", "xmmc", "spmc", "goodsname"),
 		SellerName:         pick(values, "sellername", "xsfmc", "salesname"),
 		SellerTaxID:        pick(values, "sellertaxid", "selleruscc", "xsfnsrsbh", "salestaxno"),
 		BuyerName:          pick(values, "buyername", "gmfmc", "purchasername"),
@@ -126,7 +127,8 @@ func (XML) Recognize(_ context.Context, document recognition.Document) (recognit
 	}
 	for field, present := range map[string]bool{
 		"invoice_code": candidate.InvoiceCode != "", "invoice_number": candidate.InvoiceNumber != "", "issued_on": candidate.IssuedOn != "",
-		"seller_name": candidate.SellerName != "", "seller_tax_id": candidate.SellerTaxID != "", "buyer_name": candidate.BuyerName != "", "buyer_tax_id": candidate.BuyerTaxID != "",
+		"invoice_item_name": candidate.InvoiceItemName != "",
+		"seller_name":       candidate.SellerName != "", "seller_tax_id": candidate.SellerTaxID != "", "buyer_name": candidate.BuyerName != "", "buyer_tax_id": candidate.BuyerTaxID != "",
 		"amount_excluding_tax_minor": candidate.AmountExcludingTaxMinor != nil, "tax_amount_minor": candidate.TaxAmountMinor != nil, "total_amount_minor": candidate.TotalAmountMinor != nil, "currency": true,
 	} {
 		if present {

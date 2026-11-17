@@ -12,7 +12,7 @@ test('internal navigation exposes attendance and invoice recognition without rep
   for(const marker of ['data-oms-v1-tab="members"','data-oms-v1-tab="attendance"','data-oms-v1-tab="payroll"','data-oms-v1-tab="finance"','data-oms-v1-tab="invoice-recognition"'])assert.ok(html.includes(marker),`missing ${marker}`);
   assert.match(shell,/attendance:'考勤与请假'/);
   assert.match(shell,/'invoice-recognition':'发票识别'/);
-  assert.match(server,/oms-phase1-workforce\.js\?v=20261117\.3/);
+  assert.match(server,/oms-phase1-workforce\.js\?v=20261117\.4/);
 });
 
 test('attendance journey keeps policy, facts, immutable summary and explicit payroll application separate',()=>{
@@ -53,6 +53,9 @@ test('invoice recognition uploads a trusted evidence version and requires review
   assert.ok(workforce.includes('recognizeForFinance'));
   assert.ok(workforce.includes('recognizeForPayment:recognizeForFinance'));
   assert.ok(workforce.includes("reviewField('发票代码（选填）'"));
+  assert.ok(workforce.includes("reviewField('项目名称（票面明细）','invoice_item_name'"));
+  assert.ok(workforce.includes("invoice_item_name:'项目名称（票面明细）'"));
+  assert.ok(workforce.includes("invoice_item_name:String(data.get('invoice_item_name')"));
   assert.ok(workforce.indexOf("reviewField('发票号码'")<workforce.indexOf("reviewField('发票代码（选填）'"));
   assert.doesNotMatch(workforce,/reviewField\('发票代码','invoice_code'.*required:paymentRequired/);
   for(const marker of ['data-invoice-review-workspace','data-recognition-box','field_regions','previewFile','layout:\'recognition\'','recognitionWarningText','data-invoice-viewer','data-invoice-zoom','bindInvoiceViewer','data-recognition-region-field'])assert.ok(workforce.includes(marker),`missing review marker ${marker}`);

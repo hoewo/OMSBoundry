@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-17 BF-343 本地实现完成、待发布：Candidate、XML 映射、本地图片／PDF OCR、区域置信度、Workbench 校对、确认、搜索和 CSV／JSON 导出已贯通可选 `invoice_item_name`。专项 TSV 用“项目名称／规格型号”表头与同一行右侧数量、金额验证只得到 `*生产生活服务*餐饮服务`，不会吞入后续列；Contract、Invoice Recognition 与 Workbench 专项测试通过。下一步构建 Invoice Recognition／Workbench 候选镜像、D1 发布并由用户用原 PDF 重新上传复验。[本地验证](./reports/oms-invoice-item-name-local-validation-20261117.md)
+
 2026-11-17 BF-342 已完成并发布：生产只读 SQL 确认截图对应的 21:35 新 Proposal 实际保存 `藿名称:河北雄安臻玺餐饮服务有限公司` 与 `墨芎名称:北京飞天橙子科技有限公司`，根因是原始 OCR 字符间有空格，旧规则未命中连续“名称”。Provider 已改为从首个冒号右侧提取名称，并修复全角冒号按字节截断产生乱码的边界；同票号噪声自动回归、Invoice Recognition Go test／vet、release bundle、升级前联合备份、正式 D1 check、镜像摘要和 21/21 长运行容器均通过。既有候选未改写；真实重新上传由用户后续验证。[发布记录](./reports/oms-invoice-party-name-boundary-v110-publication-20261117.md)
 
 2026-11-17 BF-341 已完成并发布：标准 PDF 票面购销双方改为左右分栏提取并清理中文 OCR 字符间空格；Invoice Recognition 增加受保护的首页审阅图读取，Workbench 的 PDF 分支不再绕过标注层进入原生 `iframe`。后端 Go test／vet、受保护 PNG 路由、分栏噪声回归、Workbench Go test／vet、JS 语法、Node 310/310、P9 preflight、D1 composition、发布包、两次升级前备份、正式 D1 check、21/21 容器和真实 Chrome 既有 PDF 9 项标注均通过。未重新上传发票，因此新购销双方结果以自动回归为证，不外推为公网样本验收。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)

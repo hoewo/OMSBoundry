@@ -1,13 +1,17 @@
 package invoicerecognitioncontract
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func minor(value int64) *int64 { return &value }
 
 func TestConfirmedCandidateRequiresExactArithmeticAndIdentity(t *testing.T) {
 	valid := Candidate{
 		InvoiceCode: "011001900111", InvoiceNumber: "12345678", IssuedOn: "2026-11-05",
-		SellerTaxID: "91110000123456789X", BuyerTaxID: "91110000987654321A",
+		InvoiceItemName: "*生产生活服务*餐饮服务",
+		SellerTaxID:     "91110000123456789X", BuyerTaxID: "91110000987654321A",
 		AmountExcludingTaxMinor: minor(10000), TaxAmountMinor: minor(1300), TotalAmountMinor: minor(11300),
 		Currency: "CNY", FieldConfidenceBPS: map[string]int64{"invoice_number": 9850},
 	}
@@ -23,6 +27,11 @@ func TestConfirmedCandidateRequiresExactArithmeticAndIdentity(t *testing.T) {
 	invalid.InvoiceNumber = ""
 	if err := ValidateCandidate(invalid, true); err == nil {
 		t.Fatal("incomplete confirmed invoice identity accepted")
+	}
+	invalid = valid
+	invalid.InvoiceItemName = strings.Repeat("项", 501)
+	if err := ValidateCandidate(invalid, true); err == nil {
+		t.Fatal("oversized invoice item name accepted")
 	}
 }
 

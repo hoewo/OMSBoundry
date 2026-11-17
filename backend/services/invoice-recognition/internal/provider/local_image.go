@@ -281,7 +281,7 @@ func invoiceFromTSV(raw string) (recognition.ProviderResult, error) {
 		return recognition.ProviderResult{}, err
 	}
 	result := recognition.ProviderResult{
-		ProviderKey: "local-tesseract", ProviderModel: "chi_sim+eng", ProviderRevision: "tsv-v2",
+		ProviderKey: "local-tesseract", ProviderModel: "chi_sim+eng", ProviderRevision: "tsv-v3",
 		Candidate:    contract.Candidate{Currency: "CNY", FieldConfidenceBPS: map[string]int64{"currency": 10000}},
 		FieldRegions: map[string][]contract.FieldRegion{},
 	}
@@ -306,6 +306,10 @@ func invoiceFromTSV(raw string) (recognition.ProviderResult, error) {
 	setText("invoice_code", []string{"发票代码", "票据代码"}, invoiceCodeRE, &result.Candidate.InvoiceCode, nil)
 	setText("invoice_number", []string{"发票号码", "发票号", "票据号码"}, invoiceNumberRE, &result.Candidate.InvoiceNumber, nil)
 	setText("issued_on", []string{"开票日期", "出票日期", "日期"}, dateRE, &result.Candidate.IssuedOn, normalizeOCRDate)
+	if value, line, ok := invoiceItemNameLine(lines); ok {
+		result.Candidate.InvoiceItemName = value
+		setRegion(&result, "invoice_item_name", line, value)
+	}
 
 	nameLines := labeledNameLines(spatialLines)
 	buyerNameLine, sellerNameLine := selectPartyLines(nameLines)
@@ -429,6 +433,7 @@ func localOCRFieldLabel(field string) string {
 		"invoice_code":               "发票代码",
 		"invoice_number":             "发票号码",
 		"issued_on":                  "开票日期",
+		"invoice_item_name":          "项目名称（票面明细）",
 		"seller_name":                "销售方",
 		"seller_tax_id":              "销售方税号",
 		"buyer_name":                 "购买方",
@@ -441,6 +446,104 @@ func localOCRFieldLabel(field string) string {
 		return label
 	}
 	return "识别字段"
+}
+
+func invoiceItemNameLine(lines []ocrLine) (string, ocrLine, bool) {
+	var header ocrLine
+	for _, line := range lines {
+		if line.pageWidth <= 0 || line.pageHeight <= 0 || line.top < line.pageHeight*20/100 || line.top > line.pageHeight*75/100 {
+			continue
+		}
+		if strings.Contains(compactOCR(line.text), "项目名称") {
+			header = line
+			break
+		}
+	}
+	if header.text == "" {
+		return "", ocrLine{}, false
+	}
+
+	// Prefer the next standard table column as the item-name boundary. The
+	// bounded fallback prevents quantities, amounts and tax rates from being
+	// merged into the recognized name when that header is damaged.
+	columnRight := header.pageWidth * 40 / 100
+	bandTop, bandBottom := header.top-header.pageHeight/100, header.bot+header.pageHeight/100
+	for _, line := range lines {
+		if line.bot < bandTop || line.top > bandBottom {
+			continue
+		}
+		for _, word := range line.words {
+			compact := compactOCR(word.text)
+			if word.left > header.left && (strings.Contains(compact, "规格型号") || strings.HasPrefix(compact, "规格") || compact == "规") {
+				columnRight = word.left
+				break
+			}
+		}
+	}
+	if columnRight <= header.left {
+		columnRight = header.pageWidth * 40 / 100
+	}
+
+	maxTop := min(header.pageHeight*82/100, header.bot+header.pageHeight*28/100)
+	for _, line := range lines {
+		if line.top <= header.bot || line.top > maxTop {
+			continue
+		}
+		words := make([]ocrWord, 0, len(line.words))
+		for _, word := range line.words {
+			if word.left+word.width/2 < columnRight {
+				words = append(words, word)
+			}
+		}
+		if len(words) == 0 {
+			continue
+		}
+		itemLine := lineFromWords(line.pageWidth, line.pageHeight, words)
+		value := normalizeInvoiceItemName(itemLine.text)
+		if value == "" {
+			continue
+		}
+		return value, itemLine, true
+	}
+	return "", ocrLine{}, false
+}
+
+func normalizeInvoiceItemName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	compact := compactOCR(value)
+	if strings.Contains(compact, "项目名称") || strings.Contains(compact, "规格型号") || strings.Contains(compact, "价税合计") || compact == "合计" {
+		return ""
+	}
+	runes := []rune(value)
+	result := make([]rune, 0, len(runes))
+	for index, char := range runes {
+		if !unicode.IsSpace(char) {
+			result = append(result, char)
+			continue
+		}
+		previous, next := rune(0), rune(0)
+		if len(result) != 0 {
+			previous = result[len(result)-1]
+		}
+		for cursor := index + 1; cursor < len(runes); cursor++ {
+			if !unicode.IsSpace(runes[cursor]) {
+				next = runes[cursor]
+				break
+			}
+		}
+		if previous != 0 && next != 0 && previous != '*' && next != '*' && !unicode.Is(unicode.Han, previous) && !unicode.Is(unicode.Han, next) && (len(result) == 0 || result[len(result)-1] != ' ') {
+			result = append(result, ' ')
+		}
+	}
+	value = strings.TrimSpace(string(result))
+	compact = compactOCR(value)
+	if len([]rune(value)) < 2 || len([]rune(value)) > 500 || amountRE.FindString(compact) == compact || taxIDRE.FindString(compact) == compact {
+		return ""
+	}
+	return value
 }
 
 func parseTSV(raw string) ([]ocrLine, error) {

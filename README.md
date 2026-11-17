@@ -1,5 +1,7 @@
 # OMSBizFoundry
 
+当前发票票面项目名称识别（BF-343，本地已实现、待发布）：Invoice Recognition 候选新增可选 `invoice_item_name`，本地 PDF／图片 OCR 从“项目名称”表头下的第一条明细提取名称，并用下一列“规格型号”或受限列宽阻止数量、金额、税率串入。Workbench 以“项目名称（票面明细）”显示、标注和人工校对，确认与导出保留该字段；它不是 OMS 经营项目名称，也不自动关联 Project。[本地验证](./docs/reports/oms-invoice-item-name-local-validation-20261117.md)
+
 当前发票购销方名称边界修复（BF-342，已发布）：PDF OCR 把纵排“购买方／销售方”和横排“名称”合并并错识为“藿 名 称／墨芎 名 称”时，识别服务现在只取第一个半角或全角冒号右侧作为公司名称，并继续清理中文分隔空格；标签噪声不再进入候选或标注文本。公网 Suite v1.110、D1 check 与 21/21 长运行容器健康通过；既有错误 Proposal 保持审计原值，删除后重新上传才使用新规则。[发布记录](./docs/reports/oms-invoice-party-name-boundary-v110-publication-20261117.md)
 
 当前多发票模式切换与明细布局（BF-339，已发布）：新建或尚未保存的多项明细切回单项时，不再被占位明细阻断；额外明细在当前编辑会话内暂存，再切回多项即可恢复。已保存多项明细继续因审计边界禁止压缩。每条明细改为左侧基本字段、右侧发票工作区的扁平双列，窄屏回落单列，不改变 Finance API、schema 或业务事实。公网 Workbench v1.105、D1 check、21/21 容器、静态资源摘要和真实 Chrome 可逆切换均通过，未保存业务数据。[发布记录](./docs/reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)

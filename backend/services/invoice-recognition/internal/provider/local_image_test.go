@@ -48,6 +48,9 @@ func TestLocalOCRWarningsUseUserFacingFieldLabels(t *testing.T) {
 	if got := localOCRFieldLabel("tax_amount_minor"); got != "税额" {
 		t.Fatalf("tax amount label=%q", got)
 	}
+	if got := localOCRFieldLabel("invoice_item_name"); got != "项目名称（票面明细）" {
+		t.Fatalf("invoice item label=%q", got)
+	}
 	if got := localOCRFieldLabel("unknown_internal_key"); got != "识别字段" {
 		t.Fatalf("unknown field label=%q", got)
 	}
@@ -153,6 +156,34 @@ func TestInvoiceFromTSVDropsNoisyVerticalRoleTextBeforePartyNameColon(t *testing
 		if len(result.FieldRegions[field]) != 1 || strings.ContainsAny(result.FieldRegions[field][0].Text, ":：") {
 			t.Fatalf("field %s region=%+v", field, result.FieldRegions[field])
 		}
+	}
+}
+
+func TestInvoiceFromTSVRecognizesInvoiceItemNameWithoutFollowingColumns(t *testing.T) {
+	tsv := "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
+		"1\t1\t0\t0\t0\t0\t0\t0\t2000\t1200\t-1\t\n" +
+		"5\t1\t1\t1\t1\t1\t1220\t90\t180\t40\t96\t发票号码：\n" +
+		"5\t1\t1\t1\t1\t2\t1420\t90\t400\t40\t99\t26132000003698822386\n" +
+		"5\t1\t2\t1\t1\t1\t100\t470\t180\t40\t96\t项目名称\n" +
+		"5\t1\t2\t1\t1\t2\t720\t470\t180\t40\t97\t规格型号\n" +
+		"5\t1\t2\t1\t1\t3\t1080\t470\t100\t40\t97\t单位\n" +
+		"5\t1\t2\t1\t2\t1\t100\t530\t160\t42\t94\t*生产生活服务*\n" +
+		"5\t1\t2\t1\t2\t2\t280\t530\t240\t42\t96\t餐饮服务\n" +
+		"5\t1\t2\t1\t2\t3\t1120\t530\t120\t42\t98\t1\n" +
+		"5\t1\t2\t1\t2\t4\t1400\t530\t180\t42\t98\t330.69\n"
+	result, err := invoiceFromTSV(tsv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Candidate.InvoiceItemName != "*生产生活服务*餐饮服务" {
+		t.Fatalf("invoice item name=%q", result.Candidate.InvoiceItemName)
+	}
+	regions := result.FieldRegions["invoice_item_name"]
+	if len(regions) != 1 || regions[0].Text != "*生产生活服务*餐饮服务" || regions[0].LeftBPS != 500 || regions[0].WidthBPS >= 3500 {
+		t.Fatalf("invoice item regions=%+v", regions)
+	}
+	if result.Candidate.FieldConfidenceBPS["invoice_item_name"] == 0 {
+		t.Fatal("invoice item confidence is missing")
 	}
 }
 

@@ -282,6 +282,7 @@ func normalizeCandidate(value contract.Candidate) contract.Candidate {
 	value.InvoiceCode = strings.ToUpper(strings.TrimSpace(value.InvoiceCode))
 	value.InvoiceNumber = strings.ToUpper(strings.TrimSpace(value.InvoiceNumber))
 	value.IssuedOn = strings.TrimSpace(value.IssuedOn)
+	value.InvoiceItemName = strings.TrimSpace(value.InvoiceItemName)
 	value.SellerName = strings.TrimSpace(value.SellerName)
 	value.SellerTaxID = strings.ToUpper(strings.TrimSpace(value.SellerTaxID))
 	value.BuyerName = strings.TrimSpace(value.BuyerName)

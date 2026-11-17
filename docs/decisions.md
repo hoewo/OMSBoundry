@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-17 BF-343（已接受／本地已实现／待发布）：发票识别候选增加可选 `invoice_item_name`，它只表示票面明细表“项目名称”首条值，不得解释为 OMS 经营项目或自动关联 Project。图片／PDF OCR 只在可靠定位“项目名称”表头后读取其下第一条明细，并以“规格型号”列或票面宽度上限隔离右侧数量、金额和税率；无法可靠定位时保持空白。Workbench 必须同时展示字段、置信度、原图标注和人工可改值，并在确认与 CSV／JSON 导出中保留；历史 Proposal 不改写。[本地验证](./reports/oms-invoice-item-name-local-validation-20261117.md)
+
 2026-11-17 BF-342（已接受／已发布）：标准发票的购销方名称以 OCR 行内第一个半角或全角冒号作为标签与字段值的稳定边界；冒号左侧即使混入纵排“购买方／销售方”、字符间空格或错字，也不得进入 `buyer_name`／`seller_name`。没有冒号时才兼容既有连续“名称”标签规则。该修复只影响新生成 Proposal，不静默改写 2026-11-17 21:35 已存在的 `needs_review` 候选或任何确认历史；Invoice Recognition、Evidence、Finance 与 Billing 的所有权不变。公网 Suite v1.110 已通过 D1 与健康检查。[发布记录](./reports/oms-invoice-party-name-boundary-v110-publication-20261117.md)
 
 2026-11-17 BF-341（已接受／已发布）：PDF 发票校对不得直接使用浏览器原生 PDF `iframe`，因为 Provider 返回的万分比字段坐标无法可靠覆盖浏览器内部工具栏、缩放和滚动面。Invoice Recognition 增加同一 `tenant.read`／Proposal Scope 保护的只读首页审阅图端口；它重新打开并校验原 Evidence 精确版本后即时用 Poppler 栅格化，只流式返回 `image/png`、`no-store`，不保存第二份文件。Workbench 把该图送入既有缩放／拖动／标注查看器。标准票面购销双方必须先按左右半页选行，再清除“名称”标签噪声与中文 OCR 字符间空格，不能从包含双方的整行首尾猜测。既有 Proposal 不被静默重写，新上传识别按新 Provider 规则生成。公网 v1.109 已通过 D1 与真实 Chrome 只读验收。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)

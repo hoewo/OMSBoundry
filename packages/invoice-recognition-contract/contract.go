@@ -31,7 +31,8 @@ var supportedMIMETypes = map[string]bool{
 
 var recognizedFields = map[string]bool{
 	"invoice_code": true, "invoice_number": true, "issued_on": true,
-	"seller_name": true, "seller_tax_id": true, "buyer_name": true,
+	"invoice_item_name": true,
+	"seller_name":       true, "seller_tax_id": true, "buyer_name": true,
 	"buyer_tax_id": true, "amount_excluding_tax_minor": true,
 	"tax_amount_minor": true, "total_amount_minor": true, "currency": true,
 }
@@ -48,6 +49,7 @@ type Candidate struct {
 	InvoiceCode             string           `json:"invoice_code,omitempty"`
 	InvoiceNumber           string           `json:"invoice_number,omitempty"`
 	IssuedOn                string           `json:"issued_on,omitempty"`
+	InvoiceItemName         string           `json:"invoice_item_name,omitempty"`
 	SellerName              string           `json:"seller_name,omitempty"`
 	SellerTaxID             string           `json:"seller_tax_id,omitempty"`
 	BuyerName               string           `json:"buyer_name,omitempty"`
@@ -152,6 +154,9 @@ func ValidateCandidate(value Candidate, confirmed bool) error {
 		if _, err := time.Parse("2006-01-02", value.IssuedOn); err != nil {
 			return fmt.Errorf("invoice issue date is invalid")
 		}
+	}
+	if len([]rune(value.InvoiceItemName)) > 500 {
+		return fmt.Errorf("invoice item name is too long")
 	}
 	for name, taxID := range map[string]string{"seller": value.SellerTaxID, "buyer": value.BuyerTaxID} {
 		if taxID != "" && !taxIDPattern.MatchString(taxID) {

@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前讨论基线
 
+2026-11-17 发票票面项目名称基线（BF-343，本地已实现、待发布）：`invoice_item_name` 是 Invoice Recognition 的可选候选字段，只保存发票明细表首条“项目名称”票面值和对应区域／置信度。它与 OMS 经营项目身份完全不同，不能按文字自动关联 Project。识别不到可靠表头或首行时留空并交给人工校对；历史候选保持不变。[本地验证](./reports/oms-invoice-item-name-local-validation-20261117.md)
+
 2026-11-17 发票名称字段边界基线（BF-342，已发布）：票面纵排角色字与横排“名称”被 Tesseract 合并后，标签可能成为“藿 名 称”或“墨芎 名 称”等噪声。只要该候选行存在冒号，公司名称必须只取第一个冒号右侧并清理中文分隔空格；不得依赖“名称”二字必须连续且正确。历史 Proposal 保持可追溯，新上传才采用新规则。公网 Suite v1.110 已运行。[发布记录](./reports/oms-invoice-party-name-boundary-v110-publication-20261117.md)
 
 2026-11-17 PDF 发票识别校对基线（BF-341，已发布）：票面坐标存在不等于用户能看到标注；PDF 必须先形成与 OCR 同页坐标系一致的受控首页图像，再复用图片查看器覆盖区域。购销双方按票面左买右卖分栏提取，中文名称移除 OCR 分隔空格，但不改写历史候选。审阅图只读、短生命周期、`no-store`，原文件仍唯一归 Evidence Service。公网 v1.109 已运行。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)
