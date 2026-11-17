@@ -1,10 +1,10 @@
 # OMSBizFoundry 验证入口
 
-## PDF 发票购销双方与标注恢复（2026-11-17，待发布）
+## PDF 发票购销双方与标注恢复（2026-11-17，已发布）
 
 BF-341 必须验证同一 OCR 行同时含购买方／销售方时，整行不得被选为购买方，左右虚拟行分别形成买方／卖方名称和区域；中文字符间 OCR 空格与“名称”标签噪声清除，英文单词间合法空格保留。`review-image` 必须重新校验原 Evidence 大小与 SHA-256，沿现有 Capability／Proposal Scope 返回 `image/png` 和 `no-store`，无凭证拒绝。Workbench 对 PDF 必须创建会话 Blob URL并使用现有标注查看器，点／悬停字段双向定位，关闭时撤销；不得回退为原生 `iframe`。既有候选只恢复可视标注，不静默改写 Candidate；新候选才使用新解析规则。
 
-本地 Invoice Recognition `go test ./...`／`go vet ./...`、Workbench `go test ./...`／`go vet ./...`、JS 语法、Node 310/310、P9 preflight 与 D1 composition 已实际通过。生产只读 SQL 已确认截图对应最新 Proposal 保存了 9 组 `field_regions`，但旧买方值包含整行双方名称，证明问题分别位于 PDF 展示分支和左右选行；没有修改 Proposal 或业务数据。[本地验证](./reports/oms-pdf-invoice-recognition-annotation-local-validation-20261117.md)
+本地 Invoice Recognition `go test ./...`／`go vet ./...`、Workbench `go test ./...`／`go vet ./...`、JS 语法、Node 310/310、P9 preflight 与 D1 composition 已实际通过。生产只读 SQL 已确认截图对应最新 Proposal 保存了 9 组 `field_regions`，但旧买方值包含整行双方名称，证明问题分别位于 PDF 展示分支和左右选行；没有修改 Proposal 或业务数据。公网 v1.109 的 D1 check、21/21 容器、资源摘要与真实 Chrome 复验通过：既有 PDF 使用会话 Blob 图片查看器并显示 9 个可交互标注，不再进入 PDF `iframe`。未重新上传或确认发票，故新解析结果仍以自动回归为证。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)
 
 ## 多项报销单行起步与布局收敛（2026-11-17，已发布）
 

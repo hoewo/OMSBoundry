@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前工程架构
 
-2026-11-17 PDF 识别审阅边界（BF-341，待发布）：Invoice Recognition 的 `GET /api/v1/proposals/{proposal_id}/review-image` 复用 `invoice-recognition.tenant.read` 与 Proposal Resource Scope，重新经 Evidence 端口核对 File ID／Version、大小和 SHA-256，并由本地 Provider 即时栅格化首页后流式返回 PNG。响应 `no-store`，服务不持久化派生图；Workbench 只创建会话内 Blob URL，关闭弹窗即撤销。该只读端口不改变 Evidence 字节所有权、Proposal／Candidate schema、人工确认、Gateway／IAM 链或任何下游业务事实。
+2026-11-17 PDF 识别审阅边界（BF-341，已发布）：Invoice Recognition 的 `GET /api/v1/proposals/{proposal_id}/review-image` 复用 `invoice-recognition.tenant.read` 与 Proposal Resource Scope，重新经 Evidence 端口核对 File ID／Version、大小和 SHA-256，并由本地 Provider 即时栅格化首页后流式返回 PNG。响应 `no-store`，服务不持久化派生图；Workbench 只创建会话内 Blob URL，关闭弹窗即撤销。该只读端口不改变 Evidence 字节所有权、Proposal／Candidate schema、人工确认、Gateway／IAM 链或任何下游业务事实。公网 v1.109 已用既有 PDF 只读验证 9 项标注。[发布记录](./reports/oms-pdf-invoice-recognition-annotation-v109-publication-20261117.md)
 
 2026-11-17 报销草稿数量门禁（BF-340，已发布）：`details.invoice_entry_mode=multiple` 在 Create／Update 草稿阶段接受 1～20 条 Line，Submit 阶段才要求 2～20 条；单项模式仍恰好 1 条。数量门禁属于 Internal Finance Requests Owner，Workbench 只提供相同的前置反馈。该调整不改变 `details.lines[]`／`details.invoices[]` 结构、金额计算、发票一对零或一关系、Evidence 门禁、schema、Capability 或跨应用所有权；界面布局也不引入浏览器持久化事实。该边界已随 Suite v1.106 部署。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
