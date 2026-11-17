@@ -1,5 +1,9 @@
 # OMSBizFoundry 验证入口
 
+## 报销宽窗双区编辑（2026-11-17，本地验证）
+
+BF-341 必须验证：桌面报销弹窗宽度上限为 1180px，费用明细在左、全部发票编辑／识别区在右；每张发票有一个完整虚线边界，页面不再重复“每条明细关联一张发票”“选择录入方式”等文案；明细名称输入实时同步到对应发票标题；980px 以下回落单列。仍须保留多项默认 1 条、可逆切换、草稿／提交数量门禁、逐明细金额、Evidence 与强重复校验。已实际通过 JavaScript 语法、专项 10/10、Workbench Node 310/310、Go test／vet、P9 preflight、D1 composition 与 `git diff --check`；尚未登记公网发布或登录后视觉写旅程。[本地验证](./reports/oms-reimbursement-wide-split-editor-local-validation-20261117.md)
+
 ## 多项报销单行起步与布局收敛（2026-11-17，已发布）
 
 BF-340 必须验证：单项切换到多项后仍只有 1 条，只有点击“添加一项”才出现下一条；1 条多项可以 Create／Update 为草稿，但 Workbench 和 Finance Owner 都拒绝正式 Submit；2～20 条沿用逐明细发票、Evidence 与精确金额门禁。桌面端每条明细按标题、名称／金额／日期同一行、发票方式／状态连续展开，不能再出现左右双区竖分隔；760px 以下回落单列。JavaScript 语法、专项 10/10、Workbench Node 310/310、两个受影响 Go module 的 test／vet、PostgreSQL 18.6 `integration`、P9 preflight、D1 composition、发布包、备份、正式 D1 check、21/21 容器及公网资源摘要已实际通过。浏览器刷新后到登录页，未代用户输入凭据或执行线上业务写入。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
