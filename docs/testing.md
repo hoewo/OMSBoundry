@@ -1,8 +1,8 @@
 # OMSBizFoundry 验证入口
 
-## 发票票面项目名称识别（2026-11-17，本地已实现、待发布）
+## 发票票面项目名称识别（2026-11-17，已发布）
 
-BF-343 必须验证 `invoice_item_name` 在契约中是可选且最多 500 字符；本地 OCR 只有定位到“项目名称”表头后才读取下一条明细，并用“规格型号”列／有界列宽排除同行数量与金额。候选值、`field_regions.invoice_item_name[].text`、置信度、Workbench 中文字段、确认请求和 CSV／JSON 导出必须一致；缺失时不得猜 OMS 项目。当前 Contract、Invoice Recognition 全量 Go、Workbench 专项 Node 与 Server Go 已通过；全量 Workbench Node、vet、release bundle、D1 与公网原 PDF 复验待候选继续执行。[本地验证](./reports/oms-invoice-item-name-local-validation-20261117.md)
+BF-343 必须验证 `invoice_item_name` 在契约中是可选且最多 500 字符；本地 OCR 只有定位到“项目名称”表头后才读取下一条明细，并用“规格型号”列／有界列宽排除同行数量与金额。候选值、`field_regions.invoice_item_name[].text`、置信度、Workbench 中文字段、确认请求和 CSV／JSON 导出必须一致；缺失时不得猜 OMS 项目。Contract、Invoice Recognition 全量 Go test／vet、Workbench JavaScript syntax、Node 310/310、Server Go test／vet、release bundle、候选 IAM preflight、联合备份 `20261117T142624Z`、正式 D1 check、21/21 长运行容器、运行镜像摘要与 Workbench 资源标记均已通过。发布后未代用户上传或确认发票，真实原 PDF 仍须重新上传复验；历史 Proposal 不改写。[发布记录](./reports/oms-invoice-item-name-v111-publication-20261117.md)
 
 ## 发票购销方名称标签噪声（2026-11-17，已发布）
 

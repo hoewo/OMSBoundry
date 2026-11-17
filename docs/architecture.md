@@ -1,6 +1,6 @@
 # OMSBizFoundry 当前工程架构
 
-2026-11-17 发票明细项目名称边界（BF-343，本地已实现、待发布）：Invoice Recognition v1 Candidate 以兼容新增字段 `invoice_item_name` 保存首条票面明细名称；Provider 从“项目名称”表头下的第一条明细生成值、区域与置信度，Workbench 只提供人工校对和交付。该字段不是 Project ID／名称，不触发 Project 查询、匹配或写入；Evidence 仍拥有原件，Finance／Billing 仍拥有消费时快照与正式业务事实。JSONB Proposal／Confirmation 无需 migration，旧记录自然缺省。[本地验证](./reports/oms-invoice-item-name-local-validation-20261117.md)
+2026-11-17 发票明细项目名称边界（BF-343，已发布）：Invoice Recognition v1 Candidate 以兼容新增字段 `invoice_item_name` 保存首条票面明细名称；Provider 从“项目名称”表头下的第一条明细生成值、区域与置信度，Workbench 只提供人工校对和交付。该字段不是 Project ID／名称，不触发 Project 查询、匹配或写入；Evidence 仍拥有原件，Finance／Billing 仍拥有消费时快照与正式业务事实。JSONB Proposal／Confirmation 无需 migration，旧记录自然缺省。公网 Suite v1.111 保持既有 Nginx→Gateway→IAM→Owner 装配，D1 check 与 21/21 长运行容器通过。[发布记录](./reports/oms-invoice-item-name-v111-publication-20261117.md)
 
 2026-11-17 OCR 购销方字段边界（BF-342，已发布）：`invoiceFromTSV` 仍按 BF-341 的票面左右分栏选择购销方行；字段值解析统一以第一个 Unicode 冒号分隔标签和值，并按 rune 宽度越过半角／全角冒号，避免 UTF-8 字节中间截断。区域文本保存清理后的候选值，区域坐标仍覆盖原票面行用于人工核对。该局部 Provider 规则不改变 Proposal schema、HTTP／IAM 契约、Evidence 引用或下游正式事实。公网 Invoice Recognition v1.110 已运行。[发布记录](./reports/oms-invoice-party-name-boundary-v110-publication-20261117.md)
 

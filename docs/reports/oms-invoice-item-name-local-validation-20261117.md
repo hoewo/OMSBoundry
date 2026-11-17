@@ -2,7 +2,7 @@
 
 日期：2026-11-17（GMT+8）  
 事项：BF-343  
-状态：本地已实现；待发布
+状态：本地已实现；已随 Suite v1.111 发布
 
 ## 问题与结果
 
@@ -22,3 +22,5 @@
 - 当前只提取首条票面项目名称；多明细结构化数组不在本批。
 - 不按名称查询、创建或关联 Project，不自动创建报销、付款或 Billing 票据。
 - 历史 Proposal／Confirmation 保持原值；部署后必须重新上传原 PDF 才会使用新 Provider revision。
+
+[公网发布记录](./oms-invoice-item-name-v111-publication-20261117.md)
