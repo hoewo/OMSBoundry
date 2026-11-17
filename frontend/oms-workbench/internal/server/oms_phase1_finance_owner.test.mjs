@@ -11,7 +11,7 @@ const styles=readFileSync(new URL('./oms_phase1.css',import.meta.url),'utf8');
 test('formal finance owner replaces browser-local finance when assembled',()=>{
   assert.match(local,/const ownerFinance=Boolean\(ownerAPI\?\.app\?\.\('internal-finance-requests'\)\)/);
   assert.match(local,/if\(!ownerFinance\)renderFinance\(\)/);
-  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261117\.2/);
+  assert.match(server,/oms-phase1-finance-owner\.js\?v=20261117\.1/);
 });
 
 test('multi-invoice drafts start with one line and can return to single mode without losing reversible input',()=>{
@@ -26,11 +26,9 @@ test('multi-invoice drafts start with one line and can return to single mode wit
   ])assert.ok(owner.includes(marker),`missing reversible mode marker ${marker}`);
   assert.doesNotMatch(owner,/stashed\.length\?stashed:\[emptyReimbursementLine\(1\)\]/);
   assert.match(owner,/next\.entry_mode==='multiple'&&next\.save_mode==='submit'&&next\.lines\.length<2/);
-  assert.ok(styles.includes('.oms-v1__dialog.is-reimbursement{width:min(1180px,calc(100vw - 48px))}'),'reimbursement dialog must use the wide workspace');
-  assert.ok(styles.includes('grid-template-columns:minmax(350px,.82fr) minmax(500px,1.18fr)'),'details and invoices must form distinct left and right segments');
-  assert.ok(styles.includes('border:1px dashed #afc4b8'),'each invoice workspace must have one dashed boundary');
-  assert.match(server,/oms-phase1\.css\?v=20261117\.2/);
-  assert.match(server,/oms-phase1\.js\?v=20261117\.2/);
+  assert.ok(styles.includes('grid-template-columns:minmax(0,1.35fr) minmax(140px,.62fr) minmax(170px,.78fr)'),'detail name, amount and date must share one horizontal row');
+  assert.ok(styles.includes('border-top:1px dashed #d8dfdb;border-radius:0;background:transparent'),'invoice workspace must follow the detail fields without nested card chrome');
+  assert.match(server,/oms-phase1\.css\?v=20261117\.1/);
 });
 
 test('reimbursement requests support one request-local invoice per detail line',()=>{
@@ -40,16 +38,13 @@ test('reimbursement requests support one request-local invoice per detail line',
     '报销内容 *',
     '明细名称（选填）',
     "'内容'+(index+1)",
-    'data-reimbursement-invoice',
-    'oms-v1__reimbursement-workspace',
-    'oms-v1__reimbursement-details',
-    'oms-v1__reimbursement-invoices',
+    '本条明细只关联一张发票',
     'invoice_entry_mode:next.entry_mode',
     'invoices,evidence:[]',
     'line_id:line.id',
     "application:'invoice-recognition'",
     '每条报销明细都必须关联一张包含原文件的发票',
-    "layout:'reimbursement'",
+    '申请总额由全部明细自动合计',
     'duplicateInvoiceLabels',
     '修改／更换冲突发票',
     '系统已停止整张申请提交',
@@ -59,8 +54,6 @@ test('reimbursement requests support one request-local invoice per detail line',
     'hasCompleteReimbursementEvidence',
     'lines.every(line=>invoices.some',
   ])assert.ok(owner.includes(marker),`missing multi-invoice reimbursement marker ${marker}`);
-  for(const repeated of ['每条明细独立关联一张发票','本条明细只关联一张发票','选择录入方式'])assert.ok(!owner.includes(repeated),`repeated invoice copy must be removed: ${repeated}`);
-  assert.ok(shell.includes("dialog.classList.toggle('is-reimbursement',layout==='reimbursement')"));
   assert.match(owner,/next\.entry_mode==='multiple'&&next\.save_mode==='submit'&&next\.lines\.length<2/);
   assert.match(owner,/invoiceAmount!==amountMinor/);
   assert.match(owner,/details\.invoices\.some\(invoice=>!invoice\.evidence\?\.length\)/);
