@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发计划
 
+2026-11-17 BF-341 已完成本地实现，待公网发布：标准 PDF 票面购销双方改为左右分栏提取并清理中文 OCR 字符间空格；Invoice Recognition 增加受保护的首页审阅图读取，Workbench 的 PDF 分支不再绕过标注层进入原生 `iframe`。后端 Go test／vet、受保护 PNG 路由、分栏噪声回归，Workbench Go test／vet、JavaScript 语法和 Node 310/310 已通过。发布后须用截图对应既有 Proposal 只读验证 9 项标注可见，并重新上传同票验证新候选购销双方；不得确认、删除或创建 Finance 事实来完成验收。[本地验证](./reports/oms-pdf-invoice-recognition-annotation-local-validation-20261117.md)
+
 2026-11-17 BF-340 已完成并发布：多项模式默认 1 条，添加第二条改为显式动作；Workbench 与 Finance Owner 区分“1 条可保存草稿”和“至少 2 条才可正式提交”。明细布局收敛为单一纵向工作流，名称／金额／日期在同一行，发票方式在其下连续展开，760px 以下单列。Finance／Workbench Go test 与 vet、Node 310/310、PostgreSQL 18.6 集成、P9 preflight、D1 composition、发布包、升级前联合备份、正式 D1 check、21/21 容器和公网资源摘要均通过。浏览器刷新后既有会话已过期，本轮没有代用户登录或执行报销写入。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
 2026-11-16 BF-339 已完成并发布：Workbench 的单项／多项切换现在暂存并恢复未保存的额外明细，只对已持久化多项继续失败关闭；每条多项明细改为扁平双列发票工作区并提供 760px 单列回落。Go test／vet、JavaScript 语法、Node 310/310、P9 preflight、D1 composition、发布包、升级前备份、正式 D1 check、21/21 容器、资源摘要和真实 Chrome 无写入切换／布局检查均通过。[发布记录](./reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)

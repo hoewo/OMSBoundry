@@ -84,6 +84,42 @@ func TestInvoiceFromTSVRecoversStandardInvoiceColumnsWhenLabelsAreNoisy(t *testi
 	}
 }
 
+func TestInvoiceFromTSVCleansSpacedPartyNamesAndKeepsBuyerSellerColumns(t *testing.T) {
+	tsv := "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
+		"1\t1\t0\t0\t0\t0\t0\t0\t2000\t1200\t-1\t\n" +
+		"5\t1\t1\t1\t1\t1\t80\t300\t80\t40\t82\t营营\n" +
+		"5\t1\t1\t1\t1\t2\t180\t300\t100\t40\t96\t名称：\n" +
+		"5\t1\t1\t1\t1\t3\t300\t300\t80\t40\t95\t北京\n" +
+		"5\t1\t1\t1\t1\t4\t400\t300\t180\t40\t95\t飞天橙子\n" +
+		"5\t1\t1\t1\t1\t5\t600\t300\t220\t40\t95\t科技有限公司\n" +
+		"5\t1\t1\t1\t1\t6\t1080\t300\t80\t40\t82\t量量\n" +
+		"5\t1\t1\t1\t1\t7\t1180\t300\t100\t40\t96\t名称：\n" +
+		"5\t1\t1\t1\t1\t8\t1300\t300\t120\t40\t95\t中国石化\n" +
+		"5\t1\t1\t1\t1\t9\t1440\t300\t180\t40\t95\t销售股份\n" +
+		"5\t1\t1\t1\t1\t10\t1640\t300\t260\t40\t95\t有限公司北京分公司\n" +
+		"5\t1\t1\t1\t2\t1\t180\t370\t240\t40\t96\t纳税人识别号：\n" +
+		"5\t1\t1\t1\t2\t2\t440\t370\t400\t40\t98\t91110113MAEN0ILP4X\n" +
+		"5\t1\t1\t1\t2\t3\t1180\t370\t240\t40\t96\t纳税人识别号：\n" +
+		"5\t1\t1\t1\t2\t4\t1440\t370\t400\t40\t98\t911100008011253056\n" +
+		"5\t1\t2\t1\t1\t1\t1220\t90\t180\t40\t96\t发票号码：\n" +
+		"5\t1\t2\t1\t1\t2\t1420\t90\t400\t40\t99\t26117000001784056555\n"
+	result, err := invoiceFromTSV(tsv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Candidate.BuyerName != "北京飞天橙子科技有限公司" || result.Candidate.SellerName != "中国石化销售股份有限公司北京分公司" {
+		t.Fatalf("party names=%q / %q", result.Candidate.BuyerName, result.Candidate.SellerName)
+	}
+	if result.Candidate.BuyerTaxID != "91110113MAEN0ILP4X" || result.Candidate.SellerTaxID != "911100008011253056" {
+		t.Fatalf("party tax ids=%q / %q", result.Candidate.BuyerTaxID, result.Candidate.SellerTaxID)
+	}
+	for _, field := range []string{"buyer_name", "seller_name", "buyer_tax_id", "seller_tax_id"} {
+		if len(result.FieldRegions[field]) != 1 || result.FieldRegions[field][0].WidthBPS >= 6000 {
+			t.Fatalf("field %s region=%+v", field, result.FieldRegions[field])
+		}
+	}
+}
+
 func TestHeaderDateTSVAcceptsCompleteChineseDateFromNoisyLabel(t *testing.T) {
 	tsv := "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
 		"1\t1\t0\t0\t0\t0\t0\t0\t1500\t480\t-1\t\n" +

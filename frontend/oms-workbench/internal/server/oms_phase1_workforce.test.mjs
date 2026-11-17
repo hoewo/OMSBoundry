@@ -12,7 +12,7 @@ test('internal navigation exposes attendance and invoice recognition without rep
   for(const marker of ['data-oms-v1-tab="members"','data-oms-v1-tab="attendance"','data-oms-v1-tab="payroll"','data-oms-v1-tab="finance"','data-oms-v1-tab="invoice-recognition"'])assert.ok(html.includes(marker),`missing ${marker}`);
   assert.match(shell,/attendance:'考勤与请假'/);
   assert.match(shell,/'invoice-recognition':'发票识别'/);
-  assert.match(server,/oms-phase1-workforce\.js\?v=20261112\.1/);
+  assert.match(server,/oms-phase1-workforce\.js\?v=20261117\.2/);
 });
 
 test('attendance journey keeps policy, facts, immutable summary and explicit payroll application separate',()=>{
@@ -56,6 +56,9 @@ test('invoice recognition uploads a trusted evidence version and requires review
   assert.ok(workforce.indexOf("reviewField('发票号码'")<workforce.indexOf("reviewField('发票代码（选填）'"));
   assert.doesNotMatch(workforce,/reviewField\('发票代码','invoice_code'.*required:paymentRequired/);
   for(const marker of ['data-invoice-review-workspace','data-recognition-box','field_regions','previewFile','layout:\'recognition\'','recognitionWarningText','data-invoice-viewer','data-invoice-zoom','bindInvoiceViewer','data-recognition-region-field'])assert.ok(workforce.includes(marker),`missing review marker ${marker}`);
+  for(const marker of ["'/review-image'","responseType:'blob'",'URL.createObjectURL(reviewImage)','_recognitionReviewURL'])assert.ok(workforce.includes(marker),`PDF review must use the annotated image viewer: ${marker}`);
+  assert.doesNotMatch(workforce,/mediaType\)\.includes\('pdf'\)\)stage\.innerHTML='<iframe/,'PDF review must not bypass annotations through the native browser viewer');
+  assert.match(shell,/responseType==='blob'\?'blob':'json'/,'owner requests must preserve capability renewal when reading review image bytes');
   assert.ok(workforce.includes('oms-v1__invoice-review-processing-image'), 'upload progress preview must not reuse the transformable review layer');
   assert.ok(workforce.includes('text.replaceAll(field,label)'), 'persisted internal warning keys must be presented as user-facing field labels');
   for(const marker of ['.oms-v1__invoice-review{','.oms-v1__invoice-review-box{','.oms-v1__dialog-mask.is-recognition .oms-v1__dialog{','.oms-v1__invoice-viewer{','.oms-v1__invoice-viewer-toolbar{'])assert.ok(css.includes(marker),`missing review style ${marker}`);

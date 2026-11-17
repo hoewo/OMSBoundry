@@ -1,5 +1,11 @@
 # OMSBizFoundry 验证入口
 
+## PDF 发票购销双方与标注恢复（2026-11-17，待发布）
+
+BF-341 必须验证同一 OCR 行同时含购买方／销售方时，整行不得被选为购买方，左右虚拟行分别形成买方／卖方名称和区域；中文字符间 OCR 空格与“名称”标签噪声清除，英文单词间合法空格保留。`review-image` 必须重新校验原 Evidence 大小与 SHA-256，沿现有 Capability／Proposal Scope 返回 `image/png` 和 `no-store`，无凭证拒绝。Workbench 对 PDF 必须创建会话 Blob URL并使用现有标注查看器，点／悬停字段双向定位，关闭时撤销；不得回退为原生 `iframe`。既有候选只恢复可视标注，不静默改写 Candidate；新候选才使用新解析规则。
+
+本地 Invoice Recognition `go test ./...`／`go vet ./...`、Workbench `go test ./...`／`go vet ./...`、JS 语法、Node 310/310、P9 preflight 与 D1 composition 已实际通过。生产只读 SQL 已确认截图对应最新 Proposal 保存了 9 组 `field_regions`，但旧买方值包含整行双方名称，证明问题分别位于 PDF 展示分支和左右选行；没有修改 Proposal 或业务数据。[本地验证](./reports/oms-pdf-invoice-recognition-annotation-local-validation-20261117.md)
+
 ## 多项报销单行起步与布局收敛（2026-11-17，已发布）
 
 BF-340 必须验证：单项切换到多项后仍只有 1 条，只有点击“添加一项”才出现下一条；1 条多项可以 Create／Update 为草稿，但 Workbench 和 Finance Owner 都拒绝正式 Submit；2～20 条沿用逐明细发票、Evidence 与精确金额门禁。桌面端每条明细按标题、名称／金额／日期同一行、发票方式／状态连续展开，不能再出现左右双区竖分隔；760px 以下回落单列。JavaScript 语法、专项 10/10、Workbench Node 310/310、两个受影响 Go module 的 test／vet、PostgreSQL 18.6 `integration`、P9 preflight、D1 composition、发布包、备份、正式 D1 check、21/21 容器及公网资源摘要已实际通过。浏览器刷新后到登录页，未代用户输入凭据或执行线上业务写入。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)

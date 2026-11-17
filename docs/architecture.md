@@ -1,5 +1,7 @@
 # OMSBizFoundry 当前工程架构
 
+2026-11-17 PDF 识别审阅边界（BF-341，待发布）：Invoice Recognition 的 `GET /api/v1/proposals/{proposal_id}/review-image` 复用 `invoice-recognition.tenant.read` 与 Proposal Resource Scope，重新经 Evidence 端口核对 File ID／Version、大小和 SHA-256，并由本地 Provider 即时栅格化首页后流式返回 PNG。响应 `no-store`，服务不持久化派生图；Workbench 只创建会话内 Blob URL，关闭弹窗即撤销。该只读端口不改变 Evidence 字节所有权、Proposal／Candidate schema、人工确认、Gateway／IAM 链或任何下游业务事实。
+
 2026-11-17 报销草稿数量门禁（BF-340，已发布）：`details.invoice_entry_mode=multiple` 在 Create／Update 草稿阶段接受 1～20 条 Line，Submit 阶段才要求 2～20 条；单项模式仍恰好 1 条。数量门禁属于 Internal Finance Requests Owner，Workbench 只提供相同的前置反馈。该调整不改变 `details.lines[]`／`details.invoices[]` 结构、金额计算、发票一对零或一关系、Evidence 门禁、schema、Capability 或跨应用所有权；界面布局也不引入浏览器持久化事实。该边界已随 Suite v1.106 部署。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
 2026-11-16 报销编辑态边界（BF-339，已发布）：Workbench 可以在一个打开的编辑会话中暂存尚未提交的额外明细，以支持单项／多项可逆切换；该暂存不进入 Local Storage、Server、Finance Request 或跨页面缓存。已持久化 Line 仍只能通过 Owner 的 revision／审计语义处理，页面不得把它降格为可丢弃草稿。布局改为字段区与发票区并列，不改变 `details.lines[]`、`details.invoices[]` 或任何版本化端口。该表面已随 Workbench v1.105 发布。[发布记录](./reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)

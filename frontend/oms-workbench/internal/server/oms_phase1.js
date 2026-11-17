@@ -92,7 +92,8 @@
     const config=app(id);if(!config||!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.route||''))throw new Error('相关功能暂不可用，请联系管理员');
     const evidencePath=id==='evidence-service'&&/^\/v1\/(?:upload-sessions(?:\/[0-9a-f-]+\/(?:complete|abort))?|files\/[0-9a-f-]+\/versions\/[1-9][0-9]*\/access-grants|references\/files\/[0-9a-f-]+\/versions\/[1-9][0-9]*)$/.test(path);
     if((!evidencePath&&!/^\/api\/v1\/[A-Za-z0-9_/?=&%.:-]+$/.test(path))||path.includes('..'))throw new Error('业务请求路径无效');
-    const method=String(options.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD',request=()=>fetch(config.route+path,{...options,credentials:'same-origin',redirect:'manual',headers:{Accept:'application/json',...(options.headers||{})}});
+    const responseType=options.responseType==='blob'?'blob':'json',requestOptions={...options};delete requestOptions.responseType;
+    const method=String(requestOptions.method||'GET').toUpperCase(),mutating=method!=='GET'&&method!=='HEAD',request=()=>fetch(config.route+path,{...requestOptions,credentials:'same-origin',redirect:'manual',headers:{Accept:responseType==='blob'?'image/*':'application/json',...(requestOptions.headers||{})}});
     await authorize(id,mutating);
     let response=await request();
     if(credentialRedirect(response)){capabilityCoordinator.invalidate(id);await authorize(id,true);response=await request()}
@@ -100,7 +101,7 @@
     if(credentialRedirect(response))throw new Error('页面状态已过期，请刷新后重试');
     if(!response.ok)await problem(response);
     state.authorized.add(id);
-    return response.status===204?{}:response.json();
+    return response.status===204?{}:responseType==='blob'?response.blob():response.json();
   }
   globalThis.OMSPhase1OwnerAPI=Object.freeze({api,authorize,app});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)capabilityCoordinator.recheck()});

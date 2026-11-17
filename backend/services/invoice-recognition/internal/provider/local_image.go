@@ -72,13 +72,9 @@ func (p *LocalImage) Recognize(ctx context.Context, document recognition.Documen
 	ocrCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 	if document.Evidence.MIMEType == "application/pdf" {
-		if p.pdfRasterizer == "" {
-			return recognition.ProviderResult{}, fmt.Errorf("local PDF rasterizer is not configured")
-		}
 		prefix := filepath.Join(dir, "page")
-		command := exec.CommandContext(ocrCtx, p.pdfRasterizer, "-f", "1", "-singlefile", "-png", "-r", "220", input, prefix)
-		if output, runErr := command.CombinedOutput(); runErr != nil {
-			return recognition.ProviderResult{}, fmt.Errorf("rasterize first invoice page: %v (%s)", runErr, shortOutput(output))
+		if err = p.rasterizePDF(ocrCtx, input, prefix); err != nil {
+			return recognition.ProviderResult{}, err
 		}
 		ocrInput = prefix + ".png"
 	}
@@ -105,6 +101,49 @@ func (p *LocalImage) Recognize(ctx context.Context, document recognition.Documen
 		}
 	}
 	return result, nil
+}
+
+func (p *LocalImage) RenderReviewImage(ctx context.Context, document recognition.Document) (recognition.ReviewImage, error) {
+	if document.Evidence.MIMEType == "image/jpeg" || document.Evidence.MIMEType == "image/png" {
+		return recognition.ReviewImage{MIMEType: document.Evidence.MIMEType, Content: append([]byte(nil), document.Bytes...)}, nil
+	}
+	if document.Evidence.MIMEType != "application/pdf" {
+		return recognition.ReviewImage{}, fmt.Errorf("local review renderer only supports JPEG, PNG and PDF")
+	}
+	dir, err := os.MkdirTemp("", "invoice-review-*")
+	if err != nil {
+		return recognition.ReviewImage{}, err
+	}
+	defer os.RemoveAll(dir)
+	input := filepath.Join(dir, "invoice.pdf")
+	if err = os.WriteFile(input, document.Bytes, 0o600); err != nil {
+		return recognition.ReviewImage{}, err
+	}
+	renderCtx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
+	prefix := filepath.Join(dir, "page")
+	if err = p.rasterizePDF(renderCtx, input, prefix); err != nil {
+		return recognition.ReviewImage{}, err
+	}
+	content, err := os.ReadFile(prefix + ".png")
+	if err != nil {
+		return recognition.ReviewImage{}, fmt.Errorf("read first invoice page: %w", err)
+	}
+	if len(content) == 0 || len(content) > 40*1024*1024 {
+		return recognition.ReviewImage{}, fmt.Errorf("rendered first invoice page is invalid")
+	}
+	return recognition.ReviewImage{MIMEType: "image/png", Content: content}, nil
+}
+
+func (p *LocalImage) rasterizePDF(ctx context.Context, input, prefix string) error {
+	if p.pdfRasterizer == "" {
+		return fmt.Errorf("local PDF rasterizer is not configured")
+	}
+	command := exec.CommandContext(ctx, p.pdfRasterizer, "-f", "1", "-singlefile", "-png", "-r", "220", input, prefix)
+	if output, err := command.CombinedOutput(); err != nil {
+		return fmt.Errorf("rasterize first invoice page: %v (%s)", err, shortOutput(output))
+	}
+	return nil
 }
 
 // recognizeHeaderDate retries only the standard invoice header area at a
@@ -269,17 +308,17 @@ func invoiceFromTSV(raw string) (recognition.ProviderResult, error) {
 	setText("issued_on", []string{"开票日期", "出票日期", "日期"}, dateRE, &result.Candidate.IssuedOn, normalizeOCRDate)
 
 	nameLines := labeledNameLines(spatialLines)
-	if len(nameLines) > 0 {
-		if value := nameAfterLabel(nameLines[0].text); value != "" {
+	buyerNameLine, sellerNameLine := selectPartyLines(nameLines)
+	if buyerNameLine.text != "" {
+		if value := nameAfterLabel(buyerNameLine.text); value != "" {
 			result.Candidate.BuyerName = value
-			setRegion(&result, "buyer_name", nameLines[0], value)
+			setRegion(&result, "buyer_name", buyerNameLine, value)
 		}
 	}
-	if len(nameLines) > 1 {
-		last := nameLines[len(nameLines)-1]
-		if value := nameAfterLabel(last.text); value != "" {
+	if sellerNameLine.text != "" {
+		if value := nameAfterLabel(sellerNameLine.text); value != "" {
 			result.Candidate.SellerName = value
-			setRegion(&result, "seller_name", last, value)
+			setRegion(&result, "seller_name", sellerNameLine, value)
 		}
 	}
 	if result.Candidate.BuyerName == "" || result.Candidate.SellerName == "" {
@@ -294,14 +333,14 @@ func invoiceFromTSV(raw string) (recognition.ProviderResult, error) {
 		}
 	}
 	taxLines := labeledLines(spatialLines, []string{"纳税人识别号", "统一社会信用代码", "税号"}, taxIDRE)
-	if len(taxLines) > 0 {
-		result.Candidate.BuyerTaxID = taxIDRE.FindString(compactOCR(taxLines[0].text))
-		setRegion(&result, "buyer_tax_id", taxLines[0], result.Candidate.BuyerTaxID)
+	buyerTaxLine, sellerTaxLine := selectPartyLines(taxLines)
+	if buyerTaxLine.text != "" {
+		result.Candidate.BuyerTaxID = taxIDRE.FindString(compactOCR(buyerTaxLine.text))
+		setRegion(&result, "buyer_tax_id", buyerTaxLine, result.Candidate.BuyerTaxID)
 	}
-	if len(taxLines) > 1 {
-		last := taxLines[len(taxLines)-1]
-		result.Candidate.SellerTaxID = taxIDRE.FindString(compactOCR(last.text))
-		setRegion(&result, "seller_tax_id", last, result.Candidate.SellerTaxID)
+	if sellerTaxLine.text != "" {
+		result.Candidate.SellerTaxID = taxIDRE.FindString(compactOCR(sellerTaxLine.text))
+		setRegion(&result, "seller_tax_id", sellerTaxLine, result.Candidate.SellerTaxID)
 	}
 	if result.Candidate.BuyerTaxID == "" || result.Candidate.SellerTaxID == "" {
 		buyer, seller := fallbackPartyTaxIDs(spatialLines)
@@ -656,6 +695,32 @@ func labeledNameLines(lines []ocrLine) []ocrLine {
 	return result
 }
 
+func selectPartyLines(lines []ocrLine) (ocrLine, ocrLine) {
+	var buyer, seller ocrLine
+	for _, line := range lines {
+		if line.pageWidth <= 0 || line.right-line.left > line.pageWidth*60/100 {
+			continue
+		}
+		if line.left+(line.right-line.left)/2 < line.pageWidth/2 {
+			if buyer.text == "" || line.top < buyer.top {
+				buyer = line
+			}
+		} else if seller.text == "" || line.top < seller.top {
+			seller = line
+		}
+	}
+	if buyer.text != "" && seller.text != "" {
+		return buyer, seller
+	}
+	if len(lines) > 0 && buyer.text == "" {
+		buyer = lines[0]
+	}
+	if len(lines) > 1 && seller.text == "" {
+		seller = lines[len(lines)-1]
+	}
+	return buyer, seller
+}
+
 func fallbackTopMatch(lines []ocrLine, pattern *regexp.Regexp) (string, ocrLine, bool) {
 	for _, line := range lines {
 		if line.top > line.pageHeight*45/100 {
@@ -673,11 +738,36 @@ func nameAfterLabel(value string) string {
 	if index := strings.LastIndex(compact, "名称"); index >= 0 {
 		compact = compact[index+len("名称"):]
 	}
-	compact = strings.Trim(compact, " :：")
+	compact = normalizePartyName(strings.Trim(compact, " :："))
 	if len([]rune(compact)) < 2 || len([]rune(compact)) > 160 {
 		return ""
 	}
 	return compact
+}
+
+func normalizePartyName(value string) string {
+	runes := []rune(strings.TrimSpace(value))
+	result := make([]rune, 0, len(runes))
+	for index, char := range runes {
+		if !unicode.IsSpace(char) {
+			result = append(result, char)
+			continue
+		}
+		previous, next := rune(0), rune(0)
+		if index > 0 {
+			previous = runes[index-1]
+		}
+		for cursor := index + 1; cursor < len(runes); cursor++ {
+			if !unicode.IsSpace(runes[cursor]) {
+				next = runes[cursor]
+				break
+			}
+		}
+		if previous != 0 && next != 0 && !unicode.Is(unicode.Han, previous) && !unicode.Is(unicode.Han, next) && (len(result) == 0 || result[len(result)-1] != ' ') {
+			result = append(result, ' ')
+		}
+	}
+	return strings.TrimSpace(string(result))
 }
 
 func normalizeOCRDate(value string) string {

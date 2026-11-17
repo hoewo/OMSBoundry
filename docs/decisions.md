@@ -1,5 +1,7 @@
 # OMSBizFoundry 开发决策总表
 
+2026-11-17 BF-341（已接受／待发布）：PDF 发票校对不得直接使用浏览器原生 PDF `iframe`，因为 Provider 返回的万分比字段坐标无法可靠覆盖浏览器内部工具栏、缩放和滚动面。Invoice Recognition 增加同一 `tenant.read`／Proposal Scope 保护的只读首页审阅图端口；它重新打开并校验原 Evidence 精确版本后即时用 Poppler 栅格化，只流式返回 `image/png`、`no-store`，不保存第二份文件。Workbench 把该图送入既有缩放／拖动／标注查看器。标准票面购销双方必须先按左右半页选行，再清除“名称”标签噪声与中文 OCR 字符间空格，不能从包含双方的整行首尾猜测。既有 Proposal 不被静默重写，新上传识别按新 Provider 规则生成。
+
 2026-11-17 BF-340（已接受／已发布）：多项发票模式进入编辑态时只创建 1 条明细，后续明细由用户显式点击“添加一项”；多项草稿允许 1～20 条，以支持逐项录入，正式提交仍要求 2～20 条且每条满足既有发票／Evidence 门禁。该规则同时由 Workbench 与 Internal Finance Requests Owner 执行，不能只靠页面提示。明细界面改为“标题—名称／金额／日期同一行—发票方式与状态”的单向工作流，取代 BF-339 的左右双列，不增加嵌套卡片、数据字段或新的事实 Owner。公网 Suite v1.106 已通过备份升级、D1 check、21/21 容器健康与资源摘要复验。[发布记录](./reports/oms-reimbursement-single-initial-line-layout-v106-publication-20261117.md)
 
 2026-11-16 BF-339（已接受／已发布）：报销模式切换必须区分未保存编辑状态与已持久化事实。新建／未保存的多项明细切回单项时，Workbench 在当前编辑会话暂存额外明细并仅显示第一项；切回多项时恢复，不因空占位阻断，也不立即丢失用户输入。若额外明细已经持久化，继续失败关闭，不能借模式切换绕过 revision 与审计删除。多项编辑面采用左侧明细字段、右侧发票工作区的扁平双列，窄屏单列；本项不修改 Finance API、schema 或 Owner 数据。公网 Workbench v1.105 已通过备份升级、D1 check、21/21 容器健康、资源摘要和真实 Chrome 无写入切换验收。[发布记录](./reports/oms-reimbursement-mode-switch-layout-v105-publication-20261116.md)

@@ -65,6 +65,15 @@ type ProviderResult struct {
 	Warnings         []string                          `json:"warnings,omitempty"`
 }
 
+type ReviewImage struct {
+	MIMEType string
+	Content  []byte
+}
+
+type ReviewImageProvider interface {
+	RenderReviewImage(context.Context, Document) (ReviewImage, error)
+}
+
 type EvidencePort interface {
 	Open(context.Context, string, contract.EvidenceReference) (io.ReadCloser, error)
 }
@@ -118,6 +127,29 @@ func (s *Service) List(ctx context.Context, tenantID string) ([]contract.Proposa
 	return s.repo.List(ctx, strings.ToLower(strings.TrimSpace(tenantID)))
 }
 
+func (s *Service) ReviewImage(ctx context.Context, tenantID, id string) (ReviewImage, error) {
+	proposal, err := s.Get(ctx, tenantID, id)
+	if err != nil {
+		return ReviewImage{}, err
+	}
+	content, err := s.openEvidence(ctx, proposal.TenantID, proposal.Evidence)
+	if err != nil {
+		return ReviewImage{}, err
+	}
+	renderer, ok := s.provider.(ReviewImageProvider)
+	if !ok {
+		return ReviewImage{}, fmt.Errorf("%w: review image renderer is unavailable", ErrProviderUnavailable)
+	}
+	image, err := renderer.RenderReviewImage(ctx, Document{Evidence: proposal.Evidence, Bytes: content})
+	if err != nil {
+		return ReviewImage{}, fmt.Errorf("%w: %v", ErrProviderUnavailable, err)
+	}
+	if (image.MIMEType != "image/jpeg" && image.MIMEType != "image/png") || len(image.Content) == 0 {
+		return ReviewImage{}, fmt.Errorf("%w: review image is invalid", ErrProviderUnavailable)
+	}
+	return image, nil
+}
+
 func (s *Service) Start(ctx context.Context, actor Actor, input StartInput) (contract.Proposal, error) {
 	if err := validateActor(actor); err != nil || !uuidPattern.MatchString(input.CommandID) {
 		return contract.Proposal{}, ErrInvalid
@@ -129,21 +161,9 @@ func (s *Service) Start(ctx context.Context, actor Actor, input StartInput) (con
 	if proposal, found, err := s.repo.ReplayProposal(ctx, actor.TenantID, input.CommandID, requestHash); err != nil || found {
 		return proposal, err
 	}
-	stream, err := s.evidence.Open(ctx, actor.TenantID, input.Evidence)
+	content, err := s.openEvidence(ctx, actor.TenantID, input.Evidence)
 	if err != nil {
-		return contract.Proposal{}, fmt.Errorf("%w: open evidence version: %v", ErrEvidenceUnavailable, err)
-	}
-	defer stream.Close()
-	content, err := io.ReadAll(io.LimitReader(stream, contract.MaximumEvidenceBytes+1))
-	if err != nil {
-		return contract.Proposal{}, fmt.Errorf("%w: read evidence version: %v", ErrEvidenceUnavailable, err)
-	}
-	if int64(len(content)) != input.Evidence.SizeBytes || len(content) > contract.MaximumEvidenceBytes {
-		return contract.Proposal{}, fmt.Errorf("%w: evidence size does not match the trusted version", ErrEvidenceUnavailable)
-	}
-	digest := sha256.Sum256(content)
-	if "sha256:"+hex.EncodeToString(digest[:]) != input.Evidence.ContentSHA256 {
-		return contract.Proposal{}, fmt.Errorf("%w: evidence digest does not match the trusted version", ErrEvidenceUnavailable)
+		return contract.Proposal{}, err
 	}
 	result, err := s.provider.Recognize(ctx, Document{Evidence: input.Evidence, Bytes: content})
 	if err != nil {
@@ -166,6 +186,26 @@ func (s *Service) Start(ctx context.Context, actor Actor, input StartInput) (con
 		return contract.Proposal{}, fmt.Errorf("generated proposal identity is invalid")
 	}
 	return s.repo.Create(ctx, actor, proposal, requestHash)
+}
+
+func (s *Service) openEvidence(ctx context.Context, tenantID string, reference contract.EvidenceReference) ([]byte, error) {
+	stream, err := s.evidence.Open(ctx, tenantID, reference)
+	if err != nil {
+		return nil, fmt.Errorf("%w: open evidence version: %v", ErrEvidenceUnavailable, err)
+	}
+	defer stream.Close()
+	content, err := io.ReadAll(io.LimitReader(stream, contract.MaximumEvidenceBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("%w: read evidence version: %v", ErrEvidenceUnavailable, err)
+	}
+	if int64(len(content)) != reference.SizeBytes || len(content) > contract.MaximumEvidenceBytes {
+		return nil, fmt.Errorf("%w: evidence size does not match the trusted version", ErrEvidenceUnavailable)
+	}
+	digest := sha256.Sum256(content)
+	if "sha256:"+hex.EncodeToString(digest[:]) != reference.ContentSHA256 {
+		return nil, fmt.Errorf("%w: evidence digest does not match the trusted version", ErrEvidenceUnavailable)
+	}
+	return content, nil
 }
 
 func (s *Service) Confirm(ctx context.Context, actor Actor, input ConfirmInput) (contract.Confirmation, error) {

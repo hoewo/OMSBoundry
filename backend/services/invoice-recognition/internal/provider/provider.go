@@ -43,6 +43,21 @@ func (r *Router) Recognize(ctx context.Context, document recognition.Document) (
 	}
 }
 
+func (r *Router) RenderReviewImage(ctx context.Context, document recognition.Document) (recognition.ReviewImage, error) {
+	switch strings.ToLower(document.Evidence.MIMEType) {
+	case "image/jpeg", "image/png":
+		return recognition.ReviewImage{MIMEType: document.Evidence.MIMEType, Content: append([]byte(nil), document.Bytes...)}, nil
+	case "application/pdf":
+		renderer, ok := r.local.(recognition.ReviewImageProvider)
+		if !ok {
+			return recognition.ReviewImage{}, fmt.Errorf("local PDF review renderer is not configured")
+		}
+		return renderer.RenderReviewImage(ctx, document)
+	default:
+		return recognition.ReviewImage{}, fmt.Errorf("review image is unavailable for %s", document.Evidence.MIMEType)
+	}
+}
+
 type XML struct{}
 
 var normalizedTag = regexp.MustCompile(`[^a-z0-9]`)

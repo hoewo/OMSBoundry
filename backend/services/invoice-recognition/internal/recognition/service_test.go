@@ -27,13 +27,20 @@ func (stub evidenceStub) Open(context.Context, string, contract.EvidenceReferenc
 }
 
 type providerStub struct {
-	called bool
-	result ProviderResult
+	called       bool
+	renderCalled bool
+	result       ProviderResult
+	reviewImage  ReviewImage
 }
 
 func (stub *providerStub) Recognize(context.Context, Document) (ProviderResult, error) {
 	stub.called = true
 	return stub.result, nil
+}
+
+func (stub *providerStub) RenderReviewImage(_ context.Context, document Document) (ReviewImage, error) {
+	stub.renderCalled = len(document.Bytes) > 0
+	return stub.reviewImage, nil
 }
 
 type repositoryStub struct {
@@ -97,7 +104,7 @@ func serviceFixture(body []byte) (*Service, *providerStub, *repositoryStub) {
 	provider := &providerStub{result: ProviderResult{
 		ProviderKey: "fixture-ocr", ProviderModel: "invoice-v1", ProviderRevision: "2026-11-05",
 		Candidate: contract.Candidate{InvoiceCode: " 011001900111 ", InvoiceNumber: "12345678", Currency: "cny"},
-	}}
+	}, reviewImage: ReviewImage{MIMEType: "image/png", Content: []byte("first page PNG")}}
 	repo := &repositoryStub{}
 	now := func() time.Time { return time.Date(2026, 11, 5, 15, 0, 0, 0, time.UTC) }
 	return New(evidenceStub{body: body}, provider, repo, func() string { return proposalID }, now), provider, repo
@@ -146,6 +153,21 @@ func TestRecognitionRejectsDigestDriftBeforeCallingProvider(t *testing.T) {
 	}
 	if provider.called {
 		t.Fatal("provider called before exact Evidence validation")
+	}
+}
+
+func TestReviewImageReopensVerifiedEvidenceAndUsesProviderRenderer(t *testing.T) {
+	body := []byte("trusted invoice bytes")
+	service, provider, _ := serviceFixture(body)
+	if _, err := service.Start(context.Background(), Actor{SubjectID: subjectID, TenantID: tenantID}, StartInput{CommandID: commandID, Evidence: evidence(body)}); err != nil {
+		t.Fatal(err)
+	}
+	image, err := service.ReviewImage(context.Background(), tenantID, proposalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !provider.renderCalled || image.MIMEType != "image/png" || string(image.Content) != "first page PNG" {
+		t.Fatalf("unexpected review image: called=%v image=%#v", provider.renderCalled, image)
 	}
 }
 

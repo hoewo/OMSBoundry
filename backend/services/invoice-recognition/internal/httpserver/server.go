@@ -21,6 +21,7 @@ type UseCases interface {
 	Start(context.Context, recognition.Actor, recognition.StartInput) (contract.Proposal, error)
 	Get(context.Context, string, string) (contract.Proposal, error)
 	List(context.Context, string) ([]contract.Proposal, error)
+	ReviewImage(context.Context, string, string) (recognition.ReviewImage, error)
 	Confirm(context.Context, recognition.Actor, recognition.ConfirmInput) (contract.Confirmation, error)
 	Discard(context.Context, recognition.Actor, recognition.DiscardInput) (contract.Proposal, error)
 }
@@ -45,6 +46,7 @@ func New(useCases UseCases, authenticator auth.Authenticator) (*Server, error) {
 		mux.Handle("GET "+prefix+"/proposals", server.protected(auth.ActionTenantRead, http.HandlerFunc(server.list)))
 		mux.Handle("POST "+prefix+"/proposals", server.protected(auth.ActionStart, http.HandlerFunc(server.start)))
 		mux.Handle("GET "+prefix+"/proposals/{proposal_id}", server.protected(auth.ActionTenantRead, http.HandlerFunc(server.get)))
+		mux.Handle("GET "+prefix+"/proposals/{proposal_id}/review-image", server.protected(auth.ActionTenantRead, http.HandlerFunc(server.reviewImage)))
 		mux.Handle("POST "+prefix+"/proposals/{proposal_id}/confirm", server.protected(auth.ActionConfirm, http.HandlerFunc(server.confirm)))
 		mux.Handle("POST "+prefix+"/proposals/{proposal_id}/discard", server.protected(auth.ActionDiscard, http.HandlerFunc(server.discard)))
 	}
@@ -125,6 +127,23 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 	}
 	value, err := s.useCases.Get(r.Context(), principal.TenantID, id)
 	s.write(w, http.StatusOK, value, err)
+}
+
+func (s *Server) reviewImage(w http.ResponseWriter, r *http.Request) {
+	principal := principalFrom(r)
+	id := strings.ToLower(strings.TrimSpace(r.PathValue("proposal_id")))
+	if !requireResource(w, principal, "proposal", id) {
+		return
+	}
+	image, err := s.useCases.ReviewImage(r.Context(), principal.TenantID, id)
+	if err != nil {
+		s.write(w, http.StatusOK, nil, err)
+		return
+	}
+	w.Header().Set("Content-Type", image.MIMEType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(image.Content)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(image.Content)
 }
 
 func (s *Server) start(w http.ResponseWriter, r *http.Request) {
